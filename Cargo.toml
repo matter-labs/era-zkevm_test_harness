@@ -1,0 +1,13 @@
+[package]
+name = "zkevm_test_harness"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+zk_evm = {path = "../zk_evm"}
+sync_vm = {path = "../sync_vm"}
+num-bigint = "0.4"
+num-integer = "0.1"
+num-traits = "0.2"
