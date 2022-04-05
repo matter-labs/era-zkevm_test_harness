@@ -58,3 +58,50 @@ impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize> Queue
         states
     }
 }
+
+pub struct SpongeLikeQueueSimulator<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const SW: usize> {
+    pub head: [E::Fr; SW],
+    pub tail: [E::Fr; SW],
+    pub num_items: u32,
+    pub witness: Vec<([E::Fr; N], [E::Fr; SW], I)>, 
+}
+
+impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const SW: usize> SpongeLikeQueueSimulator<E, I, N, SW> {
+    pub fn empty() -> Self {
+        Self {
+            head: [E::Fr::zero(); SW],
+            tail: [E::Fr::zero(); SW],
+            num_items: 0,
+            witness: vec![]
+        }
+    }
+
+    pub fn push<R: CircuitArithmeticRoundFunction<E, AW, SW>, const AW: usize>(
+        &mut self, 
+        element: I,
+        round_function: &R
+    ) {
+        let _ = self.push_and_output_intermediate_data(element, round_function);
+    }
+
+    pub fn push_and_output_intermediate_data<R: CircuitArithmeticRoundFunction<E, AW, SW>, const AW: usize>(
+        &mut self, 
+        element: I,
+        round_function: &R
+    ) -> Vec<([E::Fr; SW], [E::Fr; SW])> {
+        assert!(N % AW == 0);
+        let encoding = element.encoding_witness();
+
+        let states = round_function.simulate_absorb_multiple_rounds(
+            self.tail,
+            &encoding
+        );
+        let new_tail = states.last().map(|el| el.1).unwrap();
+
+        self.witness.push((encoding, new_tail, element));
+        self.num_items += 1;
+        self.tail = new_tail;
+
+        states
+    }
+}

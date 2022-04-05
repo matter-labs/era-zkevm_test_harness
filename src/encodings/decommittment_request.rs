@@ -4,6 +4,8 @@ use super::*;
 
 impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 2> for DecommittmentQuery {
     fn encoding_witness(&self) -> [<E>::Fr; 2] {
-        todo!()
+        [E::Fr::zero(); 2]
     }
 }
+
+pub type DecommittmentQueueSimulator<E> = SpongeLikeQueueSimulator<E, DecommittmentQuery, 2, 3>;
