@@ -20,9 +20,9 @@ pub struct WitnessTracer {
     pub storage_read_queries: Vec<(u32, LogQuery)>, // storage read queries with cycle indicators
     pub decommittment_queries: Vec<(u32, DecommittmentQuery, Vec<U256>)>,
     pub callstack_actions: Vec<(u32, (bool, u32, CallStackEntry))>,
-    pub keccak_round_function_witnesses: Vec<Vec<Keccak256RoundWitness>>,
-    pub sha256_round_function_witnesses: Vec<Vec<Sha256RoundWitness>>,
-    pub ecrecover_witnesses: Vec<Vec<ECRecoverRoundWitness>>,
+    pub keccak_round_function_witnesses: Vec<(u32, LogQuery, Vec<Keccak256RoundWitness>)>,
+    pub sha256_round_function_witnesses: Vec<(u32, LogQuery, Vec<Sha256RoundWitness>)>,
+    pub ecrecover_witnesses: Vec<(u32, LogQuery, Vec<ECRecoverRoundWitness>)>,
     pub monotonic_frame_counter: usize,
     pub log_frames_stack: Vec<ApplicationData<(usize, LogQuery)>>, // keep the unique frame index
     pub callstack_helper: AuxCallstackProto,
@@ -115,14 +115,26 @@ impl VmWitnessTracer for WitnessTracer {
     }
 
     fn add_decommittment(&mut self, monotonic_cycle_counter: u32, decommittment_query: DecommittmentQuery, mem_witness: Vec<U256>) {
+        // this will literally form the queue of decommittment queries, one to one
         self.decommittment_queries.push((monotonic_cycle_counter, decommittment_query, mem_witness));
     }
 
-    fn add_precompile_call_result(&mut self, monotonic_cycle_counter: u32, call_params: LogQuery, mem_witness_in: Vec<MemoryQuery>, memory_witness_out: Vec<MemoryQuery>, round_witness: PrecompileCyclesWitness) {
-        // we bootkeep it to later on use in memory argument, and in precompile circuits
+    fn add_precompile_call_result(&mut self, monotonic_cycle_counter: u32, call_params: LogQuery, _mem_witness_in: Vec<MemoryQuery>, _memory_witness_out: Vec<MemoryQuery>, round_witness: PrecompileCyclesWitness) {
+        // we bootkeep it to later on use in memory argument by opening and flattening, and in precompile circuits
+        match round_witness {
+            PrecompileCyclesWitness::Keccak256(wit) => {
+                self.keccak_round_function_witnesses.push((monotonic_cycle_counter, call_params, wit));
+            },
+            PrecompileCyclesWitness::Sha256(wit) => {
+                self.sha256_round_function_witnesses.push((monotonic_cycle_counter, call_params, wit));
+            },
+            PrecompileCyclesWitness::ECRecover(wit) => {
+                self.ecrecover_witnesses.push((monotonic_cycle_counter, call_params, wit));
+            }
+        }
     }
 
-    fn add_revertable_precompile_call(&mut self, monotonic_cycle_counter: u32, call_params: LogQuery) {
+    fn add_revertable_precompile_call(&mut self, _monotonic_cycle_counter: u32, _call_params: LogQuery) {
         unreachable!()
     }
 
