@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 zk_evm = {path = "../zk_evm"}
 sync_vm = {path = "../sync_vm"}
+zkevm-assembly = {path = "../zkEVM-assembly"}
 num-bigint = "0.4"
 num-integer = "0.1"
 num-traits = "0.2"

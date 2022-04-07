@@ -23,8 +23,7 @@ pub struct WitnessTracer {
     pub keccak_round_function_witnesses: Vec<(u32, LogQuery, Vec<Keccak256RoundWitness>)>,
     pub sha256_round_function_witnesses: Vec<(u32, LogQuery, Vec<Sha256RoundWitness>)>,
     pub ecrecover_witnesses: Vec<(u32, LogQuery, Vec<ECRecoverRoundWitness>)>,
-    pub monotonic_frame_counter: usize,
-    pub log_frames_stack: Vec<ApplicationData<(usize, LogQuery)>>, // keep the unique frame index
+    pub log_frames_stack: Vec<ApplicationData<((usize, usize), (u32, LogQuery))>>, // keep the unique frame index
     pub callstack_helper: AuxCallstackProto,
     // we need to properly preserve the information about logs. Not just flattening them into something,
     // but also keep the markers on when new frame has started and has finished, and the final frame execution
@@ -42,7 +41,6 @@ impl WitnessTracer {
             keccak_round_function_witnesses: vec![],
             sha256_round_function_witnesses: vec![],
             ecrecover_witnesses: vec![],
-            monotonic_frame_counter: 1,
             log_frames_stack: vec![ApplicationData::empty()],
             callstack_helper: AuxCallstackProto::new_with_max_ergs()
         }
@@ -51,8 +49,9 @@ impl WitnessTracer {
 
 #[derive(Clone, Debug)]
 pub struct AuxCallstackProto {
-    pub current: CallStackEntry,
-    pub stack: Vec<CallStackEntry>,
+    pub monotonic_frame_counter: usize,
+    pub current: (usize, CallStackEntry), // we save PARENT index and stack entry itself
+    pub stack: Vec<(usize, CallStackEntry)>,
 }
 
 impl AuxCallstackProto {
@@ -61,7 +60,8 @@ impl AuxCallstackProto {
         initial_callstack.ergs_remaining = u32::MAX;
 
         Self {
-            current: initial_callstack,
+            monotonic_frame_counter: 1,
+            current: (0, initial_callstack),
             stack: vec![]
         }
     }
@@ -72,13 +72,15 @@ impl AuxCallstackProto {
 
     #[track_caller]
     pub fn push_entry(&mut self, entry: CallStackEntry) {
-        let old = std::mem::replace(&mut self.current, entry);
+        let new_counter = self.monotonic_frame_counter;
+        self.monotonic_frame_counter += 1;
+        let old = std::mem::replace(&mut self.current, (new_counter, entry));
         self.stack.push(old);
         debug_assert!(self.depth() <= MAX_CALLSTACK_DEPTH);
     }
 
     #[track_caller]
-    pub fn pop_entry(&mut self) -> CallStackEntry {
+    pub fn pop_entry(&mut self) -> (usize, CallStackEntry) {
         let previous = self.stack.pop().unwrap();
         let old = std::mem::replace(&mut self.current, previous);
 
@@ -101,16 +103,18 @@ impl VmWitnessTracer for WitnessTracer {
 
         // log in general
         assert!(!log_query.rollback);
-        let current_frame_index = self.monotonic_frame_counter;
+        let current_frame_counter = self.callstack_helper.monotonic_frame_counter;
+        let parent_frame_counter = self.callstack_helper.current.0;
+        let frames_index = (parent_frame_counter, current_frame_counter);
         let frame_data = self.log_frames_stack.last_mut().unwrap();
         if log_query.rw_flag {
             //  also append rollback
-            frame_data.forward.push((current_frame_index, log_query));
+            frame_data.forward.push((frames_index, (monotonic_cycle_counter, log_query)));
             log_query.rollback = true;
-            frame_data.rollbacks.push((current_frame_index, log_query));
+            frame_data.rollbacks.push((frames_index, (monotonic_cycle_counter, log_query)));
         } else {
             // read, do not append to rollback
-            frame_data.forward.push((current_frame_index, log_query));
+            frame_data.forward.push((frames_index, (monotonic_cycle_counter, log_query)));
         }
     }
 
@@ -143,9 +147,6 @@ impl VmWitnessTracer for WitnessTracer {
         let new = ApplicationData::empty();
         self.log_frames_stack.push(new);
 
-        // monotonic counter
-        self.monotonic_frame_counter += 1;
-
         // callstack part
         self.callstack_helper.push_entry(*new_context);
         let new_depth = self.callstack_helper.depth() as u32;
@@ -171,7 +172,7 @@ impl VmWitnessTracer for WitnessTracer {
         }
 
         // callstack part
-        let popped = self.callstack_helper.pop_entry();
+        let (_, popped) = self.callstack_helper.pop_entry();
         let new_depth = self.callstack_helper.depth() as u32;
         self.callstack_actions.push((monotonic_cycle_counter, (false, new_depth, popped)));
     }

@@ -8,4 +8,9 @@ pub use self::franklin_crypto::bellman;
 pub use self::bellman::pairing;
 pub use self::pairing::ff;
 
+pub use zk_evm::ethereum_types;
+
 use self::utils::*;
+
+#[cfg(test)]
+mod tests;
