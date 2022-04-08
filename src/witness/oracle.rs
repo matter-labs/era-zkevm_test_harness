@@ -13,13 +13,14 @@ use crate::{witness::tracer::WitnessTracer};
 use crate::encodings::memory_query::MemoryQueueSimulator;
 use crate::encodings::decommittment_request::DecommittmentQueueSimulator;
 use std::collections::{HashMap, BTreeMap};
+use std::ops::RangeInclusive;
 use crate::ff::Field;
 
 pub struct VmWitnessOracle<E: Engine> {
     pub memory_read_witness: Vec<(u32, MemoryQuery)>,
     pub all_memory_queries_accumulated: Vec<MemoryQuery>,
     pub rollback_queue_head_segments: Vec<(u32, E::Fr)>,
-    pub rollback_queue_initial_tails_for_new_frames: Vec<(u32, E::Fr)>,
+    pub rollback_queue_initial_tails_for_new_frames: Vec<(usize, E::Fr)>,
     pub storage_read_queries: Vec<(u32, LogQuery)>,
 
     pub sorted_rollup_storage_queries: Vec<LogQuery>,
@@ -153,6 +154,9 @@ impl<E: Engine> VmWitnessOracle<E> {
 
         let num_forwards = forward.len();
 
+        // dbg!(&forward);
+        // dbg!(&rollbacks);
+
         let mut sorted_rollup_storage_queries = vec![];
         let mut sorted_porter_storage_queries = vec![];
         let mut sorted_event_queries = vec![];
@@ -167,14 +171,15 @@ impl<E: Engine> VmWitnessOracle<E> {
         // that on some specific VM cycle we either read or write
 
         // from cycle into first two sponges (common), then tail-tail pair and 3rd sponge for forward, then head-head pair and 3rd sponge for rollback
-        let mut frames_data: HashMap<u32, (
-            Option<[([E::Fr; 3], [E::Fr; 3]); 2]>, 
-            Option<((E::Fr, E::Fr), ([E::Fr; 3], [E::Fr; 3]))>, 
+        let mut sponges_data: HashMap<u32, (
+            u32,
+            [([E::Fr; 3], [E::Fr; 3]); 2], 
+            ((E::Fr, E::Fr), ([E::Fr; 3], [E::Fr; 3])), 
             Option<((E::Fr, E::Fr), ([E::Fr; 3], [E::Fr; 3]))>
         )> = HashMap::new();
 
         let mut cycle_pointers = HashMap::<u32, (usize, usize)>::new();
-        let mut frame_pointers = HashMap::<usize, (usize, usize)>::new();
+        let mut frame_pointers = HashMap::<usize, (RangeInclusive<usize>, Option<RangeInclusive<usize>>)>::new();
 
         let mut frames_sequence = vec![];
 
@@ -185,56 +190,63 @@ impl<E: Engine> VmWitnessOracle<E> {
                 round_function
             );
 
+            dbg!(new_tail);
+
             let pointer = chain_of_states.len();
             // we just log all chains of old tail -> new tail, and will interpret them later
             chain_of_states.push((cycle, this_frame_index, (old_tail, new_tail)));
 
             assert!(states.len() == 3);
+
+            let key = query.timestamp.0;
             if query.rollback {
-                let entry = frames_data.get_mut(&cycle).expect("rollbacks always happen after forward case");
-                let common_sponges_pair = entry.0.expect("rollbacks always happen after forward case");
+                let entry = sponges_data.get_mut(&key).expect("rollbacks always happen after forward case");
+                let common_sponges_pair = entry.1;
                 assert_eq!(&common_sponges_pair[0], &states[0]);
                 assert_eq!(&common_sponges_pair[1], &states[1]);
                 let head_head_pair = (old_tail, new_tail);
                 let third_sponge = states.last().unwrap().clone();
 
-                entry.2 = Some((head_head_pair, third_sponge));
+                entry.3 = Some((head_head_pair, third_sponge));
 
-                if let Some(entry) = frame_pointers.get_mut(&this_frame_index) {
-                    if entry.1 > pointer {
-                        // nothing
+                cycle_pointers.get_mut(&cycle).expect("rollbacks always happen after forward case").1 = pointer;
+
+                if let Some(frame_pointers_pair) = frame_pointers.get_mut(&this_frame_index) {
+                    if let Some(revert_range) = frame_pointers_pair.1.as_mut() {
+                        let start = *revert_range.start();
+                        let end = *revert_range.end();
+                        assert!(pointer > end);
+                        frame_pointers_pair.1 = Some(start..=pointer);
                     } else {
-                        entry.1 = pointer;
+                        frame_pointers_pair.1 = Some(pointer..=pointer);
                     }
                 } else {
                     unreachable!()
                 }
-
-                cycle_pointers.get_mut(&cycle).expect("rollbacks always happen after forward case").1 = pointer;
             } else {
-                let entry = frames_data.entry(cycle).or_default();
+                let entry = sponges_data.entry(key).or_default();
                 let common_sponges: [([E::Fr; 3], [E::Fr; 3]); 2] = states[0..2].try_into().unwrap();
                 let tail_tail_pair = (old_tail, new_tail);
                 let third_sponge = states.last().unwrap().clone();
 
-                entry.0 = Some(common_sponges);
-                entry.1 = Some((tail_tail_pair, third_sponge));
+                entry.0 = cycle;
+                entry.1 = common_sponges;
+                entry.2 = (tail_tail_pair, third_sponge);
 
                 cycle_pointers.entry(cycle).or_default().0 = pointer;
 
-                if let Some(entry) = frame_pointers.get_mut(&this_frame_index) {
-                    if entry.0 < pointer {
-                        // nothing
-                    } else {
-                        entry.0 = pointer;
-                    }
+                if let Some(frame_pointers_pair) = frame_pointers.get_mut(&this_frame_index) {
+                    let start = *frame_pointers_pair.0.start();
+                    let end = *frame_pointers_pair.0.end();
+                    assert!(pointer > end);
+                    frame_pointers_pair.0 = start..=pointer;
                 } else {
-                    frame_pointers.insert(this_frame_index, (pointer, usize::MAX));
+                    frame_pointers.insert(this_frame_index, (pointer..=pointer, None));
                 }
             }
 
             if was_applied {
-                frames_sequence.push((this_frame_index, cycle));
+                frames_sequence.push((this_frame_index, cycle, query.rollback));
             }
 
             // and sort
@@ -279,50 +291,58 @@ impl<E: Engine> VmWitnessOracle<E> {
             }
         }
 
+        dbg!(&chain_of_states);
+        dbg!(&frame_pointers);
+
         let mut rollback_queue_head_segments = vec![];
+        // we should go over the sequence of sorted cycle indexes and look at the pointers of the actually applied rollbacks
+        let mut keys: Vec<_> = cycle_pointers.keys().copied().collect();
+        keys.sort();
+        for cycle_idx in keys.into_iter() {
+            let (_, pointer) = cycle_pointers.remove(&cycle_idx).unwrap();
+            let (cycle, frame, (head, _)) = chain_of_states[pointer];
+            assert!(cycle == cycle_idx);
+            rollback_queue_head_segments.push((cycle_idx, head));
+        }
+
         let mut rollback_queue_initial_tails_for_new_frames = vec![];
-
-        let mut current_frame = 0;
-
         let initial_tail_for_entry_point = chain_of_states.last().map(|el| el.2.1).unwrap_or(E::Fr::zero());
+        dbg!(initial_tail_for_entry_point);
+
+        let mut previous_frame = 0;
 
         // only keep necessary information by walking over the frames sequence
-        for (frame, cycle_idx) in frames_sequence.into_iter() {
-            if frame != current_frame {
+        for (this_frame, cycle_idx, is_explicit_rollback) in frames_sequence.into_iter() {
+            dbg!(this_frame);
+            if this_frame != previous_frame {
                 // we start a new frame, or return
-                if frame > current_frame {
+                if this_frame > previous_frame {
+                    assert!(!is_explicit_rollback);
                     // near/far call
-                    let mut entry = frame_pointers.get_mut(&frame).expect("must be present in frame pointers");
-                    if entry.1 != usize::MAX {
-                        // there will be rollbackable operations
-                        let (cycle, frame, (_, tail)) = chain_of_states[entry.1];
-                        assert!(cycle_idx == cycle);
-                        if frame != current_frame {
-                            unreachable!(); // self-consitency checks
-                        } 
-                        rollback_queue_initial_tails_for_new_frames.push((cycle, tail));
-                        entry.1 -= 1;
+                    let (_, revert_segment) = frame_pointers.get_mut(&this_frame).expect("must be present in frame pointers");
+                    if let Some(revert_segment) = revert_segment.as_mut() {
+                        dbg!(&revert_segment);
+                        // there were rollbacks in the frame we just started, so we need to properly
+                        // for a new tail
+                        if !revert_segment.is_empty() {
+                            let pointer = *revert_segment.end();
+                            let (cycle, frame, (_, tail)) = chain_of_states[pointer];
+                            assert!(frame == this_frame);
+                            rollback_queue_initial_tails_for_new_frames.push((this_frame, tail));
+                        }
                     }
                 } else {
-                    // this is a return, and we do not care
+                    // we dont' care
                 }
 
-                current_frame = frame;
+                previous_frame = this_frame;
             } else {
-                // same frame, so it's some rollbackable operation
-                let mut entry = frame_pointers.get_mut(&frame).expect("must be present in frame pointers");
-                if entry.1 != usize::MAX {
-                    // there will be rollbackable operations
-                    let (cycle, frame, (head, _)) = chain_of_states[entry.1];
-                    assert!(cycle_idx == cycle);
-                    if frame != current_frame {
-                        unreachable!(); // self-consitency checks
-                    } 
-                    rollback_queue_head_segments.push((cycle, head));
-                    entry.1 -= 1;
-                }
+                // also don't care
             }
         }
+
+        dbg!(&rollback_queue_head_segments);
+        dbg!(&rollback_queue_initial_tails_for_new_frames);
 
         VmWitnessOracle::<E> {
             memory_read_witness,

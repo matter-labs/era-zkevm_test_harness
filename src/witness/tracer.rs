@@ -50,8 +50,8 @@ impl WitnessTracer {
 #[derive(Clone, Debug)]
 pub struct AuxCallstackProto {
     pub monotonic_frame_counter: usize,
-    pub current: (usize, CallStackEntry), // we save PARENT index and stack entry itself
-    pub stack: Vec<(usize, CallStackEntry)>,
+    pub current: ((usize, usize), CallStackEntry), // we save PARENT index and stack entry itself
+    pub stack: Vec<((usize, usize), CallStackEntry)>,
 }
 
 impl AuxCallstackProto {
@@ -60,8 +60,8 @@ impl AuxCallstackProto {
         initial_callstack.ergs_remaining = u32::MAX;
 
         Self {
-            monotonic_frame_counter: 1,
-            current: (0, initial_callstack),
+            monotonic_frame_counter: 2,
+            current: ((0, 1), initial_callstack),
             stack: vec![]
         }
     }
@@ -73,14 +73,15 @@ impl AuxCallstackProto {
     #[track_caller]
     pub fn push_entry(&mut self, entry: CallStackEntry) {
         let new_counter = self.monotonic_frame_counter;
+        let current_counter = self.current.0.1;
         self.monotonic_frame_counter += 1;
-        let old = std::mem::replace(&mut self.current, (new_counter, entry));
+        let old = std::mem::replace(&mut self.current, ((current_counter, new_counter), entry));
         self.stack.push(old);
         debug_assert!(self.depth() <= MAX_CALLSTACK_DEPTH);
     }
 
     #[track_caller]
-    pub fn pop_entry(&mut self) -> (usize, CallStackEntry) {
+    pub fn pop_entry(&mut self) -> ((usize, usize), CallStackEntry) {
         let previous = self.stack.pop().unwrap();
         let old = std::mem::replace(&mut self.current, previous);
 
@@ -103,8 +104,8 @@ impl VmWitnessTracer for WitnessTracer {
 
         // log in general
         assert!(!log_query.rollback);
-        let current_frame_counter = self.callstack_helper.monotonic_frame_counter;
-        let parent_frame_counter = self.callstack_helper.current.0;
+        let parent_frame_counter = self.callstack_helper.current.0.0;
+        let current_frame_counter = self.callstack_helper.current.0.1;
         let frames_index = (parent_frame_counter, current_frame_counter);
         let frame_data = self.log_frames_stack.last_mut().unwrap();
         if log_query.rw_flag {

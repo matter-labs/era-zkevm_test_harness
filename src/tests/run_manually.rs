@@ -17,11 +17,33 @@ use sync_vm::rescue_poseidon::rescue::params::RescueParams;
 #[test]
 fn run_and_try_create_witness() {
     let asm = r#"
-    
+        .text
+        .file	"Test_26"
+        .rodata.cst32
+        .p2align	5
+        .text
+        .globl	__entry
+    __entry:
+    .main:
+        add 1, r0, r1
+        add 2, r0, r2
+        sstore r1, r2
+        near_call r0, @.to_revert, @.continue
+    .continue:
+        add 5, r0, r1
+        add 6, r0, r2
+        sstore r1, r2
+        ret.ok r0
+    .to_revert:
+        add 3, r0, r1
+        add 4, r0, r2
+        sstore r1, r2
+        ret.revert r0
     "#;
 
     let assembly = Assembly::try_from(asm.to_owned()).unwrap();
     let bytecode = assembly.compile_to_bytecode().unwrap();
+    dbg!(bytecode.len());
     let bytecode_hash = bytecode_to_code_hash(&bytecode).unwrap();
 
     let mut tools = create_default_testing_tools();
