@@ -1,4 +1,4 @@
-use crate::entry_point::{create_default_testing_tools, create_out_of_circuit_vm, create_out_of_circuit_global_context};
+use crate::entry_point::{create_default_testing_tools, create_out_of_circuit_vm, create_out_of_circuit_global_context, create_in_circuit_vm};
 use crate::ethereum_types::*;
 use crate::witness::oracle::VmWitnessOracle;
 use super::*;
@@ -91,9 +91,20 @@ fn run_and_try_create_witness() {
     }
 
     drop(out_of_circuit_vm);
-    let params = sync_vm::utils::bn254_rescue_params();
-    let round_function = GenericHasher::<Bn256, RescueParams<_, 2, 3>, 2, 3>::new_from_params(&params);
+
+    use sync_vm::testing::create_test_artifacts_with_optimized_gate;
+    let (mut cs, round_function, _) = create_test_artifacts_with_optimized_gate();
+
+    // let params = sync_vm::utils::bn254_rescue_params();
+    // let round_function = GenericHasher::<Bn256, RescueParams<_, 2, 3>, 2, 3>::new_from_params(&params);
 
     let (oracle, artifacts) = create_artifacts_from_tracer(tools.witness_tracer, &round_function);
+
+    let initial_tail = oracle.initial_tail_for_entry_point;
+    let in_circuit_vm = create_in_circuit_vm(
+        &mut cs,
+        &round_function, 
+        initial_tail
+    );
     // let oracle = VmWitnessOracle::from_witness_tracer(tools.witness_tracer, &round_function);
 }

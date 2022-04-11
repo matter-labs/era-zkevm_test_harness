@@ -1,3 +1,4 @@
+use sync_vm::franklin_crypto::bellman::plonk::better_better_cs::cs::ConstraintSystem;
 use sync_vm::vm::vm_cycle::witness_oracle::u256_to_biguint;
 use sync_vm::vm::vm_state::GlobalContext;
 use zk_evm::ethereum_types::*;
@@ -6,6 +7,7 @@ use zk_evm::vm_state::CallStackEntry;
 use sync_vm::vm::primitives::uint256::UInt256;
 use zk_evm::vm_state::VmState;
 use zk_evm::precompiles::BOOTLOADER_FORMAL_ADDRESS;
+use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
 
 use super::*;
 
@@ -193,4 +195,67 @@ pub fn create_out_of_circuit_vm<'a, const B: bool>(
     vm.local_state.memory_page_counter = STARTING_MONOTONIC_PAGES_COUNTER;
 
     vm
+}
+
+pub fn create_in_circuit_vm<
+    E: Engine, 
+    CS: ConstraintSystem<E>,
+    R: CircuitArithmeticRoundFunction<E, 2, 3, StateElement = Num<E>>
+>(
+    cs: &mut CS,
+    round_function: &R,
+    initial_rollback_queue_value: E::Fr,
+
+) -> sync_vm::vm::vm_state::VmLocalState<E, 3> {
+    // we need to prepare some global state and push initial context
+    use sync_vm::vm::vm_cycle::register_view::Register;
+    use sync_vm::vm::ports::ArithmeticFlagsPort;
+    use sync_vm::vm::vm_state::callstack::Callstack;
+    use sync_vm::vm::vm_state::PendingRoundFunctions;
+
+    let mut initial_callstack = Callstack::<E, 3>::empty();
+    // simulate push
+
+    let bootloader_address = *BOOTLOADER_FORMAL_ADDRESS;
+    let new_context = initial_in_circuit_context(
+        0,
+        u32::MAX,
+        bootloader_address,
+        bootloader_address,
+        bootloader_address,
+        initial_rollback_queue_value,
+    );
+
+    initial_callstack.context_stack_depth = UInt16::from_uint(1);
+    // state - we need to absorb
+
+    use sync_vm::traits::CircuitFixedLengthEncodable;
+    let encoding = new_context.saved_context.encode(cs).unwrap();
+    let state = round_function.round_function_absorb_nums(
+        cs,
+        initial_callstack.stack_sponge_state,
+        &encoding
+    ).unwrap();
+    initial_callstack.stack_sponge_state = state;
+
+    let state = sync_vm::vm::vm_state::VmLocalState {
+        previous_code_word: [UInt64::<E>::zero(); 4],
+        registers: [Register::<E>::zero(); zk_evm::zkevm_opcode_defs::REGISTERS_COUNT],
+        flags: ArithmeticFlagsPort::<E>::reseted_flags(),
+        timestamp: UInt32::<E>::from_uint(STARTING_TIMESTAMP),  
+        memory_page_counter: UInt32::<E>::from_uint(STARTING_MONOTONIC_PAGES_COUNTER),
+        tx_number_in_block: UInt16::<E>::zero(),
+        previous_super_pc: UInt16::<E>::zero(),
+        did_call_or_ret_recently: Boolean::constant(true),
+        tx_origin: UInt160::<E>::zero(),
+        ergs_per_pubdata_byte: UInt32::<E>::zero(),
+        callstack: initial_callstack,
+        pending_sponges: PendingRoundFunctions::<E, 3>::empty(),
+        memory_queue_state: [Num::<E>::zero(); 3],
+        memory_queue_length: UInt32::<E>::zero(),
+        code_decommittment_queue_state: [Num::<E>::zero(); 3],
+        code_decommittment_queue_length: UInt32::<E>::zero(),
+    };
+
+    state
 }
