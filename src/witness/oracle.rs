@@ -24,8 +24,9 @@ use crate::ff::Field;
 use zk_evm::aux_structures::DecommittmentQuery;
 
 pub struct VmWitnessOracle<E: Engine> {
-    pub memory_witness: Vec<(u32, MemoryQuery)>,
+    pub memory_read_witness: Vec<(u32, MemoryQuery)>,
     pub rollback_queue_head_segments: Vec<(u32, E::Fr)>,
+    pub decommittment_requests_witness: Vec<(u32, DecommittmentQuery)>,
     pub rollback_queue_initial_tails_for_new_frames: Vec<(usize, E::Fr)>,
     pub storage_read_queries: Vec<(u32, LogQuery)>,
     pub callstack_values_for_returns: Vec<(u32, CallStackEntry)>,
@@ -56,7 +57,7 @@ pub fn create_artifacts_from_tracer<
     // this one we will later on split and re-arrange into sponge cycles, as well as use for 
     // VmState snapshot reconstruction
 
-    let memory_witness = memory_queries.clone();
+    let memory_read_witness: Vec<_> = memory_queries.iter().filter(|el| !el.1.rw_flag).cloned().collect();
     let vm_memory_queries_accumulated = memory_queries;
 
     // segmentation of the log queue
@@ -259,8 +260,9 @@ pub fn create_artifacts_from_tracer<
     }
 
     let oracle = VmWitnessOracle::<E> {
-        memory_witness,
+        memory_read_witness,
         rollback_queue_head_segments,
+        decommittment_requests_witness: decommittment_queries.iter().map(|el| (el.0, el.1)).collect(),
         rollback_queue_initial_tails_for_new_frames,
         storage_read_queries,
         callstack_values_for_returns: vec![], // TODO
@@ -292,23 +294,20 @@ use crate::franklin_crypto::plonk::circuit::boolean::*;
 use sync_vm::glue::code_unpacker_sha256::memory_query_updated::RawMemoryQuery;
 use sync_vm::scheduler::data_access_functions::StorageLogRecord;
 use sync_vm::vm::vm_state::saved_contract_context::ExecutionContextRecord;
-use sync_vm::scheduler::queues::DecommitQuery;
+use sync_vm::scheduler::queues::{DecommitQuery, DecommitHash};
 use sync_vm::vm::vm_state::saved_contract_context::ExecutionContextRecordWitness;
 use sync_vm::scheduler::queues::DecommitQueryWitness;
 
 use crate::entry_point::STARTING_TIMESTAMP;
 
 impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
-    fn get_memory_witness(&mut self, timestamp: UInt32<E>, key: &MemoryLocation<E>, rw_flag: &Boolean, execute: &Boolean) -> Option<num_bigint::BigUint> {
+    fn get_memory_witness_for_read(&mut self, timestamp: UInt32<E>, key: &MemoryLocation<E>, execute: &Boolean) -> Option<num_bigint::BigUint> {
         if execute.get_value().unwrap_or(false) {
-            let (cycle, query) = self.memory_witness.drain(..1).next().unwrap();
+            let (cycle, query) = self.memory_read_witness.drain(..1).next().unwrap();
 
             if let Some(ts) = timestamp.get_value() {
                 let roughly_a_cycle = (ts - STARTING_TIMESTAMP) / TIMESTAMPS_PER_CYCLE;
                 assert_eq!(cycle, roughly_a_cycle);
-            }
-            if let Some(rw_flag) = rw_flag.get_value() {
-                assert!(rw_flag == query.rw_flag);
             }
 
             if let Some(location) = key.create_witness() {
@@ -326,20 +325,46 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
         // we do not care
     }
 
-    fn get_storage_witness(&mut self, key: &StorageLogRecord<E>, execute: &Boolean) -> Option<num_bigint::BigUint> {
-        todo!()
+    fn get_storage_read_witness(&mut self, key: &StorageLogRecord<E>, execute: &Boolean) -> Option<num_bigint::BigUint> {
+        use crate::u160_from_address;
+
+        if execute.get_value().unwrap_or(false) {
+            let (_cycle, query) = self.storage_read_queries.drain(..1).next().unwrap();
+
+            if let Some(location) = key.create_witness() {
+                assert_eq!(location.address, u160_from_address(query.address));
+                assert_eq!(location.key, u256_to_biguint(query.key));
+            }
+
+            Some(u256_to_biguint(query.read_value))
+        } else {
+            None
+        }
     }
 
     fn push_storage_witness(&mut self, key: &StorageLogRecord<E>, execute: &Boolean) {
         // we do not care
     }
 
-    fn get_rollback_queue_witness(&mut self, key: &StorageLogRecord<E>, execute: &Boolean) -> Option<<E>::Fr> {
-        todo!()
+    // may be should also track key for debug purposes
+    fn get_rollback_queue_witness(&mut self, _key: &StorageLogRecord<E>, execute: &Boolean) -> Option<<E>::Fr> {
+        if execute.get_value().unwrap_or(false) {
+            let (_cycle, head) = self.rollback_queue_head_segments.drain(..1).next().unwrap();
+
+            Some(head)
+        } else {
+            None
+        }
     }
 
-    fn get_rollback_queue_tail_witness_for_call(&mut self, timestamp: UInt32<E>, execute: &Boolean) -> Option<<E>::Fr> {
-        todo!()
+    fn get_rollback_queue_tail_witness_for_call(&mut self, _timestamp: UInt32<E>, execute: &Boolean) -> Option<<E>::Fr> {
+        if execute.get_value().unwrap_or(false) {
+            let (_frame_idx, tail) = self.rollback_queue_initial_tails_for_new_frames.drain(..1).next().unwrap();
+
+            Some(tail)
+        } else {
+            None
+        }
     }
 
     fn push_callstack_witness(&mut self, current_record: &ExecutionContextRecord<E>, execute: &Boolean) {
@@ -351,6 +376,25 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
     }
 
     fn get_decommittment_request_witness(&mut self, request: &DecommitQuery<E>, execute: &Boolean) -> Option<DecommitQueryWitness<E>> {
-        todo!()
+        if execute.get_value().unwrap_or(false) {
+            let (_frame_idx, query) = self.decommittment_requests_witness.drain(..1).next().unwrap();
+
+            if let Some(wit) = request.create_witness() {
+                assert_eq!(wit.root_hash, u256_to_biguint(query.hash));
+                assert_eq!(wit.timestamp, query.timestamp.0);
+            }
+
+            let wit = DecommitQueryWitness::<E> {
+                root_hash: u256_to_biguint(query.hash),
+                page: query.memory_page.0,
+                is_first: query.is_fresh,
+                timestamp: query.timestamp.0,
+                _marker: std::marker::PhantomData
+            };
+
+            Some(wit)
+        } else {
+            None
+        }
     }
 }
