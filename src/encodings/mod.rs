@@ -1,5 +1,5 @@
 use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
-
+use derivative::Derivative;
 use crate::pairing::Engine;
 use crate::ff::{Field, PrimeField};
 
@@ -13,14 +13,23 @@ pub mod decommittment_request;
 pub mod memory_query;
 pub mod log_query;
 
-pub struct QueueSimulator<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize> {
+#[derive(Derivative)]
+#[derivative(Debug, Clone(bound=""), Copy(bound=""))]
+pub struct QueueIntermediateStates<E: Engine, const SW: usize, const ROUNDS: usize> {
+    pub head: E::Fr,
+    pub tail: E::Fr,
+    pub num_items: u32,
+    pub round_function_execution_pairs: [([E::Fr; SW], [E::Fr; SW]); ROUNDS] 
+}
+
+pub struct QueueSimulator<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const ROUNDS: usize> {
     pub head: E::Fr,
     pub tail: E::Fr,
     pub num_items: u32,
     pub witness: Vec<([E::Fr; N], E::Fr, I)>, 
 }
 
-impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize> QueueSimulator<E, I, N> {
+impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const ROUNDS: usize> QueueSimulator<E, I, N, ROUNDS> {
     pub fn empty() -> Self {
         Self {
             head: E::Fr::zero(),
@@ -42,7 +51,10 @@ impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize> Queue
         &mut self, 
         element: I,
         round_function: &R
-    ) -> ((E::Fr, E::Fr), Vec<([E::Fr; SW], [E::Fr; SW])>) {
+    ) -> (
+        E::Fr, // old tail
+        QueueIntermediateStates<E, SW, ROUNDS> // new head/tail, as well as round function ins/outs
+    ) {
         let old_tail = self.tail;
         let encoding = element.encoding_witness();
         let mut to_hash = vec![];
@@ -53,23 +65,38 @@ impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize> Queue
             &to_hash
         );
         let new_tail = R::simulate_state_into_commitment(states.last().map(|el| el.1).unwrap());
-
         self.witness.push((encoding, new_tail, element));
         self.num_items += 1;
         self.tail = new_tail;
 
-        ((old_tail, new_tail), states)
+        let intermediate_info = QueueIntermediateStates {
+            head: self.head,
+            tail: new_tail,
+            num_items: self.num_items,
+            round_function_execution_pairs: states.try_into().unwrap()
+        };
+
+        (old_tail, intermediate_info)
     }
 }
 
-pub struct SpongeLikeQueueSimulator<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const SW: usize> {
+#[derive(Derivative)]
+#[derivative(Debug, Clone(bound=""), Copy(bound=""))]
+pub struct SpongeLikeQueueIntermediateStates<E: Engine, const SW: usize, const ROUNDS: usize> {
+    pub head: [E::Fr; SW],
+    pub tail: [E::Fr; SW],
+    pub num_items: u32,
+    pub round_function_execution_pairs: [([E::Fr; SW], [E::Fr; SW]); ROUNDS] 
+}
+
+pub struct SpongeLikeQueueSimulator<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const SW: usize, const ROUNDS: usize> {
     pub head: [E::Fr; SW],
     pub tail: [E::Fr; SW],
     pub num_items: u32,
     pub witness: Vec<([E::Fr; N], [E::Fr; SW], I)>, 
 }
 
-impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const SW: usize> SpongeLikeQueueSimulator<E, I, N, SW> {
+impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const SW: usize, const ROUNDS: usize> SpongeLikeQueueSimulator<E, I, N, SW, ROUNDS> {
     pub fn empty() -> Self {
         Self {
             head: [E::Fr::zero(); SW],
@@ -91,7 +118,10 @@ impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const
         &mut self, 
         element: I,
         round_function: &R
-    ) -> (([E::Fr; SW], [E::Fr; SW]), Vec<([E::Fr; SW], [E::Fr; SW])>) {
+    ) -> (
+        [E::Fr; SW], // old tail
+        SpongeLikeQueueIntermediateStates<E, SW, ROUNDS>
+    ) {
         let old_tail = self.tail;
         assert!(N % AW == 0);
         let encoding = element.encoding_witness();
@@ -106,7 +136,14 @@ impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const
         self.num_items += 1;
         self.tail = new_tail;
 
-        ((old_tail, new_tail), states)
+        let intermediate_info = SpongeLikeQueueIntermediateStates {
+            head: self.head,
+            tail: new_tail,
+            num_items: self.num_items,
+            round_function_execution_pairs: states.try_into().unwrap()
+        };
+
+        (old_tail, intermediate_info)
     }
 }
 

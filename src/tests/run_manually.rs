@@ -13,6 +13,7 @@ use zk_evm::GenericNoopTracer;
 use crate::pairing::bn256::Bn256;
 use sync_vm::glue::traits::GenericHasher;
 use sync_vm::rescue_poseidon::rescue::params::RescueParams;
+use crate::witness::oracle::create_artifacts_from_tracer;
 
 #[test]
 fn run_and_try_create_witness() {
@@ -93,5 +94,6 @@ fn run_and_try_create_witness() {
     let params = sync_vm::utils::bn254_rescue_params();
     let round_function = GenericHasher::<Bn256, RescueParams<_, 2, 3>, 2, 3>::new_from_params(&params);
 
-    let oracle = VmWitnessOracle::from_witness_tracer(tools.witness_tracer, &round_function);
+    let (oracle, artifacts) = create_artifacts_from_tracer(tools.witness_tracer, &round_function);
+    // let oracle = VmWitnessOracle::from_witness_tracer(tools.witness_tracer, &round_function);
 }

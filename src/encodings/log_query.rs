@@ -239,4 +239,5 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 5> for LogQuery {
 //     }
 // }
 
-pub type LogQueueSimulator<E> = QueueSimulator<E, LogQuery, 5>;
+pub type LogQueueSimulator<E> = QueueSimulator<E, LogQuery, 5, 3>;
+pub type LogQueueState<E> = QueueIntermediateStates<E, 3, 3>;

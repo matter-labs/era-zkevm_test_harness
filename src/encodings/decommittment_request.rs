@@ -8,4 +8,5 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 2> for DecommittmentQuery {
     }
 }
 
-pub type DecommittmentQueueSimulator<E> = SpongeLikeQueueSimulator<E, DecommittmentQuery, 2, 3>;
+pub type DecommittmentQueueSimulator<E> = SpongeLikeQueueSimulator<E, DecommittmentQuery, 2, 3, 1>;
+pub type DecommittmentQueueState<E> = SpongeLikeQueueIntermediateStates<E, 3, 1>;

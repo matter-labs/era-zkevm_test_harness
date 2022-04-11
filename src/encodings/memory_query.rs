@@ -8,4 +8,5 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 2> for MemoryQuery {
     }
 }
 
-pub type MemoryQueueSimulator<E> = SpongeLikeQueueSimulator<E, MemoryQuery, 2, 3>;
+pub type MemoryQueueSimulator<E> = SpongeLikeQueueSimulator<E, MemoryQuery, 2, 3, 1>;
+pub type MemoryQueueState<E> = SpongeLikeQueueIntermediateStates<E, 3, 1>;
