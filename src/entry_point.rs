@@ -205,19 +205,21 @@ pub fn create_in_circuit_vm<
     cs: &mut CS,
     round_function: &R,
     initial_rollback_queue_value: E::Fr,
-
 ) -> sync_vm::vm::vm_state::VmLocalState<E, 3> {
     // we need to prepare some global state and push initial context
-    use sync_vm::vm::vm_cycle::register_view::Register;
+    // use sync_vm::vm::vm_cycle::register_view::Register;
+    use sync_vm::vm::primitives::register_view::Register;
     use sync_vm::vm::ports::ArithmeticFlagsPort;
     use sync_vm::vm::vm_state::callstack::Callstack;
     use sync_vm::vm::vm_state::PendingRoundFunctions;
+
+    let bool_false = Boolean::alloc(cs, Some(false)).unwrap();
 
     let mut initial_callstack = Callstack::<E, 3>::empty();
     // simulate push
 
     let bootloader_address = *BOOTLOADER_FORMAL_ADDRESS;
-    let new_context = initial_in_circuit_context(
+    let mut new_context = initial_in_circuit_context(
         0,
         u32::MAX,
         bootloader_address,
@@ -225,23 +227,34 @@ pub fn create_in_circuit_vm<
         bootloader_address,
         initial_rollback_queue_value,
     );
-
     initial_callstack.context_stack_depth = UInt16::from_uint(1);
+    new_context.saved_context.common_part.is_kernel_mode = bool_false;
     // state - we need to absorb
 
     use sync_vm::traits::CircuitFixedLengthEncodable;
     let encoding = new_context.saved_context.encode(cs).unwrap();
-    let state = round_function.round_function_absorb_nums(
+    let state = round_function.round_function_absorb_nums_multiple_rounds(
         cs,
         initial_callstack.stack_sponge_state,
         &encoding
     ).unwrap();
     initial_callstack.stack_sponge_state = state;
+    initial_callstack.current_context = new_context;
+
+    let initial_flags = ArithmeticFlagsPort::<E> {
+        overflow_or_less_than: bool_false,
+        equal: bool_false,
+        greater_than: bool_false,
+        _marker: std::marker::PhantomData
+    };
+    
+    let zero_u128 = UInt128::allocate(cs, Some(0)).unwrap();
+    let empty_reg = Register {inner: [zero_u128; 2]};
 
     let state = sync_vm::vm::vm_state::VmLocalState {
         previous_code_word: [UInt64::<E>::zero(); 4],
-        registers: [Register::<E>::zero(); zk_evm::zkevm_opcode_defs::REGISTERS_COUNT],
-        flags: ArithmeticFlagsPort::<E>::reseted_flags(),
+        registers: [empty_reg; zk_evm::zkevm_opcode_defs::REGISTERS_COUNT],
+        flags: initial_flags,
         timestamp: UInt32::<E>::from_uint(STARTING_TIMESTAMP),  
         memory_page_counter: UInt32::<E>::from_uint(STARTING_MONOTONIC_PAGES_COUNTER),
         tx_number_in_block: UInt16::<E>::zero(),

@@ -2,6 +2,7 @@
 // at the intermediate things that we need during VM execution,
 // and then during specialized circuits execution
 
+use num_bigint::BigUint;
 use rayon::slice::ParallelSliceMut;
 use sync_vm::traits::CSWitnessable;
 use sync_vm::vm::vm_cycle::memory::MemoryLocation;
@@ -67,7 +68,7 @@ pub fn create_artifacts_from_tracer<
 
     let mut log_queue_simulator = LogQueueSimulator::<E>::empty();
     let mut log_frames_stack = log_frames_stack;
-    assert!(log_frames_stack.len() == 1); // we must have exited the root
+    // assert_eq!(log_frames_stack.len(), 1); // we must have exited the root
     let ApplicationData {
         forward,
         rollbacks
@@ -315,9 +316,11 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
                 assert_eq!(location.index, query.location.index.0);
             }
 
+            println!("memory word = 0x{:x}", query.value);
+
             Some(u256_to_biguint(query.value))
         } else {
-            None
+            Some(BigUint::from(0u64))
         }
     }
 
@@ -338,7 +341,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
 
             Some(u256_to_biguint(query.read_value))
         } else {
-            None
+            Some(BigUint::from(0u64))
         }
     }
 
@@ -353,17 +356,17 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
 
             Some(head)
         } else {
-            None
+            Some(E::Fr::zero())
         }
     }
 
-    fn get_rollback_queue_tail_witness_for_call(&mut self, _timestamp: UInt32<E>, execute: &Boolean) -> Option<<E>::Fr> {
+    fn get_rollback_queue_tail_witness_for_call(&mut self, _timestamp: UInt32<E>, execute: &Boolean) -> Option<E::Fr> {
         if execute.get_value().unwrap_or(false) {
             let (_frame_idx, tail) = self.rollback_queue_initial_tails_for_new_frames.drain(..1).next().unwrap();
 
             Some(tail)
         } else {
-            None
+            Some(E::Fr::zero())
         }
     }
 
@@ -372,7 +375,14 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
     }
 
     fn get_callstack_witness(&mut self, execute: &Boolean) -> (Option<ExecutionContextRecordWitness<E>>, Option<[<E>::Fr; 3]>) {
-        todo!()
+        if execute.get_value().unwrap_or(false) {
+            let (_cycle_idx, query) = self.callstack_values_for_returns.drain(..1).next().unwrap();
+
+
+            todo!();
+        } else {
+            (Some(ExecutionContextRecord::placeholder_witness()), Some([E::Fr::zero(); 3]))
+        }
     }
 
     fn get_decommittment_request_witness(&mut self, request: &DecommitQuery<E>, execute: &Boolean) -> Option<DecommitQueryWitness<E>> {
@@ -394,7 +404,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
 
             Some(wit)
         } else {
-            None
+            Some(DecommitQuery::placeholder_witness())
         }
     }
 }
