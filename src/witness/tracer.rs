@@ -4,14 +4,22 @@ use zk_evm::ethereum_types::U256;
 use zk_evm::aux_structures::LogQuery;
 use zk_evm::aux_structures::*;
 use zk_evm::abstractions::PrecompileCyclesWitness;
+use crate::witness::callstack_handler::CallstackWithAuxData;
 
 use zk_evm::precompiles::keccak256::Keccak256RoundWitness;
 use zk_evm::precompiles::sha256::Sha256RoundWitness;
 use zk_evm::precompiles::ecrecover::ECRecoverRoundWitness;
+use std::collections::HashMap;
 
 use zk_evm::vm_state::MAX_CALLSTACK_DEPTH;
 
 // cycle indicators below are not timestamps!
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum QueryMarker {
+    Forward(usize),
+    Rollback(usize)
+}
 
 #[derive(Clone, Debug)]
 pub struct WitnessTracer {
@@ -23,11 +31,52 @@ pub struct WitnessTracer {
     pub keccak_round_function_witnesses: Vec<(u32, LogQuery, Vec<Keccak256RoundWitness>)>,
     pub sha256_round_function_witnesses: Vec<(u32, LogQuery, Vec<Sha256RoundWitness>)>,
     pub ecrecover_witnesses: Vec<(u32, LogQuery, Vec<ECRecoverRoundWitness>)>,
-    pub log_frames_stack: Vec<ApplicationData<((usize, usize), (u32, LogQuery))>>, // keep the unique frame index
+    pub monotonic_query_counter: usize,
+    pub log_frames_stack: Vec<ApplicationData<((usize, usize), (QueryMarker, u32, LogQuery))>>, // keep the unique frame index
     pub callstack_helper: AuxCallstackProto,
+    pub per_frame_queues: HashMap<usize, ApplicationData<LogQuery>>,
+    pub callstack_with_aux_data: CallstackWithAuxData,
+    pub sponge_busy_range: Range<usize>,
     // we need to properly preserve the information about logs. Not just flattening them into something,
     // but also keep the markers on when new frame has started and has finished, and the final frame execution
     // result, so we can properly substitute hash chain results in there for non-determinism
+}
+
+
+#[derive(Clone, Debug)]
+pub struct NumberedApplicationData<T> {
+    pub index: usize,
+    pub forward: Vec<T>,
+    pub rollbacks: Vec<T>,
+}
+
+impl<T> NumberedApplicationData<T> {
+    pub fn new() -> Self {
+        Self {
+            index: 0,
+            forward: vec![],
+            rollbacks: vec![]
+        }
+    }
+}
+
+use std::ops::Range;
+
+#[derive(Clone, Debug)]
+pub struct LogQueueFramesProcessor {
+    pub frame_indexes: Vec<usize>,
+    pub frames: NumberedApplicationData<(QueryMarker, LogQuery)>,
+    pub ranges: NumberedApplicationData<Range<usize>>,
+}
+
+impl LogQueueFramesProcessor {
+    pub fn empty() -> Self {
+        Self {
+            frame_indexes: vec![],
+            frames: NumberedApplicationData::new(),
+            ranges: NumberedApplicationData::new(),
+        }
+    }
 }
 
 impl WitnessTracer {
@@ -41,17 +90,26 @@ impl WitnessTracer {
             keccak_round_function_witnesses: vec![],
             sha256_round_function_witnesses: vec![],
             ecrecover_witnesses: vec![],
+            monotonic_query_counter: 0,
             log_frames_stack: vec![ApplicationData::empty()],
-            callstack_helper: AuxCallstackProto::new_with_max_ergs()
+            callstack_helper: AuxCallstackProto::new_with_max_ergs(),
+            per_frame_queues: HashMap::new(),
+            callstack_with_aux_data: CallstackWithAuxData::empty(),
+            sponge_busy_range: 0..0
         }
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct AuxCallstackProto {
+    // monotonic counter to enumerate frames
     pub monotonic_frame_counter: usize,
+    // current frame and it's parent
     pub current: ((usize, usize), CallStackEntry), // we save PARENT index and stack entry itself
+    // stack of frames, along with their parents
     pub stack: Vec<((usize, usize), CallStackEntry)>,
+    // history of "actions" - VM cycle, and action direction
+    pub history: Vec<(u32, (bool, usize, CallStackEntry))>,
 }
 
 impl AuxCallstackProto {
@@ -62,7 +120,8 @@ impl AuxCallstackProto {
         Self {
             monotonic_frame_counter: 2,
             current: ((0, 1), initial_callstack),
-            stack: vec![]
+            stack: vec![],
+            history: vec![],
         }
     }
 
@@ -71,19 +130,25 @@ impl AuxCallstackProto {
     }
 
     #[track_caller]
-    pub fn push_entry(&mut self, entry: CallStackEntry) {
+    pub fn push_entry(&mut self, monotonic_cycle_counter: u32, previous_entry: CallStackEntry, new_entry: CallStackEntry) {
         let new_counter = self.monotonic_frame_counter;
         let current_counter = self.current.0.1;
         self.monotonic_frame_counter += 1;
-        let old = std::mem::replace(&mut self.current, ((current_counter, new_counter), entry));
+        let mut old = std::mem::replace(&mut self.current, ((current_counter, new_counter), new_entry));
+        assert_eq!(old.1.code_page, previous_entry.code_page);
+        old.1 = previous_entry;
         self.stack.push(old);
+
+        self.history.push((monotonic_cycle_counter, (true, current_counter, previous_entry)));
         debug_assert!(self.depth() <= MAX_CALLSTACK_DEPTH);
     }
 
     #[track_caller]
-    pub fn pop_entry(&mut self) -> ((usize, usize), CallStackEntry) {
+    pub fn pop_entry(&mut self, monotonic_cycle_counter: u32) -> ((usize, usize), CallStackEntry) {
         let previous = self.stack.pop().unwrap();
         let old = std::mem::replace(&mut self.current, previous);
+
+        self.history.push((monotonic_cycle_counter, (false, old.0.1, old.1)));
 
         old
     }
@@ -102,6 +167,10 @@ impl VmWitnessTracer for WitnessTracer {
             self.storage_read_queries.push((monotonic_cycle_counter, log_query));
         }
 
+        self.callstack_with_aux_data.add_log_query(monotonic_cycle_counter, log_query);
+
+        let query_counter = self.monotonic_query_counter;
+        self.monotonic_query_counter += 1;
         // log in general
         assert!(!log_query.rollback);
         let parent_frame_counter = self.callstack_helper.current.0.0;
@@ -110,12 +179,29 @@ impl VmWitnessTracer for WitnessTracer {
         let frame_data = self.log_frames_stack.last_mut().unwrap();
         if log_query.rw_flag {
             //  also append rollback
-            frame_data.forward.push((frames_index, (monotonic_cycle_counter, log_query)));
+            log_query.rollback = false;
+            frame_data.forward.push((frames_index, (QueryMarker::Forward(query_counter), monotonic_cycle_counter, log_query)));
             log_query.rollback = true;
-            frame_data.rollbacks.push((frames_index, (monotonic_cycle_counter, log_query)));
+            frame_data.rollbacks.push((frames_index, (QueryMarker::Rollback(query_counter), monotonic_cycle_counter, log_query)));
         } else {
             // read, do not append to rollback
-            frame_data.forward.push((frames_index, (monotonic_cycle_counter, log_query)));
+            log_query.rollback = false;
+            frame_data.forward.push((frames_index, (QueryMarker::Forward(query_counter), monotonic_cycle_counter, log_query)));
+        }
+
+        // log for particular frame
+        let frame_index = self.callstack_helper.current.0.1;
+        let entry = self.per_frame_queues.entry(frame_index).or_insert(ApplicationData::empty());
+        if log_query.rw_flag {
+            //  also append rollback
+            log_query.rollback = false;
+            entry.forward.push(log_query);
+            log_query.rollback = true;
+            entry.rollbacks.push(log_query);
+        } else {
+            // read, do not append to rollback
+            log_query.rollback = false;
+            entry.forward.push(log_query);
         }
     }
 
@@ -143,19 +229,23 @@ impl VmWitnessTracer for WitnessTracer {
         unreachable!()
     }
 
-    fn start_new_execution_context(&mut self, monotonic_cycle_counter: u32, new_context: &CallStackEntry) {
+    fn start_new_execution_context(&mut self, monotonic_cycle_counter: u32, previous_context: &CallStackEntry, new_context: &CallStackEntry) {
+        self.callstack_with_aux_data.push_entry(monotonic_cycle_counter, *previous_context, *new_context);
+
         // log part
         let new = ApplicationData::empty();
         self.log_frames_stack.push(new);
 
         // callstack part
-        self.callstack_helper.push_entry(*new_context);
+        self.callstack_helper.push_entry(monotonic_cycle_counter, *previous_context, *new_context);
         let new_depth = self.callstack_helper.depth() as u32;
         self.callstack_actions.push((monotonic_cycle_counter, (true, new_depth, *new_context)));
     }
 
     fn finish_execution_context(&mut self, monotonic_cycle_counter: u32, panicked: bool) {
         // log part
+
+        self.callstack_with_aux_data.pop_entry(monotonic_cycle_counter, panicked);
 
         // if we panic then we append forward and rollbacks to the forward of parent,
         // otherwise we place rollbacks of child before rollbacks of the parent
@@ -173,7 +263,7 @@ impl VmWitnessTracer for WitnessTracer {
         }
 
         // callstack part
-        let (_, popped) = self.callstack_helper.pop_entry();
+        let (_, popped) = self.callstack_helper.pop_entry(monotonic_cycle_counter);
         let new_depth = self.callstack_helper.depth() as u32;
         self.callstack_actions.push((monotonic_cycle_counter, (false, new_depth, popped)));
     }

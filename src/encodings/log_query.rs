@@ -158,9 +158,9 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 5> for LogQuery {
         let mut shift = 0;
         scale_and_accumulate::<E, _>(&mut lc, self.written_value.0[0], &shifts, shift);
         shift += 64;
-        scale_and_accumulate::<E, _>(&mut lc, self.read_value.0[1], &shifts, shift);
+        scale_and_accumulate::<E, _>(&mut lc, self.written_value.0[1], &shifts, shift);
         shift += 64;
-        scale_and_accumulate::<E, _>(&mut lc, self.read_value.0[2], &shifts, shift);
+        scale_and_accumulate::<E, _>(&mut lc, self.written_value.0[2], &shifts, shift);
         shift += 64;
         assert!(shift <= E::Fr::CAPACITY as usize);
         let el3 = lc;
@@ -182,6 +182,8 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 5> for LogQuery {
         assert!(shift <= E::Fr::CAPACITY as usize);
 
         let el4 = lc;
+
+        dbg!([el0, el1, el2, el3, el4]);
 
         [el0, el1, el2, el3, el4]
     }

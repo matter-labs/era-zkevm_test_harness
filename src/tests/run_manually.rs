@@ -20,31 +20,6 @@ use crate::witness::oracle::create_artifacts_from_tracer;
 
 #[test]
 fn run_and_try_create_witness() {
-    // let asm = r#"
-    //     .text
-    //     .file	"Test_26"
-    //     .rodata.cst32
-    //     .p2align	5
-    //     .text
-    //     .globl	__entry
-    // __entry:
-    // .main:
-    //     add 1, r0, r1
-    //     add 2, r0, r2
-    //     sstore r1, r2
-    //     near_call r0, @.to_revert, @.continue
-    // .continue:
-    //     add 5, r0, r1
-    //     add 6, r0, r2
-    //     sstore r1, r2
-    //     ret.ok r0
-    // .to_revert:
-    //     add 3, r0, r1
-    //     add 4, r0, r2
-    //     sstore r1, r2
-    //     ret.revert r0
-    // "#;
-
     let asm = r#"
         .text
         .file	"Test_26"
@@ -54,10 +29,84 @@ fn run_and_try_create_witness() {
         .globl	__entry
     __entry:
     .main:
-        add! 1, r0, r1
+        nop stack+=[4]
+        nop stack-=[1]
+        add 1, r0, r1
+        add 2, r0, r2
+        sstore r1, r2
+        near_call r0, @.continue, @.to_revert
         ret.ok r0
+    .continue:
+        add 5, r0, r1
+        add 6, r0, r2
+        sstore r1, r2
+        ret.ok r0
+    .to_revert:
+        add 3, r0, r1
+        add 4, r0, r2
+        sstore r1, r2
+        ret.revert r0
     "#;
 
+    // let asm = r#"
+    //     .text
+    //     .file	"Test_26"
+    //     .rodata.cst32
+    //     .p2align	5
+    //     .text
+    //     .globl	__entry
+    // __entry:
+    // .main:
+    //     add! 1, r0, r1
+    //     ret.ok r0
+    // "#;
+
+    run_and_try_create_witness_inner(asm, 16);
+}
+
+fn assert_equal_state(
+    out_of_circuit: &zk_evm::vm_state::VmLocalState,
+    in_circuit: &sync_vm::vm::vm_state::VmLocalState<Bn256, 3>
+) {
+    let wit = in_circuit.create_witness().unwrap();
+
+    for (reg_idx, (circuit, not_circuit)) in wit.registers.iter().zip(out_of_circuit.registers.iter()).enumerate() {
+        compare_reg_values(
+            reg_idx + 1,
+            circuit.inner,
+            *not_circuit
+        );
+    }
+
+    // compare flags
+    let flags = wit.flags;
+    assert_eq!(flags.overflow_or_less_than, out_of_circuit.flags.overflow_or_less_than_flag, "OF flag divergence");
+    assert_eq!(flags.equal, out_of_circuit.flags.equality_flag, "EQ flag divergence");
+    assert_eq!(flags.greater_than, out_of_circuit.flags.greater_than_flag, "GT flag divergence");
+}
+
+fn compare_reg_values(
+    reg_idx: usize,
+    in_circuit: [u128; 2],
+    out_of_circuit: U256
+) {
+    let l0_a = in_circuit[0] as u64;
+    let l1_a = (in_circuit[0] >> 64) as u64;
+    let l2_a = in_circuit[1] as u64;
+    let l3_a = (in_circuit[1] >> 64) as u64;
+
+    let equal = out_of_circuit.0[0] == l0_a && out_of_circuit.0[1] == l1_a && out_of_circuit.0[2] == l2_a && out_of_circuit.0[3] == l3_a;
+    if !equal {
+        println!("Limb 0 in circuit = 0x{:016x}, out = 0x{:016x}", l0_a, out_of_circuit.0[0]);
+        println!("Limb 1 in circuit = 0x{:016x}, out = 0x{:016x}", l1_a, out_of_circuit.0[1]);
+        println!("Limb 2 in circuit = 0x{:016x}, out = 0x{:016x}", l2_a, out_of_circuit.0[2]);
+        println!("Limb 3 in circuit = 0x{:016x}, out = 0x{:016x}", l3_a, out_of_circuit.0[3]);
+
+        panic!("Failed as reg {}:", reg_idx);
+    }
+}
+
+fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
     let assembly = Assembly::try_from(asm.to_owned()).unwrap();
     let bytecode = assembly.compile_to_bytecode().unwrap();
     dbg!(bytecode.len());
@@ -100,8 +149,6 @@ fn run_and_try_create_witness() {
         50, 
         2
     );
-
-    let cycle_limit = 1;
 
     let mut out_of_circuit_vm = create_out_of_circuit_vm(&mut tools, &block_properties);
     let mut tracer = GenericNoopTracer::<_>::new();
@@ -149,46 +196,4 @@ fn run_and_try_create_witness() {
         &in_circuit_vm,
     );
     // compare
-}
-
-fn assert_equal_state(
-    out_of_circuit: &zk_evm::vm_state::VmLocalState,
-    in_circuit: &sync_vm::vm::vm_state::VmLocalState<Bn256, 3>
-) {
-    let wit = in_circuit.create_witness().unwrap();
-
-    for (reg_idx, (circuit, not_circuit)) in wit.registers.iter().zip(out_of_circuit.registers.iter()).enumerate() {
-        compare_reg_values(
-            reg_idx + 1,
-            circuit.inner,
-            *not_circuit
-        );
-    }
-
-    // compare flags
-    let flags = wit.flags;
-    assert_eq!(flags.overflow_or_less_than, out_of_circuit.flags.overflow_or_less_than_flag, "OF flag divergence");
-    assert_eq!(flags.equal, out_of_circuit.flags.equality_flag, "EQ flag divergence");
-    assert_eq!(flags.greater_than, out_of_circuit.flags.greater_than_flag, "GT flag divergence");
-}
-
-fn compare_reg_values(
-    reg_idx: usize,
-    in_circuit: [u128; 2],
-    out_of_circuit: U256
-) {
-    let l0_a = in_circuit[0] as u64;
-    let l1_a = (in_circuit[0] >> 64) as u64;
-    let l2_a = in_circuit[1] as u64;
-    let l3_a = (in_circuit[1] >> 64) as u64;
-
-    let equal = out_of_circuit.0[0] == l0_a && out_of_circuit.0[1] == l1_a && out_of_circuit.0[2] == l2_a && out_of_circuit.0[3] == l3_a;
-    if !equal {
-        println!("Limb 0 in circuit = 0x{:016x}, out = 0x{:016x}", l0_a, out_of_circuit.0[0]);
-        println!("Limb 1 in circuit = 0x{:016x}, out = 0x{:016x}", l1_a, out_of_circuit.0[1]);
-        println!("Limb 2 in circuit = 0x{:016x}, out = 0x{:016x}", l2_a, out_of_circuit.0[2]);
-        println!("Limb 3 in circuit = 0x{:016x}, out = 0x{:016x}", l3_a, out_of_circuit.0[3]);
-
-        panic!("Failed as reg {}", reg_idx);
-    }
 }

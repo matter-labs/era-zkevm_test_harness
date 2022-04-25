@@ -12,6 +12,7 @@ pub trait OutOfCircuitFixedLengthEncodable<E: Engine, const N: usize> {
 pub mod decommittment_request;
 pub mod memory_query;
 pub mod log_query;
+pub mod callstack_entry;
 
 #[derive(Derivative)]
 #[derivative(Debug, Clone(bound=""), Copy(bound=""))]
@@ -147,14 +148,23 @@ impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const
     }
 }
 
+#[derive(Derivative)]
+#[derivative(Debug, Clone(bound=""), Copy(bound=""))]
+pub struct SpongeLikeStackIntermediateStates<E: Engine, const SW: usize, const ROUNDS: usize> {
+    pub is_push: bool,
+    pub previous_state: [E::Fr; SW],
+    pub new_state: [E::Fr; SW],
+    pub depth: u32,
+    pub round_function_execution_pairs: [([E::Fr; SW], [E::Fr; SW]); ROUNDS] 
+}
 
-pub struct SpongeLikeStackSimulator<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const SW: usize> {
+pub struct SpongeLikeStackSimulator<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const SW: usize, const ROUNDS: usize> {
     pub state: [E::Fr; SW],
     pub num_items: u32,
     pub witness: Vec<([E::Fr; N], [E::Fr; SW], I)>, 
 }
 
-impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const SW: usize> SpongeLikeStackSimulator<E, I, N, SW> {
+impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const SW: usize, const ROUNDS: usize> SpongeLikeStackSimulator<E, I, N, SW, ROUNDS> {
     pub fn empty() -> Self {
         Self {
             state: [E::Fr::zero(); SW],
@@ -175,9 +185,11 @@ impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const
         &mut self, 
         element: I,
         round_function: &R
-    ) -> Vec<([E::Fr; SW], [E::Fr; SW])> {
+    ) -> SpongeLikeStackIntermediateStates<E, SW, ROUNDS> {
         assert!(N % AW == 0);
         let encoding = element.encoding_witness();
+
+        let old_state = self.state;
 
         let states = round_function.simulate_absorb_multiple_rounds(
             self.state,
@@ -189,14 +201,25 @@ impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const
         self.num_items += 1;
         self.state = new_state;
 
-        states
+        let intermediate_info = SpongeLikeStackIntermediateStates {
+            is_push: true,
+            previous_state: old_state,
+            new_state,
+            depth: self.num_items,
+            round_function_execution_pairs: states.try_into().unwrap()
+        };
+
+        intermediate_info
     }
 
     pub fn pop_and_output_intermediate_data<R: CircuitArithmeticRoundFunction<E, AW, SW>, const AW: usize>(
         &mut self, 
         round_function: &R
-    ) -> (I, Vec<([E::Fr; SW], [E::Fr; SW])>) {
+    ) -> (I, SpongeLikeStackIntermediateStates<E, SW, ROUNDS>) {
         assert!(N % AW == 0);
+
+        let current_state = self.state;
+
         let popped = self.witness.pop().unwrap();
         self.num_items -= 1;
 
@@ -212,6 +235,14 @@ impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const
 
         self.state = previous_state;
 
-        (element, states)
+        let intermediate_info = SpongeLikeStackIntermediateStates {
+            is_push: false,
+            previous_state: current_state,
+            new_state: previous_state,
+            depth: self.num_items,
+            round_function_execution_pairs: states.try_into().unwrap()
+        };
+
+        (element, intermediate_info)
     }
 }

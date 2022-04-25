@@ -19,6 +19,8 @@ pub const STARTING_MONOTONIC_PAGES_COUNTER: u32 = 2048;
 
 pub const STARTING_TIMESTAMP: u32 = 8;
 
+pub const INITIAL_MONOTONIC_CYCLE_COUNTER: u32 = 1024;
+
 // Define initial contexts to work with
 
 pub fn initial_out_of_circuit_context(
@@ -35,7 +37,6 @@ pub fn initial_out_of_circuit_context(
         base_memory_page: MemoryPage(STARTING_BASE_PAGE),
         code_page: MemoryPage(STARTING_CODE_PAGE),
         calldata_page: MemoryPage(STARTING_CALLDATA_PAGE),
-        returndata_page: MemoryPage(0),
         sp: 0u16,
         pc: initial_pc,
         exception_handler_location: u16::MAX,
@@ -178,6 +179,7 @@ pub fn create_out_of_circuit_vm<'a, const B: bool>(
         block_properties,
     );
 
+
     let bootloader_address = *BOOTLOADER_FORMAL_ADDRESS;
 
     let initial_context = initial_out_of_circuit_context(
@@ -188,11 +190,12 @@ pub fn create_out_of_circuit_vm<'a, const B: bool>(
         bootloader_address
     );
 
-    vm.local_state.current_ergs_per_pubdata_byte = 0; // uninitialized yet, but we do not care
-
     vm.push_bootloader_context(0, initial_context);
+
+    vm.local_state.current_ergs_per_pubdata_byte = 0; // uninitialized yet, but we do not care
     vm.local_state.timestamp = STARTING_TIMESTAMP;
     vm.local_state.memory_page_counter = STARTING_MONOTONIC_PAGES_COUNTER;
+    vm.local_state.monotonic_cycle_counter = INITIAL_MONOTONIC_CYCLE_COUNTER;
 
     vm
 }
