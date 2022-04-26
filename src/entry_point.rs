@@ -217,8 +217,17 @@ pub fn create_in_circuit_vm<
     use sync_vm::vm::vm_state::PendingRoundFunctions;
 
     let bool_false = Boolean::alloc(cs, Some(false)).unwrap();
+    let bool_true = Boolean::alloc(cs, Some(true)).unwrap();
 
     let mut initial_callstack = Callstack::<E, 3>::empty();
+    let mut initial_context = initial_callstack.current_context.saved_context.clone();
+    // set the head-tail, and segment length is 0
+    initial_context.common_part.reverted_queue_head = Num::Constant(initial_rollback_queue_value);
+    initial_context.common_part.reverted_queue_tail = Num::Constant(initial_rollback_queue_value);
+    // and we start/end in kernel mode
+    initial_context.common_part.is_kernel_mode = Boolean::constant(true);
+
+    dbg!(Num::get_value_multiple(&initial_callstack.stack_sponge_state));
     // simulate push
 
     let bootloader_address = *BOOTLOADER_FORMAL_ADDRESS;
@@ -231,11 +240,12 @@ pub fn create_in_circuit_vm<
         initial_rollback_queue_value,
     );
     initial_callstack.context_stack_depth = UInt16::from_uint(1);
-    new_context.saved_context.common_part.is_kernel_mode = bool_false;
-    // state - we need to absorb
+    new_context.saved_context.common_part.is_kernel_mode = bool_true; // formal address of the bootloader implies kernel
 
+    // push the initial (empty) context
     use sync_vm::traits::CircuitFixedLengthEncodable;
-    let encoding = new_context.saved_context.encode(cs).unwrap();
+    let encoding = initial_context.encode(cs).unwrap();
+    dbg!(Num::get_value_multiple(&encoding));
     let state = round_function.round_function_absorb_nums_multiple_rounds(
         cs,
         initial_callstack.stack_sponge_state,
@@ -243,6 +253,7 @@ pub fn create_in_circuit_vm<
     ).unwrap();
     initial_callstack.stack_sponge_state = state;
     initial_callstack.current_context = new_context;
+    dbg!(Num::get_value_multiple(&initial_callstack.stack_sponge_state));
 
     let initial_flags = ArithmeticFlagsPort::<E> {
         overflow_or_less_than: bool_false,

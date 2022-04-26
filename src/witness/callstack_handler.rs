@@ -131,8 +131,8 @@ impl CallstackWithAuxData {
     }
 
     pub fn push_entry(&mut self, monotonic_cycle_counter: u32, previous_simple_entry: CallStackEntry, new_simple_entry: CallStackEntry) {
-        dbg!(&previous_simple_entry);
-        dbg!(&new_simple_entry);
+        // dbg!(&previous_simple_entry);
+        // dbg!(&new_simple_entry);
 
         let new_counter = self.monotonic_frame_counter;
         self.monotonic_frame_counter += 1;
@@ -184,7 +184,7 @@ impl CallstackWithAuxData {
 
     pub fn pop_entry(&mut self, monotonic_cycle_counter: u32, panicked: bool) -> CallStackEntry {
         let mut previous = self.stack.pop().unwrap();
-        dbg!(&previous);
+        // dbg!(&previous);
         self.depth -= 1;
 
         let previous_history_record = &mut previous.current_history_record;
@@ -214,7 +214,7 @@ impl CallstackWithAuxData {
 
         // when we pop then current goes out of scope
         let current = std::mem::replace(&mut self.current_entry, previous);
-        dbg!(&current);
+        // dbg!(&current);
         // keep the history as is
         let mut history_of_current = current.current_history_record.clone();
         history_of_current.action = CallstackAction::OutOfScope { panic: panicked };

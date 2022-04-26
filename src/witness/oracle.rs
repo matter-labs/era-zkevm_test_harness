@@ -59,14 +59,11 @@ pub fn create_artifacts_from_tracer<
         precompile_calls, 
         storage_read_queries, 
         decommittment_queries, 
-        callstack_actions, 
         keccak_round_function_witnesses, 
         sha256_round_function_witnesses, 
         ecrecover_witnesses, 
         log_frames_stack, 
-        callstack_helper ,
         monotonic_query_counter: _,
-        per_frame_queues,
         callstack_with_aux_data,
         ..
     } = tracer;
@@ -318,12 +315,21 @@ pub fn create_artifacts_from_tracer<
     use crate::encodings::callstack_entry::CallstackSimulator;
     let mut callstack_argebraic_simulator = CallstackSimulator::<E>::empty();
 
+    let mut skipped_entry_point = false;
+
     for el in full_history {
         match el.action {
             CallstackAction::PushToStack => {
                 // this is a point where need to substitue a state of the computed chain
                 // we mainly need the length of the segment of the rollback queue and the current point
                 // and head/tail parts of the queue
+
+                println!("Pushing {:?} to the callstack", el);
+                println!("Callstack sponge state = {:?}", callstack_argebraic_simulator.state);
+
+                if !skipped_entry_point {
+                    skipped_entry_point = true;   
+                }
 
                 assert!(el.rollback_queue_ranges_at_entry.len() <= 1);
                 assert!(el.rollback_queue_ranges_change.len() == 0, "expected merged changes for push, got {:?}", &el.rollback_queue_ranges_change);
@@ -351,12 +357,16 @@ pub fn create_artifacts_from_tracer<
                     rollback_queue_segment_length: segment_len as u32,
                 };
 
-                let _ = callstack_argebraic_simulator.push_and_output_intermediate_data(entry, round_function);
+                let states = callstack_argebraic_simulator.push_and_output_intermediate_data(entry, round_function);
+                dbg!(states.round_function_execution_pairs.last().unwrap().1);
+                dbg!(&callstack_argebraic_simulator.witness);
             },
             CallstackAction::PopFromStack { panic: _ } => {
+                println!("Popping {:?} from the callstack", el);
                 // here we actually get witness
 
                 let (entry, intermediate_info) = callstack_argebraic_simulator.pop_and_output_intermediate_data(round_function);
+                dbg!(&intermediate_info);
                 callstack_values_for_returns.push((el.cycle_index, (entry, intermediate_info)));
             },
             _ => {}
@@ -364,15 +374,18 @@ pub fn create_artifacts_from_tracer<
         }
     }
 
+    // for witness we need only frames after the initial entrypoint
+    // let _ = callstack_values_for_returns.drain(0..1);
+
     dbg!(&callstack_values_for_returns);
 
     // we simulate a series of actions on the stack starting from the outermost frame
     // each history record contains an information on what was the stack state between points
     // when it potentially came into and out of scope
 
-    for (idx, el) in memory_read_witness.iter().enumerate() {
-        println!("Memory witness {} = 0x{:x}", idx, el.1.value);
-    }
+    // for (idx, el) in memory_read_witness.iter().enumerate() {
+    //     println!("Memory witness {} = 0x{:x}", idx, el.1.value);
+    // }
 
     dbg!(&rollback_queue_initial_tails_for_new_frames);
 
@@ -506,13 +519,15 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
             let (_cycle_idx, (extended_entry, internediate_info)) = self.callstack_values_for_returns.drain(..1).next().unwrap();
             let CallstackSimulatorState {
                 is_push,
-                previous_state,
-                new_state: _,
+                previous_state: _,
+                new_state,
                 depth: _,
                 round_function_execution_pairs: _,
             } = internediate_info;
 
             assert!(!is_push);
+
+            dbg!(new_state);
 
             let ExtendedCallstackEntry { 
                 callstack_entry: entry, 
@@ -555,7 +570,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
                 _marker: std::marker::PhantomData
             };
 
-            (Some(witness), Some(previous_state))
+            (Some(witness), Some(new_state))
         } else {
             (Some(ExecutionContextRecord::placeholder_witness()), Some([E::Fr::zero(); 3]))
         }

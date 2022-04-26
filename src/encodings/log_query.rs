@@ -183,7 +183,7 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 5> for LogQuery {
 
         let el4 = lc;
 
-        dbg!([el0, el1, el2, el3, el4]);
+        // dbg!([el0, el1, el2, el3, el4]);
 
         [el0, el1, el2, el3, el4]
     }

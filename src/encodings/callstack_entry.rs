@@ -105,7 +105,6 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 6> for ExtendedCallstackEntr
         shift += 8;
         // 224
         scale_and_accumulate::<E, _>(&mut lc, 0u16, &shifts, shift);
-        // lc.add_assign_number_with_coeff(&self.pubdata_bytes_remaining.inner, shifts[shift]);
         shift += 16;
         // 240
         scale_and_accumulate::<E, _>(&mut lc, self.callstack_entry.code_shard_id, &shifts, shift);
