@@ -122,8 +122,6 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 6> for ExtendedCallstackEntr
         assert!(shift <= E::Fr::CAPACITY as usize);
 
         let val_5 = lc;
-
-        dbg!([val_0, val_1, val_2, val_3, val_4, val_5]);
        
         [val_0, val_1, val_2, val_3, val_4, val_5]
     }

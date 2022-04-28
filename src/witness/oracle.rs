@@ -43,6 +43,8 @@ pub struct VmWitnessOracle<E: Engine> {
     pub storage_read_queries: Vec<(u32, LogQuery)>,
     pub callstack_values_for_returns: Vec<(u32, (ExtendedCallstackEntry<E>, CallstackSimulatorState<E>))>,
     pub initial_tail_for_entry_point: E::Fr,
+    pub initial_callstack_state_for_start: ([E::Fr; 3], CallStackEntry),
+    pub initial_context_for_start: CallStackEntry,
 }
 
 use super::full_block_artifact::FullBlockArtifacts;
@@ -315,7 +317,8 @@ pub fn create_artifacts_from_tracer<
     use crate::encodings::callstack_entry::CallstackSimulator;
     let mut callstack_argebraic_simulator = CallstackSimulator::<E>::empty();
 
-    let mut skipped_entry_point = false;
+    let mut initial_callstack_state_for_start = None;
+    let mut initial_context_for_start = None;
 
     for el in full_history {
         match el.action {
@@ -323,13 +326,6 @@ pub fn create_artifacts_from_tracer<
                 // this is a point where need to substitue a state of the computed chain
                 // we mainly need the length of the segment of the rollback queue and the current point
                 // and head/tail parts of the queue
-
-                println!("Pushing {:?} to the callstack", el);
-                println!("Callstack sponge state = {:?}", callstack_argebraic_simulator.state);
-
-                if !skipped_entry_point {
-                    skipped_entry_point = true;   
-                }
 
                 assert!(el.rollback_queue_ranges_at_entry.len() <= 1);
                 assert!(el.rollback_queue_ranges_change.len() == 0, "expected merged changes for push, got {:?}", &el.rollback_queue_ranges_change);
@@ -357,22 +353,33 @@ pub fn create_artifacts_from_tracer<
                     rollback_queue_segment_length: segment_len as u32,
                 };
 
-                let states = callstack_argebraic_simulator.push_and_output_intermediate_data(entry, round_function);
-                dbg!(states.round_function_execution_pairs.last().unwrap().1);
-                dbg!(&callstack_argebraic_simulator.witness);
+                let _states = callstack_argebraic_simulator.push_and_output_intermediate_data(entry, round_function);
+
+                if initial_callstack_state_for_start.is_none() {
+                    initial_callstack_state_for_start = Some((_states.new_state, el.affected_entry));
+                }
             },
             CallstackAction::PopFromStack { panic: _ } => {
-                println!("Popping {:?} from the callstack", el);
                 // here we actually get witness
 
                 let (entry, intermediate_info) = callstack_argebraic_simulator.pop_and_output_intermediate_data(round_function);
-                dbg!(&intermediate_info);
                 callstack_values_for_returns.push((el.cycle_index, (entry, intermediate_info)));
             },
+            CallstackAction::OutOfScope { panic: _ } => {
+                if initial_context_for_start.is_none() {
+                    initial_context_for_start = Some(el.affected_entry);
+                }
+            }
             _ => {}
-
         }
     }
+
+    let initial_callstack_state_for_start = initial_callstack_state_for_start.unwrap();
+    let initial_context_for_start = initial_context_for_start.unwrap();
+
+    dbg!(&initial_callstack_state_for_start);
+    dbg!(&initial_context_for_start);
+
 
     // for witness we need only frames after the initial entrypoint
     // let _ = callstack_values_for_returns.drain(0..1);
@@ -389,6 +396,8 @@ pub fn create_artifacts_from_tracer<
 
     dbg!(&rollback_queue_initial_tails_for_new_frames);
 
+    dbg!(&memory_read_witness);
+
     let oracle = VmWitnessOracle::<E> {
         memory_read_witness,
         rollback_queue_head_segments,
@@ -397,6 +406,8 @@ pub fn create_artifacts_from_tracer<
         storage_read_queries,
         callstack_values_for_returns,
         initial_tail_for_entry_point,
+        initial_callstack_state_for_start,
+        initial_context_for_start,
     };
 
     let mut artifacts = FullBlockArtifacts::<E>::default();
@@ -434,6 +445,9 @@ use crate::entry_point::INITIAL_MONOTONIC_CYCLE_COUNTER;
 impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
     fn get_memory_witness_for_read(&mut self, timestamp: UInt32<E>, key: &MemoryLocation<E>, execute: &Boolean) -> Option<num_bigint::BigUint> {
         if execute.get_value().unwrap_or(false) {
+            if self.memory_read_witness.is_empty() {
+                panic!("should have a witness to read at timestamp {:?}, location {:?}", timestamp.get_value(), key.create_witness());
+            }
             let (cycle, query) = self.memory_read_witness.drain(..1).next().unwrap();
 
             // println!("Query value = 0x{:x}", query.value);
@@ -484,7 +498,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
     fn get_rollback_queue_witness(&mut self, _key: &StorageLogRecord<E>, execute: &Boolean) -> Option<<E>::Fr> {
         if execute.get_value().unwrap_or(false) {
             let (_cycle, head) = self.rollback_queue_head_segments.drain(..1).next().unwrap();
-            dbg!(head);
+            // dbg!(head);
 
             Some(head)
         } else {

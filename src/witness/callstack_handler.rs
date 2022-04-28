@@ -164,6 +164,8 @@ impl CallstackWithAuxData {
             rollback_queue_ranges: vec![], 
         };
 
+        let history_of_new = full_entry.current_history_record.clone();
+
         let mut current = std::mem::replace(&mut self.current_entry, full_entry);
         // update as we do not mutate between intermediate points
         current.entry = previous_simple_entry;
@@ -176,10 +178,9 @@ impl CallstackWithAuxData {
         history_of_current.action = CallstackAction::PushToStack;
         history_of_current.cycle_index = monotonic_cycle_counter;
 
-        // dbg!(&current);
-        // dbg!(&history_of_current);
         self.stack.push(current);
         self.full_history.push(history_of_current);
+        self.full_history.push(history_of_new);
     }
 
     pub fn pop_entry(&mut self, monotonic_cycle_counter: u32, panicked: bool) -> CallStackEntry {
@@ -269,7 +270,7 @@ impl CallstackWithAuxData {
         current.entry
     }
 
-    pub fn add_log_query(&mut self, monotonic_cycle_counter: u32, mut log_query: LogQuery) {
+    pub fn add_log_query(&mut self, monotonic_cycle_counter: u32, log_query: LogQuery) {
         let forward_query_index = self.monotonic_forward_query_counter;
         self.monotonic_forward_query_counter += 1;
         if log_query.rw_flag {

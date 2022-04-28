@@ -84,6 +84,34 @@ pub fn initial_in_circuit_context<E: Engine>(
     ctx
 }
 
+pub fn out_to_in_circuit_context_on_call<E: Engine, CS: ConstraintSystem<E>>(
+    cs: &mut CS,
+    out_of_circuit_context: CallStackEntry,
+    initial_rollback_queue_value: E::Fr,
+) -> FullExecutionContext<E> {
+    let mut ctx = FullExecutionContext::uninitialized();
+
+    ctx.saved_context.common_part.base_page = UInt32::from_uint(out_of_circuit_context.base_memory_page.0);
+    ctx.saved_context.common_part.calldata_page = UInt32::from_uint(out_of_circuit_context.calldata_page.0);
+    ctx.saved_context.common_part.code_page = UInt32::from_uint(out_of_circuit_context.code_page.0);
+
+    ctx.saved_context.common_part.pc = UInt16::from_uint(out_of_circuit_context.pc);
+    ctx.saved_context.common_part.exception_handler_loc = UInt16::from_uint(out_of_circuit_context.exception_handler_location);
+    ctx.saved_context.common_part.ergs_remaining = UInt32::from_uint(out_of_circuit_context.ergs_remaining);
+
+    ctx.saved_context.common_part.code_address = UInt160::from_uint(u160_from_address(out_of_circuit_context.code_address));
+    ctx.saved_context.common_part.this = UInt160::from_uint(u160_from_address(out_of_circuit_context.this_address));
+    ctx.saved_context.common_part.caller = UInt160::from_uint(u160_from_address(out_of_circuit_context.msg_sender));
+
+    // circuit specific bit
+    ctx.saved_context.common_part.reverted_queue_tail = Num::Constant(initial_rollback_queue_value);
+    ctx.saved_context.common_part.reverted_queue_head = ctx.saved_context.common_part.reverted_queue_tail;
+
+    ctx.saved_context.common_part.is_kernel_mode = Boolean::alloc(cs, Some(out_of_circuit_context.is_kernel_mode())).unwrap();
+
+    ctx
+}
+
 use zk_evm::block_properties::BlockProperties;
 
 pub fn create_out_of_circuit_global_context(
@@ -208,6 +236,8 @@ pub fn create_in_circuit_vm<
     cs: &mut CS,
     round_function: &R,
     initial_rollback_queue_value: E::Fr,
+    initial_callstack_state_for_start: ([E::Fr; 3], CallStackEntry),
+    initial_context_for_start: CallStackEntry,
 ) -> sync_vm::vm::vm_state::VmLocalState<E, 3> {
     // we need to prepare some global state and push initial context
     // use sync_vm::vm::vm_cycle::register_view::Register;
@@ -220,40 +250,58 @@ pub fn create_in_circuit_vm<
     let bool_true = Boolean::alloc(cs, Some(true)).unwrap();
 
     let mut initial_callstack = Callstack::<E, 3>::empty();
-    let mut initial_context = initial_callstack.current_context.saved_context.clone();
-    // set the head-tail, and segment length is 0
-    initial_context.common_part.reverted_queue_head = Num::Constant(initial_rollback_queue_value);
-    initial_context.common_part.reverted_queue_tail = Num::Constant(initial_rollback_queue_value);
-    // and we start/end in kernel mode
-    initial_context.common_part.is_kernel_mode = Boolean::constant(true);
+    let (initial_callstack_sponge_state, empty_context) = initial_callstack_state_for_start;
 
-    dbg!(Num::get_value_multiple(&initial_callstack.stack_sponge_state));
+    // let initial_empty_context = out_to_in_circuit_context_on_call::<E>(
+    //     empty_context,
+    //     initial_rollback_queue_value
+    // );
+
+    let initial_callstack_sponge = Num::alloc_multiple(cs, Some(initial_callstack_sponge_state)).unwrap();
+    initial_callstack.stack_sponge_state = initial_callstack_sponge;
+    initial_callstack.context_stack_depth = UInt16::from_uint(1);
+
+    let initial_context = out_to_in_circuit_context_on_call(
+        cs,
+        initial_context_for_start,
+        initial_rollback_queue_value
+    );
+    initial_callstack.current_context = initial_context;
+
+    // let mut initial_context = initial_callstack.current_context.saved_context.clone();
+    // // set the head-tail, and segment length is 0
+    // initial_context.common_part.reverted_queue_head = Num::Constant(initial_rollback_queue_value);
+    // initial_context.common_part.reverted_queue_tail = Num::Constant(initial_rollback_queue_value);
+    // // and we start/end in kernel mode
+    // initial_context.common_part.is_kernel_mode = Boolean::constant(initial_context_for_start.is_kernel_mode());
+
+    // dbg!(Num::get_value_multiple(&initial_callstack.stack_sponge_state));
     // simulate push
 
-    let bootloader_address = *BOOTLOADER_FORMAL_ADDRESS;
-    let mut new_context = initial_in_circuit_context(
-        0,
-        u32::MAX,
-        bootloader_address,
-        bootloader_address,
-        bootloader_address,
-        initial_rollback_queue_value,
-    );
-    initial_callstack.context_stack_depth = UInt16::from_uint(1);
-    new_context.saved_context.common_part.is_kernel_mode = bool_true; // formal address of the bootloader implies kernel
+    // let bootloader_address = *BOOTLOADER_FORMAL_ADDRESS;
+    // let mut new_context = initial_in_circuit_context(
+    //     0,
+    //     u32::MAX,
+    //     bootloader_address,
+    //     bootloader_address,
+    //     bootloader_address,
+    //     initial_rollback_queue_value,
+    // );
+    // initial_callstack.context_stack_depth = UInt16::from_uint(1);
+    // new_context.saved_context.common_part.is_kernel_mode = bool_true; // formal address of the bootloader implies kernel
 
-    // push the initial (empty) context
-    use sync_vm::traits::CircuitFixedLengthEncodable;
-    let encoding = initial_context.encode(cs).unwrap();
-    dbg!(Num::get_value_multiple(&encoding));
-    let state = round_function.round_function_absorb_nums_multiple_rounds(
-        cs,
-        initial_callstack.stack_sponge_state,
-        &encoding
-    ).unwrap();
-    initial_callstack.stack_sponge_state = state;
-    initial_callstack.current_context = new_context;
-    dbg!(Num::get_value_multiple(&initial_callstack.stack_sponge_state));
+    // // push the initial (empty) context
+    // use sync_vm::traits::CircuitFixedLengthEncodable;
+    // let encoding = initial_context.encode(cs).unwrap();
+    // dbg!(Num::get_value_multiple(&encoding));
+    // let state = round_function.round_function_absorb_nums_multiple_rounds(
+    //     cs,
+    //     initial_callstack.stack_sponge_state,
+    //     &encoding
+    // ).unwrap();
+    // initial_callstack.stack_sponge_state = state;
+    // initial_callstack.current_context = new_context;
+    // dbg!(Num::get_value_multiple(&initial_callstack.stack_sponge_state));
 
     let initial_flags = ArithmeticFlagsPort::<E> {
         overflow_or_less_than: bool_false,

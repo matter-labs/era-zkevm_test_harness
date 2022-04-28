@@ -20,6 +20,34 @@ use crate::witness::oracle::create_artifacts_from_tracer;
 
 #[test]
 fn run_and_try_create_witness() {
+    // let asm = r#"
+    //     .text
+    //     .file	"Test_26"
+    //     .rodata.cst32
+    //     .p2align	5
+    //     .text
+    //     .globl	__entry
+    // __entry:
+    // .main:
+    //     nop stack+=[4]
+    //     nop stack-=[1]
+    //     add 1, r0, r1
+    //     add 2, r0, r2
+    //     sstore r1, r2
+    //     near_call r0, @.continue, @.to_revert
+    //     ret.ok r0
+    // .continue:
+    //     add 5, r0, r1
+    //     add 6, r0, r2
+    //     sstore r1, r2
+    //     ret.ok r0
+    // .to_revert:
+    //     add 3, r0, r1
+    //     add 4, r0, r2
+    //     sstore r1, r2
+    //     ret.revert r0
+    // "#;
+
     let asm = r#"
         .text
         .file	"Test_26"
@@ -34,7 +62,8 @@ fn run_and_try_create_witness() {
         add 1, r0, r1
         add 2, r0, r2
         sstore r1, r2
-        near_call r0, @.continue, @.to_revert
+        near_call r0, @.to_revert, @.finish
+    .finish:
         ret.ok r0
     .continue:
         add 5, r0, r1
@@ -184,7 +213,9 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
     let mut in_circuit_vm = create_in_circuit_vm(
         &mut cs,
         &round_function, 
-        initial_tail
+        initial_tail,
+        oracle.initial_callstack_state_for_start.clone(),
+        oracle.initial_context_for_start
     );
 
     for _ in 0..cycle_limit {

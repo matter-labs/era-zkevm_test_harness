@@ -1,5 +1,6 @@
+use sync_vm::vm::state::NUM_SPONGES_PER_CYCLE;
 use zk_evm::testing::event_sink::ApplicationData;
-use zk_evm::vm_state::CallStackEntry;
+use zk_evm::vm_state::{CallStackEntry};
 use zk_evm::ethereum_types::U256;
 use zk_evm::aux_structures::LogQuery;
 use zk_evm::aux_structures::*;
@@ -9,7 +10,6 @@ use crate::witness::callstack_handler::CallstackWithAuxData;
 use zk_evm::precompiles::keccak256::Keccak256RoundWitness;
 use zk_evm::precompiles::sha256::Sha256RoundWitness;
 use zk_evm::precompiles::ecrecover::ECRecoverRoundWitness;
-use std::collections::HashMap;
 
 use zk_evm::vm_state::MAX_CALLSTACK_DEPTH;
 
@@ -29,7 +29,7 @@ pub struct WitnessTracer {
     pub decommittment_queries: Vec<(u32, DecommittmentQuery, Vec<U256>)>,
     pub keccak_round_function_witnesses: Vec<(u32, LogQuery, Vec<Keccak256RoundWitness>)>,
     pub sha256_round_function_witnesses: Vec<(u32, LogQuery, Vec<Sha256RoundWitness>)>,
-    pub ecrecover_witnesses: Vec<(u32, LogQuery, Vec<ECRecoverRoundWitness>)>,
+    pub ecrecover_witnesses: Vec<(u32, LogQuery, ECRecoverRoundWitness)>,
     pub monotonic_query_counter: usize,
     pub log_frames_stack: Vec<ApplicationData<((usize, usize), (QueryMarker, u32, LogQuery))>>, // keep the unique frame index
     pub callstack_with_aux_data: CallstackWithAuxData,
@@ -149,8 +149,45 @@ impl AuxCallstackProto {
 }
 
 use zk_evm::witness_trace::VmWitnessTracer;
+use zk_evm::abstractions::SpongeExecutionMarker;
+use zk_evm::vm_state::VmLocalState;
 
 impl VmWitnessTracer for WitnessTracer {
+    fn start_new_execution_cycle(&mut self, current_state: &VmLocalState) {
+        // println!("New cycle starts");
+        // dbg!(&self.sponge_busy_range);
+    }
+    fn end_execution_cycle(&mut self, current_state: &VmLocalState) {
+        // println!("Cycle ends");
+        // dbg!(&self.sponge_busy_range);
+        if !self.sponge_busy_range.is_empty() {
+            if self.sponge_busy_range.contains(&NUM_SPONGES_PER_CYCLE) {
+                // drain
+                let new_range = NUM_SPONGES_PER_CYCLE..self.sponge_busy_range.end;
+                self.sponge_busy_range = new_range
+            } else {
+                self.sponge_busy_range = 0..0;
+            }
+        }
+    }
+    fn add_sponge_marker(&mut self, monotonic_cycle_counter: u32, marker: SpongeExecutionMarker, sponges_range: Range<usize>, is_pended: bool) {
+        // dbg!(&sponges_range);
+        if self.sponge_busy_range.is_empty() {
+            if sponges_range.start != 0 {
+                let new_range = 0..sponges_range.end;
+                self.sponge_busy_range = new_range;
+            } else {
+                self.sponge_busy_range = sponges_range;
+            }
+        } else {
+            for el in sponges_range.clone() {
+                assert!(!self.sponge_busy_range.contains(&el));
+            }
+            // merge
+            self.sponge_busy_range.end = sponges_range.end;
+        }
+    }
+
     fn add_memory_query(&mut self, monotonic_cycle_counter: u32, memory_query: MemoryQuery) {
         self.memory_queries.push((monotonic_cycle_counter, memory_query));
     }
@@ -198,8 +235,9 @@ impl VmWitnessTracer for WitnessTracer {
             PrecompileCyclesWitness::Sha256(wit) => {
                 self.sha256_round_function_witnesses.push((monotonic_cycle_counter, call_params, wit));
             },
-            PrecompileCyclesWitness::ECRecover(wit) => {
-                self.ecrecover_witnesses.push((monotonic_cycle_counter, call_params, wit));
+            PrecompileCyclesWitness::ECRecover(mut wit) => {
+                assert_eq!(wit.len(), 1);
+                self.ecrecover_witnesses.push((monotonic_cycle_counter, call_params, wit.drain(0..1).next().unwrap()));
             }
         }
     }

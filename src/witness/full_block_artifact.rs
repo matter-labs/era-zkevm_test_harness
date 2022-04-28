@@ -81,7 +81,7 @@ pub struct FullBlockArtifacts<E: Engine> {
     // keep precompile round functions data
     pub keccak_round_function_witnesses: Vec<(u32, LogQuery, Vec<Keccak256RoundWitness>)>,
     pub sha256_round_function_witnesses: Vec<(u32, LogQuery, Vec<Sha256RoundWitness>)>,
-    pub ecrecover_witnesses: Vec<(u32, LogQuery, Vec<ECRecoverRoundWitness>)>,
+    pub ecrecover_witnesses: Vec<(u32, LogQuery, ECRecoverRoundWitness)>,
 }
 
 pub fn sort_log_queries<
@@ -234,17 +234,15 @@ impl<E: Engine> FullBlockArtifacts<E> {
         // ecrecover precompile
 
         for (_cycle, _query, witness) in self.ecrecover_witnesses.iter() {
-            for el in witness.iter() {
-                let ECRecoverRoundWitness {
-                    new_request: _,
-                    reads,
-                    writes
-                } = el;
+            let ECRecoverRoundWitness {
+                new_request: _,
+                reads,
+                writes
+            } = witness;
 
-                // we read, then write
-                self.all_memory_queries_accumulated.extend_from_slice(reads);
-                self.all_memory_queries_accumulated.extend_from_slice(writes);
-            }
+            // we read, then write
+            self.all_memory_queries_accumulated.extend_from_slice(reads);
+            self.all_memory_queries_accumulated.extend_from_slice(writes);
         }
         
         // we are done with a memory and can sort
