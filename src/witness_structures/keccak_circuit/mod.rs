@@ -2,6 +2,7 @@ use super::*;
 use crate::ff::{Field, PrimeField};
 use crate::pairing::Engine;
 use derivative::Derivative;
+use num_bigint::BigUint;
 use sync_vm::franklin_crypto::plonk::circuit::utils::u64_to_fe;
 use sync_vm::glue::keccak256_round_function_circuit::*;
 use zk_evm::precompiles::keccak256::BUFFER_SIZE;
@@ -18,6 +19,7 @@ pub struct Keccak256RoundFunctionCircuitWitness<E: Engine> {
     pub passthrough_data: Keccak256CircuitPassthroughData<E>,
     pub fsm_input: Keccak256CircuitFSMData<E>,
     pub fsm_output: Keccak256CircuitFSMData<E>,
+    pub memory_reads_witness: Vec<Vec<BigUint>>,
 }
 
 #[derive(Derivative)]
@@ -97,6 +99,8 @@ pub fn decompose_into_per_circuit_witness<E: Engine>(
             .zip(round_function_witness.into_iter())
             .enumerate()
     {
+        let mut memory_reads_per_request = vec![];
+
         assert_eq!(
             precompile_state,
             Keccak256PrecompileState::GetRequestFromQueue
@@ -137,7 +141,7 @@ pub fn decompose_into_per_circuit_witness<E: Engine>(
 
                     let read_query = memory_queries_it.next().unwrap();
                     assert!(data == read_query.value);
-                    memory_read_witnesses.push(read_query.value);
+                    memory_reads_per_request.push(biguint_from_u256(read_query.value));
                     current_memory_queue_state = memory_queue_states_it.next().unwrap();
 
                     precompile_request.input_memory_offset += 1;
@@ -237,6 +241,10 @@ pub fn decompose_into_per_circuit_witness<E: Engine>(
                     _marker: std::marker::PhantomData,
                 };
 
+                let current_reads = std::mem::replace(&mut memory_reads_per_request, vec![]);
+                let mut current_witness = std::mem::replace(&mut memory_read_witnesses, vec![]);
+                current_witness.push(current_reads);
+
                 let witness = Keccak256RoundFunctionCircuitWitness::<E> {
                     is_finished: finished,
                     passthrough_data: Keccak256CircuitPassthroughData::<E> {
@@ -253,6 +261,7 @@ pub fn decompose_into_per_circuit_witness<E: Engine>(
 
                     fsm_input: fsm_input_state,
                     fsm_output: fsm_output_state.clone(),
+                    memory_reads_witness: current_witness
                 };
 
                 result.push(witness);
@@ -262,6 +271,8 @@ pub fn decompose_into_per_circuit_witness<E: Engine>(
                 memory_queue_input_state = current_memory_queue_state;
             }
         }
+
+        memory_read_witnesses.push(memory_reads_per_request);
     }
 
     result
@@ -303,6 +314,7 @@ mod test {
             passthrough_data,
             fsm_input,
             fsm_output,
+            memory_reads_witness,
         } = witness;
 
         let initial_state = KeccakPrecompileState::alloc_from_witness(cs, Some(fsm_input))?;
@@ -328,7 +340,7 @@ mod test {
             cs,
             &mut memory_queue,
             &mut requests_queue,
-            None,
+            Some(memory_reads_witness),
             initial_state,
             &committer,
             limit,
