@@ -1,9 +1,9 @@
 use std::ops::Add;
 
-use sync_vm::vm::primitives::u160;
-use zk_evm::{ethereum_types::*, address_to_u256};
-use num_bigint::BigUint;
 use crate::ff::PrimeField;
+use num_bigint::BigUint;
+use sync_vm::vm::primitives::u160;
+use zk_evm::{address_to_u256, ethereum_types::*};
 
 pub fn u160_from_address(address: Address) -> u160 {
     // transform to limbs
@@ -15,7 +15,7 @@ pub fn u160_from_address(address: Address) -> u160 {
     u160 {
         limb0: lowest,
         limb1: mid,
-        limb2: high
+        limb2: high,
     }
 }
 

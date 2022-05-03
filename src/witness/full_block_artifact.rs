@@ -1,31 +1,31 @@
 use super::*;
-use crate::pairing::Engine;
-use rayon::slice::ParallelSliceMut;
-use zk_evm::aux_structures::DecommittmentQuery;
-use zk_evm::aux_structures::MemoryQuery;
-use zk_evm::aux_structures::LogQuery;
+use crate::encodings::decommittment_request::DecommittmentQueueSimulator;
+use crate::encodings::decommittment_request::DecommittmentQueueState;
+use crate::encodings::log_query::LogQueueState;
+use crate::encodings::memory_query::MemoryQueueSimulator;
 use crate::encodings::memory_query::MemoryQueueState;
 use crate::ethereum_types::U256;
+use crate::pairing::Engine;
+use derivative::Derivative;
+use rayon::slice::ParallelSliceMut;
+use std::cmp::Ordering;
+use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
+use zk_evm::aux_structures::DecommittmentQuery;
+use zk_evm::aux_structures::LogQuery;
+use zk_evm::aux_structures::MemoryIndex;
+use zk_evm::aux_structures::MemoryQuery;
 use zk_evm::precompiles::ecrecover::ECRecoverRoundWitness;
 use zk_evm::precompiles::keccak256::Keccak256RoundWitness;
 use zk_evm::precompiles::sha256::Sha256RoundWitness;
-use derivative::Derivative;
-use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
-use crate::encodings::memory_query::MemoryQueueSimulator;
-use crate::encodings::decommittment_request::DecommittmentQueueSimulator;
-use std::cmp::Ordering;
-use crate::encodings::decommittment_request::DecommittmentQueueState;
-use zk_evm::aux_structures::MemoryIndex;
-use crate::encodings::log_query::LogQueueState;
 
 #[derive(Derivative)]
-#[derivative(Clone, Default(bound=""))]
+#[derivative(Clone, Default(bound = ""))]
 pub struct FullBlockArtifacts<E: Engine> {
     pub is_processed: bool,
     // all the RAM (without accumulation into the queue)
     pub vm_memory_queries_accumulated: Vec<(u32, MemoryQuery)>,
     pub vm_memory_queue_states: Vec<(u32, bool, MemoryQueueState<E>)>,
-    // 
+    //
     pub all_memory_queries_accumulated: Vec<MemoryQuery>,
     pub sorted_memory_queries_accumulated: Vec<MemoryQuery>,
     // all the RAM queue states
@@ -51,11 +51,11 @@ pub struct FullBlockArtifacts<E: Engine> {
     pub demuxed_to_l1_queries: Vec<LogQuery>,
     pub demuxed_to_l1_queue_states: Vec<E::Fr>,
     pub demuxed_keccak_precompile_queries: Vec<LogQuery>,
-    pub demuxed_keccak_precompile_queue_states: Vec<E::Fr>,
+    pub demuxed_keccak_precompile_queue_states: Vec<LogQueueState<E>>,
     pub demuxed_sha256_precompile_queries: Vec<LogQuery>,
-    pub demuxed_sha256_precompile_queue_states: Vec<E::Fr>,
+    pub demuxed_sha256_precompile_queue_states: Vec<LogQueueState<E>>,
     pub demuxed_ecrecover_queries: Vec<LogQuery>,
-    pub demuxed_ecrecover_queue_states: Vec<E::Fr>,
+    pub demuxed_ecrecover_queue_states: Vec<LogQueueState<E>>,
 
     // sorted and deduplicated log-like queues for ones that support reverts
     // sorted
@@ -82,15 +82,19 @@ pub struct FullBlockArtifacts<E: Engine> {
     pub keccak_round_function_witnesses: Vec<(u32, LogQuery, Vec<Keccak256RoundWitness>)>,
     pub sha256_round_function_witnesses: Vec<(u32, LogQuery, Vec<Sha256RoundWitness>)>,
     pub ecrecover_witnesses: Vec<(u32, LogQuery, ECRecoverRoundWitness)>,
+
+    // also separate copy of memory queries that are contributions from individual precompiles
+    pub keccak_256_memory_queries: Vec<MemoryQuery>,
+    pub keccak_256_memory_states: Vec<MemoryQueueState<E>>,
 }
 
 pub fn sort_log_queries<
     F: Fn(&LogQuery, &LogQuery) -> std::cmp::Ordering + Sync,
-    D: Fn(&LogQuery, &LogQuery) -> bool + Sync
+    D: Fn(&LogQuery, &LogQuery) -> bool + Sync,
 >(
     unsorted: &Vec<(u32, LogQuery)>,
     sorting_function: F,
-    deduplication_function: D
+    deduplication_function: D,
 ) -> (Vec<LogQuery>, Vec<LogQuery>) {
     if unsorted.len() == 0 {
         return (vec![], vec![]);
@@ -119,7 +123,6 @@ pub fn sort_log_queries<
 
 impl<E: Engine> FullBlockArtifacts<E> {
     pub fn process<R: CircuitArithmeticRoundFunction<E, 2, 3>>(&mut self, round_function: &R) {
-
         let mut memory_queue_simulator = MemoryQueueSimulator::<E>::empty();
         let mut decommittment_queue_simulator = DecommittmentQueueSimulator::<E>::empty();
 
@@ -128,17 +131,18 @@ impl<E: Engine> FullBlockArtifacts<E> {
         for (cycle, query) in self.vm_memory_queries_accumulated.iter() {
             self.all_memory_queries_accumulated.push(*query);
 
-            let (_old_tail, intermediate_info) = memory_queue_simulator.push_and_output_intermediate_data(
-                *query, 
-                round_function
-            );
+            let (_old_tail, intermediate_info) =
+                memory_queue_simulator.push_and_output_intermediate_data(*query, round_function);
 
             let is_pended = query.is_pended;
-            self.vm_memory_queue_states.push((*cycle, is_pended, intermediate_info));    
+            self.vm_memory_queue_states
+                .push((*cycle, is_pended, intermediate_info));
             self.all_memory_queue_states.push(intermediate_info);
         }
 
-        assert!(memory_queue_simulator.num_items as usize == self.vm_memory_queries_accumulated.len());
+        assert!(
+            memory_queue_simulator.num_items as usize == self.vm_memory_queries_accumulated.len()
+        );
 
         // sort decommittment requests
 
@@ -151,36 +155,32 @@ impl<E: Engine> FullBlockArtifacts<E> {
         // internally parallelizable by the factor of 3
         for (cycle, decommittment_request, _) in self.all_decommittment_queries.iter() {
             // sponge
-            let (old_tail, intermediate_info) = decommittment_queue_simulator.push_and_output_intermediate_data(*decommittment_request, round_function);
-            self.all_decommittment_queue_states.push((*cycle, intermediate_info));
+            let (old_tail, intermediate_info) = decommittment_queue_simulator
+                .push_and_output_intermediate_data(*decommittment_request, round_function);
+            self.all_decommittment_queue_states
+                .push((*cycle, intermediate_info));
         }
 
         // sort queries
         let mut sorted_decommittment_requests_with_data = unsorted_decommittment_requests_with_data;
-        sorted_decommittment_requests_with_data.par_sort_by(|a, b| {
-            match a.0.hash.cmp(&b.0.hash) {
-                Ordering::Equal => {
-                    a.0.timestamp.cmp(&b.0.timestamp)
-                },
-                a @ _ => a
-            }
+        sorted_decommittment_requests_with_data.par_sort_by(|a, b| match a.0.hash.cmp(&b.0.hash) {
+            Ordering::Equal => a.0.timestamp.cmp(&b.0.timestamp),
+            a @ _ => a,
         });
 
         for (query, writes) in sorted_decommittment_requests_with_data.into_iter() {
             if query.is_fresh {
                 // now feed the queries into it
-                let as_queries_it = writes.into_iter().enumerate().map(|(idx, el)| {
-                    MemoryQuery {
-                        timestamp: query.timestamp,
-                        location: zk_evm::aux_structures::MemoryLocation {
-                            memory_type: zk_evm::abstractions::MemoryType::Code,
-                            page: query.memory_page,
-                            index: MemoryIndex(idx as u32)
-                        },
-                        rw_flag: true,
-                        value: el,
-                        is_pended: false
-                    }
+                let as_queries_it = writes.into_iter().enumerate().map(|(idx, el)| MemoryQuery {
+                    timestamp: query.timestamp,
+                    location: zk_evm::aux_structures::MemoryLocation {
+                        memory_type: zk_evm::abstractions::MemoryType::Code,
+                        page: query.memory_page,
+                        index: MemoryIndex(idx as u32),
+                    },
+                    rw_flag: true,
+                    value: el,
+                    is_pended: false,
                 });
 
                 self.all_memory_queries_accumulated.extend(as_queries_it);
@@ -198,7 +198,7 @@ impl<E: Engine> FullBlockArtifacts<E> {
                 let Keccak256RoundWitness {
                     new_request: _,
                     reads,
-                    writes
+                    writes,
                 } = el;
 
                 // we read, then write
@@ -207,7 +207,8 @@ impl<E: Engine> FullBlockArtifacts<E> {
                 }
 
                 if let Some(writes) = writes.as_ref() {
-                    self.all_memory_queries_accumulated.extend_from_slice(writes);
+                    self.all_memory_queries_accumulated
+                        .extend_from_slice(writes);
                 }
             }
         }
@@ -219,14 +220,15 @@ impl<E: Engine> FullBlockArtifacts<E> {
                 let Sha256RoundWitness {
                     new_request: _,
                     reads,
-                    writes
+                    writes,
                 } = el;
 
                 // we read, then write
                 self.all_memory_queries_accumulated.extend_from_slice(reads);
 
                 if let Some(writes) = writes.as_ref() {
-                    self.all_memory_queries_accumulated.extend_from_slice(writes);
+                    self.all_memory_queries_accumulated
+                        .extend_from_slice(writes);
                 }
             }
         }
@@ -237,34 +239,35 @@ impl<E: Engine> FullBlockArtifacts<E> {
             let ECRecoverRoundWitness {
                 new_request: _,
                 reads,
-                writes
+                writes,
             } = witness;
 
             // we read, then write
             self.all_memory_queries_accumulated.extend_from_slice(reads);
-            self.all_memory_queries_accumulated.extend_from_slice(writes);
+            self.all_memory_queries_accumulated
+                .extend_from_slice(writes);
         }
-        
+
         // we are done with a memory and can sort
 
         self.sorted_memory_queries_accumulated = self.all_memory_queries_accumulated.clone();
         self.sorted_memory_queries_accumulated.par_sort_by(|a, b| {
             match a.location.cmp(&b.location) {
-                Ordering::Equal => {
-                    a.timestamp.cmp(&b.timestamp)
-                },
-                a @ _ => a
+                Ordering::Equal => a.timestamp.cmp(&b.timestamp),
+                a @ _ => a,
             }
         });
 
         // those two thins are parallelizable, and can be internally parallelized too
 
         // now we can finish reconstruction of each sorted and unsorted memory queries
-        for query in self.all_memory_queries_accumulated.iter().skip(self.vm_memory_queries_accumulated.len()) {
+        for query in self
+            .all_memory_queries_accumulated
+            .iter()
+            .skip(self.vm_memory_queries_accumulated.len())
+        {
             // TODO
         }
-
-
 
         // reconstruct sorted one too
         for query in self.sorted_memory_queries_accumulated.iter() {
@@ -272,7 +275,6 @@ impl<E: Engine> FullBlockArtifacts<E> {
         }
 
         // now completely parallel process to reconstruct the states, with internally parallelism in each round function
-
 
         self.is_processed = true;
     }

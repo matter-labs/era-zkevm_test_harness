@@ -1,6 +1,6 @@
-use zk_evm::{vm_state::CallStackEntry, aux_structures::LogQuery};
 use crate::witness::tracer::QueryMarker;
 use std::ops::Range;
+use zk_evm::{aux_structures::LogQuery, vm_state::CallStackEntry};
 
 use super::*;
 
@@ -34,8 +34,8 @@ impl CallstackEntryWithAuxData {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CallstackAction {
     PushToStack,
-    OutOfScope{panic: bool},
-    PopFromStack{panic: bool},
+    OutOfScope { panic: bool },
+    PopFromStack { panic: bool },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -106,7 +106,7 @@ impl CallstackWithAuxData {
             forward_queue: vec![],
             rollback_queue: vec![],
             forward_queue_ranges: vec![],
-            rollback_queue_ranges: vec![], 
+            rollback_queue_ranges: vec![],
         };
 
         let previous_history_record = CallstackActionHistoryEntry {
@@ -126,11 +126,16 @@ impl CallstackWithAuxData {
             current_entry: full_entry,
             depth: 1,
             stack: vec![],
-            full_history: vec![previous_history_record]
+            full_history: vec![previous_history_record],
         }
     }
 
-    pub fn push_entry(&mut self, monotonic_cycle_counter: u32, previous_simple_entry: CallStackEntry, new_simple_entry: CallStackEntry) {
+    pub fn push_entry(
+        &mut self,
+        monotonic_cycle_counter: u32,
+        previous_simple_entry: CallStackEntry,
+        new_simple_entry: CallStackEntry,
+    ) {
         // dbg!(&previous_simple_entry);
         // dbg!(&new_simple_entry);
 
@@ -141,7 +146,7 @@ impl CallstackWithAuxData {
         // when we push a new entry we put the previous "current" into the stack,
         // and intoduce a new one, for which we do not add history action as it may be unnecessary
 
-        // we only care about the history of the stack top, so we push previous entry 
+        // we only care about the history of the stack top, so we push previous entry
 
         let current_frame_index = self.current_entry.frame_index;
 
@@ -161,7 +166,7 @@ impl CallstackWithAuxData {
             forward_queue: vec![],
             rollback_queue: vec![],
             forward_queue_ranges: vec![],
-            rollback_queue_ranges: vec![], 
+            rollback_queue_ranges: vec![],
         };
 
         let history_of_new = full_entry.current_history_record.clone();
@@ -171,8 +176,24 @@ impl CallstackWithAuxData {
         current.entry = previous_simple_entry;
         current.current_history_record.affected_entry = previous_simple_entry;
         // and flatten the history that we already to have
-        current.current_history_record.forward_queue_ranges_at_entry.extend(current.current_history_record.forward_queue_ranges_changes.drain(..));
-        current.current_history_record.rollback_queue_ranges_at_entry.extend(current.current_history_record.rollback_queue_ranges_change.drain(..));
+        current
+            .current_history_record
+            .forward_queue_ranges_at_entry
+            .extend(
+                current
+                    .current_history_record
+                    .forward_queue_ranges_changes
+                    .drain(..),
+            );
+        current
+            .current_history_record
+            .rollback_queue_ranges_at_entry
+            .extend(
+                current
+                    .current_history_record
+                    .rollback_queue_ranges_change
+                    .drain(..),
+            );
 
         let mut history_of_current = current.current_history_record.clone();
         history_of_current.action = CallstackAction::PushToStack;
@@ -195,19 +216,32 @@ impl CallstackWithAuxData {
 
         if panicked {
             let mut in_scope_monotonic_forward_query_counter = self.monotonic_forward_query_counter;
-            previous_history_record.forward_queue_ranges_changes.extend_from_slice(&history_of_current.forward_queue_ranges_changes);
-            let it = history_of_current.rollback_queue_ranges_change.iter().cloned().rev().map(|el| {
-                // we need to offset by the current counter and transform into the current counter + something
-                let current = in_scope_monotonic_forward_query_counter;
-                let num_entries = el.len();
-                in_scope_monotonic_forward_query_counter += num_entries;
+            previous_history_record
+                .forward_queue_ranges_changes
+                .extend_from_slice(&history_of_current.forward_queue_ranges_changes);
+            let it = history_of_current
+                .rollback_queue_ranges_change
+                .iter()
+                .cloned()
+                .rev()
+                .map(|el| {
+                    // we need to offset by the current counter and transform into the current counter + something
+                    let current = in_scope_monotonic_forward_query_counter;
+                    let num_entries = el.len();
+                    in_scope_monotonic_forward_query_counter += num_entries;
 
-                current..(current+num_entries)
-            });
-            previous_history_record.forward_queue_ranges_changes.extend(it);
+                    current..(current + num_entries)
+                });
+            previous_history_record
+                .forward_queue_ranges_changes
+                .extend(it);
         } else {
-            previous_history_record.forward_queue_ranges_changes.extend_from_slice(&history_of_current.forward_queue_ranges_changes);
-            previous_history_record.rollback_queue_ranges_change.extend_from_slice(&history_of_current.forward_queue_ranges_changes);
+            previous_history_record
+                .forward_queue_ranges_changes
+                .extend_from_slice(&history_of_current.forward_queue_ranges_changes);
+            previous_history_record
+                .rollback_queue_ranges_change
+                .extend_from_slice(&history_of_current.forward_queue_ranges_changes);
         }
 
         let mut previous_history_record = previous.current_history_record.clone();
@@ -243,9 +277,13 @@ impl CallstackWithAuxData {
         // merge the queues
         if panicked {
             self.current_entry.forward_queue.extend(forward_queue);
-            self.current_entry.forward_queue_ranges.extend(forward_queue_ranges);
+            self.current_entry
+                .forward_queue_ranges
+                .extend(forward_queue_ranges);
 
-            self.current_entry.forward_queue.extend(rollback_queue.into_iter().rev()); // keep in mind proper composition
+            self.current_entry
+                .forward_queue
+                .extend(rollback_queue.into_iter().rev()); // keep in mind proper composition
 
             // remap ranges of the rollback queue
             let it = rollback_queue_ranges.into_iter().rev().map(|el| {
@@ -254,17 +292,21 @@ impl CallstackWithAuxData {
                 let num_entries = el.len();
                 self.monotonic_forward_query_counter += num_entries;
 
-                current..(current+num_entries)
+                current..(current + num_entries)
             });
             self.current_entry.forward_queue_ranges.extend(it)
         } else {
             // just glue
 
             self.current_entry.forward_queue.extend(forward_queue);
-            self.current_entry.forward_queue_ranges.extend(forward_queue_ranges);
+            self.current_entry
+                .forward_queue_ranges
+                .extend(forward_queue_ranges);
 
-            self.current_entry.rollback_queue.extend(rollback_queue); 
-            self.current_entry.rollback_queue_ranges.extend(rollback_queue_ranges); 
+            self.current_entry.rollback_queue.extend(rollback_queue);
+            self.current_entry
+                .rollback_queue_ranges
+                .extend(rollback_queue_ranges);
         }
 
         current.entry
@@ -276,24 +318,38 @@ impl CallstackWithAuxData {
         if log_query.rw_flag {
             // can be rolled back
             let marker = QueryMarker::Forward(forward_query_index);
-            self.current_entry.forward_queue.push((marker, monotonic_cycle_counter, log_query));
+            self.current_entry
+                .forward_queue
+                .push((marker, monotonic_cycle_counter, log_query));
             if let Some(last) = self.current_entry.forward_queue_ranges.last_mut() {
                 if last.end == forward_query_index {
                     last.end += 1;
                 } else {
                     drop(last);
-                    self.current_entry.forward_queue_ranges.push(forward_query_index..(forward_query_index+1));
+                    self.current_entry
+                        .forward_queue_ranges
+                        .push(forward_query_index..(forward_query_index + 1));
                 }
             } else {
                 // just push
-                self.current_entry.forward_queue_ranges.push(forward_query_index..(forward_query_index+1));
+                self.current_entry
+                    .forward_queue_ranges
+                    .push(forward_query_index..(forward_query_index + 1));
             }
 
-            if let Some(entry) = self.current_entry.current_history_record.forward_queue_ranges_changes.last_mut() {
+            if let Some(entry) = self
+                .current_entry
+                .current_history_record
+                .forward_queue_ranges_changes
+                .last_mut()
+            {
                 debug_assert!(entry.end == forward_query_index);
                 entry.end += 1;
             } else {
-                self.current_entry.current_history_record.forward_queue_ranges_changes.push(forward_query_index..(forward_query_index+1));
+                self.current_entry
+                    .current_history_record
+                    .forward_queue_ranges_changes
+                    .push(forward_query_index..(forward_query_index + 1));
             }
 
             let mut rollback_query = log_query;
@@ -301,46 +357,76 @@ impl CallstackWithAuxData {
             let rollback_query_index = self.monotonic_rollback_query_counter;
             self.monotonic_rollback_query_counter += 1;
             let marker = QueryMarker::Rollback(rollback_query_index);
-            self.current_entry.rollback_queue.push((marker, monotonic_cycle_counter, rollback_query));
+            self.current_entry.rollback_queue.push((
+                marker,
+                monotonic_cycle_counter,
+                rollback_query,
+            ));
             if let Some(last) = self.current_entry.rollback_queue_ranges.last_mut() {
                 if last.end == rollback_query_index {
                     last.end += 1;
                 } else {
                     drop(last);
-                    self.current_entry.rollback_queue_ranges.push(rollback_query_index..(rollback_query_index+1));
+                    self.current_entry
+                        .rollback_queue_ranges
+                        .push(rollback_query_index..(rollback_query_index + 1));
                 }
             } else {
                 // just push
-                self.current_entry.rollback_queue_ranges.push(rollback_query_index..(rollback_query_index+1));
+                self.current_entry
+                    .rollback_queue_ranges
+                    .push(rollback_query_index..(rollback_query_index + 1));
             }
 
-            if let Some(entry) = self.current_entry.current_history_record.rollback_queue_ranges_change.last_mut() {
+            if let Some(entry) = self
+                .current_entry
+                .current_history_record
+                .rollback_queue_ranges_change
+                .last_mut()
+            {
                 debug_assert!(entry.end == rollback_query_index);
                 entry.end += 1;
             } else {
-                self.current_entry.current_history_record.rollback_queue_ranges_change.push(rollback_query_index..(rollback_query_index+1));
+                self.current_entry
+                    .current_history_record
+                    .rollback_queue_ranges_change
+                    .push(rollback_query_index..(rollback_query_index + 1));
             }
         } else {
             // just add
             let marker = QueryMarker::Forward(forward_query_index);
-            self.current_entry.forward_queue.push((marker, monotonic_cycle_counter, log_query));
+            self.current_entry
+                .forward_queue
+                .push((marker, monotonic_cycle_counter, log_query));
             if let Some(last) = self.current_entry.forward_queue_ranges.last_mut() {
                 if last.end == forward_query_index {
                     last.end += 1;
                 } else {
                     drop(last);
-                    self.current_entry.forward_queue_ranges.push(forward_query_index..(forward_query_index+1));
+                    self.current_entry
+                        .forward_queue_ranges
+                        .push(forward_query_index..(forward_query_index + 1));
                 }
             } else {
                 // just push
-                self.current_entry.forward_queue_ranges.push(forward_query_index..(forward_query_index+1));
+                self.current_entry
+                    .forward_queue_ranges
+                    .push(forward_query_index..(forward_query_index + 1));
             }
 
-            if let Some(entry) = self.current_entry.current_history_record.forward_queue_ranges_changes.last_mut() {
+            if let Some(entry) = self
+                .current_entry
+                .current_history_record
+                .forward_queue_ranges_changes
+                .last_mut()
+            {
                 debug_assert!(entry.end == forward_query_index);
                 entry.end += 1;
             } else {
-                self.current_entry.current_history_record.forward_queue_ranges_changes.push(forward_query_index..(forward_query_index+1));
+                self.current_entry
+                    .current_history_record
+                    .forward_queue_ranges_changes
+                    .push(forward_query_index..(forward_query_index + 1));
             }
         }
     }

@@ -22,7 +22,6 @@ use sync_vm::vm::vm_state::saved_contract_context::scale_and_accumulate;
 //     }
 // }
 
-
 // // BE order:
 // // the whole structure can be placed in five field elements:
 // // el0 = [r_w_flag | aux_byte | log_idx | key0 | actor_address]
@@ -100,7 +99,7 @@ use sync_vm::vm::vm_state::saved_contract_context::scale_and_accumulate;
 // if with_revert {
 //     lc.add_assign_boolean_with_coeff(&self.rollback, shifts[shift]);
 // }
-// let revert_falg_offset = shifts[shift];    
+// let revert_falg_offset = shifts[shift];
 // shift += 1;
 
 // //dbg!(shift);
@@ -189,12 +188,11 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 5> for LogQuery {
     }
 }
 
-
 // pub struct LogQueueSimulator<E: Engine> {
 //     pub head: E::Fr,
 //     pub tail: E::Fr,
 //     pub num_items: u32,
-//     pub witness: Vec<([E::Fr; 5], E::Fr, LogQuery)>, 
+//     pub witness: Vec<([E::Fr; 5], E::Fr, LogQuery)>,
 // }
 
 // impl<E: Engine> LogQueueSimulator<E> {
@@ -208,7 +206,7 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 5> for LogQuery {
 //     }
 
 //     pub fn push<R: CircuitArithmeticRoundFunction<E, AW, SW>, const AW: usize, const SW: usize>(
-//         &mut self, 
+//         &mut self,
 //         element: LogQuery,
 //         round_function: &R
 //     ) {
@@ -216,7 +214,7 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 5> for LogQuery {
 //     }
 
 //     pub fn push_and_output_intermediate_data<R: CircuitArithmeticRoundFunction<E, AW, SW>, const AW: usize, const SW: usize>(
-//         &mut self, 
+//         &mut self,
 //         element: LogQuery,
 //         round_function: &R
 //     ) -> ((E::Fr, E::Fr), Vec<([E::Fr; SW], [E::Fr; SW])>) {
@@ -226,7 +224,6 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 5> for LogQuery {
 //         to_hash.extend_from_slice(&encoding);
 
 //         let mut to_hash = vec![self.tail];
-
 
 //         let states = round_function.simulate_absorb_multiple_rounds_into_empty_with_specialization(
 //             &to_hash

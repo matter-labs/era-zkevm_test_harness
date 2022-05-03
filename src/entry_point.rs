@@ -1,13 +1,13 @@
+use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
 use sync_vm::franklin_crypto::bellman::plonk::better_better_cs::cs::ConstraintSystem;
+use sync_vm::vm::primitives::uint256::UInt256;
 use sync_vm::vm::vm_cycle::witness_oracle::u256_to_biguint;
 use sync_vm::vm::vm_state::GlobalContext;
-use zk_evm::ethereum_types::*;
 use zk_evm::aux_structures::*;
-use zk_evm::vm_state::CallStackEntry;
-use sync_vm::vm::primitives::uint256::UInt256;
-use zk_evm::vm_state::VmState;
+use zk_evm::ethereum_types::*;
 use zk_evm::precompiles::BOOTLOADER_FORMAL_ADDRESS;
-use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
+use zk_evm::vm_state::CallStackEntry;
+use zk_evm::vm_state::VmState;
 
 use super::*;
 
@@ -52,8 +52,8 @@ pub fn initial_out_of_circuit_context(
 use sync_vm::franklin_crypto::bellman::pairing::Engine;
 use sync_vm::franklin_crypto::plonk::circuit::allocated_num::Num;
 use sync_vm::franklin_crypto::plonk::circuit::boolean::Boolean;
-use sync_vm::vm::vm_state::execution_context::FullExecutionContext;
 use sync_vm::vm::primitives::*;
+use sync_vm::vm::vm_state::execution_context::FullExecutionContext;
 
 pub fn initial_in_circuit_context<E: Engine>(
     initial_pc: u16,
@@ -73,13 +73,15 @@ pub fn initial_in_circuit_context<E: Engine>(
     ctx.saved_context.common_part.exception_handler_loc = UInt16::from_uint(u16::MAX);
     ctx.saved_context.common_part.ergs_remaining = UInt32::from_uint(initial_ergs);
 
-    ctx.saved_context.common_part.code_address = UInt160::from_uint(u160_from_address(code_address));
+    ctx.saved_context.common_part.code_address =
+        UInt160::from_uint(u160_from_address(code_address));
     ctx.saved_context.common_part.this = UInt160::from_uint(u160_from_address(this_address));
     ctx.saved_context.common_part.caller = UInt160::from_uint(u160_from_address(msg_sender));
 
     // circuit specific bit
     ctx.saved_context.common_part.reverted_queue_tail = Num::Constant(initial_rollback_queue_value);
-    ctx.saved_context.common_part.reverted_queue_head = ctx.saved_context.common_part.reverted_queue_tail;
+    ctx.saved_context.common_part.reverted_queue_head =
+        ctx.saved_context.common_part.reverted_queue_tail;
 
     ctx
 }
@@ -91,23 +93,32 @@ pub fn out_to_in_circuit_context_on_call<E: Engine, CS: ConstraintSystem<E>>(
 ) -> FullExecutionContext<E> {
     let mut ctx = FullExecutionContext::uninitialized();
 
-    ctx.saved_context.common_part.base_page = UInt32::from_uint(out_of_circuit_context.base_memory_page.0);
-    ctx.saved_context.common_part.calldata_page = UInt32::from_uint(out_of_circuit_context.calldata_page.0);
+    ctx.saved_context.common_part.base_page =
+        UInt32::from_uint(out_of_circuit_context.base_memory_page.0);
+    ctx.saved_context.common_part.calldata_page =
+        UInt32::from_uint(out_of_circuit_context.calldata_page.0);
     ctx.saved_context.common_part.code_page = UInt32::from_uint(out_of_circuit_context.code_page.0);
 
     ctx.saved_context.common_part.pc = UInt16::from_uint(out_of_circuit_context.pc);
-    ctx.saved_context.common_part.exception_handler_loc = UInt16::from_uint(out_of_circuit_context.exception_handler_location);
-    ctx.saved_context.common_part.ergs_remaining = UInt32::from_uint(out_of_circuit_context.ergs_remaining);
+    ctx.saved_context.common_part.exception_handler_loc =
+        UInt16::from_uint(out_of_circuit_context.exception_handler_location);
+    ctx.saved_context.common_part.ergs_remaining =
+        UInt32::from_uint(out_of_circuit_context.ergs_remaining);
 
-    ctx.saved_context.common_part.code_address = UInt160::from_uint(u160_from_address(out_of_circuit_context.code_address));
-    ctx.saved_context.common_part.this = UInt160::from_uint(u160_from_address(out_of_circuit_context.this_address));
-    ctx.saved_context.common_part.caller = UInt160::from_uint(u160_from_address(out_of_circuit_context.msg_sender));
+    ctx.saved_context.common_part.code_address =
+        UInt160::from_uint(u160_from_address(out_of_circuit_context.code_address));
+    ctx.saved_context.common_part.this =
+        UInt160::from_uint(u160_from_address(out_of_circuit_context.this_address));
+    ctx.saved_context.common_part.caller =
+        UInt160::from_uint(u160_from_address(out_of_circuit_context.msg_sender));
 
     // circuit specific bit
     ctx.saved_context.common_part.reverted_queue_tail = Num::Constant(initial_rollback_queue_value);
-    ctx.saved_context.common_part.reverted_queue_head = ctx.saved_context.common_part.reverted_queue_tail;
+    ctx.saved_context.common_part.reverted_queue_head =
+        ctx.saved_context.common_part.reverted_queue_tail;
 
-    ctx.saved_context.common_part.is_kernel_mode = Boolean::alloc(cs, Some(out_of_circuit_context.is_kernel_mode())).unwrap();
+    ctx.saved_context.common_part.is_kernel_mode =
+        Boolean::alloc(cs, Some(out_of_circuit_context.is_kernel_mode())).unwrap();
 
     ctx
 }
@@ -122,13 +133,13 @@ pub fn create_out_of_circuit_global_context(
     ergs_per_pubdata_byte_limit_in_block: u32,
     ergs_per_code_decommittment_word: u16,
 ) -> BlockProperties {
-    BlockProperties { 
+    BlockProperties {
         default_aa_code_hash,
         block_number,
         block_timestamp,
         ergs_per_pubdata_byte_limit_in_block,
         zkporter_is_available,
-        ergs_per_code_decommittment_word
+        ergs_per_code_decommittment_word,
     }
 }
 
@@ -140,7 +151,7 @@ pub fn create_in_circuit_global_context<E: Engine>(
     ergs_per_pubdata_byte_limit_in_block: u32,
     ergs_per_code_decommittment_word: u16,
 ) -> GlobalContext<E> {
-    GlobalContext { 
+    GlobalContext {
         block_number: UInt64::from_uint(block_number),
         block_timestamp: UInt64::from_uint(block_timestamp),
         ergs_per_pubdata_byte_in_block: UInt32::from_uint(ergs_per_pubdata_byte_limit_in_block),
@@ -150,14 +161,14 @@ pub fn create_in_circuit_global_context<E: Engine>(
     }
 }
 
-use zk_evm::testing::event_sink::InMemoryEventSink;
-use zk_evm::testing::storage::InMemoryStorage;
-use zk_evm::testing::memory::SimpleMemory;
+use crate::witness::tracer::WitnessTracer;
 use zk_evm::precompiles::DefaultPrecompilesProcessor;
 use zk_evm::testing::decommitter::SimpleDecommitter;
-use crate::witness::tracer::WitnessTracer;
+use zk_evm::testing::event_sink::InMemoryEventSink;
+use zk_evm::testing::memory::SimpleMemory;
+use zk_evm::testing::storage::InMemoryStorage;
 
-pub struct Tools<const B: bool>{
+pub struct Tools<const B: bool> {
     pub storage: InMemoryStorage,
     pub memory: SimpleMemory,
     pub event_sink: InMemoryEventSink,
@@ -184,19 +195,19 @@ pub fn create_default_testing_tools() -> Tools<true> {
     }
 }
 
-/// We expect that storage/memory/decommitter were prefilled 
+/// We expect that storage/memory/decommitter were prefilled
 pub fn create_out_of_circuit_vm<'a, const B: bool>(
     tools: &'a mut Tools<B>,
     block_properties: &'a BlockProperties,
 ) -> VmState<
-        'a,
-        InMemoryStorage,
-        SimpleMemory,
-        InMemoryEventSink,
-        DefaultPrecompilesProcessor<B>,
-        SimpleDecommitter<B>,
-        WitnessTracer,
-    > {
+    'a,
+    InMemoryStorage,
+    SimpleMemory,
+    InMemoryEventSink,
+    DefaultPrecompilesProcessor<B>,
+    SimpleDecommitter<B>,
+    WitnessTracer,
+> {
     let mut vm = VmState::empty_state(
         &mut tools.storage,
         &mut tools.memory,
@@ -207,7 +218,6 @@ pub fn create_out_of_circuit_vm<'a, const B: bool>(
         block_properties,
     );
 
-
     let bootloader_address = *BOOTLOADER_FORMAL_ADDRESS;
 
     let initial_context = initial_out_of_circuit_context(
@@ -215,7 +225,7 @@ pub fn create_out_of_circuit_vm<'a, const B: bool>(
         u32::MAX,
         bootloader_address,
         bootloader_address,
-        bootloader_address
+        bootloader_address,
     );
 
     vm.push_bootloader_context(0, initial_context);
@@ -229,95 +239,57 @@ pub fn create_out_of_circuit_vm<'a, const B: bool>(
 }
 
 pub fn create_in_circuit_vm<
-    E: Engine, 
+    E: Engine,
     CS: ConstraintSystem<E>,
-    R: CircuitArithmeticRoundFunction<E, 2, 3, StateElement = Num<E>>
+    R: CircuitArithmeticRoundFunction<E, 2, 3, StateElement = Num<E>>,
 >(
     cs: &mut CS,
-    round_function: &R,
+    _round_function: &R,
     initial_rollback_queue_value: E::Fr,
     initial_callstack_state_for_start: ([E::Fr; 3], CallStackEntry),
     initial_context_for_start: CallStackEntry,
 ) -> sync_vm::vm::vm_state::VmLocalState<E, 3> {
     // we need to prepare some global state and push initial context
     // use sync_vm::vm::vm_cycle::register_view::Register;
-    use sync_vm::vm::primitives::register_view::Register;
     use sync_vm::vm::ports::ArithmeticFlagsPort;
+    use sync_vm::vm::primitives::register_view::Register;
     use sync_vm::vm::vm_state::callstack::Callstack;
     use sync_vm::vm::vm_state::PendingRoundFunctions;
 
     let bool_false = Boolean::alloc(cs, Some(false)).unwrap();
-    let bool_true = Boolean::alloc(cs, Some(true)).unwrap();
 
     let mut initial_callstack = Callstack::<E, 3>::empty();
-    let (initial_callstack_sponge_state, empty_context) = initial_callstack_state_for_start;
+    let (initial_callstack_sponge_state, _empty_context) = initial_callstack_state_for_start;
 
-    // let initial_empty_context = out_to_in_circuit_context_on_call::<E>(
-    //     empty_context,
-    //     initial_rollback_queue_value
-    // );
-
-    let initial_callstack_sponge = Num::alloc_multiple(cs, Some(initial_callstack_sponge_state)).unwrap();
+    let initial_callstack_sponge =
+        Num::alloc_multiple(cs, Some(initial_callstack_sponge_state)).unwrap();
     initial_callstack.stack_sponge_state = initial_callstack_sponge;
     initial_callstack.context_stack_depth = UInt16::from_uint(1);
 
     let initial_context = out_to_in_circuit_context_on_call(
         cs,
         initial_context_for_start,
-        initial_rollback_queue_value
+        initial_rollback_queue_value,
     );
     initial_callstack.current_context = initial_context;
-
-    // let mut initial_context = initial_callstack.current_context.saved_context.clone();
-    // // set the head-tail, and segment length is 0
-    // initial_context.common_part.reverted_queue_head = Num::Constant(initial_rollback_queue_value);
-    // initial_context.common_part.reverted_queue_tail = Num::Constant(initial_rollback_queue_value);
-    // // and we start/end in kernel mode
-    // initial_context.common_part.is_kernel_mode = Boolean::constant(initial_context_for_start.is_kernel_mode());
-
-    // dbg!(Num::get_value_multiple(&initial_callstack.stack_sponge_state));
-    // simulate push
-
-    // let bootloader_address = *BOOTLOADER_FORMAL_ADDRESS;
-    // let mut new_context = initial_in_circuit_context(
-    //     0,
-    //     u32::MAX,
-    //     bootloader_address,
-    //     bootloader_address,
-    //     bootloader_address,
-    //     initial_rollback_queue_value,
-    // );
-    // initial_callstack.context_stack_depth = UInt16::from_uint(1);
-    // new_context.saved_context.common_part.is_kernel_mode = bool_true; // formal address of the bootloader implies kernel
-
-    // // push the initial (empty) context
-    // use sync_vm::traits::CircuitFixedLengthEncodable;
-    // let encoding = initial_context.encode(cs).unwrap();
-    // dbg!(Num::get_value_multiple(&encoding));
-    // let state = round_function.round_function_absorb_nums_multiple_rounds(
-    //     cs,
-    //     initial_callstack.stack_sponge_state,
-    //     &encoding
-    // ).unwrap();
-    // initial_callstack.stack_sponge_state = state;
-    // initial_callstack.current_context = new_context;
-    // dbg!(Num::get_value_multiple(&initial_callstack.stack_sponge_state));
 
     let initial_flags = ArithmeticFlagsPort::<E> {
         overflow_or_less_than: bool_false,
         equal: bool_false,
         greater_than: bool_false,
-        _marker: std::marker::PhantomData
+        _marker: std::marker::PhantomData,
     };
-    
+
     let zero_u128 = UInt128::allocate(cs, Some(0)).unwrap();
-    let empty_reg = Register {inner: [zero_u128; 2]};
+    let empty_reg = Register {
+        inner: [zero_u128; 2],
+    };
 
     let state = sync_vm::vm::vm_state::VmLocalState {
         previous_code_word: [UInt64::<E>::zero(); 4],
         registers: [empty_reg; zk_evm::zkevm_opcode_defs::REGISTERS_COUNT],
         flags: initial_flags,
-        timestamp: UInt32::<E>::from_uint(STARTING_TIMESTAMP),  
+        timestamp: UInt32::<E>::from_uint(STARTING_TIMESTAMP),
         memory_page_counter: UInt32::<E>::from_uint(STARTING_MONOTONIC_PAGES_COUNTER),
         tx_number_in_block: UInt16::<E>::zero(),
         previous_super_pc: UInt16::<E>::zero(),
