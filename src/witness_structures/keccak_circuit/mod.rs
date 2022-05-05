@@ -285,11 +285,11 @@ mod test {
     use sync_vm::scheduler::queues::StorageLogQueue;
     use sync_vm::{
         franklin_crypto::{
-            bellman::{compact_bn256::Bn256, SynthesisError},
+            bellman::{SynthesisError},
             plonk::circuit::tables::inscribe_default_range_table_for_bit_width_over_first_three_columns,
         },
         precompiles::keccak256::{
-            keccak256_precompile_inner, KeccakPrecompileState, KeccakPrecompileStateWitness,
+            keccak256_precompile_inner, KeccakPrecompileState,
         },
         scheduler::queues::{FixedWidthEncodingGenericQueueState, FullSpongeLikeQueueState},
         testing::create_test_artifacts_with_optimized_gate,

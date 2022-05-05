@@ -43,13 +43,13 @@ pub struct FullBlockArtifacts<E: Engine> {
     pub original_log_queue_states: Vec<(u32, LogQueueState<E>)>,
     // demuxed log queues
     pub demuxed_rollup_storage_queries: Vec<LogQuery>,
-    pub demuxed_rollup_storage_queue_states: Vec<E::Fr>,
+    pub demuxed_rollup_storage_queue_states: Vec<LogQueueState<E>>,
     pub demuxed_porter_storage_queries: Vec<LogQuery>,
-    pub demuxed_porter_storage_queue_states: Vec<E::Fr>,
+    pub demuxed_porter_storage_queue_states: Vec<LogQueueState<E>>,
     pub demuxed_event_queries: Vec<LogQuery>,
-    pub demuxed_event_queue_states: Vec<E::Fr>,
+    pub demuxed_event_queue_states: Vec<LogQueueState<E>>,
     pub demuxed_to_l1_queries: Vec<LogQuery>,
-    pub demuxed_to_l1_queue_states: Vec<E::Fr>,
+    pub demuxed_to_l1_queue_states: Vec<LogQueueState<E>>,
     pub demuxed_keccak_precompile_queries: Vec<LogQuery>,
     pub demuxed_keccak_precompile_queue_states: Vec<LogQueueState<E>>,
     pub demuxed_sha256_precompile_queries: Vec<LogQuery>,
@@ -60,23 +60,23 @@ pub struct FullBlockArtifacts<E: Engine> {
     // sorted and deduplicated log-like queues for ones that support reverts
     // sorted
     pub sorted_rollup_storage_queries: Vec<LogQuery>,
-    pub sorted_rollup_storage_queue_states: Vec<E::Fr>,
+    pub sorted_rollup_storage_queue_states: Vec<LogQueueState<E>>,
     pub sorted_porter_storage_queries: Vec<LogQuery>,
-    pub sorted_porter_storage_queue_states: Vec<E::Fr>,
+    pub sorted_porter_storage_queue_states: Vec<LogQueueState<E>>,
     pub sorted_event_queries: Vec<LogQuery>,
-    pub sorted_event_queue_states: Vec<E::Fr>,
+    pub sorted_event_queue_states: Vec<LogQueueState<E>>,
     pub sorted_to_l1_queries: Vec<LogQuery>,
-    pub sorted_to_l1_queue_states: Vec<E::Fr>,
+    pub sorted_to_l1_queue_states: Vec<LogQueueState<E>>,
 
     // deduplicated
     pub deduplicated_rollup_storage_queries: Vec<LogQuery>,
-    pub deduplicated_rollup_storage_queue_states: Vec<E::Fr>,
+    pub deduplicated_rollup_storage_queue_states: Vec<LogQueueState<E>>,
     pub deduplicated_porter_storage_queries: Vec<LogQuery>,
-    pub deduplicated_porter_storage_queue_states: Vec<E::Fr>,
+    pub deduplicated_porter_storage_queue_states: Vec<LogQueueState<E>>,
     pub deduplicated_event_queries: Vec<LogQuery>,
-    pub deduplicated_event_queue_states: Vec<E::Fr>,
+    pub deduplicated_event_queue_states: Vec<LogQueueState<E>>,
     pub deduplicated_to_l1_queries: Vec<LogQuery>,
-    pub deduplicated_to_l1_queue_states: Vec<E::Fr>,
+    pub deduplicated_to_l1_queue_states: Vec<LogQueueState<E>>,
 
     // keep precompile round functions data
     pub keccak_round_function_witnesses: Vec<(u32, LogQuery, Vec<Keccak256RoundWitness>)>,
@@ -261,17 +261,24 @@ impl<E: Engine> FullBlockArtifacts<E> {
         // those two thins are parallelizable, and can be internally parallelized too
 
         // now we can finish reconstruction of each sorted and unsorted memory queries
+
+        // Transform the rest of queries into states
         for query in self
             .all_memory_queries_accumulated
             .iter()
             .skip(self.vm_memory_queries_accumulated.len())
         {
-            // TODO
+            let (_old_tail, intermediate_info) =
+                memory_queue_simulator.push_and_output_intermediate_data(*query, round_function);
+            self.all_memory_queue_states.push(intermediate_info);
         }
 
-        // reconstruct sorted one too
+        // reconstruct sorted one in full
+        let mut sorted_memory_queries_simulator = MemoryQueueSimulator::<E>::empty();
         for query in self.sorted_memory_queries_accumulated.iter() {
-            // TODO
+            let (_old_tail, intermediate_info) =
+                sorted_memory_queries_simulator.push_and_output_intermediate_data(*query, round_function);
+            self.sorted_memory_queue_states.push(intermediate_info);
         }
 
         // now completely parallel process to reconstruct the states, with internally parallelism in each round function

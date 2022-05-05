@@ -19,6 +19,8 @@ pub mod memory_query;
 pub struct QueueIntermediateStates<E: Engine, const SW: usize, const ROUNDS: usize> {
     pub head: E::Fr,
     pub tail: E::Fr,
+    pub previous_head: E::Fr,
+    pub previous_tail: E::Fr,
     pub num_items: u32,
     pub round_function_execution_pairs: [([E::Fr; SW], [E::Fr; SW]); ROUNDS],
 }
@@ -28,6 +30,8 @@ impl<E: Engine, const SW: usize, const ROUNDS: usize> QueueIntermediateStates<E,
         Self {
             head: E::Fr::zero(),
             tail: E::Fr::zero(),
+            previous_head: E::Fr::zero(),
+            previous_tail: E::Fr::zero(),
             num_items: 0,
             round_function_execution_pairs: [([E::Fr::zero(); SW], [E::Fr::zero(); SW]); ROUNDS],
         }
@@ -94,6 +98,8 @@ impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const
         let intermediate_info = QueueIntermediateStates {
             head: self.head,
             tail: new_tail,
+            previous_head: self.head, // unchanged
+            previous_tail: old_tail,
             num_items: self.num_items,
             round_function_execution_pairs: states.try_into().unwrap(),
         };

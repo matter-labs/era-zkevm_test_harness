@@ -100,7 +100,7 @@ fn assert_equal_state(
     out_of_circuit: &zk_evm::vm_state::VmLocalState,
     in_circuit: &sync_vm::vm::vm_state::VmLocalState<Bn256, 3>,
 ) {
-    let wit = in_circuit.create_witness().unwrap();
+    let wit = in_circuit.clone().split().0.create_witness().unwrap();
 
     for (reg_idx, (circuit, not_circuit)) in wit
         .registers

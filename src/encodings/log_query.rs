@@ -1,6 +1,9 @@
+use sync_vm::traits::CSWitnessable;
 use sync_vm::utils::compute_shifts;
 use zk_evm::aux_structures::LogQuery;
 use zk_evm::ethereum_types::H160;
+
+use crate::utils::{u160_from_address, biguint_from_u256};
 
 use super::*;
 
@@ -240,3 +243,24 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 5> for LogQuery {
 
 pub type LogQueueSimulator<E> = QueueSimulator<E, LogQuery, 5, 3>;
 pub type LogQueueState<E> = QueueIntermediateStates<E, 3, 3>;
+
+use sync_vm::scheduler::data_access_functions::StorageLogRecord;
+
+pub fn log_query_into_storage_record_witness<E: Engine>(query: &LogQuery) -> <StorageLogRecord<E> as CSWitnessable<E>>::Witness {
+    use sync_vm::scheduler::queues::StorageLogRecordWitness;
+
+    StorageLogRecordWitness {
+        address: u160_from_address(query.address),
+        key: biguint_from_u256(query.key),
+        read_value: biguint_from_u256(query.read_value),
+        written_value: biguint_from_u256(query.written_value),
+        r_w_flag: query.rw_flag,
+        aux_byte: query.aux_byte,
+        rollback: query.rollback,
+        is_service: query.is_service,
+        shard_id: query.shard_id,
+        tx_number_in_block: query.tx_number_in_block,
+        timestamp: query.timestamp.0,
+        _marker: std::marker::PhantomData
+    }
+}

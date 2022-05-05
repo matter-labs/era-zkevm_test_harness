@@ -1,6 +1,7 @@
 use super::*;
 
 pub mod keccak_circuit;
+pub mod log_circuit_splitter;
 
 use crate::bellman::Engine;
 use crate::encodings::{QueueIntermediateStates, SpongeLikeQueueIntermediateStates};

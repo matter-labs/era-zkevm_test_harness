@@ -302,6 +302,7 @@ pub fn create_in_circuit_vm<
         memory_queue_length: UInt32::<E>::zero(),
         code_decommittment_queue_state: [Num::<E>::zero(); 3],
         code_decommittment_queue_length: UInt32::<E>::zero(),
+        pending_arithmetic_operations: vec![],
     };
 
     state

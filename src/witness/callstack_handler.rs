@@ -136,9 +136,6 @@ impl CallstackWithAuxData {
         previous_simple_entry: CallStackEntry,
         new_simple_entry: CallStackEntry,
     ) {
-        // dbg!(&previous_simple_entry);
-        // dbg!(&new_simple_entry);
-
         let new_counter = self.monotonic_frame_counter;
         self.monotonic_frame_counter += 1;
         self.depth += 1;
