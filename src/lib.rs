@@ -13,5 +13,7 @@ pub use zk_evm::ethereum_types;
 
 use self::utils::*;
 
-#[cfg(test)]
-mod tests;
+pub mod external_calls;
+
+// #[cfg(test)]
+pub(crate) mod tests;

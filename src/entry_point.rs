@@ -1,3 +1,5 @@
+use std::ops::Add;
+
 use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
 use sync_vm::franklin_crypto::bellman::plonk::better_better_cs::cs::ConstraintSystem;
 use sync_vm::vm::primitives::uint256::UInt256;
@@ -199,6 +201,7 @@ pub fn create_default_testing_tools() -> Tools<true> {
 pub fn create_out_of_circuit_vm<'a, const B: bool>(
     tools: &'a mut Tools<B>,
     block_properties: &'a BlockProperties,
+    entry_point_address: Address,
 ) -> VmState<
     'a,
     InMemoryStorage,
@@ -218,14 +221,12 @@ pub fn create_out_of_circuit_vm<'a, const B: bool>(
         block_properties,
     );
 
-    let bootloader_address = *BOOTLOADER_FORMAL_ADDRESS;
-
     let initial_context = initial_out_of_circuit_context(
         0,
         u32::MAX,
-        bootloader_address,
-        bootloader_address,
-        bootloader_address,
+        entry_point_address,
+        Address::zero(),
+        entry_point_address,
     );
 
     vm.push_bootloader_context(0, initial_context);

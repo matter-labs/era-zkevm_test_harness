@@ -48,3 +48,22 @@ pub fn u256_to_fe<F: PrimeField>(value: U256) -> F {
 
     F::from_repr(repr).unwrap()
 }
+
+pub fn calldata_to_aligned_data(calldata: &Vec<u8>) -> Vec<U256> {
+    let mut capacity = calldata.len() / 32;
+    if calldata.len() % 32 != 0 {
+        capacity += 1;
+    }
+    let mut result = Vec::with_capacity(capacity);
+    let mut it = calldata.chunks_exact(32);
+    for el in &mut it {
+        let el = U256::from_big_endian(el);
+        result.push(el);
+    }
+    let mut buffer = [0u8; 32];
+    buffer[0..it.remainder().len()].copy_from_slice(it.remainder());
+    let el = U256::from_big_endian(&buffer);
+    result.push(el);
+
+    result
+}

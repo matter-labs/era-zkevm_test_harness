@@ -96,7 +96,7 @@ fn run_and_try_create_witness() {
     run_and_try_create_witness_inner(asm, 16);
 }
 
-fn assert_equal_state(
+pub fn assert_equal_state(
     out_of_circuit: &zk_evm::vm_state::VmLocalState,
     in_circuit: &sync_vm::vm::vm_state::VmLocalState<Bn256, 3>,
 ) {
@@ -192,7 +192,14 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
 
     let block_properties = create_out_of_circuit_global_context(1, 1, true, U256::zero(), 50, 2);
 
-    let mut out_of_circuit_vm = create_out_of_circuit_vm(&mut tools, &block_properties);
+    use zk_evm::precompiles::BOOTLOADER_FORMAL_ADDRESS;
+
+    let mut out_of_circuit_vm = create_out_of_circuit_vm(
+        &mut tools, 
+        &block_properties,
+        *BOOTLOADER_FORMAL_ADDRESS
+    );
+
     let mut tracer = GenericNoopTracer::<_>::new();
     for _ in 0..cycle_limit {
         out_of_circuit_vm.cycle(&mut tracer);
