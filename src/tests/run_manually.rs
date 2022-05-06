@@ -197,6 +197,7 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
     let mut out_of_circuit_vm = create_out_of_circuit_vm(
         &mut tools, 
         &block_properties,
+        Address::zero(),
         *BOOTLOADER_FORMAL_ADDRESS
     );
 

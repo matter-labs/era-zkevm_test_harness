@@ -1,3 +1,5 @@
+use std::ops::Add;
+
 use crate::ethereum_types::Address;
 use crate::ethereum_types::U256;
 use zk_evm::address_to_u256;
@@ -22,6 +24,7 @@ use crate::tests::run_manually::assert_equal_state;
 /// setup the environment and will run out-of-circuit and then in-circuit
 /// and perform intermediate tests
 pub fn run(
+    caller: Address,
     entry_point_address: Address,
     entry_point_code: Vec<[u8; 32]>,
     all_known_codes: Vec<Vec<[u8; 32]>>,
@@ -137,7 +140,8 @@ pub fn run(
     let mut out_of_circuit_vm = create_out_of_circuit_vm(
         &mut tools, 
         &block_properties,
-        entry_point_address
+        caller,
+        entry_point_address,
     );
 
     // set initial registers

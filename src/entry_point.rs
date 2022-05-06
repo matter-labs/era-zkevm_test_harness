@@ -1,5 +1,3 @@
-use std::ops::Add;
-
 use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
 use sync_vm::franklin_crypto::bellman::plonk::better_better_cs::cs::ConstraintSystem;
 use sync_vm::vm::primitives::uint256::UInt256;
@@ -7,7 +5,6 @@ use sync_vm::vm::vm_cycle::witness_oracle::u256_to_biguint;
 use sync_vm::vm::vm_state::GlobalContext;
 use zk_evm::aux_structures::*;
 use zk_evm::ethereum_types::*;
-use zk_evm::precompiles::BOOTLOADER_FORMAL_ADDRESS;
 use zk_evm::vm_state::CallStackEntry;
 use zk_evm::vm_state::VmState;
 
@@ -201,6 +198,7 @@ pub fn create_default_testing_tools() -> Tools<true> {
 pub fn create_out_of_circuit_vm<'a, const B: bool>(
     tools: &'a mut Tools<B>,
     block_properties: &'a BlockProperties,
+    caller_address: Address,
     entry_point_address: Address,
 ) -> VmState<
     'a,
@@ -225,7 +223,7 @@ pub fn create_out_of_circuit_vm<'a, const B: bool>(
         0,
         u32::MAX,
         entry_point_address,
-        Address::zero(),
+        caller_address,
         entry_point_address,
     );
 
