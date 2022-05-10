@@ -182,7 +182,7 @@ pub fn create_default_testing_tools() -> Tools<true> {
     let event_sink = InMemoryEventSink::new();
     let precompiles_processor = DefaultPrecompilesProcessor::<true>;
     let decommittment_processor = SimpleDecommitter::<true>::new();
-    let witness_tracer = WitnessTracer::new();
+    let witness_tracer = WitnessTracer::new(10);
 
     Tools::<true> {
         storage,

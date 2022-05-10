@@ -208,6 +208,15 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
 
     let vm_local_state = out_of_circuit_vm.local_state;
 
+    // perform the final snapshot
+    let current_cycle_counter = tools.witness_tracer.current_cycle_counter;
+    use crate::witness::vm_snapshot::VmSnapshot;
+    let snapshot = VmSnapshot {
+        local_state: vm_local_state.clone(),
+        at_cycle: current_cycle_counter,
+    };
+    tools.witness_tracer.vm_snapshots.push(snapshot);
+
     use sync_vm::testing::create_test_artifacts_with_optimized_gate;
     let (mut cs, round_function, _) = create_test_artifacts_with_optimized_gate();
     sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();

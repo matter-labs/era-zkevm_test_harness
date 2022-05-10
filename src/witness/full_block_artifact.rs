@@ -88,39 +88,6 @@ pub struct FullBlockArtifacts<E: Engine> {
     pub keccak_256_memory_states: Vec<MemoryQueueState<E>>,
 }
 
-pub fn sort_log_queries<
-    F: Fn(&LogQuery, &LogQuery) -> std::cmp::Ordering + Sync,
-    D: Fn(&LogQuery, &LogQuery) -> bool + Sync,
->(
-    unsorted: &Vec<(u32, LogQuery)>,
-    sorting_function: F,
-    deduplication_function: D,
-) -> (Vec<LogQuery>, Vec<LogQuery>) {
-    if unsorted.len() == 0 {
-        return (vec![], vec![]);
-    }
-
-    let mut sorted: Vec<_> = unsorted.iter().map(|el| el.1).collect();
-    sorted.par_sort_by(&sorting_function);
-
-    // retain
-
-    let mut retained = vec![];
-    let first = sorted[0].clone();
-    retained.push(first);
-
-    for window in sorted.windows(2) {
-        let a = &window[0];
-        let b = &window[1];
-        let retain_b = deduplication_function(a, b);
-        if retain_b {
-            retained.push(b.clone());
-        }
-    }
-
-    (sorted, retained)
-}
-
 impl<E: Engine> FullBlockArtifacts<E> {
     pub fn process<R: CircuitArithmeticRoundFunction<E, 2, 3>>(&mut self, round_function: &R) {
         let mut memory_queue_simulator = MemoryQueueSimulator::<E>::empty();

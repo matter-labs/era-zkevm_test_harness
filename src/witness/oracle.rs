@@ -56,13 +56,45 @@ pub struct VmWitnessOracle<E: Engine> {
 
 use super::full_block_artifact::FullBlockArtifacts;
 
+
+#[derive(Derivative)]
+#[derivative(Clone(bound = ""), Copy(bound = ""), Debug, Default(bound = ""))]
+pub struct CommonLogSponges<E: Engine>{
+    pub rf_0: ([E::Fr; 3], [E::Fr; 3]),
+    pub rf_1: ([E::Fr; 3], [E::Fr; 3]),
+}
+
+#[derive(Derivative)]
+#[derivative(Clone(bound = ""), Copy(bound = ""), Debug, Default(bound = ""))]
+pub struct ForwardLogSponge<E: Engine>{
+    pub old_tail: E::Fr,
+    pub new_tail: E::Fr,
+    pub exclusive_rf: ([E::Fr; 3], [E::Fr; 3]),
+}
+
+#[derive(Derivative)]
+#[derivative(Clone(bound = ""), Copy(bound = ""), Debug, Default(bound = ""))]
+pub struct RollbackLogSponge<E: Engine>{
+    pub old_head: E::Fr,
+    pub new_head: E::Fr,
+    pub exclusive_rf: ([E::Fr; 3], [E::Fr; 3]),
+}
+
+#[derive(Derivative)]
+#[derivative(Clone(bound = ""), Copy(bound = ""), Debug, Default(bound = ""))]
+pub struct LogAccessSpongesInfo<E: Engine>{
+    pub cycle: u32,
+    pub common_sponges: CommonLogSponges<E>,
+    pub forward_info: ForwardLogSponge<E>,
+    pub rollback_info: Option<RollbackLogSponge<E>>,
+}
+
 pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction<E, 2, 3>>(
     tracer: WitnessTracer,
     round_function: &R,
 ) -> (VmWitnessOracle<E>, FullBlockArtifacts<E>) {
     let WitnessTracer {
         memory_queries,
-        precompile_calls,
         storage_read_queries,
         decommittment_queries,
         keccak_round_function_witnesses,
@@ -92,7 +124,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
     let mut log_queue_simulator = LogQueueSimulator::<E>::empty();
     let mut log_frames_stack = log_frames_stack;
-    // assert_eq!(log_frames_stack.len(), 1); // we must have exited the root
+    assert_eq!(log_frames_stack.len(), 1, "VM trace didn't exit the root frame"); // we must have exited the root
     let ApplicationData { forward, rollbacks } = log_frames_stack.drain(0..1).next().unwrap();
     drop(log_frames_stack);
 
@@ -119,12 +151,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
     // from cycle into first two sponges (common), then tail-tail pair and 3rd sponge for forward, then head-head pair and 3rd sponge for rollback
     let mut sponges_data: HashMap<
         u32,
-        (
-            u32,
-            [([E::Fr; 3], [E::Fr; 3]); 2],
-            ((E::Fr, E::Fr), ([E::Fr; 3], [E::Fr; 3])),
-            Option<((E::Fr, E::Fr), ([E::Fr; 3], [E::Fr; 3]))>,
-        ),
+        LogAccessSpongesInfo<E>,
     > = HashMap::new();
 
     // for some cycle we point to the elements in the flattened history - to when forward operation ended up, and where rollback ended up
@@ -137,7 +164,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
     let mut frames_sequence = vec![];
 
-    for (((parent_frame_index, this_frame_index), (frame_marker, cycle, query)), was_applied) in
+    for (((_parent_frame_index, this_frame_index), (_frame_marker, cycle, query)), was_applied) in
         forward.iter().cloned().zip(std::iter::repeat(true)).chain(
             rollbacks
                 .iter()
@@ -146,31 +173,35 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
                 .zip(std::iter::repeat(false)),
         )
     {
-        let (old_tail, intermediate_info) =
+        let (_old_tail, intermediate_info) =
             log_queue_simulator.push_and_output_intermediate_data(query, round_function);
 
         let pointer = chain_of_states.len();
         // we just log all chains of old tail -> new tail, and will interpret them later
-        chain_of_states.push((cycle, this_frame_index, (old_tail, intermediate_info.tail)));
+        chain_of_states.push((cycle, this_frame_index, (intermediate_info.previous_tail, intermediate_info.tail)));
 
         let key = query.timestamp.0;
         if query.rollback {
             let entry = sponges_data
                 .get_mut(&key)
                 .expect("rollbacks always happen after forward case");
-            let common_sponges_pair = entry.1;
+            let common_sponges_pair = entry.common_sponges;
             assert_eq!(
-                &common_sponges_pair[0],
+                &common_sponges_pair.rf_0,
                 &intermediate_info.round_function_execution_pairs[0]
             );
             assert_eq!(
-                &common_sponges_pair[1],
+                &common_sponges_pair.rf_1,
                 &intermediate_info.round_function_execution_pairs[1]
             );
-            let head_head_pair = (old_tail, intermediate_info.tail);
-            let third_sponge = intermediate_info.round_function_execution_pairs[2];
 
-            entry.3 = Some((head_head_pair, third_sponge));
+            let rollback_info = RollbackLogSponge {
+                old_head: intermediate_info.tail,
+                new_head: intermediate_info.previous_tail, // it's our convension - we move backwards
+                exclusive_rf: intermediate_info.round_function_execution_pairs[2]
+            };
+
+            entry.rollback_info = Some(rollback_info);
 
             cycle_pointers
                 .get_mut(&cycle)
@@ -191,16 +222,21 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
             }
         } else {
             let entry = sponges_data.entry(key).or_default();
-            let common_sponges: [([E::Fr; 3], [E::Fr; 3]); 2] = intermediate_info
-                .round_function_execution_pairs[0..2]
-                .try_into()
-                .unwrap();
-            let tail_tail_pair = (old_tail, intermediate_info.tail);
-            let third_sponge = intermediate_info.round_function_execution_pairs[2];
 
-            entry.0 = cycle;
-            entry.1 = common_sponges;
-            entry.2 = (tail_tail_pair, third_sponge);
+            let common_sponges_info = CommonLogSponges {
+                rf_0: intermediate_info.round_function_execution_pairs[0],
+                rf_1: intermediate_info.round_function_execution_pairs[1]
+            };
+
+            let forward_info = ForwardLogSponge {
+                old_tail: intermediate_info.previous_tail,
+                new_tail: intermediate_info.tail,
+                exclusive_rf: intermediate_info.round_function_execution_pairs[2]
+            };
+
+            entry.cycle = cycle;
+            entry.common_sponges = common_sponges_info;
+            entry.forward_info = forward_info;
 
             cycle_pointers.entry(cycle).or_default().0 = pointer;
 
@@ -270,7 +306,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
     keys.sort();
     for cycle_idx in keys.into_iter() {
         let (_, pointer) = cycle_pointers.remove(&cycle_idx).unwrap();
-        let (cycle, frame, (head, _)) = chain_of_states[pointer];
+        let (cycle, _frame, (head, _)) = chain_of_states[pointer]; // we reinterpret "previous tail" as head
         assert!(cycle == cycle_idx);
         rollback_queue_head_segments.push((cycle_idx, head));
     }
@@ -283,7 +319,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
     let mut previous_frame = 0;
 
     // only keep necessary information by walking over the frames sequence
-    for (this_frame, cycle_idx, is_explicit_rollback) in frames_sequence.into_iter() {
+    for (this_frame, _cycle_idx, is_explicit_rollback) in frames_sequence.into_iter() {
         dbg!(this_frame);
         if this_frame != previous_frame {
             // we start a new frame, or return
@@ -299,7 +335,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
                     // for a new tail
                     if !revert_segment.is_empty() {
                         let pointer = *revert_segment.end();
-                        let (cycle, frame, (_, tail)) = chain_of_states[pointer];
+                        let (_cycle, frame, (_, tail)) = chain_of_states[pointer];
                         assert!(frame == this_frame);
                         rollback_queue_initial_tails_for_new_frames.push((this_frame, tail));
                     }
@@ -387,8 +423,6 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
                             .unwrap_or(E::Fr::zero());
                         (t, t, 0)
                     };
-
-                use crate::encodings::callstack_entry::ExtendedCallstackEntry;
 
                 let entry = ExtendedCallstackEntry {
                     callstack_entry: el.affected_entry,
@@ -483,7 +517,7 @@ use crate::franklin_crypto::plonk::circuit::boolean::*;
 use sync_vm::glue::code_unpacker_sha256::memory_query_updated::RawMemoryQuery;
 use sync_vm::scheduler::data_access_functions::StorageLogRecord;
 use sync_vm::scheduler::queues::DecommitQueryWitness;
-use sync_vm::scheduler::queues::{DecommitHash, DecommitQuery};
+use sync_vm::scheduler::queues::{DecommitQuery};
 use sync_vm::vm::primitives::*;
 use sync_vm::vm::vm_state::saved_contract_context::ExecutionContextRecord;
 use sync_vm::vm::vm_state::saved_contract_context::ExecutionContextRecordWitness;
@@ -506,13 +540,13 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
                     key.create_witness()
                 );
             }
-            let (cycle, query) = self.memory_read_witness.drain(..1).next().unwrap();
+            let (_cycle, query) = self.memory_read_witness.drain(..1).next().unwrap();
 
             // println!("Query value = 0x{:x}", query.value);
             if let Some(ts) = timestamp.get_value() {
-                let roughly_a_cycle = (ts - STARTING_TIMESTAMP) / TIMESTAMPS_PER_CYCLE
+                let _roughly_a_cycle = (ts - STARTING_TIMESTAMP) / TIMESTAMPS_PER_CYCLE
                     + INITIAL_MONOTONIC_CYCLE_COUNTER;
-                // assert_eq!(cycle, roughly_a_cycle);
+                // assert_eq!(_cycle, _roughly_a_cycle);
             }
 
             if let Some(location) = key.create_witness() {
@@ -533,7 +567,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
         }
     }
 
-    fn push_memory_witness(&mut self, memory_query: &RawMemoryQuery<E>, execute: &Boolean) {
+    fn push_memory_witness(&mut self, _memory_query: &RawMemoryQuery<E>, _execute: &Boolean) {
         // we do not care
     }
 
@@ -542,8 +576,6 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
         key: &StorageLogRecord<E>,
         execute: &Boolean,
     ) -> Option<num_bigint::BigUint> {
-        use crate::u160_from_address;
-
         if execute.get_value().unwrap_or(false) {
             let (_cycle, query) = self.storage_read_queries.drain(..1).next().unwrap();
 
@@ -558,7 +590,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
         }
     }
 
-    fn push_storage_witness(&mut self, key: &StorageLogRecord<E>, execute: &Boolean) {
+    fn push_storage_witness(&mut self, _key: &StorageLogRecord<E>, _execute: &Boolean) {
         // we do not care
     }
 

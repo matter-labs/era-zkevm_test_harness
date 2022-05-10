@@ -23,6 +23,9 @@ pub enum QueryMarker {
 
 #[derive(Clone, Debug)]
 pub struct WitnessTracer {
+    pub cycles_to_use_per_snapshot: u32,
+    pub current_cycle_counter: u32,
+    pub cycle_counter_in_this_snapshot: u32,
     pub memory_queries: Vec<(u32, MemoryQuery)>, // flattened memory queries, with cycle indicators
     pub precompile_calls: Vec<()>,
     pub storage_read_queries: Vec<(u32, LogQuery)>, // storage read queries with cycle indicators
@@ -34,6 +37,7 @@ pub struct WitnessTracer {
     pub log_frames_stack: Vec<ApplicationData<((usize, usize), (QueryMarker, u32, LogQuery))>>, // keep the unique frame index
     pub callstack_with_aux_data: CallstackWithAuxData,
     pub sponge_busy_range: Range<usize>,
+    pub vm_snapshots: Vec<VmSnapshot>,
     // we need to properly preserve the information about logs. Not just flattening them into something,
     // but also keep the markers on when new frame has started and has finished, and the final frame execution
     // result, so we can properly substitute hash chain results in there for non-determinism
@@ -76,8 +80,11 @@ impl LogQueueFramesProcessor {
 }
 
 impl WitnessTracer {
-    pub fn new() -> Self {
+    pub fn new(cycles_per_snapshot: u32) -> Self {
         Self {
+            cycles_to_use_per_snapshot: cycles_per_snapshot,
+            current_cycle_counter: 0,
+            cycle_counter_in_this_snapshot: 0,
             memory_queries: vec![],
             precompile_calls: vec![],
             storage_read_queries: vec![],
@@ -89,6 +96,7 @@ impl WitnessTracer {
             log_frames_stack: vec![ApplicationData::empty()],
             callstack_with_aux_data: CallstackWithAuxData::empty(),
             sponge_busy_range: 0..0,
+            vm_snapshots: vec![],
         }
     }
 }
@@ -163,10 +171,50 @@ use zk_evm::abstractions::SpongeExecutionMarker;
 use zk_evm::vm_state::VmLocalState;
 use zk_evm::witness_trace::VmWitnessTracer;
 
+use super::vm_snapshot::VmSnapshot;
+
 impl VmWitnessTracer for WitnessTracer {
     fn start_new_execution_cycle(&mut self, current_state: &VmLocalState) {
-        // println!("New cycle starts");
-        // dbg!(&self.sponge_busy_range);
+        if self.current_cycle_counter == 0 {
+            if self.current_cycle_counter != current_state.monotonic_cycle_counter {
+                // adjust
+                self.current_cycle_counter = current_state.monotonic_cycle_counter;
+            }
+            // make the initial one
+            let snapshot = VmSnapshot {
+                local_state: current_state.clone(),
+                at_cycle: self.current_cycle_counter
+            };
+            self.vm_snapshots.push(snapshot);
+        }
+
+        if self.cycle_counter_in_this_snapshot >= self.cycles_to_use_per_snapshot {
+            let is_pending = current_state.pending_port.is_any_pending();
+            if self.cycle_counter_in_this_snapshot > self.cycles_to_use_per_snapshot {
+                assert!(!is_pending);
+            }
+
+            if !is_pending {
+                // to it immediatelly
+                let snapshot = VmSnapshot {
+                    local_state: current_state.clone(),
+                    at_cycle: self.current_cycle_counter
+                };
+                self.vm_snapshots.push(snapshot);
+
+                // we made a snapshot now, but the cycle itself will be the first one for the next snapshot 
+                self.cycle_counter_in_this_snapshot = 1;
+            } else {
+                // wait for 1 more cycle
+                self.cycle_counter_in_this_snapshot += 1;
+            }
+        } else {
+            // just continue
+            self.cycle_counter_in_this_snapshot += 1;
+        }
+
+        // monotonic counter always increases
+        self.current_cycle_counter += 1;
     }
     fn end_execution_cycle(&mut self, current_state: &VmLocalState) {
         // println!("Cycle ends");
