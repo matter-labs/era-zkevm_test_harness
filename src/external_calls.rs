@@ -32,169 +32,171 @@ pub fn run(
     calldata: Vec<u8>,
     cycle_limit: usize,
 ) {
-    use sync_vm::testing::Bn256;
-    let mut tools = create_default_testing_tools();
+    todo!();
 
-    let mut all_bytecodes = std::collections::HashMap::new();
+    // use sync_vm::testing::Bn256;
+    // let mut tools = create_default_testing_tools();
 
-    // fill the tools
+    // let mut all_bytecodes = std::collections::HashMap::new();
 
-    for bytecode in Some(entry_point_code.clone()).iter().chain(all_known_codes.iter()) {
-        let bytecode_hash = bytecode_to_code_hash(bytecode).unwrap();
-        let bytecode_hash_as_u256 = U256::from_big_endian(&bytecode_hash);
-        all_bytecodes.insert(bytecode_hash_as_u256, contract_bytecode_to_words(&bytecode));
-    }
+    // // fill the tools
 
-    for (_, bytecode) in predeployed_contracts.iter() {
-        let bytecode_hash = bytecode_to_code_hash(bytecode).unwrap();
-        let bytecode_hash_as_u256 = U256::from_big_endian(&bytecode_hash);
-        all_bytecodes.insert(bytecode_hash_as_u256, contract_bytecode_to_words(&bytecode));
-    }
+    // for bytecode in Some(entry_point_code.clone()).iter().chain(all_known_codes.iter()) {
+    //     let bytecode_hash = bytecode_to_code_hash(bytecode).unwrap();
+    //     let bytecode_hash_as_u256 = U256::from_big_endian(&bytecode_hash);
+    //     all_bytecodes.insert(bytecode_hash_as_u256, contract_bytecode_to_words(&bytecode));
+    // }
 
-    let mut decommitter_data_to_fill = vec![];
-    for (bytecode_hash_as_u256, bytecode_words) in all_bytecodes.clone().into_iter() {
-        decommitter_data_to_fill.push((bytecode_hash_as_u256, bytecode_words));
-    }
+    // for (_, bytecode) in predeployed_contracts.iter() {
+    //     let bytecode_hash = bytecode_to_code_hash(bytecode).unwrap();
+    //     let bytecode_hash_as_u256 = U256::from_big_endian(&bytecode_hash);
+    //     all_bytecodes.insert(bytecode_hash_as_u256, contract_bytecode_to_words(&bytecode));
+    // }
 
-    let (entry_point_bytecode_hash, entry_point_bytecode) = decommitter_data_to_fill[0].clone();
-    tools.decommittment_processor.populate(decommitter_data_to_fill);
+    // let mut decommitter_data_to_fill = vec![];
+    // for (bytecode_hash_as_u256, bytecode_words) in all_bytecodes.clone().into_iter() {
+    //     decommitter_data_to_fill.push((bytecode_hash_as_u256, bytecode_words));
+    // }
 
-    // and do the query
-    let initial_decommittment_query = DecommittmentQuery {
-        hash: entry_point_bytecode_hash,
-        timestamp: Timestamp(1u32),
-        memory_page: MemoryPage(STARTING_CODE_PAGE),
-        decommitted_length: entry_point_bytecode.len() as u16,
-        is_fresh: true,
-    };
+    // let (entry_point_bytecode_hash, entry_point_bytecode) = decommitter_data_to_fill[0].clone();
+    // tools.decommittment_processor.populate(decommitter_data_to_fill);
 
-    let (query, witness) = tools.decommittment_processor.decommit_into_memory(
-        0,
-        initial_decommittment_query,
-        &mut tools.memory,
-    );
+    // // and do the query
+    // let initial_decommittment_query = DecommittmentQuery {
+    //     hash: entry_point_bytecode_hash,
+    //     timestamp: Timestamp(1u32),
+    //     memory_page: MemoryPage(STARTING_CODE_PAGE),
+    //     decommitted_length: entry_point_bytecode.len() as u16,
+    //     is_fresh: true,
+    // };
 
-    if let Some(wit) = witness {
-        tools.witness_tracer.add_decommittment(0, query, wit);
-    }
+    // let (query, witness) = tools.decommittment_processor.decommit_into_memory(
+    //     0,
+    //     initial_decommittment_query,
+    //     &mut tools.memory,
+    // );
 
-    // put calldata into initial memory
-    use crate::calldata_to_aligned_data;
+    // if let Some(wit) = witness {
+    //     tools.witness_tracer.add_decommittment(0, query, wit);
+    // }
 
-    let calldata_len = calldata.len();
+    // // put calldata into initial memory
+    // use crate::calldata_to_aligned_data;
 
-    // fill the calldata
-    let aligned_calldata = calldata_to_aligned_data(&calldata);
+    // let calldata_len = calldata.len();
 
-    tools.memory.populate(vec![
-        (STARTING_CALLDATA_PAGE, aligned_calldata),
-        (STARTING_CODE_PAGE, entry_point_bytecode),
-    ]);
+    // // fill the calldata
+    // let aligned_calldata = calldata_to_aligned_data(&calldata);
 
-    // fill the formal storage of known code hashes and deployed contracts
-    let mut storage_els = vec![];
+    // tools.memory.populate(vec![
+    //     (STARTING_CALLDATA_PAGE, aligned_calldata),
+    //     (STARTING_CODE_PAGE, entry_point_bytecode),
+    // ]);
 
-    use zk_evm::precompiles::*;
+    // // fill the formal storage of known code hashes and deployed contracts
+    // let mut storage_els = vec![];
 
-    for (address, bytecode) in predeployed_contracts.iter() {
-        let bytecode_hash = bytecode_to_code_hash(bytecode).unwrap();
-        let bytecode_hash_as_u256 = U256::from_big_endian(&bytecode_hash);
+    // use zk_evm::precompiles::*;
+
+    // for (address, bytecode) in predeployed_contracts.iter() {
+    //     let bytecode_hash = bytecode_to_code_hash(bytecode).unwrap();
+    //     let bytecode_hash_as_u256 = U256::from_big_endian(&bytecode_hash);
         
-        let address_as_u256 = address_to_u256(address);
+    //     let address_as_u256 = address_to_u256(address);
 
-        // we write into DEPLOYER that for key == address we have bytecode == bytecode hash
-        storage_els.push((
-            0,
-            *DEPLOYER_SYSTEM_CONTRACT_ADDRESS,
-            address_as_u256,
-            bytecode_hash_as_u256,
-        ));
-        // we write into FACTORY that for key == bytecode hash we have marker to know it
-        storage_els.push((
-            0,
-            *KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS,
-            bytecode_hash_as_u256,
-            U256::from(1u64),
-        ));
-    }
+    //     // we write into DEPLOYER that for key == address we have bytecode == bytecode hash
+    //     storage_els.push((
+    //         0,
+    //         *DEPLOYER_SYSTEM_CONTRACT_ADDRESS,
+    //         address_as_u256,
+    //         bytecode_hash_as_u256,
+    //     ));
+    //     // we write into FACTORY that for key == bytecode hash we have marker to know it
+    //     storage_els.push((
+    //         0,
+    //         *KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS,
+    //         bytecode_hash_as_u256,
+    //         U256::from(1u64),
+    //     ));
+    // }
 
-    for (bytecode_hash_as_u256, _) in all_bytecodes.into_iter() {
-        storage_els.push((
-            0,
-            *KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS,
-            bytecode_hash_as_u256,
-            U256::from(1u64),
-        ));
-    }
+    // for (bytecode_hash_as_u256, _) in all_bytecodes.into_iter() {
+    //     storage_els.push((
+    //         0,
+    //         *KNOWN_CODE_FACTORY_SYSTEM_CONTRACT_ADDRESS,
+    //         bytecode_hash_as_u256,
+    //         U256::from(1u64),
+    //     ));
+    // }
 
 
-    let block_properties = create_out_of_circuit_global_context(
-        1, 
-        1, 
-        true, 
-        U256::zero(), 
-        50, 
-        2
-    );
+    // let block_properties = create_out_of_circuit_global_context(
+    //     1, 
+    //     1, 
+    //     true, 
+    //     U256::zero(), 
+    //     50, 
+    //     2
+    // );
 
-    let mut out_of_circuit_vm = create_out_of_circuit_vm(
-        &mut tools, 
-        &block_properties,
-        caller,
-        entry_point_address,
-    );
+    // let mut out_of_circuit_vm = create_out_of_circuit_vm(
+    //     &mut tools, 
+    //     &block_properties,
+    //     caller,
+    //     entry_point_address,
+    // );
 
-    // set initial registers
-    out_of_circuit_vm.local_state.registers[1] = U256::from(calldata_len as u64);
+    // // set initial registers
+    // out_of_circuit_vm.local_state.registers[1] = U256::from(calldata_len as u64);
 
-    let mut tracer = GenericNoopTracer::<_>::new();
-    for _ in 0..cycle_limit {
-        out_of_circuit_vm.cycle(&mut tracer);
-    }
+    // let mut tracer = GenericNoopTracer::<_>::new();
+    // for _ in 0..cycle_limit {
+    //     out_of_circuit_vm.cycle(&mut tracer);
+    // }
 
-    let vm_local_state = out_of_circuit_vm.local_state;
+    // let vm_local_state = out_of_circuit_vm.local_state;
 
-    use sync_vm::testing::create_test_artifacts_with_optimized_gate;
-    let (mut cs, round_function, _) = create_test_artifacts_with_optimized_gate();
-    sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+    // use sync_vm::testing::create_test_artifacts_with_optimized_gate;
+    // let (mut cs, round_function, _) = create_test_artifacts_with_optimized_gate();
+    // sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
 
-    // use crate::franklin_crypto::plonk::circuit::tables::inscribe_default_range_table_for_bit_width_over_first_three_columns;
-    // inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
+    // // use crate::franklin_crypto::plonk::circuit::tables::inscribe_default_range_table_for_bit_width_over_first_three_columns;
+    // // inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
 
-    // let params = sync_vm::utils::bn254_rescue_params();
-    // let round_function = GenericHasher::<Bn256, RescueParams<_, 2, 3>, 2, 3>::new_from_params(&params);
+    // // let params = sync_vm::utils::bn254_rescue_params();
+    // // let round_function = GenericHasher::<Bn256, RescueParams<_, 2, 3>, 2, 3>::new_from_params(&params);
 
-    let (mut oracle, artifacts) =
-        create_artifacts_from_tracer(tools.witness_tracer, &round_function);
+    // let (mut oracle, artifacts) =
+    //     create_artifacts_from_tracer(tools.witness_tracer, &round_function);
 
-    use crate::entry_point::create_in_circuit_global_context;
-    let in_circuit_global_context =
-        create_in_circuit_global_context::<Bn256>(1, 1, true, U256::zero(), 50, 2);
+    // use crate::entry_point::create_in_circuit_global_context;
+    // let in_circuit_global_context =
+    //     create_in_circuit_global_context::<Bn256>(1, 1, true, U256::zero(), 50, 2);
 
-    let initial_tail = oracle.initial_tail_for_entry_point;
-    let mut in_circuit_vm = create_in_circuit_vm(
-        &mut cs,
-        &round_function,
-        initial_tail,
-        oracle.initial_callstack_state_for_start.clone(),
-        oracle.initial_context_for_start,
-    );
+    // let initial_tail = oracle.initial_tail_for_entry_point;
+    // let mut in_circuit_vm = create_in_circuit_vm(
+    //     &mut cs,
+    //     &round_function,
+    //     initial_tail,
+    //     oracle.initial_callstack_state_for_start.clone(),
+    //     oracle.initial_context_for_start,
+    // );
 
-    use sync_vm::vm::primitives::UInt128;
-    in_circuit_vm.registers[1].inner[0] = UInt128::allocate(&mut cs, Some(calldata_len as u128)).unwrap();
+    // use sync_vm::vm::primitives::UInt128;
+    // in_circuit_vm.registers[1].inner[0] = UInt128::allocate(&mut cs, Some(calldata_len as u128)).unwrap();
 
-    for _ in 0..cycle_limit {
-        in_circuit_vm = vm_cycle(
-            &mut cs,
-            in_circuit_vm,
-            &mut oracle,
-            &round_function,
-            &in_circuit_global_context,
-        )
-        .unwrap();
-    }
+    // for _ in 0..cycle_limit {
+    //     in_circuit_vm = vm_cycle(
+    //         &mut cs,
+    //         in_circuit_vm,
+    //         &mut oracle,
+    //         &round_function,
+    //         &in_circuit_global_context,
+    //     )
+    //     .unwrap();
+    // }
 
-    assert_equal_state(&vm_local_state, &in_circuit_vm);
+    // assert_equal_state(&vm_local_state, &in_circuit_vm);
 
     // TODO: run tests over artifacts
 }

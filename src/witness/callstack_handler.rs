@@ -32,9 +32,15 @@ impl CallstackEntryWithAuxData {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum OutOfScopeReason {
+    Fresh,
+    Exited{ panic: bool },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CallstackAction {
     PushToStack,
-    OutOfScope { panic: bool },
+    OutOfScope(OutOfScopeReason),
     PopFromStack { panic: bool },
 }
 
@@ -43,10 +49,14 @@ pub struct CallstackActionHistoryEntry {
     pub action: CallstackAction,
     pub affected_entry: CallStackEntry,
     pub cycle_index: u32,
-    pub forward_queue_ranges_at_entry: Vec<Range<usize>>,
-    pub rollback_queue_ranges_at_entry: Vec<Range<usize>>,
-    pub forward_queue_ranges_changes: Vec<Range<usize>>,
-    pub rollback_queue_ranges_change: Vec<Range<usize>>,
+    pub monotonic_forward_query_counter_on_first_entry: usize,
+    pub monotonic_forward_query_counter_on_exit: Option<usize>,
+    pub monotonic_rollback_query_counter_on_first_entry: usize,
+    pub monotonic_rollback_query_counter_on_exit: Option<usize>,
+    pub forward_queue_ranges_at_entry: Range<usize>,
+    pub forward_queue_ranges_changes: Range<usize>,
+    pub rollback_queue_ranges_change: Range<usize>,
+    pub rollback_queue_ranges_at_entry: Range<usize>,
 }
 
 impl CallstackActionHistoryEntry {
@@ -55,12 +65,26 @@ impl CallstackActionHistoryEntry {
             action: CallstackAction::PushToStack,
             affected_entry: CallStackEntry::empty_context(),
             cycle_index: 0,
-            forward_queue_ranges_at_entry: vec![],
-            rollback_queue_ranges_at_entry: vec![],
-            forward_queue_ranges_changes: vec![],
-            rollback_queue_ranges_change: vec![],
+            monotonic_forward_query_counter_on_first_entry: 0,
+            monotonic_forward_query_counter_on_exit: None,
+            monotonic_rollback_query_counter_on_first_entry: 0,
+            monotonic_rollback_query_counter_on_exit: None,
+            forward_queue_ranges_at_entry: 0..0,
+            rollback_queue_ranges_at_entry: 0..0,
+            forward_queue_ranges_changes: 0..0,
+            rollback_queue_ranges_change: 0..0,
         }
     }
+
+    pub fn total_forward_segment_length_on_pop(&self) -> usize {
+        self.forward_queue_ranges_changes.end
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct LogQueueAccessAuxData {
+    pub monotonic_forward_query_counter: usize,
+    pub monotonic_rollback_query_counter: Option<usize>,
 }
 
 #[derive(Clone, Debug)]
@@ -72,6 +96,7 @@ pub struct CallstackWithAuxData {
     pub depth: usize,
     pub stack: Vec<CallstackEntryWithAuxData>,
     pub full_history: Vec<CallstackActionHistoryEntry>,
+    pub log_queue_access_snapshots: Vec<(u32, LogQueueAccessAuxData)>,
 }
 
 impl CallstackWithAuxData {
@@ -84,18 +109,23 @@ impl CallstackWithAuxData {
             depth: 0,
             stack: vec![],
             full_history: vec![],
+            log_queue_access_snapshots: vec![],
         }
     }
 
     pub fn from_initial_callstack(simple_entry: CallStackEntry) -> Self {
         let current_history_record = CallstackActionHistoryEntry {
-            action: CallstackAction::PushToStack,
+            action: CallstackAction::OutOfScope(OutOfScopeReason::Fresh),
             affected_entry: simple_entry,
             cycle_index: 0,
-            forward_queue_ranges_at_entry: vec![],
-            rollback_queue_ranges_at_entry: vec![],
-            forward_queue_ranges_changes: vec![],
-            rollback_queue_ranges_change: vec![],
+            forward_queue_ranges_at_entry: 0..0,
+            rollback_queue_ranges_at_entry: 0..0,
+            forward_queue_ranges_changes: 0..0,
+            rollback_queue_ranges_change: 0..0,
+            monotonic_forward_query_counter_on_first_entry: 0,
+            monotonic_forward_query_counter_on_exit: None,
+            monotonic_rollback_query_counter_on_first_entry: 0,
+            monotonic_rollback_query_counter_on_exit: None,
         };
 
         let full_entry = CallstackEntryWithAuxData {
@@ -113,10 +143,14 @@ impl CallstackWithAuxData {
             action: CallstackAction::PushToStack,
             affected_entry: CallStackEntry::empty_context(),
             cycle_index: 0,
-            forward_queue_ranges_at_entry: vec![],
-            rollback_queue_ranges_at_entry: vec![],
-            forward_queue_ranges_changes: vec![],
-            rollback_queue_ranges_change: vec![],
+            forward_queue_ranges_at_entry: 0..0,
+            rollback_queue_ranges_at_entry: 0..0,
+            forward_queue_ranges_changes: 0..0,
+            rollback_queue_ranges_change: 0..0,
+            monotonic_forward_query_counter_on_first_entry: 0,
+            monotonic_forward_query_counter_on_exit: None,
+            monotonic_rollback_query_counter_on_first_entry: 0,
+            monotonic_rollback_query_counter_on_exit: None,
         };
 
         Self {
@@ -127,6 +161,7 @@ impl CallstackWithAuxData {
             depth: 1,
             stack: vec![],
             full_history: vec![previous_history_record],
+            log_queue_access_snapshots: vec![],
         }
     }
 
@@ -150,13 +185,17 @@ impl CallstackWithAuxData {
         let full_entry = CallstackEntryWithAuxData {
             entry: new_simple_entry,
             current_history_record: CallstackActionHistoryEntry {
-                action: CallstackAction::OutOfScope { panic: false },
+                action: CallstackAction::OutOfScope(OutOfScopeReason::Fresh),
                 affected_entry: new_simple_entry,
                 cycle_index: monotonic_cycle_counter,
-                forward_queue_ranges_at_entry: vec![],
-                rollback_queue_ranges_at_entry: vec![],
-                forward_queue_ranges_changes: vec![],
-                rollback_queue_ranges_change: vec![],
+                forward_queue_ranges_at_entry: self.monotonic_forward_query_counter..self.monotonic_forward_query_counter,
+                rollback_queue_ranges_at_entry: self.monotonic_rollback_query_counter..self.monotonic_rollback_query_counter,
+                forward_queue_ranges_changes: self.monotonic_forward_query_counter..self.monotonic_forward_query_counter,
+                rollback_queue_ranges_change: self.monotonic_rollback_query_counter..self.monotonic_rollback_query_counter,
+                monotonic_forward_query_counter_on_first_entry: self.monotonic_forward_query_counter,
+                monotonic_forward_query_counter_on_exit: None,
+                monotonic_rollback_query_counter_on_first_entry: self.monotonic_rollback_query_counter,
+                monotonic_rollback_query_counter_on_exit: None,
             },
             parent_frame_index: current_frame_index,
             frame_index: new_counter,
@@ -173,24 +212,20 @@ impl CallstackWithAuxData {
         current.entry = previous_simple_entry;
         current.current_history_record.affected_entry = previous_simple_entry;
         // and flatten the history that we already to have
-        current
-            .current_history_record
-            .forward_queue_ranges_at_entry
-            .extend(
-                current
-                    .current_history_record
-                    .forward_queue_ranges_changes
-                    .drain(..),
-            );
-        current
-            .current_history_record
-            .rollback_queue_ranges_at_entry
-            .extend(
-                current
-                    .current_history_record
-                    .rollback_queue_ranges_change
-                    .drain(..),
-            );
+
+        assert_eq!(current.current_history_record.forward_queue_ranges_at_entry.end,
+            current.current_history_record.forward_queue_ranges_changes.start
+        );
+
+        current.current_history_record.forward_queue_ranges_at_entry.end = current.current_history_record.forward_queue_ranges_changes.end;
+        current.current_history_record.forward_queue_ranges_changes.start = current.current_history_record.forward_queue_ranges_changes.end;
+
+        assert_eq!(current.current_history_record.rollback_queue_ranges_at_entry.end,
+            current.current_history_record.rollback_queue_ranges_change.start
+        );
+
+        current.current_history_record.rollback_queue_ranges_at_entry.end = current.current_history_record.rollback_queue_ranges_change.end;
+        current.current_history_record.rollback_queue_ranges_change.start = current.current_history_record.rollback_queue_ranges_change.end;
 
         let mut history_of_current = current.current_history_record.clone();
         history_of_current.action = CallstackAction::PushToStack;
@@ -203,7 +238,6 @@ impl CallstackWithAuxData {
 
     pub fn pop_entry(&mut self, monotonic_cycle_counter: u32, panicked: bool) -> CallStackEntry {
         let mut previous = self.stack.pop().unwrap();
-        // dbg!(&previous);
         self.depth -= 1;
 
         let previous_history_record = &mut previous.current_history_record;
@@ -212,33 +246,26 @@ impl CallstackWithAuxData {
         // now make a history record for previous by joining that properly
 
         if panicked {
-            let mut in_scope_monotonic_forward_query_counter = self.monotonic_forward_query_counter;
-            previous_history_record
-                .forward_queue_ranges_changes
-                .extend_from_slice(&history_of_current.forward_queue_ranges_changes);
-            let it = history_of_current
-                .rollback_queue_ranges_change
-                .iter()
-                .cloned()
-                .rev()
-                .map(|el| {
-                    // we need to offset by the current counter and transform into the current counter + something
-                    let current = in_scope_monotonic_forward_query_counter;
-                    let num_entries = el.len();
-                    in_scope_monotonic_forward_query_counter += num_entries;
+            // glue the forward
+            let mut full_history_of_changes = history_of_current.forward_queue_ranges_at_entry.clone();
+            assert_eq!(full_history_of_changes.end, history_of_current.forward_queue_ranges_changes.start);
+            full_history_of_changes.end = history_of_current.forward_queue_ranges_changes.end;
+            // now glue the rollback
+            full_history_of_changes.end += history_of_current.rollback_queue_ranges_change.len();
 
-                    current..(current + num_entries)
-                });
-            previous_history_record
-                .forward_queue_ranges_changes
-                .extend(it);
+            previous_history_record.forward_queue_ranges_changes = full_history_of_changes;
         } else {
-            previous_history_record
-                .forward_queue_ranges_changes
-                .extend_from_slice(&history_of_current.forward_queue_ranges_changes);
-            previous_history_record
-                .rollback_queue_ranges_change
-                .extend_from_slice(&history_of_current.forward_queue_ranges_changes);
+            let mut full_history_of_changes = history_of_current.forward_queue_ranges_at_entry.clone();
+            assert_eq!(full_history_of_changes.end, history_of_current.forward_queue_ranges_changes.start);
+            full_history_of_changes.end = history_of_current.forward_queue_ranges_changes.end;
+
+            previous_history_record.forward_queue_ranges_changes = full_history_of_changes;
+
+            let mut full_history_of_changes = history_of_current.rollback_queue_ranges_at_entry.clone();
+            assert_eq!(full_history_of_changes.end, history_of_current.rollback_queue_ranges_change.start);
+            full_history_of_changes.end = history_of_current.rollback_queue_ranges_change.end;
+
+            previous_history_record.rollback_queue_ranges_change = full_history_of_changes; // ?
         }
 
         let mut previous_history_record = previous.current_history_record.clone();
@@ -246,16 +273,14 @@ impl CallstackWithAuxData {
 
         // when we pop then current goes out of scope
         let current = std::mem::replace(&mut self.current_entry, previous);
-        // dbg!(&current);
         // keep the history as is
         let mut history_of_current = current.current_history_record.clone();
-        history_of_current.action = CallstackAction::OutOfScope { panic: panicked };
+        history_of_current.monotonic_forward_query_counter_on_exit = Some(self.monotonic_forward_query_counter);
+        history_of_current.monotonic_rollback_query_counter_on_exit = Some(self.monotonic_rollback_query_counter);
+        history_of_current.action = CallstackAction::OutOfScope(OutOfScopeReason::Exited { panic: panicked } );
 
         history_of_current.cycle_index = monotonic_cycle_counter;
         previous_history_record.cycle_index = monotonic_cycle_counter;
-
-        // dbg!(&history_of_current);
-        // dbg!(&previous_history_record);
 
         self.full_history.push(history_of_current);
         self.full_history.push(previous_history_record);
@@ -314,10 +339,12 @@ impl CallstackWithAuxData {
         self.monotonic_forward_query_counter += 1;
         if log_query.rw_flag {
             // can be rolled back
+
             let marker = QueryMarker::Forward(forward_query_index);
             self.current_entry
                 .forward_queue
                 .push((marker, monotonic_cycle_counter, log_query));
+                
             if let Some(last) = self.current_entry.forward_queue_ranges.last_mut() {
                 if last.end == forward_query_index {
                     last.end += 1;
@@ -334,20 +361,10 @@ impl CallstackWithAuxData {
                     .push(forward_query_index..(forward_query_index + 1));
             }
 
-            if let Some(entry) = self
+            self
                 .current_entry
                 .current_history_record
-                .forward_queue_ranges_changes
-                .last_mut()
-            {
-                debug_assert!(entry.end == forward_query_index);
-                entry.end += 1;
-            } else {
-                self.current_entry
-                    .current_history_record
-                    .forward_queue_ranges_changes
-                    .push(forward_query_index..(forward_query_index + 1));
-            }
+                .forward_queue_ranges_changes.end += 1;
 
             let mut rollback_query = log_query;
             rollback_query.rollback = true;
@@ -375,21 +392,23 @@ impl CallstackWithAuxData {
                     .push(rollback_query_index..(rollback_query_index + 1));
             }
 
-            if let Some(entry) = self
+            self
                 .current_entry
                 .current_history_record
-                .rollback_queue_ranges_change
-                .last_mut()
-            {
-                debug_assert!(entry.end == rollback_query_index);
-                entry.end += 1;
-            } else {
-                self.current_entry
-                    .current_history_record
-                    .rollback_queue_ranges_change
-                    .push(rollback_query_index..(rollback_query_index + 1));
-            }
+                .rollback_queue_ranges_change.end += 1;
+
+            // snapshot it
+            self.log_queue_access_snapshots.push((monotonic_cycle_counter, LogQueueAccessAuxData {
+                monotonic_forward_query_counter: forward_query_index,
+                monotonic_rollback_query_counter: Some(rollback_query_index)
+            }));
         } else {
+            // snapshot it
+            self.log_queue_access_snapshots.push((monotonic_cycle_counter, LogQueueAccessAuxData {
+                monotonic_forward_query_counter: forward_query_index,
+                monotonic_rollback_query_counter: None,
+            }));
+
             // just add
             let marker = QueryMarker::Forward(forward_query_index);
             self.current_entry
@@ -411,20 +430,10 @@ impl CallstackWithAuxData {
                     .push(forward_query_index..(forward_query_index + 1));
             }
 
-            if let Some(entry) = self
+            self
                 .current_entry
                 .current_history_record
-                .forward_queue_ranges_changes
-                .last_mut()
-            {
-                debug_assert!(entry.end == forward_query_index);
-                entry.end += 1;
-            } else {
-                self.current_entry
-                    .current_history_record
-                    .forward_queue_ranges_changes
-                    .push(forward_query_index..(forward_query_index + 1));
-            }
+                .forward_queue_ranges_changes.end += 1;
         }
     }
 }

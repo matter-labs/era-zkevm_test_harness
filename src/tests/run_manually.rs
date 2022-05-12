@@ -230,30 +230,29 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
     let (mut oracle, artifacts) =
         create_artifacts_from_tracer(tools.witness_tracer, &round_function);
 
-    use crate::entry_point::create_in_circuit_global_context;
-    let in_circuit_global_context =
-        create_in_circuit_global_context::<Bn256>(1, 1, true, U256::zero(), 50, 2);
+    // use crate::entry_point::create_in_circuit_global_context;
+    // let in_circuit_global_context =
+    //     create_in_circuit_global_context::<Bn256>(1, 1, true, U256::zero(), 50, 2);
 
-    let initial_tail = oracle.initial_tail_for_entry_point;
-    let mut in_circuit_vm = create_in_circuit_vm(
-        &mut cs,
-        &round_function,
-        initial_tail,
-        oracle.initial_callstack_state_for_start.clone(),
-        oracle.initial_context_for_start,
-    );
+    // let initial_tail = oracle.initial_tail_for_entry_point;
+    // let mut in_circuit_vm = create_in_circuit_vm(
+    //     &mut cs,
+    //     &round_function,
+    //     initial_tail,
+    //     oracle.initial_callstack_state_for_start.clone(),
+    //     oracle.initial_context_for_start,
+    // );
 
-    for _ in 0..cycle_limit {
-        in_circuit_vm = vm_cycle(
-            &mut cs,
-            in_circuit_vm,
-            &mut oracle,
-            &round_function,
-            &in_circuit_global_context,
-        )
-        .unwrap();
-    }
+    // for _ in 0..cycle_limit {
+    //     in_circuit_vm = vm_cycle(
+    //         &mut cs,
+    //         in_circuit_vm,
+    //         &mut oracle,
+    //         &round_function,
+    //         &in_circuit_global_context,
+    //     )
+    //     .unwrap();
+    // }
 
-    assert_equal_state(&vm_local_state, &in_circuit_vm);
-    // compare
+    // assert_equal_state(&vm_local_state, &in_circuit_vm);
 }

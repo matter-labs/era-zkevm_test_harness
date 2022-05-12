@@ -1,5 +1,7 @@
 use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
+use sync_vm::franklin_crypto::bellman::SynthesisError;
 use sync_vm::franklin_crypto::bellman::plonk::better_better_cs::cs::ConstraintSystem;
+use sync_vm::project_ref;
 use sync_vm::vm::primitives::uint256::UInt256;
 use sync_vm::vm::vm_cycle::witness_oracle::u256_to_biguint;
 use sync_vm::vm::vm_state::GlobalContext;
@@ -122,6 +124,63 @@ pub fn out_to_in_circuit_context_on_call<E: Engine, CS: ConstraintSystem<E>>(
     ctx
 }
 
+/// Allocated execution context with uninitialized rollback queue head/tail/length
+pub fn alloc_execution_context<E: Engine, CS: ConstraintSystem<E>>(
+    cs: &mut CS,
+    out_of_circuit_context: Option<CallStackEntry>,
+) -> Result<FullExecutionContext<E>, SynthesisError> {
+    let mut ctx = FullExecutionContext::uninitialized();
+
+    let base_page = project_ref!(out_of_circuit_context, base_memory_page).map(|el| el.0);
+    ctx.saved_context.common_part.base_page =
+        UInt32::allocate(cs, base_page)?;
+    let calldata_page = project_ref!(out_of_circuit_context, calldata_page).map(|el| el.0);
+    ctx.saved_context.common_part.calldata_page =
+        UInt32::allocate(cs, calldata_page)?;
+    let code_page = project_ref!(out_of_circuit_context, code_page).map(|el| el.0);
+    ctx.saved_context.common_part.code_page = UInt32::allocate(cs, code_page)?;
+
+    ctx.saved_context.common_part.pc = UInt16::allocate(cs, project_ref!(out_of_circuit_context, pc).cloned())?;
+    ctx.saved_context.common_part.exception_handler_loc =
+        UInt16::allocate(cs, project_ref!(out_of_circuit_context, exception_handler_location).cloned())?;
+    ctx.saved_context.common_part.ergs_remaining =
+        UInt32::allocate(cs, project_ref!(out_of_circuit_context, ergs_remaining).cloned())?;
+
+    ctx.saved_context.common_part.code_address =
+        UInt160::allocate(cs, project_ref!(out_of_circuit_context, code_address).cloned().map(u160_from_address))?;
+    ctx.saved_context.common_part.this =
+    UInt160::allocate(cs, project_ref!(out_of_circuit_context, this_address).cloned().map(u160_from_address))?;
+    ctx.saved_context.common_part.caller =
+        UInt160::allocate(cs, project_ref!(out_of_circuit_context, msg_sender).cloned().map(u160_from_address))?;
+
+    let is_kernel_mode = out_of_circuit_context.map(|el| el.is_kernel_mode());
+
+    ctx.saved_context.common_part.is_kernel_mode =
+        Boolean::alloc(cs, is_kernel_mode)?;
+
+    Ok(ctx)
+}
+
+use sync_vm::vm::ports::ArithmeticFlagsPort;
+
+pub fn alloc_arithmetic_port<E: Engine, CS: ConstraintSystem<E>>(
+    cs: &mut CS,
+    flags_witness: Option<zk_evm::flags::Flags>,
+) -> Result<ArithmeticFlagsPort<E>, SynthesisError> {
+    let overflow_or_less_than = Boolean::alloc(cs, project_ref!(flags_witness, overflow_or_less_than_flag).cloned())?;
+    let equal = Boolean::alloc(cs, project_ref!(flags_witness, equality_flag).cloned())?;
+    let greater_than = Boolean::alloc(cs, project_ref!(flags_witness, greater_than_flag).cloned())?;
+
+    let new = ArithmeticFlagsPort {
+        overflow_or_less_than,
+        equal,
+        greater_than,
+        _marker: std::marker::PhantomData,
+    };
+
+    Ok(new)
+}
+
 use zk_evm::block_properties::BlockProperties;
 
 pub fn create_out_of_circuit_global_context(
@@ -160,6 +219,9 @@ pub fn create_in_circuit_global_context<E: Engine>(
     }
 }
 
+use crate::witness::oracle::VmInCircuitAuxilaryParameters;
+use crate::witness::oracle::VmInstanceWitness;
+use crate::witness::oracle::VmWitnessOracle;
 use crate::witness::tracer::WitnessTracer;
 use zk_evm::precompiles::DefaultPrecompilesProcessor;
 use zk_evm::testing::decommitter::SimpleDecommitter;
@@ -303,6 +365,134 @@ pub fn create_in_circuit_vm<
         code_decommittment_queue_length: UInt32::<E>::zero(),
         pending_arithmetic_operations: vec![],
     };
+
+    state
+}
+
+pub fn run_vm_instance<
+    E: Engine,
+    CS: ConstraintSystem<E>,
+    R: CircuitArithmeticRoundFunction<E, 2, 3, StateElement = Num<E>>,
+>(
+    cs: &mut CS,
+    round_function: &R,
+    in_circuit_global_context: &GlobalContext<E>,
+    snapshot_data: VmInstanceWitness<E, VmWitnessOracle<E>>,
+) -> sync_vm::vm::vm_state::VmLocalState<E, 3> {
+    // we need to prepare some global state and push initial context
+    // use sync_vm::vm::vm_cycle::register_view::Register;
+    use sync_vm::vm::primitives::register_view::Register;
+    use sync_vm::vm::vm_state::callstack::Callstack;
+    use sync_vm::vm::vm_state::PendingRoundFunctions;
+
+    let VmInstanceWitness { 
+        initial_state,
+        witness_oracle, 
+        auxilary_initial_parameters, 
+        cycles_range, 
+        final_state, 
+        auxilary_final_parameters 
+    } = snapshot_data;
+
+    let VmInCircuitAuxilaryParameters {
+        callstack_state: (initial_callstack_sponge_state, initial_context_for_start),
+        decommittment_queue_state,
+        memory_queue_state: memory_queue_state_witness,
+        storage_log_queue_state,
+        current_frame_rollback_queue_tail,
+        current_frame_rollback_queue_head,
+        current_frame_rollback_queue_segment_length,
+    } = auxilary_initial_parameters;
+
+    let mut initial_callstack = Callstack::<E, 3>::empty();
+    initial_callstack.current_context.returndata_page = UInt32::allocate(cs, Some(initial_state.callstack.returndata_page.0)).unwrap();
+    initial_callstack.current_context.log_queue_forward_tail = Num::alloc(cs, Some(storage_log_queue_state.tail_state)).unwrap();
+    initial_callstack.current_context.log_queue_forward_part_length = UInt32::allocate(cs, Some(storage_log_queue_state.num_items)).unwrap();
+
+    let initial_callstack_sponge =
+        Num::alloc_multiple(cs, Some(initial_callstack_sponge_state)).unwrap();
+    initial_callstack.stack_sponge_state = initial_callstack_sponge;
+    initial_callstack.context_stack_depth = UInt16::allocate(cs, Some(initial_state.callstack.depth() as u16)).unwrap();
+
+    let mut initial_context = alloc_execution_context(
+        cs,
+        Some(initial_context_for_start),
+    ).unwrap();
+    // set rollback queue properties
+    initial_context.saved_context.common_part.reverted_queue_head = Num::alloc(cs, Some(current_frame_rollback_queue_head)).unwrap();
+    initial_context.saved_context.common_part.reverted_queue_tail = Num::alloc(cs, Some(current_frame_rollback_queue_tail)).unwrap();
+    initial_context.saved_context.common_part.reverted_queue_segment_len = UInt32::allocate(cs, Some(current_frame_rollback_queue_segment_length)).unwrap();
+
+    initial_callstack.current_context = initial_context;
+
+    let initial_flags = alloc_arithmetic_port(cs, Some(initial_state.flags)).unwrap();
+
+    let mut regs = [Register::<E>::zero(); zk_evm::zkevm_opcode_defs::REGISTERS_COUNT];
+    for (dst, src) in regs.iter_mut().zip(initial_state.registers.iter()) {
+        let low = (src.0[0] as u128) | (src.0[1] as u128);
+        let high = (src.0[2] as u128) | (src.0[3] as u128);
+
+        let low = UInt128::allocate(cs, Some(low)).unwrap();
+        let high = UInt128::allocate(cs, Some(high)).unwrap();
+        dst.inner[0] = low;
+        dst.inner[1] = high;
+    }
+
+    let mut previous_code_word = [UInt64::<E>::zero(); 4];
+    for (i, dst) in previous_code_word.iter_mut().enumerate() {
+        let value = initial_state.previous_code_word.0[i];
+        *dst = UInt64::allocate(cs, Some(value)).unwrap();
+    }
+
+    let timestamp = UInt32::allocate(cs, Some(initial_state.timestamp)).unwrap();
+    let memory_page_counter = UInt32::allocate(cs, Some(initial_state.memory_page_counter)).unwrap();
+    let tx_number_in_block = UInt16::allocate(cs, Some(initial_state.tx_number_in_block)).unwrap();
+    let previous_super_pc = UInt16::allocate(cs, Some(initial_state.previous_super_pc)).unwrap();
+    let did_call_or_ret_recently = Boolean::alloc(cs, Some(initial_state.did_call_or_ret_recently)).unwrap();
+    let tx_origin = UInt160::allocate(cs, Some(u160_from_address(initial_state.tx_origin))).unwrap();
+    let ergs_per_pubdata_byte = UInt32::allocate(cs, Some(initial_state.current_ergs_per_pubdata_byte)).unwrap();
+
+    let memory_queue_state =
+        Num::alloc_multiple(cs, Some(memory_queue_state_witness.tail)).unwrap();
+    let memory_queue_length = UInt32::allocate(cs, Some(memory_queue_state_witness.length)).unwrap();
+
+    let code_decommittment_queue_state =
+    Num::alloc_multiple(cs, Some(decommittment_queue_state.tail)).unwrap();
+    let code_decommittment_queue_length = UInt32::allocate(cs, Some(decommittment_queue_state.length)).unwrap();
+
+    let mut state = sync_vm::vm::vm_state::VmLocalState {
+        previous_code_word,
+        registers: regs,
+        flags: initial_flags,
+        timestamp,
+        memory_page_counter,
+        tx_number_in_block,
+        previous_super_pc,
+        did_call_or_ret_recently,
+        tx_origin,
+        ergs_per_pubdata_byte,
+        callstack: initial_callstack,
+        pending_sponges: PendingRoundFunctions::<E, 3>::empty(), // we guarantee that those are empty
+        memory_queue_state,
+        memory_queue_length,
+        code_decommittment_queue_state,
+        code_decommittment_queue_length,
+        pending_arithmetic_operations: vec![], // also guaranteed to be empty
+    };
+
+    let mut oracle = witness_oracle;
+    use sync_vm::vm::vm_cycle::cycle::vm_cycle;
+
+    for _ in cycles_range {
+        state = vm_cycle(
+            cs,
+            state,
+            &mut oracle,
+            round_function,
+            &in_circuit_global_context,
+        )
+        .unwrap();
+    }
 
     state
 }
