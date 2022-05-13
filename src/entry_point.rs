@@ -3,6 +3,7 @@ use sync_vm::franklin_crypto::bellman::SynthesisError;
 use sync_vm::franklin_crypto::bellman::plonk::better_better_cs::cs::ConstraintSystem;
 use sync_vm::project_ref;
 use sync_vm::vm::primitives::uint256::UInt256;
+use sync_vm::vm::vm_cycle::cycle::vm_process_pending;
 use sync_vm::vm::vm_cycle::witness_oracle::u256_to_biguint;
 use sync_vm::vm::vm_state::GlobalContext;
 use zk_evm::aux_structures::*;
@@ -378,7 +379,7 @@ pub fn run_vm_instance<
     round_function: &R,
     in_circuit_global_context: &GlobalContext<E>,
     snapshot_data: VmInstanceWitness<E, VmWitnessOracle<E>>,
-) -> sync_vm::vm::vm_state::VmLocalState<E, 3> {
+) -> sync_vm::vm::vm_state::VmGlobalState<E, 3> {
     // we need to prepare some global state and push initial context
     // use sync_vm::vm::vm_cycle::register_view::Register;
     use sync_vm::vm::primitives::register_view::Register;
@@ -405,9 +406,6 @@ pub fn run_vm_instance<
     } = auxilary_initial_parameters;
 
     let mut initial_callstack = Callstack::<E, 3>::empty();
-    initial_callstack.current_context.returndata_page = UInt32::allocate(cs, Some(initial_state.callstack.returndata_page.0)).unwrap();
-    initial_callstack.current_context.log_queue_forward_tail = Num::alloc(cs, Some(storage_log_queue_state.tail_state)).unwrap();
-    initial_callstack.current_context.log_queue_forward_part_length = UInt32::allocate(cs, Some(storage_log_queue_state.num_items)).unwrap();
 
     let initial_callstack_sponge =
         Num::alloc_multiple(cs, Some(initial_callstack_sponge_state)).unwrap();
@@ -418,7 +416,12 @@ pub fn run_vm_instance<
         cs,
         Some(initial_context_for_start),
     ).unwrap();
-    // set rollback queue properties
+    // set forward and rollback queue properties
+
+    initial_context.returndata_page = UInt32::allocate(cs, Some(initial_state.callstack.returndata_page.0)).unwrap();
+    initial_context.log_queue_forward_tail = Num::alloc(cs, Some(storage_log_queue_state.tail_state)).unwrap();
+    initial_context.log_queue_forward_part_length = UInt32::allocate(cs, Some(storage_log_queue_state.num_items)).unwrap();
+
     initial_context.saved_context.common_part.reverted_queue_head = Num::alloc(cs, Some(current_frame_rollback_queue_head)).unwrap();
     initial_context.saved_context.common_part.reverted_queue_tail = Num::alloc(cs, Some(current_frame_rollback_queue_tail)).unwrap();
     initial_context.saved_context.common_part.reverted_queue_segment_len = UInt32::allocate(cs, Some(current_frame_rollback_queue_segment_length)).unwrap();
@@ -439,7 +442,7 @@ pub fn run_vm_instance<
     }
 
     let mut previous_code_word = [UInt64::<E>::zero(); 4];
-    for (i, dst) in previous_code_word.iter_mut().enumerate() {
+    for (i, dst) in previous_code_word.iter_mut().rev().enumerate() {
         let value = initial_state.previous_code_word.0[i];
         *dst = UInt64::allocate(cs, Some(value)).unwrap();
     }
@@ -494,5 +497,7 @@ pub fn run_vm_instance<
         .unwrap();
     }
 
-    state
+    let final_state_no_pending = vm_process_pending(cs, state, round_function).unwrap();
+
+    final_state_no_pending
 }

@@ -49,7 +49,7 @@ pub struct VmWitnessOracle<E: Engine> {
     pub memory_read_witness: Vec<(u32, MemoryQuery)>,
     pub rollback_queue_head_segments: Vec<(u32, E::Fr)>,
     pub decommittment_requests_witness: Vec<(u32, DecommittmentQuery)>,
-    pub rollback_queue_initial_tails_for_new_frames: Vec<(u32, (usize, E::Fr))>,
+    pub rollback_queue_initial_tails_for_new_frames: Vec<(u32, E::Fr)>,
     pub storage_read_queries: Vec<(u32, LogQuery)>,
     pub callstack_values_for_returns:
         Vec<(u32, (ExtendedCallstackEntry<E>, CallstackSimulatorState<E>))>,
@@ -59,7 +59,7 @@ pub struct VmWitnessOracle<E: Engine> {
 }
 
 #[derive(Derivative)]
-#[derivative(Clone(bound = ""), Copy(bound = ""), Debug)]
+#[derivative(Clone(bound = ""), Copy(bound = ""), Debug, Default)]
 pub struct StorageLogDetailedState<E: Engine> {
     pub forward_tail: E::Fr,
     pub forward_length: u32,
@@ -405,13 +405,10 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
     // These are "frozen" states that just lie in the callstack for now and can not be modified
     let mut callstack_sponge_encoding_ranges = vec![];
-    let mut current_range = 0..0;
+    // pretend initial state
+    callstack_sponge_encoding_ranges.push((0, [E::Fr::zero(); 3]));
 
     let mut enriched_log_access_history = vec![];
-    let end_of_queue = chain_of_states
-        .last()
-        .map(|el| el.2.1)
-        .unwrap_or(E::Fr::zero());
 
     use crate::witness::callstack_handler::LogQueueAccessAuxData;
 
@@ -422,7 +419,6 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
     for (idx, el) in full_history.iter().cloned().enumerate() {
         match el.action {
             CallstackAction::PushToStack => {
-                dbg!(&el);
                 // this is a point where need to substitue a state of the computed chain
                 // we mainly need the length of the segment of the rollback queue and the current point
                 // and head/tail parts of the queue
@@ -447,15 +443,10 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
                     .push_and_output_intermediate_data(entry, round_function);
 
                 // when we push a new one then we need to "finish" the previous range and start a new one
-                let active_range = current_range.start..el.cycle_index;
-                current_range = el.cycle_index..el.cycle_index;
-
-                callstack_sponge_encoding_ranges.push((active_range, states.new_state));
+                callstack_sponge_encoding_ranges.push((el.cycle_index, states.new_state));
             }
             CallstackAction::PopFromStack { panic: _ } => {
                 // here we actually get witness
-
-                dbg!(&el);
 
                 let (entry, intermediate_info) =
                     callstack_argebraic_simulator.pop_and_output_intermediate_data(round_function);
@@ -464,10 +455,8 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
                 // some older frame became current
 
                 // when we push a new one then we need to "finish" the previous range and start a new one
-                let active_range = current_range.start..el.cycle_index;
-                current_range = el.cycle_index..el.cycle_index;
 
-                callstack_sponge_encoding_ranges.push((active_range, intermediate_info.new_state));
+                callstack_sponge_encoding_ranges.push((el.cycle_index, intermediate_info.new_state));
 
                 // we have created a new frame and can determine all the states before any next call
 
@@ -546,7 +535,6 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
             CallstackAction::OutOfScope(OutOfScopeReason::Fresh) => {
                 // we have created a new frame and can determine all the states before any next call
 
-                dbg!(&el);
                 // we can determine the tail right now
                 let first_entry_rollback_counter = el.monotonic_rollback_query_counter_on_first_entry; 
                 let initial_rollback_tail = chain_of_states[first_entry_rollback_counter-1].2.1;
@@ -617,473 +605,209 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
                 }
             }
             CallstackAction::OutOfScope(OutOfScopeReason::Exited { panic: _ }) => {
-                dbg!(&el);
                 // we are not too interested
             }
         }
     }
 
-    dbg!(&enriched_log_access_history);
-
-    todo!();
-
-
-    // // let mut callstack_log_part_ranges = vec![]; // cycle, rollback head, rollback tail, segment length
-
-    // // this is a state on top of the callstack
-    // let mut current_context = None;
-
-    // // let mut peekckable_iterator_over_chain_of_states = chain_of_states.iter().peekable();
-    // let mut peekckable_forward_log_iter = forward.iter().peekable();
-    // let mut peekckable_rollback_log_iter = rollbacks.iter().rev().peekable();
-
-
-
-    // let mut full_history_peekable_iter = full_history.iter().peekable();
-
-    // let mut map = HashMap::<u32, (E::Fr, E::Fr, u32)>::new();
-
-    // let mut current_callstack_item_props = (E::Fr::zero(), E::Fr::zero(), 0u32);
-    // let el = full_history_peekable_iter.next().cloned().unwrap();
-    // assert!(el.action == CallstackAction::PushToStack);
-    // let (head, tail, segment_len) =
-    //     if let Some(segment) = el.rollback_queue_ranges_at_entry.last() {
-    //         let head = chain_of_states[segment.start - 1].2 .1;
-    //         let tail = chain_of_states[segment.end - 1].2 .1;
-    //         let len = segment.len();
-
-    //         (head, tail, len)
-    //     } else {
-    //         // it's the end
-    //         let t = chain_of_states
-    //             .last()
-    //             .map(|el| el.2 .1)
-    //             .unwrap_or(E::Fr::zero());
-    //         (t, t, 0)
-    //     };
-
-    // let entry = ExtendedCallstackEntry {
-    //     callstack_entry: el.affected_entry,
-    //     rollback_queue_head: head,
-    //     rollback_queue_tail: tail,
-    //     rollback_queue_segment_length: segment_len as u32,
-    // };
-
-    // let states = callstack_argebraic_simulator
-    //     .push_and_output_intermediate_data(entry, round_function);
-
-    // // when we push a new one then we need to "finish" the previous range and start a new one
-    // let active_range = current_range.start..el.cycle_index;
-    // current_range = el.cycle_index..el.cycle_index;
-
-    // callstack_sponge_encoding_ranges.push((active_range, states.new_state));
-
-    // dbg!(&chain_of_states);
-
-    // current_callstack_item_props.0 = head;
-    // current_callstack_item_props.1 = tail;
-    // current_callstack_item_props.2 = segment_len as u32;
-
-    // map.insert(0, current_callstack_item_props);
-
-    // loop {
-    //     if let Some(_next_action) = full_history_peekable_iter.peek().cloned() {
-    //         let el = full_history_peekable_iter.next().cloned().unwrap();
-
-    //         dbg!(&el);
-
-    //         match el.action {
-    //             CallstackAction::PushToStack => {
-    //                 // this is a point where need to substitue a state of the computed chain
-    //                 // we mainly need the length of the segment of the rollback queue and the current point
-    //                 // and head/tail parts of the queue
-    
-    //                 // assert!(el.rollback_queue_ranges_at_entry.len() <= 1);
-    //                 assert!(
-    //                     el.rollback_queue_ranges_change.len() == 0,
-    //                     "expected merged changes for push, got {:?}",
-    //                     &el.rollback_queue_ranges_change
-    //                 );
-    
-    //                 // everything was joined for us, so we need to only ask what is a current state
-    
-    //                 let (head, tail, segment_len) =
-    //                     if let Some(segment) = el.rollback_queue_ranges_at_entry.last() {
-    //                         let head = chain_of_states[segment.start - 1].2 .1;
-    //                         let tail = chain_of_states[segment.end - 1].2 .1;
-    //                         let len = segment.len();
-    
-    //                         (head, tail, len)
-    //                     } else {
-    //                         // it's the end
-    //                         let t = chain_of_states
-    //                             .last()
-    //                             .map(|el| el.2 .1)
-    //                             .unwrap_or(E::Fr::zero());
-    //                         (t, t, 0)
-    //                     };
-    
-    //                 let entry = ExtendedCallstackEntry {
-    //                     callstack_entry: el.affected_entry,
-    //                     rollback_queue_head: head,
-    //                     rollback_queue_tail: tail,
-    //                     rollback_queue_segment_length: segment_len as u32,
-    //                 };
-    
-    //                 let states = callstack_argebraic_simulator
-    //                     .push_and_output_intermediate_data(entry, round_function);
-    
-    //                 // when we push a new one then we need to "finish" the previous range and start a new one
-    //                 let active_range = current_range.start..el.cycle_index;
-    //                 current_range = el.cycle_index..el.cycle_index;
-    
-    //                 callstack_sponge_encoding_ranges.push((active_range, states.new_state));
-    //             }
-    //             CallstackAction::PopFromStack { panic: _ } => {
-    //                 // here we actually get witness
-    
-    //                 let (entry, intermediate_info) =
-    //                     callstack_argebraic_simulator.pop_and_output_intermediate_data(round_function);
-    //                 callstack_values_for_returns.push((el.cycle_index, (entry, intermediate_info)));
-
-    //                 // some older frame became current
-
-    //                 // we have created a new frame and can determine all the states before any next call
-
-    //                 let (head, tail, segment_len) =
-    //                 if let Some(segment) = el.rollback_queue_ranges_at_entry.first() {
-    //                     let head = chain_of_states[segment.start - 1].2 .1;
-    //                     let tail = chain_of_states[segment.end - 1].2 .1;
-    //                     let len = segment.len();
-
-    //                     (head, tail, len)
-    //                 } else {
-    //                     // it's the end
-    //                     let t = chain_of_states
-    //                         .last()
-    //                         .map(|el| el.2 .1)
-    //                         .unwrap_or(E::Fr::zero());
-    //                     (t, t, 0)
-    //                 };
-
-    //                 current_callstack_item_props.0 = head;
-    //                 current_callstack_item_props.1 = tail;
-    //                 current_callstack_item_props.2 = segment_len as u32;
-
-    //                 rollback_queue_initial_tails_for_new_frames.push((el.cycle_index, current_callstack_item_props.1));
-
-    //                 if let Some(_next_action) = full_history_peekable_iter.peek().cloned() {
-    //                     let next_call_cycle = _next_action.cycle_index;
-
-    //                     while let Some(peek_next_forward) = peekckable_forward_log_iter.peek().cloned() {
-    //                         if peek_next_forward.1.1 < next_call_cycle {
-    //                             // we will have a sequence of calls in this frame
-    //                             let next_forward = peekckable_forward_log_iter.next().cloned().unwrap();
-    //                             let (_, (_, cycle_idx, query)) = next_forward;
-    //                             indexer.head_offset += 1;
-    //                             if query.rollback {
-    //                                 assert!(peekckable_rollback_log_iter.next().is_some());
-    //                                 indexer.tail_offset -= 1;
-    //                                 current_callstack_item_props.2 += 1;
-    //                                 let new_head = chain_of_states[indexer.tail_offset].2.0;
-    //                                 current_callstack_item_props.0 = new_head;
-    //                                 rollback_queue_head_segments.push((cycle_idx, new_head));
-    //                             }
-
-    //                             map.insert(cycle_idx, current_callstack_item_props);
-    //                         } else {
-    //                             break;
-    //                         }
-    //                     }
-    //                 } else {
-    //                     // it's the exit from the root frame, not too interesting
-    //                 }
-
-    //                 // when we push a new one then we need to "finish" the previous range and start a new one
-    //                 let active_range = current_range.start..el.cycle_index;
-    //                 current_range = el.cycle_index..el.cycle_index;
-    
-    //                 callstack_sponge_encoding_ranges.push((active_range, intermediate_info.new_state));
-    //             }
-    //             CallstackAction::OutOfScope(OutOfScopeReason::Fresh) => {
-    //                 if current_context.is_none() {
-    //                     current_context = Some(el.affected_entry);
-    //                 }
-
-    //                 // we have created a new frame and can determine all the states before any next call
-
-    //                 let (head, tail, segment_len) =
-    //                 if let Some(segment) = el.rollback_queue_ranges_at_entry.first() {
-    //                     let head = chain_of_states[segment.start - 1].2 .1;
-    //                     let tail = chain_of_states[segment.end - 1].2 .1;
-    //                     let len = segment.len();
-
-    //                     (head, tail, len)
-    //                 } else {
-    //                     // it's the end
-    //                     let t = chain_of_states
-    //                         .last()
-    //                         .map(|el| el.2 .1)
-    //                         .unwrap_or(E::Fr::zero());
-    //                     (t, t, 0)
-    //                 };
-
-    //                 assert!(segment_len == 0);
-
-    //                 current_callstack_item_props.0 = head;
-    //                 current_callstack_item_props.1 = tail;
-    //                 current_callstack_item_props.2 = segment_len as u32;
-
-    //                 dbg!(&current_callstack_item_props);
-
-    //                 let next_action = full_history_peekable_iter.peek().cloned().unwrap(); // will always exists, as there is something on callstack
-    //                 let next_call_cycle = next_action.cycle_index;
-
-    //                 while let Some(peek_next_forward) = peekckable_forward_log_iter.peek().cloned() {
-    //                     if peek_next_forward.1.1 < next_call_cycle {
-    //                         // we will have a sequence of calls in this frame
-    //                         let next_forward = peekckable_forward_log_iter.next().cloned().unwrap();
-    //                         let (_, (_, cycle_idx, query)) = next_forward;
-    //                         if !query.rollback {
-    //                             let (forward_offset, rollback_offset) = cycle_into_flat_sequence_index[&cycle_idx];
-    //                             assert_eq!(forward_offset, indexer.head_offset);
-    //                             if let Some(rollback_offset) = rollback_offset {
-    //                                 let new_head = chain_of_states[rollback_offset].2.0;
-    //                                 current_callstack_item_props.0 = new_head;
-    //                                 current_callstack_item_props.2 += 1;
-    //                                 rollback_queue_head_segments.push((cycle_idx, new_head));
-    //                             }
-    //                         }
-    //                         indexer.head_offset += 1;
-    //                         // if query.rollback {
-    //                         //     assert!(peekckable_rollback_log_iter.next().is_some());
-    //                         //     indexer.tail_offset -= 1;
-    //                         //     current_callstack_item_props.2 += 1;
-    //                         //     let new_head = chain_of_states[indexer.tail_offset].2.0;
-    //                         //     current_callstack_item_props.0 = new_head;
-    //                         // }
-
-    //                         dbg!(&current_callstack_item_props);
-
-    //                         map.insert(cycle_idx, current_callstack_item_props);
-    //                     } else {
-    //                         // next access will be in another frame
-    //                         break
-    //                     }
-    //                 }
-    //                 // 
-    //             }
-    //             CallstackAction::OutOfScope(OutOfScopeReason::Exited { panic: _ }) => {
-    //                 assert!(current_context.is_some());
-
-    //                 // 
-    //             }
-    //         }
-
-    //     } else {
-    //         // we should only walk the remaining logs and index them
-    //         if let Some(next_forward) = peekckable_forward_log_iter.next().cloned() {
-    //             let (_, (_, cycle_idx, query)) = next_forward;
-    //             if !query.rollback {
-    //                 let (forward_offset, rollback_offset) = cycle_into_flat_sequence_index[&cycle_idx];
-    //                 assert_eq!(forward_offset, indexer.head_offset);
-    //                 if let Some(rollback_offset) = rollback_offset {
-    //                     let new_head = chain_of_states[rollback_offset].2.0;
-    //                     current_callstack_item_props.0 = new_head;
-    //                     current_callstack_item_props.2 += 1;
-    //                 }
-    //             }
-    //             indexer.head_offset += 1;
-
-    //             map.insert(cycle_idx, current_callstack_item_props);
-    //         } else {
-    //             break;
-    //         }
-    //     }
-    // }
-
-    // dbg!(&map);
-
-    // // we simulate a series of actions on the stack starting from the outermost frame
-    // // each history record contains an information on what was the stack state between points
-    // // when it potentially came into and out of scope
-
-    // let mut artifacts = FullBlockArtifacts::<E>::default();
-    // artifacts.vm_memory_queries_accumulated = vm_memory_queries_accumulated;
-    // artifacts.all_decommittment_queries = decommittment_queries;
-    // artifacts.keccak_round_function_witnesses = keccak_round_function_witnesses;
-    // artifacts.sha256_round_function_witnesses = sha256_round_function_witnesses;
-    // artifacts.ecrecover_witnesses = ecrecover_witnesses;
-    // artifacts.original_log_queue = original_log_queue;
-    // artifacts.original_log_queue_states = original_log_queue_states;
-
-    // artifacts.sorted_rollup_storage_queries = sorted_rollup_storage_queries;
-    // artifacts.sorted_porter_storage_queries = sorted_porter_storage_queries;
-    // artifacts.sorted_event_queries = sorted_event_queries;
-    // artifacts.sorted_to_l1_queries = sorted_to_l1_queries;
-    // artifacts.demuxed_keccak_precompile_queries = sorted_keccak_precompile_queries;
-    // artifacts.demuxed_sha256_precompile_queries = sorted_sha256_precompile_queries;
-    // artifacts.demuxed_ecrecover_queries = sorted_ecrecover_queries;
-
-    // artifacts.process(round_function);
-
-    // let mut all_instances_witnesses = vec![];
-
-    // for pair in vm_snapshots.windows(2) {
-    //     let initial_state = &pair[0];
-    //     let final_state = &pair[1];
-
-    //     // we need to get chunks of
-    //     // - memory read witnesses
-    //     // - storage read witnesses
-    //     // - decommittment witnesses
-    //     // - callstack witnesses
-    //     // - rollback queue witnesses
-
-    //     // first find the memory witness by scanning all the known states
-    //     // and finding the latest one with cycle index < current
-    //     use crate::witness_structures::{transform_queue_state, transform_sponge_like_queue_state};
-
-    //     let memory_queue_state_for_entry = artifacts.vm_memory_queue_states.iter().take_while(
-    //         |el| el.0 < initial_state.at_cycle
-    //     )
-    //     .last()
-    //     .map(|el| transform_sponge_like_queue_state(el.2))
-    //     .unwrap_or(FullSpongeLikeQueueState::<E>::placeholder_witness());
-
-    //     let decommittment_queue_state_for_entry = artifacts.all_decommittment_queue_states.iter().take_while(
-    //         |el| el.0 < initial_state.at_cycle
-    //     )
-    //     .last()
-    //     .map(|el| transform_sponge_like_queue_state(el.1))
-    //     .unwrap_or(FullSpongeLikeQueueState::<E>::placeholder_witness());
-
-    //     // we also need forward storage log queue
-    //     let storage_log_queue_state_for_entry = artifacts.original_log_queue_states.iter().take_while(
-    //         |el| el.0 < initial_state.at_cycle
-    //     )
-    //     .last()
-    //     .map(|el| transform_queue_state(el.1))
-    //     .unwrap_or(FixedWidthEncodingGenericQueueState::<E>::placeholder_witness());
-
-    //     // and finally we need the callstack current state
-
-    //     let mut el = None;
-    //     for (range, state) in callstack_sponge_encoding_ranges.iter() {
-    //         if range.contains(&initial_state.at_cycle) {
-    //             el = Some(*state);
-    //             break;
-    //         }
-    //     }
-
-    //     let callstack_state_for_entry = el.unwrap_or([E::Fr::zero(); 3]);
-
-    //     // initial state is kind of done, now
-    //     // split the oracle witness
-
-    //     let per_isntance_memory_read_witnesses: Vec<_> = memory_read_witness.iter()
-    //         .take_while(
-    //             |el| el.0 < initial_state.at_cycle
-    //         ).cloned().collect();
-
-    //     let per_isntance_storage_read_witnesses: Vec<_> = storage_read_queries.iter()
-    //         .take_while(
-    //             |el| el.0 < initial_state.at_cycle
-    //         ).cloned().collect();
-
-    //     let decommittment_requests_witness: Vec<_> = artifacts.all_decommittment_queries.iter()
-    //         .take_while(
-    //             |el| el.0 < initial_state.at_cycle
-    //         )
-    //         .map(|el| (el.0, el.1))
-    //         .collect();
-
-    //     let rollback_queue_initial_tails_for_new_frames: Vec<_> = rollback_queue_initial_tails_for_new_frames.iter()
-    //         .take_while(
-    //             |el| el.0 < initial_state.at_cycle
-    //         )
-    //         .cloned()
-    //         .collect();
-    //     let callstack_values_for_returns = callstack_values_for_returns.iter()
-    //         .take_while(
-    //             |el| el.0 < initial_state.at_cycle
-    //         )
-    //         .cloned()
-    //         .collect();
-    //     let rollback_queue_head_segments = rollback_queue_head_segments.iter()
-    //         .take_while(
-    //             |el| el.0 < initial_state.at_cycle
-    //         )
-    //         .cloned()
-    //         .collect();
-
-
-    //     // construct an oracle
-    //     let witness_oracle = VmWitnessOracle::<E> {
-    //         memory_read_witness: per_isntance_memory_read_witnesses,
-    //         rollback_queue_head_segments,
-    //         decommittment_requests_witness,
-    //         rollback_queue_initial_tails_for_new_frames,
-    //         storage_read_queries: per_isntance_storage_read_witnesses,
-    //         callstack_values_for_returns,
-    //         // initial_tail_for_entry_point,
-    //         // initial_callstack_state_for_start,
-    //         // initial_context_for_start,
-    //     };
-
-    //     // continue into full witness for this instance of VM trace
-
-    //     // it's easy to find the tail for the current frame as we have already prepared non-deterministic witnesses for it
-    //     let rollback_queue_tail: E::Fr = rollback_queue_initial_tails_for_new_frames.iter().take_while(
-    //         |el| el.0 < initial_state.at_cycle
-    //     )
-    //     .last()
-    //     .map(|el| el.1.1)
-    //     .unwrap();
-
-    //     // for current head it's a little bit more complex, as we need to find 
-
-    //     let mut instance_witness = VmInstanceWitness {
-    //         initial_state: initial_state.local_state.clone(),
-    //         witness_oracle,
-    //         auxilary_initial_parameters: VmInCircuitAuxilaryParameters {
-    //             callstack_state: (callstack_state_for_entry, initial_state.local_state.callstack.get_current_stack().clone()),
-    //             decommittment_queue_state: decommittment_queue_state_for_entry,
-    //             memory_queue_state: memory_queue_state_for_entry,
-    //             storage_log_queue_state: storage_log_queue_state_for_entry,
-    //             current_frame_rollback_queue_tail: rollback_queue_tail,
-    //             current_frame_rollback_queue_head: ,
-    //             current_frame_rollback_queue_segment_length
-    //         },
-    //         cycles_range: initial_state.at_cycle..final_state.at_cycle,
-    //         final_state: final_state.local_state.clone(),
-    //         auxilary_final_parameters: VmInCircuitAuxilaryParameters::default(), // TODO
-    //     };
-
-    //     dbg!(&instance_witness.initial_state);
-    //     dbg!(&instance_witness.auxilary_initial_parameters);
-
-    //     all_instances_witnesses.push(instance_witness);
-    // }
-
-
-    // let oracle = VmWitnessOracle::<E> {
-    //     memory_read_witness,
-    //     rollback_queue_head_segments,
-    //     decommittment_requests_witness: decommittment_queries
-    //         .iter()
-    //         .map(|el| (el.0, el.1))
-    //         .collect(),
-    //     rollback_queue_initial_tails_for_new_frames,
-    //     storage_read_queries,
-    //     callstack_values_for_returns,
-    //     initial_tail_for_entry_point,
-    //     initial_callstack_state_for_start,
-    //     initial_context_for_start,
-    // };
-
-
-    // (all_instances_witnesses, artifacts)
+    // dbg!(&enriched_log_access_history);
+
+    // we simulate a series of actions on the stack starting from the outermost frame
+    // each history record contains an information on what was the stack state between points
+    // when it potentially came into and out of scope
+
+    let mut artifacts = FullBlockArtifacts::<E>::default();
+    artifacts.vm_memory_queries_accumulated = vm_memory_queries_accumulated;
+    artifacts.all_decommittment_queries = decommittment_queries;
+    artifacts.keccak_round_function_witnesses = keccak_round_function_witnesses;
+    artifacts.sha256_round_function_witnesses = sha256_round_function_witnesses;
+    artifacts.ecrecover_witnesses = ecrecover_witnesses;
+    artifacts.original_log_queue = original_log_queue;
+    artifacts.original_log_queue_states = original_log_queue_states;
+
+    artifacts.sorted_rollup_storage_queries = sorted_rollup_storage_queries;
+    artifacts.sorted_porter_storage_queries = sorted_porter_storage_queries;
+    artifacts.sorted_event_queries = sorted_event_queries;
+    artifacts.sorted_to_l1_queries = sorted_to_l1_queries;
+    artifacts.demuxed_keccak_precompile_queries = sorted_keccak_precompile_queries;
+    artifacts.demuxed_sha256_precompile_queries = sorted_sha256_precompile_queries;
+    artifacts.demuxed_ecrecover_queries = sorted_ecrecover_queries;
+
+    artifacts.process(round_function);
+
+    let mut all_instances_witnesses = vec![];
+
+    for pair in vm_snapshots.windows(2) {
+        let initial_state = &pair[0];
+        let final_state = &pair[1];
+
+        // we need to get chunks of
+        // - memory read witnesses
+        // - storage read witnesses
+        // - decommittment witnesses
+        // - callstack witnesses
+        // - rollback queue witnesses
+
+        // first find the memory witness by scanning all the known states
+        // and finding the latest one with cycle index < current
+        use crate::witness_structures::{transform_queue_state, transform_sponge_like_queue_state};
+
+        let memory_queue_state_for_entry = artifacts.vm_memory_queue_states.iter()
+            .skip_while(
+                |el| el.0 < initial_state.at_cycle
+            ).take_while(
+                |el| el.0 < final_state.at_cycle
+            )
+            .last()
+            .map(|el| transform_sponge_like_queue_state(el.2))
+            .unwrap_or(FullSpongeLikeQueueState::<E>::placeholder_witness());
+
+        let decommittment_queue_state_for_entry = artifacts.all_decommittment_queue_states.iter()
+            .skip_while(
+                |el| el.0 < initial_state.at_cycle
+            )
+            .take_while(
+                |el| el.0 < final_state.at_cycle
+            )
+            .last()
+            .map(|el| transform_sponge_like_queue_state(el.1))
+            .unwrap_or(FullSpongeLikeQueueState::<E>::placeholder_witness());
+
+        // and finally we need the callstack current state
+
+        dbg!(&callstack_sponge_encoding_ranges);
+
+        let callstack_state_for_entry = callstack_sponge_encoding_ranges.iter()
+            // .skip_while(
+            //     |el| el.0 < initial_state.at_cycle
+            // )
+            .take_while(
+                |el| el.0 < initial_state.at_cycle
+            )
+            .last()
+            .map(|el| el.1)
+            .unwrap_or([E::Fr::zero(); 3]);
+
+        // dbg!(&callstack_state_for_entry);
+
+
+        // initial state is kind of done, now
+        // split the oracle witness
+
+        let per_isntance_memory_read_witnesses: Vec<_> = memory_read_witness.iter()
+            .skip_while(
+                |el| el.0 < initial_state.at_cycle
+            )
+            .take_while(
+                |el| el.0 < final_state.at_cycle
+            ).cloned().collect();
+
+        let per_isntance_storage_read_witnesses: Vec<_> = storage_read_queries.iter()
+            .skip_while(
+                |el| el.0 < initial_state.at_cycle
+            )
+            .take_while(
+                |el| el.0 < final_state.at_cycle
+            ).cloned().collect();
+
+        let decommittment_requests_witness: Vec<_> = artifacts.all_decommittment_queries.iter()
+            .skip_while(
+                |el| el.0 < initial_state.at_cycle
+            )
+            .take_while(
+                |el| el.0 < final_state.at_cycle
+            )
+            .map(|el| (el.0, el.1))
+            .collect();
+
+        let rollback_queue_initial_tails_for_new_frames: Vec<_> = rollback_queue_initial_tails_for_new_frames.iter()
+            .skip_while(
+                |el| el.0 < initial_state.at_cycle
+            )
+            .take_while(
+                |el| el.0 < final_state.at_cycle
+            )
+            .cloned()
+            .collect();
+        let callstack_values_for_returns = callstack_values_for_returns.iter()
+            .skip_while(
+                |el| el.0 < initial_state.at_cycle
+            )
+            .take_while(
+                |el| el.0 < final_state.at_cycle
+            )
+            .cloned()
+            .collect();
+        let rollback_queue_head_segments = rollback_queue_head_segments.iter()
+            .skip_while(
+                |el| el.0 < initial_state.at_cycle
+            )
+            .take_while(
+                |el| el.0 < final_state.at_cycle
+            )
+            .cloned()
+            .collect();
+
+
+        // construct an oracle
+        let witness_oracle = VmWitnessOracle::<E> {
+            memory_read_witness: per_isntance_memory_read_witnesses,
+            rollback_queue_head_segments,
+            decommittment_requests_witness,
+            rollback_queue_initial_tails_for_new_frames,
+            storage_read_queries: per_isntance_storage_read_witnesses,
+            callstack_values_for_returns,
+        };
+
+        // continue into full witness for this instance of VM trace
+
+        let latest_log_queue_action = enriched_log_access_history.iter()
+            // .skip_while(
+            //     |el| el.0 < initial_state.at_cycle
+            // )
+            .take_while(
+                |el| el.0 < initial_state.at_cycle
+            )
+            .last()
+            .map(|el| el.1)
+            .unwrap_or(StorageLogDetailedState::<E>::default());
+
+        // dbg!(&latest_log_queue_action);
+
+        let storage_log_queue_state_for_entry = FixedWidthEncodingGenericQueueStateWitness::<E> {
+            num_items: latest_log_queue_action.forward_length,
+            head_state: E::Fr::zero(),
+            tail_state: latest_log_queue_action.forward_tail,
+            _marker: std::marker::PhantomData,
+        };
+
+        // for current head it's a little bit more complex, as we need to find 
+
+        let instance_witness = VmInstanceWitness {
+            initial_state: initial_state.local_state.clone(),
+            witness_oracle,
+            auxilary_initial_parameters: VmInCircuitAuxilaryParameters {
+                callstack_state: (callstack_state_for_entry, initial_state.local_state.callstack.get_current_stack().clone()),
+                decommittment_queue_state: decommittment_queue_state_for_entry,
+                memory_queue_state: memory_queue_state_for_entry,
+                storage_log_queue_state: storage_log_queue_state_for_entry,
+                current_frame_rollback_queue_tail: latest_log_queue_action.rollback_tail,
+                current_frame_rollback_queue_head: latest_log_queue_action.rollback_head,
+                current_frame_rollback_queue_segment_length: latest_log_queue_action.rollback_length
+            },
+            cycles_range: initial_state.at_cycle..final_state.at_cycle,
+            final_state: final_state.local_state.clone(),
+            auxilary_final_parameters: VmInCircuitAuxilaryParameters::default(), // TODO
+        };
+
+        // dbg!(&instance_witness.initial_state);
+        // dbg!(&instance_witness.auxilary_initial_parameters);
+        // dbg!(&instance_witness.witness_oracle.memory_read_witness);
+
+        all_instances_witnesses.push(instance_witness);
+    }
+
+    (all_instances_witnesses, artifacts)
 }
 
 use crate::franklin_crypto::plonk::circuit::boolean::*;
@@ -1189,12 +913,12 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
         execute: &Boolean,
     ) -> Option<E::Fr> {
         if execute.get_value().unwrap_or(false) {
-            let (_cycle_idx, (_frame_idx, tail)) = self
+            let (_cycle_idx, tail) = self
                 .rollback_queue_initial_tails_for_new_frames
                 .drain(..1)
                 .next()
                 .unwrap();
-            dbg!(tail);
+            // dbg!(tail);
 
             Some(tail)
         } else {
@@ -1207,14 +931,14 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
         current_record: &ExecutionContextRecord<E>,
         execute: &Boolean,
     ) {
-        if execute.get_value().unwrap_or(false) {
-            let wit = current_record.create_witness();
-            dbg!(wit.as_ref().map(|el| el.common_part.reverted_queue_head));
-            dbg!(wit.as_ref().map(|el| el.common_part.reverted_queue_tail));
-            dbg!(wit
-                .as_ref()
-                .map(|el| el.common_part.reverted_queue_segment_len));
-        }
+        // if execute.get_value().unwrap_or(false) {
+        //     let wit = current_record.create_witness();
+        //     dbg!(wit.as_ref().map(|el| el.common_part.reverted_queue_head));
+        //     dbg!(wit.as_ref().map(|el| el.common_part.reverted_queue_tail));
+        //     dbg!(wit
+        //         .as_ref()
+        //         .map(|el| el.common_part.reverted_queue_segment_len));
+        // }
 
         // we do not care
     }
@@ -1239,7 +963,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
 
             assert!(!is_push);
 
-            dbg!(new_state);
+            // dbg!(new_state);
 
             let ExtendedCallstackEntry {
                 callstack_entry: entry,

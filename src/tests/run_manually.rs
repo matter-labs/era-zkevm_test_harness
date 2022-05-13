@@ -93,7 +93,7 @@ fn run_and_try_create_witness() {
     //     ret.ok r0
     // "#;
 
-    run_and_try_create_witness_inner(asm, 16);
+    run_and_try_create_witness_inner(asm, 20);
 }
 
 pub fn assert_equal_state(
@@ -218,8 +218,7 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
     tools.witness_tracer.vm_snapshots.push(snapshot);
 
     use sync_vm::testing::create_test_artifacts_with_optimized_gate;
-    let (mut cs, round_function, _) = create_test_artifacts_with_optimized_gate();
-    sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+    let (_, round_function, _) = create_test_artifacts_with_optimized_gate();
 
     // use crate::franklin_crypto::plonk::circuit::tables::inscribe_default_range_table_for_bit_width_over_first_three_columns;
     // inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
@@ -227,12 +226,36 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
     // let params = sync_vm::utils::bn254_rescue_params();
     // let round_function = GenericHasher::<Bn256, RescueParams<_, 2, 3>, 2, 3>::new_from_params(&params);
 
-    let (mut oracle, artifacts) =
+    let (instance_oracles, artifacts) =
         create_artifacts_from_tracer(tools.witness_tracer, &round_function);
 
-    // use crate::entry_point::create_in_circuit_global_context;
-    // let in_circuit_global_context =
-    //     create_in_circuit_global_context::<Bn256>(1, 1, true, U256::zero(), 50, 2);
+    use crate::entry_point::create_in_circuit_global_context;
+    let in_circuit_global_context =
+        create_in_circuit_global_context::<Bn256>(
+            1, 
+            1, 
+            true, 
+            U256::zero(), 
+            50, 
+            2
+        );
+
+
+    for vm_instance in instance_oracles.into_iter() {
+        println!("Running VM for range {:?}", vm_instance.cycles_range);
+        use crate::entry_point::run_vm_instance;
+
+        let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+        sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+
+        let _ = run_vm_instance(
+            &mut cs,
+            &round_function,
+            &in_circuit_global_context,
+            vm_instance
+        );
+    }
+
 
     // let initial_tail = oracle.initial_tail_for_entry_point;
     // let mut in_circuit_vm = create_in_circuit_vm(
