@@ -154,6 +154,14 @@ pub fn alloc_execution_context<E: Engine, CS: ConstraintSystem<E>>(
     ctx.saved_context.common_part.caller =
         UInt160::allocate(cs, project_ref!(out_of_circuit_context, msg_sender).cloned().map(u160_from_address))?;
 
+    let is_static_execution = project_ref!(out_of_circuit_context, is_static).cloned();
+    ctx.saved_context.common_part.is_static_execution =
+        Boolean::alloc(cs, is_static_execution)?;
+
+    let is_local_call = project_ref!(out_of_circuit_context, is_local_frame).cloned();
+    ctx.saved_context.extension.is_local_call =
+        Boolean::alloc(cs, is_local_call)?;
+
     let is_kernel_mode = out_of_circuit_context.map(|el| el.is_kernel_mode());
 
     ctx.saved_context.common_part.is_kernel_mode =
@@ -442,7 +450,7 @@ pub fn run_vm_instance<
     }
 
     let mut previous_code_word = [UInt64::<E>::zero(); 4];
-    for (i, dst) in previous_code_word.iter_mut().rev().enumerate() {
+    for (i, dst) in previous_code_word.iter_mut().enumerate() {
         let value = initial_state.previous_code_word.0[i];
         *dst = UInt64::allocate(cs, Some(value)).unwrap();
     }
@@ -499,5 +507,150 @@ pub fn run_vm_instance<
 
     let final_state_no_pending = vm_process_pending(cs, state, round_function).unwrap();
 
+    assert_expected_final_state(
+        &final_state_no_pending,
+        final_state, 
+        auxilary_final_parameters
+    );
+
     final_state_no_pending
+}
+
+
+pub fn assert_expected_final_state<E: Engine>(
+    vm_state: &sync_vm::vm::vm_state::VmGlobalState<E, 3>,
+    out_of_circuit_state: zk_evm::vm_state::VmLocalState,
+    auxilary_final_parameters: VmInCircuitAuxilaryParameters<E>,
+) {
+    use sync_vm::traits::CSWitnessable;
+
+    let wit = vm_state.create_witness().unwrap();
+
+    for (reg_idx, (circuit, not_circuit)) in wit
+        .registers
+        .iter()
+        .zip(out_of_circuit_state.registers.iter())
+        .enumerate()
+    {
+        compare_reg_values(reg_idx + 1, circuit.inner, *not_circuit);
+    }
+
+    // compare flags
+    let flags = wit.flags;
+    assert_eq!(
+        flags.overflow_or_less_than, out_of_circuit_state.flags.overflow_or_less_than_flag,
+        "OF flag divergence"
+    );
+    assert_eq!(
+        flags.equal, out_of_circuit_state.flags.equality_flag,
+        "EQ flag divergence"
+    );
+    assert_eq!(
+        flags.greater_than, out_of_circuit_state.flags.greater_than_flag,
+        "GT flag divergence"
+    );
+
+    // compare callstack top element, state and depth
+    let callstack_state_encoding = wit.callstack.stack_sponge_state;
+    assert_eq!(callstack_state_encoding, auxilary_final_parameters.callstack_state.0);
+    let callstack_depth = wit.callstack.context_stack_depth;
+    assert_eq!(callstack_depth as usize, out_of_circuit_state.callstack.depth());
+
+    // compare individual fields of callstack
+    let current_callstack_entry = auxilary_final_parameters.callstack_state.1;
+    let current_callstack_vm_witness = wit.callstack.current_context.saved_context.clone();
+
+    // code pages
+    assert_eq!(current_callstack_entry.base_memory_page.0, current_callstack_vm_witness.common_part.base_page);
+    assert_eq!(current_callstack_entry.calldata_page.0, current_callstack_vm_witness.common_part.calldata_page);
+    assert_eq!(current_callstack_entry.code_page.0, current_callstack_vm_witness.common_part.code_page);
+
+    // pc and sp related parts
+    assert_eq!(current_callstack_entry.pc, current_callstack_vm_witness.common_part.pc);
+    assert_eq!(current_callstack_entry.exception_handler_location, current_callstack_vm_witness.common_part.exception_handler_loc);
+    assert_eq!(current_callstack_entry.ergs_remaining, current_callstack_vm_witness.common_part.ergs_remaining, "invalid remaning ergs");
+
+    // boolean flags of properties
+    assert_eq!(current_callstack_entry.is_local_frame, current_callstack_vm_witness.extension.is_local_call);
+    assert_eq!(current_callstack_entry.is_static, current_callstack_vm_witness.common_part.is_static_execution);
+    assert_eq!(current_callstack_entry.is_kernel_mode(), current_callstack_vm_witness.common_part.is_kernel_mode);
+
+    // addresses
+    assert_eq!(current_callstack_entry.code_address, address_from_u160(current_callstack_vm_witness.common_part.code_address));
+    assert_eq!(current_callstack_entry.this_address, address_from_u160(current_callstack_vm_witness.common_part.this));
+    assert_eq!(current_callstack_entry.msg_sender, address_from_u160(current_callstack_vm_witness.common_part.caller));
+
+    // shards
+    assert_eq!(current_callstack_entry.code_shard_id, current_callstack_vm_witness.common_part.code_shard_id);
+    assert_eq!(current_callstack_entry.this_shard_id, current_callstack_vm_witness.common_part.this_shard_id);
+    assert_eq!(current_callstack_entry.caller_shard_id, current_callstack_vm_witness.common_part.caller_shard_id);
+
+    // non-callstack saved part of the state
+
+    // counters
+    // assert_eq!(out_of_circuit_state.monotonic_cycle_counter, ); // cycle counter doesn't exist in VM
+    assert_eq!(out_of_circuit_state.timestamp, wit.timestamp);
+    assert_eq!(out_of_circuit_state.memory_page_counter, wit.memory_page_counter);
+
+    // previous pc, previous code word
+    assert_eq!(out_of_circuit_state.previous_super_pc, wit.previous_super_pc);
+    assert_eq!(out_of_circuit_state.previous_code_word.0, wit.previous_code_word);
+
+    // jump marker
+    assert_eq!(out_of_circuit_state.did_call_or_ret_recently, wit.did_call_or_ret_recently);
+
+    // returndata page
+    assert_eq!(out_of_circuit_state.callstack.returndata_page.0, wit.callstack.current_context.returndata_page);
+    // ergs per pubdata byte
+    assert_eq!(out_of_circuit_state.current_ergs_per_pubdata_byte, wit.ergs_per_pubdata_byte);
+    // tx number in block
+    assert_eq!(out_of_circuit_state.tx_number_in_block, wit.tx_number_in_block);
+    // tx.origin
+    assert_eq!(out_of_circuit_state.tx_origin, address_from_u160(wit.tx_origin));
+    // state and depth of the forward storage queue
+    assert_eq!(auxilary_final_parameters.storage_log_queue_state.tail_state, wit.callstack.current_context.log_queue_forward_tail);
+    assert_eq!(auxilary_final_parameters.storage_log_queue_state.num_items, wit.callstack.current_context.log_queue_forward_part_length);
+    // memory queue
+    assert_eq!(auxilary_final_parameters.memory_queue_state.tail, wit.memory_queue_state);
+    assert_eq!(auxilary_final_parameters.memory_queue_state.length, wit.memory_queue_length);
+    // decommittment queue
+    assert_eq!(auxilary_final_parameters.decommittment_queue_state.tail, wit.code_decommittment_queue_state);
+    assert_eq!(auxilary_final_parameters.decommittment_queue_state.length, wit.code_decommittment_queue_length);
+    // reverted part of the log 
+
+    assert_eq!(auxilary_final_parameters.current_frame_rollback_queue_head, current_callstack_vm_witness.common_part.reverted_queue_head);
+    assert_eq!(auxilary_final_parameters.current_frame_rollback_queue_tail, current_callstack_vm_witness.common_part.reverted_queue_tail);
+    assert_eq!(auxilary_final_parameters.current_frame_rollback_queue_segment_length, current_callstack_vm_witness.common_part.reverted_queue_segment_len);
+}
+
+fn compare_reg_values(reg_idx: usize, in_circuit: [u128; 2], out_of_circuit: U256) {
+    let l0_a = in_circuit[0] as u64;
+    let l1_a = (in_circuit[0] >> 64) as u64;
+    let l2_a = in_circuit[1] as u64;
+    let l3_a = (in_circuit[1] >> 64) as u64;
+
+    let equal = out_of_circuit.0[0] == l0_a
+        && out_of_circuit.0[1] == l1_a
+        && out_of_circuit.0[2] == l2_a
+        && out_of_circuit.0[3] == l3_a;
+    if !equal {
+        println!(
+            "Limb 0 in circuit = 0x{:016x}, out = 0x{:016x}",
+            l0_a, out_of_circuit.0[0]
+        );
+        println!(
+            "Limb 1 in circuit = 0x{:016x}, out = 0x{:016x}",
+            l1_a, out_of_circuit.0[1]
+        );
+        println!(
+            "Limb 2 in circuit = 0x{:016x}, out = 0x{:016x}",
+            l2_a, out_of_circuit.0[2]
+        );
+        println!(
+            "Limb 3 in circuit = 0x{:016x}, out = 0x{:016x}",
+            l3_a, out_of_circuit.0[3]
+        );
+
+        panic!("Failed as reg {}:", reg_idx);
+    }
 }

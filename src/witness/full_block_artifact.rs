@@ -101,6 +101,8 @@ impl<E: Engine> FullBlockArtifacts<E> {
             let (_old_tail, intermediate_info) =
                 memory_queue_simulator.push_and_output_intermediate_data(*query, round_function);
 
+            // dbg!(&intermediate_info.tail);
+
             let is_pended = query.is_pended;
             self.vm_memory_queue_states
                 .push((*cycle, is_pended, intermediate_info));

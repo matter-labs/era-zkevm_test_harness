@@ -194,8 +194,8 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
     let num_forwards = forward.len();
     let num_rollbacks = rollbacks.len();
-    dbg!(num_forwards);
-    dbg!(num_rollbacks);
+    // dbg!(num_forwards);
+    // dbg!(num_rollbacks);
 
     let mut sorted_rollup_storage_queries = vec![];
     let mut sorted_porter_storage_queries = vec![];
@@ -347,9 +347,9 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
     let full_log_length = chain_of_states.len();
     assert_eq!(full_log_length, num_forwards + num_rollbacks);
 
-    let mut indexer = FlattenedLogQueueIndexer::<E>::default();
-    indexer.current_tail = chain_of_states.last().map(|el| el.2.1).unwrap_or(E::Fr::zero());
-    indexer.tail_offset = full_log_length - 1;
+    // let mut indexer = FlattenedLogQueueIndexer::<E>::default();
+    // indexer.current_tail = chain_of_states.last().map(|el| el.2.1).unwrap_or(E::Fr::zero());
+    // indexer.tail_offset = full_log_length - 1;
 
     let log_accesses_history: Vec<_> = callstack_with_aux_data
         .log_queue_access_snapshots
@@ -388,7 +388,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
             el
         });
 
-    dbg!(&chain_of_states);
+    // dbg!(&chain_of_states);
     
     use super::callstack_handler::CallstackAction;
     use crate::encodings::callstack_entry::CallstackSimulator;
@@ -637,6 +637,8 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
     let mut all_instances_witnesses = vec![];
 
+    use crate::witness_structures::{transform_queue_state, transform_sponge_like_queue_state};
+
     for pair in vm_snapshots.windows(2) {
         let initial_state = &pair[0];
         let final_state = &pair[1];
@@ -650,24 +652,18 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
         // first find the memory witness by scanning all the known states
         // and finding the latest one with cycle index < current
-        use crate::witness_structures::{transform_queue_state, transform_sponge_like_queue_state};
 
         let memory_queue_state_for_entry = artifacts.vm_memory_queue_states.iter()
-            .skip_while(
+            .take_while(
                 |el| el.0 < initial_state.at_cycle
-            ).take_while(
-                |el| el.0 < final_state.at_cycle
             )
             .last()
             .map(|el| transform_sponge_like_queue_state(el.2))
             .unwrap_or(FullSpongeLikeQueueState::<E>::placeholder_witness());
 
         let decommittment_queue_state_for_entry = artifacts.all_decommittment_queue_states.iter()
-            .skip_while(
-                |el| el.0 < initial_state.at_cycle
-            )
             .take_while(
-                |el| el.0 < final_state.at_cycle
+                |el| el.0 < initial_state.at_cycle
             )
             .last()
             .map(|el| transform_sponge_like_queue_state(el.1))
@@ -675,7 +671,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
         // and finally we need the callstack current state
 
-        dbg!(&callstack_sponge_encoding_ranges);
+        // dbg!(&callstack_sponge_encoding_ranges);
 
         let callstack_state_for_entry = callstack_sponge_encoding_ranges.iter()
             // .skip_while(
@@ -807,6 +803,55 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
         all_instances_witnesses.push(instance_witness);
     }
 
+    // make final states of each instance to be an initial state of the next one (actually backwards)
+
+    for idx in 0..(all_instances_witnesses.len() - 1) {
+        let initial_aux_of_next = all_instances_witnesses[idx+1].auxilary_initial_parameters.clone();
+
+        all_instances_witnesses[idx].auxilary_final_parameters = initial_aux_of_next;
+    }
+
+    // special pass for the last one 
+    {
+        let final_state = vm_snapshots.last().unwrap();
+        let last = all_instances_witnesses.last_mut().unwrap();
+
+        // always an empty one
+        last.auxilary_final_parameters.callstack_state = (
+            [E::Fr::zero(); 3],
+            final_state.local_state.callstack.get_current_stack().clone()
+        );
+
+        let final_memory_queue_state = artifacts.vm_memory_queue_states
+        .last()
+            .map(|el| transform_sponge_like_queue_state(el.2))
+            .unwrap_or(FullSpongeLikeQueueState::<E>::placeholder_witness());
+
+        let final_decommittment_queue_state = artifacts.all_decommittment_queue_states.iter()
+            .last()
+            .map(|el| transform_sponge_like_queue_state(el.1))
+            .unwrap_or(FullSpongeLikeQueueState::<E>::placeholder_witness());
+
+        let latest_log_queue_action = enriched_log_access_history.iter()
+            .last()
+            .map(|el| el.1)
+            .unwrap_or(StorageLogDetailedState::<E>::default());    
+
+        let final_storage_log_queue_state = FixedWidthEncodingGenericQueueStateWitness::<E> {
+            num_items: latest_log_queue_action.forward_length,
+            head_state: E::Fr::zero(),
+            tail_state: latest_log_queue_action.forward_tail,
+            _marker: std::marker::PhantomData,
+        };
+
+        last.auxilary_final_parameters.decommittment_queue_state = final_decommittment_queue_state;
+        last.auxilary_final_parameters.memory_queue_state = final_memory_queue_state;
+        last.auxilary_final_parameters.storage_log_queue_state = final_storage_log_queue_state;
+        last.auxilary_final_parameters.current_frame_rollback_queue_tail = latest_log_queue_action.rollback_tail;
+        last.auxilary_final_parameters.current_frame_rollback_queue_head = latest_log_queue_action.rollback_head;
+        last.auxilary_final_parameters.current_frame_rollback_queue_segment_length = latest_log_queue_action.rollback_length;
+    }
+
     (all_instances_witnesses, artifacts)
 }
 
@@ -839,7 +884,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
             }
             let (_cycle, query) = self.memory_read_witness.drain(..1).next().unwrap();
 
-            // println!("Query value = 0x{:x}", query.value);
+            // println!("Query value = 0x{:064x}", query.value);
             if let Some(ts) = timestamp.get_value() {
                 let _roughly_a_cycle = (ts - STARTING_TIMESTAMP) / TIMESTAMPS_PER_CYCLE
                     + INITIAL_MONOTONIC_CYCLE_COUNTER;

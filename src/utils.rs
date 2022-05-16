@@ -19,6 +19,21 @@ pub fn u160_from_address(address: Address) -> u160 {
     }
 }
 
+pub fn address_from_u160(value: u160) -> Address {
+    // transform to limbs
+
+    let lowest = value.limb0.to_be_bytes();
+    let mid = value.limb1.to_be_bytes();
+    let highest = value.limb2.to_be_bytes();
+
+    let mut result = Address::zero();
+    result[0..4].copy_from_slice(&highest);
+    result[4..12].copy_from_slice(&mid);
+    result[12..].copy_from_slice(&lowest);
+
+    result
+}
+
 pub fn biguint_from_u256(value: U256) -> BigUint {
     let mut result = BigUint::from(value.0[3]);
     result <<= 64u32;
