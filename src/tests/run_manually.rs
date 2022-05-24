@@ -160,7 +160,7 @@ fn compare_reg_values(reg_idx: usize, in_circuit: [u128; 2], out_of_circuit: U25
 }
 
 fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
-    let assembly = Assembly::try_from(asm.to_owned()).unwrap();
+    let mut assembly = Assembly::try_from(asm.to_owned()).unwrap();
     let bytecode = assembly.compile_to_bytecode().unwrap();
     for el in bytecode.iter() {
         println!("{}", hex::encode(el));

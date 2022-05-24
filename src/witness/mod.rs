@@ -4,3 +4,4 @@ pub mod oracle;
 pub mod tracer;
 pub mod utils;
 pub mod vm_snapshot;
+pub mod individual_circuits;

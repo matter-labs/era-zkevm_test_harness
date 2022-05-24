@@ -132,10 +132,13 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
         // sort queries
         let mut sorted_decommittment_requests_with_data = unsorted_decommittment_requests_with_data;
-        sorted_decommittment_requests_with_data.par_sort_by(|a, b| match a.0.hash.cmp(&b.0.hash) {
-            Ordering::Equal => a.0.timestamp.cmp(&b.0.timestamp),
-            a @ _ => a,
-        });
+        sorted_decommittment_requests_with_data.par_sort_by(|a, b| 
+            // sort by hash first, and then by timestamp
+            match a.0.hash.cmp(&b.0.hash) {
+                Ordering::Equal => a.0.timestamp.cmp(&b.0.timestamp),
+                a @ _ => a,
+            }
+        );
 
         for (query, writes) in sorted_decommittment_requests_with_data.into_iter() {
             if query.is_fresh {
@@ -217,38 +220,16 @@ impl<E: Engine> FullBlockArtifacts<E> {
                 .extend_from_slice(writes);
         }
 
-        // we are done with a memory and can sort
+        // we are done with a memory and can do the processing and breaking of the logical arguments into individual circits
 
-        self.sorted_memory_queries_accumulated = self.all_memory_queries_accumulated.clone();
-        self.sorted_memory_queries_accumulated.par_sort_by(|a, b| {
-            match a.location.cmp(&b.location) {
-                Ordering::Equal => a.timestamp.cmp(&b.timestamp),
-                a @ _ => a,
-            }
-        });
+        use crate::witness::individual_circuits::ram_permutation::compute_ram_circuit_snapshots;
 
-        // those two thins are parallelizable, and can be internally parallelized too
-
-        // now we can finish reconstruction of each sorted and unsorted memory queries
-
-        // Transform the rest of queries into states
-        for query in self
-            .all_memory_queries_accumulated
-            .iter()
-            .skip(self.vm_memory_queries_accumulated.len())
-        {
-            let (_old_tail, intermediate_info) =
-                memory_queue_simulator.push_and_output_intermediate_data(*query, round_function);
-            self.all_memory_queue_states.push(intermediate_info);
-        }
-
-        // reconstruct sorted one in full
-        let mut sorted_memory_queries_simulator = MemoryQueueSimulator::<E>::empty();
-        for query in self.sorted_memory_queries_accumulated.iter() {
-            let (_old_tail, intermediate_info) =
-                sorted_memory_queries_simulator.push_and_output_intermediate_data(*query, round_function);
-            self.sorted_memory_queue_states.push(intermediate_info);
-        }
+        let _ = compute_ram_circuit_snapshots(
+            self,
+            memory_queue_simulator,
+            round_function,
+            1<<19
+        );
 
         // now completely parallel process to reconstruct the states, with internally parallelism in each round function
 

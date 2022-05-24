@@ -12,6 +12,7 @@ use zk_evm::precompiles::keccak256::Keccak256RoundWitness;
 use zk_evm::precompiles::sha256::Sha256RoundWitness;
 
 use zk_evm::vm_state::MAX_CALLSTACK_DEPTH;
+use zk_evm::zkevm_opcode_defs::decoding::EncodingModeProduction;
 
 // cycle indicators below are not timestamps!
 
@@ -173,7 +174,7 @@ use zk_evm::witness_trace::VmWitnessTracer;
 
 use super::vm_snapshot::VmSnapshot;
 
-impl VmWitnessTracer for WitnessTracer {
+impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
     fn start_new_execution_cycle(&mut self, current_state: &VmLocalState) {
         if self.current_cycle_counter == 0 {
             if self.current_cycle_counter != current_state.monotonic_cycle_counter {
