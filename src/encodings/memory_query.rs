@@ -1,8 +1,32 @@
 use super::*;
+use num_bigint::BigUint;
+use sync_vm::franklin_crypto::plonk::circuit::bigint::biguint_to_fe;
 use sync_vm::utils::compute_shifts;
 use sync_vm::vm::vm_state::saved_contract_context::scale_and_accumulate;
 
 use zk_evm::aux_structures::MemoryQuery;
+
+pub fn sorting_key<E: Engine>(query: &MemoryQuery) -> E::Fr {
+    let mut key = BigUint::from(0u64);
+    // page | index | timestamp
+    key += BigUint::from(query.location.page.0 as u64);
+    key <<= 32;
+    key += BigUint::from(query.location.index.0 as u64);
+    key <<= 32;
+    key += BigUint::from(query.timestamp.0 as u64);
+
+    biguint_to_fe::<E::Fr>(key)
+}
+
+pub fn comparison_key<E: Engine>(query: &MemoryQuery) -> E::Fr {
+    let mut key = BigUint::from(0u64);
+    // page | index
+    key += BigUint::from(query.location.page.0 as u64);
+    key <<= 32;
+    key += BigUint::from(query.location.index.0 as u64);
+
+    biguint_to_fe::<E::Fr>(key)
+}
 
 impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 2> for MemoryQuery {
     fn encoding_witness(&self) -> [<E>::Fr; 2] {

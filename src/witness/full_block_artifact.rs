@@ -17,6 +17,7 @@ use zk_evm::aux_structures::MemoryQuery;
 use zk_evm::precompiles::ecrecover::ECRecoverRoundWitness;
 use zk_evm::precompiles::keccak256::Keccak256RoundWitness;
 use zk_evm::precompiles::sha256::Sha256RoundWitness;
+use sync_vm::glue::ram_permutation::RamPermutationCircuitInstanceWitness;
 
 #[derive(Derivative)]
 #[derivative(Clone, Default(bound = ""))]
@@ -86,6 +87,9 @@ pub struct FullBlockArtifacts<E: Engine> {
     // also separate copy of memory queries that are contributions from individual precompiles
     pub keccak_256_memory_queries: Vec<MemoryQuery>,
     pub keccak_256_memory_states: Vec<MemoryQueueState<E>>,
+
+    // processed RAM circuit information
+    pub ram_permutation_circuits_data: Vec<RamPermutationCircuitInstanceWitness<E>>,
 }
 
 impl<E: Engine> FullBlockArtifacts<E> {
@@ -224,12 +228,14 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
         use crate::witness::individual_circuits::ram_permutation::compute_ram_circuit_snapshots;
 
-        let _ = compute_ram_circuit_snapshots(
+        let ram_permutation_circuits_data = compute_ram_circuit_snapshots(
             self,
             memory_queue_simulator,
             round_function,
-            1<<19
+            1<<2
         );
+
+        self.ram_permutation_circuits_data = ram_permutation_circuits_data;
 
         // now completely parallel process to reconstruct the states, with internally parallelism in each round function
 

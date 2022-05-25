@@ -8,7 +8,6 @@ use crate::entry_point::create_default_testing_tools;
 use zk_evm::contract_bytecode_to_words;
 use zk_evm::aux_structures::Timestamp;
 use zk_evm::aux_structures::MemoryPage;
-use crate::entry_point::{STARTING_CODE_PAGE, STARTING_CALLDATA_PAGE};
 use zk_evm::aux_structures::DecommittmentQuery;
 use zk_evm::abstractions::*;
 use zk_evm::witness_trace::VmWitnessTracer;

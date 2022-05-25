@@ -1,5 +1,4 @@
 use super::*;
-use crate::entry_point::STARTING_CODE_PAGE;
 use crate::entry_point::{
     create_default_testing_tools, create_in_circuit_vm, create_out_of_circuit_global_context,
     create_out_of_circuit_vm,
@@ -179,7 +178,7 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
     let initial_decommittment_query = DecommittmentQuery {
         hash: bytecode_hash_as_u256,
         timestamp: Timestamp(1u32),
-        memory_page: MemoryPage(STARTING_CODE_PAGE),
+        memory_page: MemoryPage(zk_evm::zkevm_opcode_defs::BOOTLOADER_CODE_PAGE),
         decommitted_length: bytecode.len() as u16,
         is_fresh: true,
     };
@@ -258,6 +257,24 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
             vm_instance
         );
     }
+
+        // test
+        {
+            for subresult in artifacts.ram_permutation_circuits_data.iter() {
+                // println!("Running RAM permutation for input {:?}", subresult);
+                use sync_vm::glue::ram_permutation::ram_permutation_entry_point;
+    
+                let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+                sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+    
+                let _ = ram_permutation_entry_point(
+                    &mut cs,
+                    Some(subresult.clone()),
+                    &round_function,
+                    1<<2,
+                ).unwrap();
+            }
+        }
 
 
     // let initial_tail = oracle.initial_tail_for_entry_point;

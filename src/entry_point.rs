@@ -10,17 +10,11 @@ use zk_evm::aux_structures::*;
 use zk_evm::ethereum_types::*;
 use zk_evm::vm_state::CallStackEntry;
 use zk_evm::vm_state::VmState;
+use zk_evm::zkevm_opcode_defs::STARTING_BASE_PAGE;
 
 use super::*;
 
-pub const STARTING_CODE_PAGE: u32 = 1024;
-pub const STARTING_CALLDATA_PAGE: u32 = STARTING_CODE_PAGE + 1;
-pub const STARTING_BASE_PAGE: u32 = STARTING_CODE_PAGE + 2;
-
-pub const STARTING_MONOTONIC_PAGES_COUNTER: u32 = 2048;
-
 pub const STARTING_TIMESTAMP: u32 = 8;
-
 pub const INITIAL_MONOTONIC_CYCLE_COUNTER: u32 = 1024;
 
 // Define initial contexts to work with
@@ -36,9 +30,9 @@ pub fn initial_out_of_circuit_context(
         this_address,
         msg_sender,
         code_address,
-        base_memory_page: MemoryPage(STARTING_BASE_PAGE),
-        code_page: MemoryPage(STARTING_CODE_PAGE),
-        calldata_page: MemoryPage(STARTING_CALLDATA_PAGE),
+        base_memory_page: MemoryPage(zk_evm::zkevm_opcode_defs::BOOTLOADER_BASE_PAGE),
+        code_page: MemoryPage(zk_evm::zkevm_opcode_defs::BOOTLOADER_CODE_PAGE),
+        calldata_page: MemoryPage(zk_evm::zkevm_opcode_defs::BOOTLOADER_CALLDATA_PAGE),
         sp: 0u16,
         pc: initial_pc,
         exception_handler_location: u16::MAX,
@@ -67,9 +61,9 @@ pub fn initial_in_circuit_context<E: Engine>(
 ) -> FullExecutionContext<E> {
     let mut ctx = FullExecutionContext::uninitialized();
 
-    ctx.saved_context.common_part.base_page = UInt32::from_uint(STARTING_BASE_PAGE);
-    ctx.saved_context.common_part.calldata_page = UInt32::from_uint(STARTING_CALLDATA_PAGE);
-    ctx.saved_context.common_part.code_page = UInt32::from_uint(STARTING_CODE_PAGE);
+    ctx.saved_context.common_part.base_page = UInt32::from_uint(zk_evm::zkevm_opcode_defs::BOOTLOADER_BASE_PAGE);
+    ctx.saved_context.common_part.calldata_page = UInt32::from_uint(zk_evm::zkevm_opcode_defs::BOOTLOADER_CALLDATA_PAGE);
+    ctx.saved_context.common_part.code_page = UInt32::from_uint(zk_evm::zkevm_opcode_defs::BOOTLOADER_CODE_PAGE);
 
     ctx.saved_context.common_part.pc = UInt16::from_uint(initial_pc);
     ctx.saved_context.common_part.exception_handler_loc = UInt16::from_uint(u16::MAX);
@@ -302,7 +296,7 @@ pub fn create_out_of_circuit_vm<'a, const B: bool>(
 
     vm.local_state.current_ergs_per_pubdata_byte = 0; // uninitialized yet, but we do not care
     vm.local_state.timestamp = STARTING_TIMESTAMP;
-    vm.local_state.memory_page_counter = STARTING_MONOTONIC_PAGES_COUNTER;
+    vm.local_state.memory_page_counter = STARTING_BASE_PAGE;
     vm.local_state.monotonic_cycle_counter = INITIAL_MONOTONIC_CYCLE_COUNTER;
 
     vm
@@ -360,7 +354,7 @@ pub fn create_in_circuit_vm<
         registers: [empty_reg; zk_evm::zkevm_opcode_defs::REGISTERS_COUNT],
         flags: initial_flags,
         timestamp: UInt32::<E>::from_uint(STARTING_TIMESTAMP),
-        memory_page_counter: UInt32::<E>::from_uint(STARTING_MONOTONIC_PAGES_COUNTER),
+        memory_page_counter: UInt32::<E>::from_uint(STARTING_BASE_PAGE),
         tx_number_in_block: UInt16::<E>::zero(),
         previous_super_pc: UInt16::<E>::zero(),
         did_call_or_ret_recently: Boolean::constant(true),
