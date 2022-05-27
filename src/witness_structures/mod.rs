@@ -35,3 +35,23 @@ pub fn transform_sponge_like_queue_state<E: Engine, const M: usize>(
 
     result
 }
+
+use crate::encodings::*;
+
+pub fn take_sponge_like_queue_state_from_simulator<
+    E: Engine, 
+    I: OutOfCircuitFixedLengthEncodable<E, N>,
+    const N: usize,
+    const ROUNDS: usize
+>(
+    simulator: &SpongeLikeQueueSimulator<E, I, N, 3, ROUNDS>
+) -> FullSpongeLikeQueueStateWitness<E> {
+    let result = FullSpongeLikeQueueStateWitness::<E> {
+        length: simulator.num_items,
+        head: simulator.head,
+        tail: simulator.tail,
+        _marker: std::marker::PhantomData,
+    };
+
+    result
+}

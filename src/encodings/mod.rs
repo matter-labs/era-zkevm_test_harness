@@ -4,7 +4,7 @@ use derivative::Derivative;
 use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
 
 // for we need to encode some structures as packed field elements
-pub trait OutOfCircuitFixedLengthEncodable<E: Engine, const N: usize> {
+pub trait OutOfCircuitFixedLengthEncodable<E: Engine, const N: usize>: Clone {
     fn encoding_witness(&self) -> [E::Fr; N];
 }
 
@@ -113,10 +113,14 @@ impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const
 pub struct SpongeLikeQueueIntermediateStates<E: Engine, const SW: usize, const ROUNDS: usize> {
     pub head: [E::Fr; SW],
     pub tail: [E::Fr; SW],
+    pub old_head: [E::Fr; SW],
+    pub old_tail: [E::Fr; SW],
     pub num_items: u32,
     pub round_function_execution_pairs: [([E::Fr; SW], [E::Fr; SW]); ROUNDS],
 }
 
+#[derive(Derivative)]
+#[derivative(Debug, Clone(bound = ""))]
 pub struct SpongeLikeQueueSimulator<
     E: Engine,
     I: OutOfCircuitFixedLengthEncodable<E, N>,
@@ -180,12 +184,52 @@ impl<
         let intermediate_info = SpongeLikeQueueIntermediateStates {
             head: self.head,
             tail: new_tail,
+            old_head: self.head,
+            old_tail,
             num_items: self.num_items,
             round_function_execution_pairs: states.try_into().unwrap(),
         };
 
         (old_tail, intermediate_info)
     }
+
+    pub fn pop_and_output_intermediate_data<
+        R: CircuitArithmeticRoundFunction<E, AW, SW>,
+        const AW: usize,
+    >(
+        &mut self,
+        round_function: &R,
+    ) -> (
+        I, // old tail
+        SpongeLikeQueueIntermediateStates<E, SW, ROUNDS>,
+    ) {
+        let old_head = self.head;
+        assert!(N % AW == 0);
+        let (_, _, element) = self.witness.drain(0..1).next().unwrap();
+        let encoding = element.encoding_witness();
+
+        let states = round_function.simulate_absorb_multiple_rounds(self.head, &encoding);
+        let new_head = states.last().map(|el| el.1).unwrap();
+
+        self.num_items -= 1;
+        self.head = new_head;
+
+        if self.num_items == 0 {
+            assert_eq!(self.head, self.tail);
+        }
+
+        let intermediate_info = SpongeLikeQueueIntermediateStates {
+            head: self.head,
+            tail: self.tail,
+            old_head,
+            old_tail: self.tail,
+            num_items: self.num_items,
+            round_function_execution_pairs: states.try_into().unwrap(),
+        };
+
+        (element, intermediate_info)
+    }
+
 }
 
 #[derive(Derivative)]

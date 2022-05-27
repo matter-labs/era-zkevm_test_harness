@@ -11,7 +11,7 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 2> for DecommittmentQuery {
         let mut lc = E::Fr::zero();
         let mut shift = 0;
         scale_and_accumulate::<E, _>(&mut lc, self.memory_page.0, &shifts, shift);
-        shift += 64;
+        shift += 32;
         scale_and_accumulate::<E, _>(&mut lc, self.hash.0[0], &shifts, shift);
         shift += 64;
         scale_and_accumulate::<E, _>(&mut lc, self.hash.0[1], &shifts, shift);

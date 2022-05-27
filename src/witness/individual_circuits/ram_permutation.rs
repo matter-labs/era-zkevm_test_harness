@@ -13,14 +13,12 @@ use rayon::prelude::*;
 use crate::ff::Field;
 use sync_vm::glue::ram_permutation::RamPermutationCircuitInstanceWitness;
 
-use super::*;
-
 pub fn compute_ram_circuit_snapshots<
     E: Engine,
     R: CircuitArithmeticRoundFunction<E, 2, 3>
 >(
     artifacts: &mut FullBlockArtifacts<E>,
-    mut memory_queue_simulator: MemoryQueueSimulator<E>,
+    memory_queue_simulator: MemoryQueueSimulator<E>,
     round_function: &R,
     per_circuit_capacity: usize
 ) -> Vec<RamPermutationCircuitInstanceWitness<E>> {
@@ -38,17 +36,6 @@ pub fn compute_ram_circuit_snapshots<
     // those two thins are parallelizable, and can be internally parallelized too
 
     // now we can finish reconstruction of each sorted and unsorted memory queries
-
-    // Transform the rest of queries into states
-    for query in artifacts
-        .all_memory_queries_accumulated
-        .iter()
-        .skip(artifacts.vm_memory_queries_accumulated.len())
-    {
-        let (_old_tail, intermediate_info) =
-            memory_queue_simulator.push_and_output_intermediate_data(*query, round_function);
-        artifacts.all_memory_queue_states.push(intermediate_info);
-    }
 
     // reconstruct sorted one in full
     let mut sorted_memory_queries_simulator = MemoryQueueSimulator::<E>::empty();

@@ -18,6 +18,7 @@ use zk_evm::precompiles::ecrecover::ECRecoverRoundWitness;
 use zk_evm::precompiles::keccak256::Keccak256RoundWitness;
 use zk_evm::precompiles::sha256::Sha256RoundWitness;
 use sync_vm::glue::ram_permutation::RamPermutationCircuitInstanceWitness;
+use sync_vm::glue::code_unpacker_sha256::input::CodeDecommitterCircuitInstanceWitness;
 
 #[derive(Derivative)]
 #[derivative(Clone, Default(bound = ""))]
@@ -90,12 +91,13 @@ pub struct FullBlockArtifacts<E: Engine> {
 
     // processed RAM circuit information
     pub ram_permutation_circuits_data: Vec<RamPermutationCircuitInstanceWitness<E>>,
+    // processed code decommitter circuits, as well as sorting circuit (1)
+    pub code_decommitter_circuits_data: Vec<CodeDecommitterCircuitInstanceWitness<E>>,
 }
 
 impl<E: Engine> FullBlockArtifacts<E> {
     pub fn process<R: CircuitArithmeticRoundFunction<E, 2, 3>>(&mut self, round_function: &R) {
         let mut memory_queue_simulator = MemoryQueueSimulator::<E>::empty();
-        let mut decommittment_queue_simulator = DecommittmentQueueSimulator::<E>::empty();
 
         // this is parallelizable internally by the factor of 3 in round function implementation later on
 
@@ -117,55 +119,19 @@ impl<E: Engine> FullBlockArtifacts<E> {
             memory_queue_simulator.num_items as usize == self.vm_memory_queries_accumulated.len()
         );
 
-        // sort decommittment requests
+        // direct VM related part is done, other subcircuit's functionality is moved to other functions
+        // that should properly do sorts and memory writes
 
-        let mut unsorted_decommittment_requests_with_data = vec![];
-        for (cycle, decommittment_request, writes) in self.all_decommittment_queries.iter_mut() {
-            let data = std::mem::replace(writes, vec![]);
-            unsorted_decommittment_requests_with_data.push((*decommittment_request, data));
-        }
+        use crate::witness::individual_circuits::decommit_code::compute_decommitter_circuit_snapshots;
 
-        // internally parallelizable by the factor of 3
-        for (cycle, decommittment_request, _) in self.all_decommittment_queries.iter() {
-            // sponge
-            let (old_tail, intermediate_info) = decommittment_queue_simulator
-                .push_and_output_intermediate_data(*decommittment_request, round_function);
-            self.all_decommittment_queue_states
-                .push((*cycle, intermediate_info));
-        }
-
-        // sort queries
-        let mut sorted_decommittment_requests_with_data = unsorted_decommittment_requests_with_data;
-        sorted_decommittment_requests_with_data.par_sort_by(|a, b| 
-            // sort by hash first, and then by timestamp
-            match a.0.hash.cmp(&b.0.hash) {
-                Ordering::Equal => a.0.timestamp.cmp(&b.0.timestamp),
-                a @ _ => a,
-            }
+        let (code_decommitter_circuits_data, _) = compute_decommitter_circuit_snapshots(
+            self,
+            &mut memory_queue_simulator,
+            round_function,
+            1 << 1
         );
 
-        for (query, writes) in sorted_decommittment_requests_with_data.into_iter() {
-            if query.is_fresh {
-                // now feed the queries into it
-                let as_queries_it = writes.into_iter().enumerate().map(|(idx, el)| MemoryQuery {
-                    timestamp: query.timestamp,
-                    location: zk_evm::aux_structures::MemoryLocation {
-                        memory_type: zk_evm::abstractions::MemoryType::Code,
-                        page: query.memory_page,
-                        index: MemoryIndex(idx as u32),
-                    },
-                    rw_flag: true,
-                    value: el,
-                    is_pended: false,
-                });
-
-                self.all_memory_queries_accumulated.extend(as_queries_it);
-
-                self.deduplicated_decommittment_queries.push(query);
-            }
-
-            self.sorted_decommittment_queries.push(query);
-        }
+        self.code_decommitter_circuits_data = code_decommitter_circuits_data;
 
         // keccak precompile
 

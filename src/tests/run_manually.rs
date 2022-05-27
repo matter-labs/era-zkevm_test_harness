@@ -258,23 +258,41 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
         );
     }
 
-        // test
-        {
-            for subresult in artifacts.ram_permutation_circuits_data.iter() {
-                // println!("Running RAM permutation for input {:?}", subresult);
-                use sync_vm::glue::ram_permutation::ram_permutation_entry_point;
-    
-                let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
-                sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
-    
-                let _ = ram_permutation_entry_point(
-                    &mut cs,
-                    Some(subresult.clone()),
-                    &round_function,
-                    1<<2,
-                ).unwrap();
-            }
+    // test
+    {
+        for subresult in artifacts.code_decommitter_circuits_data.iter() {
+            // println!("Running RAM permutation for input {:?}", subresult);
+            use sync_vm::glue::code_unpacker_sha256::unpack_code_into_memory_entry_point;
+
+            let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+            sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+
+            let _ = unpack_code_into_memory_entry_point(
+                &mut cs,
+                Some(subresult.clone()),
+                &round_function,
+                1<<1,
+            ).unwrap();
         }
+    }
+
+    // test
+    {
+        for subresult in artifacts.ram_permutation_circuits_data.iter() {
+            // println!("Running RAM permutation for input {:?}", subresult);
+            use sync_vm::glue::ram_permutation::ram_permutation_entry_point;
+
+            let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+            sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+
+            let _ = ram_permutation_entry_point(
+                &mut cs,
+                Some(subresult.clone()),
+                &round_function,
+                1<<2,
+            ).unwrap();
+        }
+    }
 
 
     // let initial_tail = oracle.initial_tail_for_entry_point;
