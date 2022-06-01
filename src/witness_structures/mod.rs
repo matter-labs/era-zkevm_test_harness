@@ -38,6 +38,24 @@ pub fn transform_sponge_like_queue_state<E: Engine, const M: usize>(
 
 use crate::encodings::*;
 
+pub fn take_queue_state_from_simulator<
+    E: Engine, 
+    I: OutOfCircuitFixedLengthEncodable<E, N>,
+    const N: usize,
+    const ROUNDS: usize
+>(
+    simulator: &QueueSimulator<E, I, N, ROUNDS>
+) -> FixedWidthEncodingGenericQueueStateWitness<E> {
+    let result = FixedWidthEncodingGenericQueueStateWitness::<E> {
+        num_items: simulator.num_items,
+        head_state: simulator.head,
+        tail_state: simulator.tail,
+        _marker: std::marker::PhantomData,
+    };
+
+    result
+}
+
 pub fn take_sponge_like_queue_state_from_simulator<
     E: Engine, 
     I: OutOfCircuitFixedLengthEncodable<E, N>,

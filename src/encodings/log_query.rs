@@ -112,6 +112,8 @@ use sync_vm::vm::vm_state::saved_contract_context::scale_and_accumulate;
 
 // Ok(([el0, el1, el2, el3, el4], revert_falg_offset))
 
+use sync_vm::glue::storage_validity_by_grand_product::{EXTENDED_TIMESTAMP_ENCODING_OFFSET, EXTENDED_TIMESTAMP_ENCODING_ELEMENT};
+
 impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 5> for LogQuery {
     fn encoding_witness(&self) -> [<E>::Fr; 5] {
         use crate::utils::*;
@@ -142,6 +144,7 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 5> for LogQuery {
         scale_and_accumulate::<E, _>(&mut lc, self.key.0[3], &shifts, shift);
         shift += 64;
         assert!(shift <= E::Fr::CAPACITY as usize);
+        assert_eq!(shift, EXTENDED_TIMESTAMP_ENCODING_OFFSET);
         let el1 = lc;
 
         let mut lc = E::Fr::zero();
@@ -191,58 +194,42 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 5> for LogQuery {
     }
 }
 
-// pub struct LogQueueSimulator<E: Engine> {
-//     pub head: E::Fr,
-//     pub tail: E::Fr,
-//     pub num_items: u32,
-//     pub witness: Vec<([E::Fr; 5], E::Fr, LogQuery)>,
-// }
 
-// impl<E: Engine> LogQueueSimulator<E> {
-//     pub fn empty() -> Self {
-//         Self {
-//             head: E::Fr::zero(),
-//             tail: E::Fr::zero(),
-//             num_items: 0,
-//             witness: vec![]
-//         }
-//     }
+#[derive(Derivative)]
+#[derivative(Clone, Copy, Debug)]
+pub struct LogQueryWithExtendedEnumeration {
+    pub raw_query: LogQuery,
+    pub extended_timestamp: u32
+}
 
-//     pub fn push<R: CircuitArithmeticRoundFunction<E, AW, SW>, const AW: usize, const SW: usize>(
-//         &mut self,
-//         element: LogQuery,
-//         round_function: &R
-//     ) {
-//         let _ = self.push_and_output_intermediate_data(element, round_function);
-//     }
+impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 5> for LogQueryWithExtendedEnumeration {
+    fn encoding_witness(&self) -> [<E>::Fr; 5] {
+        let shifts = compute_shifts::<E::Fr>();
 
-//     pub fn push_and_output_intermediate_data<R: CircuitArithmeticRoundFunction<E, AW, SW>, const AW: usize, const SW: usize>(
-//         &mut self,
-//         element: LogQuery,
-//         round_function: &R
-//     ) -> ((E::Fr, E::Fr), Vec<([E::Fr; SW], [E::Fr; SW])>) {
-//         let old_tail = self.tail;
-//         let encoding = element.encoding_witness();
-//         let mut to_hash = vec![];
-//         to_hash.extend_from_slice(&encoding);
+        let LogQueryWithExtendedEnumeration {
+            raw_query,
+            extended_timestamp
+        } = self;
 
-//         let mut to_hash = vec![self.tail];
+        let mut result = <LogQuery as OutOfCircuitFixedLengthEncodable<E, 5>>::encoding_witness(raw_query);
 
-//         let states = round_function.simulate_absorb_multiple_rounds_into_empty_with_specialization(
-//             &to_hash
-//         );
-//         let new_tail = R::simulate_state_into_commitment(states.last().map(|el| el.1).unwrap());
+        let mut shift = EXTENDED_TIMESTAMP_ENCODING_OFFSET;
+        scale_and_accumulate::<E, _>(&mut result[EXTENDED_TIMESTAMP_ENCODING_ELEMENT], *extended_timestamp, &shifts, shift);
+        shift += 32;
+        assert!(shift <= E::Fr::CAPACITY as usize);
 
-//         self.witness.push((encoding, new_tail, element));
-//         self.num_items += 1;
-//         self.tail = new_tail;
+        // dbg!(&result);
+        
+        result
+    }
+}
 
-//         ((old_tail, new_tail), states)
-//     }
-// }
 
 pub type LogQueueSimulator<E> = QueueSimulator<E, LogQuery, 5, 3>;
 pub type LogQueueState<E> = QueueIntermediateStates<E, 3, 3>;
+
+pub type LogWithExtendedEnumerationQueueSimulator<E> = QueueSimulator<E, LogQueryWithExtendedEnumeration, 5, 3>;
+pub type LogWithExtendedEnumerationQueueState<E> = QueueIntermediateStates<E, 3, 3>;
 
 use sync_vm::scheduler::data_access_functions::StorageLogRecord;
 

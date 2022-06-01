@@ -258,7 +258,7 @@ pub fn compute_ram_circuit_snapshots<
         final_sorted_state.tail = sorted_global_final_state.tail;
         final_sorted_state.length = sorted_global_final_state.num_items - final_sorted_state.length;
 
-        let mut instance_witness = RamPermutationCircuitInstanceWitness {
+        let instance_witness = RamPermutationCircuitInstanceWitness {
             closed_form_input: ClosedFormInputWitness {
                 _marker_e: (),
                 start_flag: if_first,
@@ -300,14 +300,6 @@ pub fn compute_ram_circuit_snapshots<
             unsorted_queue_witness: unsorted_witness,
             sorted_queue_witness: sorted_witness,
         };
-
-        // // adjust queue lengths. States indicate a number of elements in the queue, but when we pop we should actually
-        // // use a value that says how many elements left in the queue
-        // instance_witness.closed_form_input.fsm_input.current_unsorted_queue_state.length = total_queue_length - instance_witness.closed_form_input.fsm_input.current_unsorted_queue_state.length;
-        // instance_witness.closed_form_input.fsm_input.current_sorted_queue_state.length = total_queue_length - instance_witness.closed_form_input.fsm_input.current_sorted_queue_state.length;
-
-        // instance_witness.closed_form_input.fsm_output.current_unsorted_queue_state.length = total_queue_length - instance_witness.closed_form_input.fsm_output.current_unsorted_queue_state.length;
-        // instance_witness.closed_form_input.fsm_output.current_unsorted_queue_state.length = total_queue_length - instance_witness.closed_form_input.fsm_output.current_unsorted_queue_state.length;
 
         current_lhs_product = accumulated_lhs;
         current_rhs_product = accumulated_rhs;

@@ -42,6 +42,7 @@ pub fn initial_out_of_circuit_context(
         code_shard_id: 0,
         is_static: false,
         is_local_frame: false,
+        context_u128_value: 0,
     }
 }
 
@@ -545,10 +546,12 @@ pub fn assert_expected_final_state<E: Engine>(
     );
 
     // compare callstack top element, state and depth
-    let callstack_state_encoding = wit.callstack.stack_sponge_state;
-    assert_eq!(callstack_state_encoding, auxilary_final_parameters.callstack_state.0);
     let callstack_depth = wit.callstack.context_stack_depth;
     assert_eq!(callstack_depth as usize, out_of_circuit_state.callstack.depth());
+
+    let callstack_state_encoding = wit.callstack.stack_sponge_state;
+    assert_eq!(callstack_state_encoding, auxilary_final_parameters.callstack_state.0);
+
 
     // compare individual fields of callstack
     let current_callstack_entry = auxilary_final_parameters.callstack_state.1;
@@ -578,6 +581,9 @@ pub fn assert_expected_final_state<E: Engine>(
     assert_eq!(current_callstack_entry.code_shard_id, current_callstack_vm_witness.common_part.code_shard_id);
     assert_eq!(current_callstack_entry.this_shard_id, current_callstack_vm_witness.common_part.this_shard_id);
     assert_eq!(current_callstack_entry.caller_shard_id, current_callstack_vm_witness.common_part.caller_shard_id);
+
+    // context u128
+    // assert_eq!(current_callstack_entry.context_u128_value, current_callstack_vm_witness.common_part.caller_shard_id);
 
     // non-callstack saved part of the state
 

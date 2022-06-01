@@ -31,8 +31,13 @@ pub fn compute_decommitter_circuit_snapshots<
 
     let mut results: Vec<CodeDecommitterCircuitInstanceWitness<E>> = vec![];
 
-    let initial_memory_queue_state = artifacts.all_memory_queue_states.last().unwrap().clone();
-    let initial_memory_queue_state = transform_sponge_like_queue_state(initial_memory_queue_state);
+    // let initial_memory_queue_state = artifacts.all_memory_queue_states.last().unwrap().clone();
+    // let initial_memory_queue_state = transform_sponge_like_queue_state(initial_memory_queue_state);
+
+    use crate::witness_structures::take_sponge_like_queue_state_from_simulator;
+    let initial_memory_queue_state = take_sponge_like_queue_state_from_simulator(memory_queue_simulator);
+
+    // TODO: move to the corresponding circuit!
 
     let mut unsorted_decommittment_queue_simulator = DecommittmentQueueSimulator::<E>::empty();
     let mut sorted_decommittment_queue_simulator = DecommittmentQueueSimulator::<E>::empty();
@@ -44,7 +49,7 @@ pub fn compute_decommitter_circuit_snapshots<
     let mut deduplicated_decommittment_queue_states = vec![];
 
     let mut unsorted_decommittment_requests_with_data = vec![];
-    for (cycle, decommittment_request, writes) in artifacts.all_decommittment_queries.iter_mut() {
+    for (_cycle, decommittment_request, writes) in artifacts.all_decommittment_queries.iter_mut() {
         let data = std::mem::replace(writes, vec![]);
         unsorted_decommittment_requests_with_data.push((*decommittment_request, data));
     }
@@ -206,12 +211,12 @@ pub fn compute_decommitter_circuit_snapshots<
             }
         }
 
-        for cycle_idx in 0..per_circuit_capacity {
+        for _cycle_idx in 0..per_circuit_capacity {
             // we will kind of fall through, so "if" instead of "match"
             if &DecommitterState::BeginNew == &fsm_state {
                 internal_state = Sha256::default();
 
-                let (((query, memory_data), state) , wit) = it.next().unwrap();
+                let (((_query, memory_data), _state) , wit) = it.next().unwrap();
                 let _ = current_decommittment_requests_queue_simulator.pop_and_output_intermediate_data(round_function);
                 current_memory_data = memory_data;
 
@@ -359,7 +364,6 @@ pub fn compute_decommitter_circuit_snapshots<
         }
 
         // proceed with final bits
-        use crate::witness_structures::take_sponge_like_queue_state_from_simulator;
         current_circuit_witness.closed_form_input.fsm_output.decommittment_requests_queue_state = take_sponge_like_queue_state_from_simulator(&current_decommittment_requests_queue_simulator);
         current_circuit_witness.closed_form_input.fsm_output.decommittment_requests_queue_state = take_sponge_like_queue_state_from_simulator(&current_decommittment_requests_queue_simulator);
         current_circuit_witness.closed_form_input.fsm_output.memory_queue_state = transform_sponge_like_queue_state(artifacts.all_memory_queue_states.iter().skip(
@@ -371,6 +375,10 @@ pub fn compute_decommitter_circuit_snapshots<
         results.push(current_circuit_witness);
             
         if fsm_state == DecommitterState::Done {
+            // mark as done and set passthrough output
+            results.last_mut().unwrap().closed_form_input.completion_flag = true;
+            let final_memory_state = results.last().unwrap().closed_form_input.fsm_output.memory_queue_state.clone();
+            results.last_mut().unwrap().closed_form_input.passthrough_output_data.memory_queue_final_state = final_memory_state;
             break 'outer;
         }
     }

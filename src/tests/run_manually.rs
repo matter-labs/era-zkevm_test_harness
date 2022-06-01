@@ -62,10 +62,14 @@ fn run_and_try_create_witness() {
         nop stack+=[4]
         nop stack-=[1]
         add 1, r0, r1
+        sload r1, r0
         add 2, r0, r2
         sstore r1, r2
+        sload r1, r0
         near_call r0, @.to_revert, @.finish
     .finish:
+        add 3, r0, r1
+        sload r1, r0
         ret.ok r0
     .continue:
         add 5, r0, r1
@@ -76,6 +80,7 @@ fn run_and_try_create_witness() {
         add 3, r0, r1
         add 4, r0, r2
         sstore r1, r2
+        sload r1, r0
         ret.revert r0
     "#;
 
@@ -242,25 +247,40 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
             2
         );
 
+    // let num_instances = instance_oracles.len();
 
-    for vm_instance in instance_oracles.into_iter() {
-        println!("Running VM for range {:?}", vm_instance.cycles_range);
-        use crate::entry_point::run_vm_instance;
+    // for (instance_idx, vm_instance) in instance_oracles.into_iter().enumerate() {
+    //     println!("Running VM for range {:?}", vm_instance.cycles_range);
+    //     use crate::entry_point::run_vm_instance;
 
-        let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
-        sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+    //     let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+    //     sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
 
-        let _ = run_vm_instance(
-            &mut cs,
-            &round_function,
-            &in_circuit_global_context,
-            vm_instance
-        );
-    }
+    //     let vm_state = run_vm_instance(
+    //         &mut cs,
+    //         &round_function,
+    //         &in_circuit_global_context,
+    //         vm_instance
+    //     );
+
+    //     if instance_idx == num_instances - 1 {
+    //         // consistency check for storage log
+    //         assert_eq!(
+    //             vm_state.callstack.current_context.log_queue_forward_tail.get_value().unwrap(),
+    //             artifacts.original_log_queue_simulator.tail
+    //         );
+
+    //         assert_eq!(
+    //             vm_state.callstack.current_context.log_queue_forward_part_length.get_value().unwrap(),
+    //             artifacts.original_log_queue_simulator.num_items
+    //         );
+    //     }
+    // }
 
     // test
     {
-        for subresult in artifacts.code_decommitter_circuits_data.iter() {
+        for (i, subresult) in artifacts.code_decommitter_circuits_data.iter().enumerate() {
+            println!("Running RAM permutation circuit number {}", i);
             // println!("Running RAM permutation for input {:?}", subresult);
             use sync_vm::glue::code_unpacker_sha256::unpack_code_into_memory_entry_point;
 
@@ -276,22 +296,42 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
         }
     }
 
+    // // test
+    // {
+    //     for subresult in artifacts.ram_permutation_circuits_data.iter() {
+    //         // println!("Running RAM permutation for input {:?}", subresult);
+    //         use sync_vm::glue::ram_permutation::ram_permutation_entry_point;
+
+    //         let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+    //         sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+
+    //         let _ = ram_permutation_entry_point(
+    //             &mut cs,
+    //             Some(subresult.clone()),
+    //             &round_function,
+    //             1<<2,
+    //         ).unwrap();
+    //     }
+    // }
+
     // test
     {
-        for subresult in artifacts.ram_permutation_circuits_data.iter() {
-            // println!("Running RAM permutation for input {:?}", subresult);
-            use sync_vm::glue::ram_permutation::ram_permutation_entry_point;
+        assert!(artifacts.storage_deduplicator_circuit_data.len() == 1);
+        let subresult = &artifacts.storage_deduplicator_circuit_data[0];
+        // println!("Running RAM permutation for input {:?}", subresult);
+        use sync_vm::glue::storage_validity_by_grand_product::sort_and_deduplicate_storage_access_entry_point;
 
-            let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
-            sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+        let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+        sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
 
-            let _ = ram_permutation_entry_point(
-                &mut cs,
-                Some(subresult.clone()),
-                &round_function,
-                1<<2,
-            ).unwrap();
-        }
+        let _ = sort_and_deduplicate_storage_access_entry_point(
+            &mut cs,
+            Some(subresult.clone()),
+            &round_function,
+            16
+        ).unwrap();
+
+
     }
 
 

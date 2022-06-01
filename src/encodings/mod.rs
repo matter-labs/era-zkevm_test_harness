@@ -38,6 +38,8 @@ impl<E: Engine, const SW: usize, const ROUNDS: usize> QueueIntermediateStates<E,
     }
 }
 
+#[derive(Derivative)]
+#[derivative(Clone(bound = ""), Default(bound = ""))]
 pub struct QueueSimulator<
     E: Engine,
     I: OutOfCircuitFixedLengthEncodable<E, N>,

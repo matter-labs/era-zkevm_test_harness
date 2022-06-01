@@ -2,8 +2,6 @@ use crate::witness::tracer::QueryMarker;
 use std::ops::Range;
 use zk_evm::{aux_structures::LogQuery, vm_state::CallStackEntry};
 
-use super::*;
-
 #[derive(Clone, Debug)]
 pub struct CallstackEntryWithAuxData {
     pub entry: CallStackEntry,

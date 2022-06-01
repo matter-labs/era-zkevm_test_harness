@@ -14,11 +14,14 @@ use zk_evm::aux_structures::DecommittmentQuery;
 use zk_evm::aux_structures::LogQuery;
 use zk_evm::aux_structures::MemoryIndex;
 use zk_evm::aux_structures::MemoryQuery;
+use crate::encodings::log_query::LogQueueSimulator;
 use zk_evm::precompiles::ecrecover::ECRecoverRoundWitness;
 use zk_evm::precompiles::keccak256::Keccak256RoundWitness;
 use zk_evm::precompiles::sha256::Sha256RoundWitness;
 use sync_vm::glue::ram_permutation::RamPermutationCircuitInstanceWitness;
 use sync_vm::glue::code_unpacker_sha256::input::CodeDecommitterCircuitInstanceWitness;
+use sync_vm::glue::demux_log_queue::input::LogDemuxerCircuitInstanceWitness;
+use sync_vm::glue::storage_validity_by_grand_product::input::StorageDeduplicatorInstanceWitness;
 
 #[derive(Derivative)]
 #[derivative(Clone, Default(bound = ""))]
@@ -42,33 +45,42 @@ pub struct FullBlockArtifacts<E: Engine> {
     pub deduplicated_decommittment_queue_states: Vec<DecommittmentQueueState<E>>,
     // log queue
     pub original_log_queue: Vec<(u32, LogQuery)>,
+    pub original_log_queue_simulator: LogQueueSimulator<E>,
     pub original_log_queue_states: Vec<(u32, LogQueueState<E>)>,
+
     // demuxed log queues
     pub demuxed_rollup_storage_queries: Vec<LogQuery>,
     pub demuxed_rollup_storage_queue_states: Vec<LogQueueState<E>>,
+    pub demuxed_rollup_storage_queue_simulator: LogQueueSimulator<E>,
     pub demuxed_porter_storage_queries: Vec<LogQuery>,
     pub demuxed_porter_storage_queue_states: Vec<LogQueueState<E>>,
+    pub demuxed_porter_storage_queue_simulator: LogQueueSimulator<E>,
     pub demuxed_event_queries: Vec<LogQuery>,
+    pub demuxed_events_queue_simulator: LogQueueSimulator<E>,
     pub demuxed_event_queue_states: Vec<LogQueueState<E>>,
     pub demuxed_to_l1_queries: Vec<LogQuery>,
+    pub demuxed_to_l1_queue_simulator: LogQueueSimulator<E>,
     pub demuxed_to_l1_queue_states: Vec<LogQueueState<E>>,
     pub demuxed_keccak_precompile_queries: Vec<LogQuery>,
+    pub demuxed_keccak_precompile_queue_simulator: LogQueueSimulator<E>,
     pub demuxed_keccak_precompile_queue_states: Vec<LogQueueState<E>>,
     pub demuxed_sha256_precompile_queries: Vec<LogQuery>,
+    pub demuxed_sha256_precompile_queue_simulator: LogQueueSimulator<E>,
     pub demuxed_sha256_precompile_queue_states: Vec<LogQueueState<E>>,
     pub demuxed_ecrecover_queries: Vec<LogQuery>,
+    pub demuxed_ecrecover_queue_simulator: LogQueueSimulator<E>,
     pub demuxed_ecrecover_queue_states: Vec<LogQueueState<E>>,
 
     // sorted and deduplicated log-like queues for ones that support reverts
     // sorted
-    pub sorted_rollup_storage_queries: Vec<LogQuery>,
-    pub sorted_rollup_storage_queue_states: Vec<LogQueueState<E>>,
-    pub sorted_porter_storage_queries: Vec<LogQuery>,
-    pub sorted_porter_storage_queue_states: Vec<LogQueueState<E>>,
-    pub sorted_event_queries: Vec<LogQuery>,
-    pub sorted_event_queue_states: Vec<LogQueueState<E>>,
-    pub sorted_to_l1_queries: Vec<LogQuery>,
-    pub sorted_to_l1_queue_states: Vec<LogQueueState<E>>,
+    // pub _sorted_rollup_storage_queries: Vec<LogQuery>,
+    // pub _sorted_rollup_storage_queue_states: Vec<LogQueueState<E>>,
+    // pub _sorted_porter_storage_queries: Vec<LogQuery>,
+    // pub _sorted_porter_storage_queue_states: Vec<LogQueueState<E>>,
+    // pub _sorted_event_queries: Vec<LogQuery>,
+    // pub sorted_event_queue_states: Vec<LogQueueState<E>>,
+    // pub _sorted_to_l1_queries: Vec<LogQuery>,
+    // pub sorted_to_l1_queue_states: Vec<LogQueueState<E>>,
 
     // deduplicated
     pub deduplicated_rollup_storage_queries: Vec<LogQuery>,
@@ -93,6 +105,10 @@ pub struct FullBlockArtifacts<E: Engine> {
     pub ram_permutation_circuits_data: Vec<RamPermutationCircuitInstanceWitness<E>>,
     // processed code decommitter circuits, as well as sorting circuit (1)
     pub code_decommitter_circuits_data: Vec<CodeDecommitterCircuitInstanceWitness<E>>,
+    //
+    pub log_demuxer_circuit_data: Vec<LogDemuxerCircuitInstanceWitness<E>>,
+    //
+    pub storage_deduplicator_circuit_data: Vec<StorageDeduplicatorInstanceWitness<E>>,
 }
 
 impl<E: Engine> FullBlockArtifacts<E> {
@@ -132,6 +148,16 @@ impl<E: Engine> FullBlockArtifacts<E> {
         );
 
         self.code_decommitter_circuits_data = code_decommitter_circuits_data;
+
+        // demux log queue
+        use crate::witness::individual_circuits::log_demux::compute_logs_demux;
+
+        let log_demuxer_witness = compute_logs_demux(
+            self,
+            round_function
+        );
+
+        self.log_demuxer_circuit_data = vec![log_demuxer_witness];
 
         // keccak precompile
 
@@ -194,16 +220,24 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
         use crate::witness::individual_circuits::ram_permutation::compute_ram_circuit_snapshots;
 
-        let ram_permutation_circuits_data = compute_ram_circuit_snapshots(
-            self,
-            memory_queue_simulator,
-            round_function,
-            1<<2
-        );
+        // let ram_permutation_circuits_data = compute_ram_circuit_snapshots(
+        //     self,
+        //     memory_queue_simulator,
+        //     round_function,
+        //     1<<2
+        // );
 
-        self.ram_permutation_circuits_data = ram_permutation_circuits_data;
+        // self.ram_permutation_circuits_data = ram_permutation_circuits_data;
 
         // now completely parallel process to reconstruct the states, with internally parallelism in each round function
+
+        use crate::witness::individual_circuits::log_sort_dedup::compute_logs_dedup_and_sort;
+
+        let storage_deduplicator_circuit_data = compute_logs_dedup_and_sort(
+            self,
+            round_function
+        );
+        self.storage_deduplicator_circuit_data = vec![storage_deduplicator_circuit_data];
 
         self.is_processed = true;
     }

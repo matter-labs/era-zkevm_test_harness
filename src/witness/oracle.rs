@@ -197,17 +197,19 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
     // dbg!(num_forwards);
     // dbg!(num_rollbacks);
 
-    let mut sorted_rollup_storage_queries = vec![];
-    let mut sorted_porter_storage_queries = vec![];
-    let mut sorted_event_queries = vec![];
-    let mut sorted_to_l1_queries = vec![];
-    let mut sorted_keccak_precompile_queries = vec![];
-    let mut sorted_sha256_precompile_queries = vec![];
-    let mut sorted_ecrecover_queries = vec![];
+    let mut demuxed_rollup_storage_queries = vec![];
+    let mut demuxed_porter_storage_queries = vec![];
+    let mut demuxed_event_queries = vec![];
+    let mut demuxed_to_l1_queries = vec![];
+    let mut demuxed_keccak_precompile_queries = vec![];
+    let mut demuxed_sha256_precompile_queries = vec![];
+    let mut demuxed_ecrecover_queries = vec![];
     let original_log_queue: Vec<_> = forward.iter().map(|(_, b)| (b.1, b.2.clone())).collect();
     let mut original_log_queue_states = vec![];
 
     let mut chain_of_states = vec![];
+
+    let mut original_log_queue_simulator = None;
 
     // we want to have some hashmap that will indicate
     // that on some specific VM cycle we either read or write
@@ -244,6 +246,16 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
                 .zip(std::iter::repeat(false)),
         )
     {
+        if !was_applied {
+            // save the latest "usefull"
+            if original_log_queue_simulator.is_none() {
+                original_log_queue_simulator = Some(log_queue_simulator.clone());
+            }
+        } else {
+            // check for no gaps
+            assert!(original_log_queue_simulator.is_none());
+        }
+
         let (_old_tail, intermediate_info) =
             log_queue_simulator.push_and_output_intermediate_data(query, round_function);
 
@@ -301,38 +313,39 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
         // and sort
         if was_applied {
+            // push state
             original_log_queue_states.push((cycle, intermediate_info));
             match query.aux_byte {
                 STORAGE_AUX_BYTE => {
                     // sort rollup and porter
                     match query.shard_id {
                         0 => {
-                            sorted_rollup_storage_queries.push(query);
+                            demuxed_rollup_storage_queries.push(query);
                         }
                         1 => {
-                            sorted_porter_storage_queries.push(query);
+                            demuxed_porter_storage_queries.push(query);
                         }
                         _ => unreachable!(),
                     }
                 }
                 L1_MESSAGE_AUX_BYTE => {
-                    sorted_to_l1_queries.push(query);
+                    demuxed_to_l1_queries.push(query);
                 }
                 EVENT_AUX_BYTE => {
-                    sorted_event_queries.push(query);
+                    demuxed_event_queries.push(query);
                 }
                 PRECOMPILE_AUX_BYTE => {
                     assert!(!query.rollback);
                     use zk_evm::precompiles::*;
                     match query.address {
                         a if a == *KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
-                            sorted_keccak_precompile_queries.push(query);
+                            demuxed_keccak_precompile_queries.push(query);
                         }
                         a if a == *SHA256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
-                            sorted_sha256_precompile_queries.push(query);
+                            demuxed_sha256_precompile_queries.push(query);
                         }
                         a if a == *ECRECOVER_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
-                            sorted_ecrecover_queries.push(query);
+                            demuxed_ecrecover_queries.push(query);
                         }
                         _ => {
                             // just burn ergs
@@ -389,6 +402,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
         });
 
     // dbg!(&chain_of_states);
+    // dbg!(&log_queue_simulator.tail);
     
     use super::callstack_handler::CallstackAction;
     use crate::encodings::callstack_entry::CallstackSimulator;
@@ -623,15 +637,16 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
     artifacts.sha256_round_function_witnesses = sha256_round_function_witnesses;
     artifacts.ecrecover_witnesses = ecrecover_witnesses;
     artifacts.original_log_queue = original_log_queue;
+    artifacts.original_log_queue_simulator = original_log_queue_simulator.unwrap();
     artifacts.original_log_queue_states = original_log_queue_states;
 
-    artifacts.sorted_rollup_storage_queries = sorted_rollup_storage_queries;
-    artifacts.sorted_porter_storage_queries = sorted_porter_storage_queries;
-    artifacts.sorted_event_queries = sorted_event_queries;
-    artifacts.sorted_to_l1_queries = sorted_to_l1_queries;
-    artifacts.demuxed_keccak_precompile_queries = sorted_keccak_precompile_queries;
-    artifacts.demuxed_sha256_precompile_queries = sorted_sha256_precompile_queries;
-    artifacts.demuxed_ecrecover_queries = sorted_ecrecover_queries;
+    artifacts.demuxed_rollup_storage_queries = demuxed_rollup_storage_queries;
+    artifacts.demuxed_porter_storage_queries = demuxed_porter_storage_queries;
+    artifacts.demuxed_event_queries = demuxed_event_queries;
+    artifacts.demuxed_to_l1_queries = demuxed_to_l1_queries;
+    artifacts.demuxed_keccak_precompile_queries = demuxed_keccak_precompile_queries;
+    artifacts.demuxed_sha256_precompile_queries = demuxed_sha256_precompile_queries;
+    artifacts.demuxed_ecrecover_queries = demuxed_ecrecover_queries;
 
     artifacts.process(round_function);
 
