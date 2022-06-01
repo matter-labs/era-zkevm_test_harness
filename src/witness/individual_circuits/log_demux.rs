@@ -82,7 +82,9 @@ pub fn compute_logs_demux<
     let mut input_passthrough_data = LogDemuxerPassthroughData::placeholder_witness();
     // we only need the state of the original input
     input_passthrough_data.initial_log_queue_state = take_queue_state_from_simulator(&artifacts.original_log_queue_simulator);
+
     let mut output_passthrough_data = LogDemuxerPassthroughData::placeholder_witness();
+
     output_passthrough_data.storage_access_queue_state = take_queue_state_from_simulator(&artifacts.demuxed_rollup_storage_queue_simulator);
     output_passthrough_data.events_access_queue_state = take_queue_state_from_simulator(&artifacts.demuxed_events_queue_simulator);
     output_passthrough_data.l1messages_access_queue_state = take_queue_state_from_simulator(&artifacts.demuxed_to_l1_queue_simulator);

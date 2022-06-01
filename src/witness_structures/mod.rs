@@ -1,7 +1,6 @@
 use super::*;
 
-pub mod keccak_circuit;
-pub mod log_circuit_splitter;
+// pub mod log_circuit_splitter;
 pub mod ram_circuit;
 
 use crate::bellman::Engine;

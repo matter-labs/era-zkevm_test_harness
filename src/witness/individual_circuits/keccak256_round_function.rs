@@ -6,6 +6,8 @@ use num_bigint::BigUint;
 use sync_vm::franklin_crypto::plonk::circuit::utils::u64_to_fe;
 use sync_vm::glue::keccak256_round_function_circuit::*;
 use zk_evm::precompiles::keccak256::BUFFER_SIZE;
+use crate::biguint_from_u256;
+use crate::witness_structures::*;
 
 pub type Keccak256CircuitFSMData<E> = Keccak256RoundFunctionFSMWitness<E>;
 pub type Keccak256CircuitPassthroughData<E> = Keccak256RoundFunctionPassthroughStructureWitness<E>;

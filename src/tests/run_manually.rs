@@ -284,7 +284,8 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
     // test
     {
         println!("Running code decommittments sorter and deduplicator");
-        assert!(artifacts.decommittments_deduplicator_circuits_data.len() == 1);        let subresult = &artifacts.decommittments_deduplicator_circuits_data[0];
+        assert!(artifacts.decommittments_deduplicator_circuits_data.len() == 1);        
+        let subresult = &artifacts.decommittments_deduplicator_circuits_data[0];
         use sync_vm::glue::sort_decommittment_requests::sort_and_deduplicate_code_decommittments_entry_point;
 
         let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
@@ -316,6 +317,26 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
             ).unwrap();
         }
     }
+
+    // test
+    {
+        println!("Running log demuxer circuit");
+        assert!(artifacts.log_demuxer_circuit_data.len() == 1);        
+        let subresult = &artifacts.log_demuxer_circuit_data[0];
+        use sync_vm::glue::demux_log_queue::demultiplex_storage_logs_enty_point;
+
+        let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+        sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+
+        let _ = demultiplex_storage_logs_enty_point(
+            &mut cs,
+            Some(subresult.clone()),
+            &round_function,
+            16
+        ).unwrap();
+    }
+
+    
 
     // // test
     // {
