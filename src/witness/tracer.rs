@@ -37,7 +37,7 @@ pub struct WitnessTracer {
     pub monotonic_query_counter: usize,
     pub log_frames_stack: Vec<ApplicationData<((usize, usize), (QueryMarker, u32, LogQuery))>>, // keep the unique frame index
     pub callstack_with_aux_data: CallstackWithAuxData,
-    pub sponge_busy_range: Range<usize>,
+    pub sponge_busy_range: HashSet<usize>,
     pub vm_snapshots: Vec<VmSnapshot>,
     // we need to properly preserve the information about logs. Not just flattening them into something,
     // but also keep the markers on when new frame has started and has finished, and the final frame execution
@@ -61,6 +61,7 @@ impl<T> NumberedApplicationData<T> {
     }
 }
 
+use std::collections::HashSet;
 use std::ops::Range;
 
 #[derive(Clone, Debug)]
@@ -96,7 +97,7 @@ impl WitnessTracer {
             monotonic_query_counter: 0,
             log_frames_stack: vec![ApplicationData::empty()],
             callstack_with_aux_data: CallstackWithAuxData::empty(),
-            sponge_busy_range: 0..0,
+            sponge_busy_range:  HashSet::with_capacity(8),
             vm_snapshots: vec![],
         }
     }
@@ -176,6 +177,8 @@ use super::vm_snapshot::VmSnapshot;
 
 impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
     fn start_new_execution_cycle(&mut self, current_state: &VmLocalState) {
+        // println!("Cycle starts");
+        // dbg!(&self.sponge_busy_range);
         if self.current_cycle_counter == 0 {
             if self.current_cycle_counter != current_state.monotonic_cycle_counter {
                 // adjust
@@ -218,17 +221,16 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
         self.current_cycle_counter += 1;
     }
     fn end_execution_cycle(&mut self, current_state: &VmLocalState) {
-        // println!("Cycle ends");
         // dbg!(&self.sponge_busy_range);
         if !self.sponge_busy_range.is_empty() {
-            if self.sponge_busy_range.contains(&NUM_SPONGES_PER_CYCLE) {
-                // drain
-                let new_range = NUM_SPONGES_PER_CYCLE..self.sponge_busy_range.end;
-                self.sponge_busy_range = new_range
-            } else {
-                self.sponge_busy_range = 0..0;
+            for i in 0..NUM_SPONGES_PER_CYCLE {
+                self.sponge_busy_range.remove(&i);
+                if self.sponge_busy_range.remove(&(i + NUM_SPONGES_PER_CYCLE)) {
+                    self.sponge_busy_range.insert(i);
+                }
             }
         }
+        // println!("Cycle ends");
     }
     fn add_sponge_marker(
         &mut self,
@@ -237,20 +239,12 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
         sponges_range: Range<usize>,
         is_pended: bool,
     ) {
-        // dbg!(&sponges_range);
-        if self.sponge_busy_range.is_empty() {
-            if sponges_range.start != 0 {
-                let new_range = 0..sponges_range.end;
-                self.sponge_busy_range = new_range;
-            } else {
-                self.sponge_busy_range = sponges_range;
+        // println!("Adding sponges range {:?}", &sponges_range);
+        for el in sponges_range {
+            let is_unique = self.sponge_busy_range.insert(el);
+            if !is_unique {
+                panic!("sponge markers are {:?} and trying to add {:?}", &self.sponge_busy_range, &el);
             }
-        } else {
-            for el in sponges_range.clone() {
-                assert!(!self.sponge_busy_range.contains(&el));
-            }
-            // merge
-            self.sponge_busy_range.end = sponges_range.end;
         }
     }
 

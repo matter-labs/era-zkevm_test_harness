@@ -22,6 +22,7 @@ use sync_vm::glue::ram_permutation::RamPermutationCircuitInstanceWitness;
 use sync_vm::glue::code_unpacker_sha256::input::CodeDecommitterCircuitInstanceWitness;
 use sync_vm::glue::demux_log_queue::input::LogDemuxerCircuitInstanceWitness;
 use sync_vm::glue::storage_validity_by_grand_product::input::StorageDeduplicatorInstanceWitness;
+use sync_vm::glue::log_sorter::input::EventsDeduplicatorInstanceWitness;
 
 #[derive(Derivative)]
 #[derivative(Clone, Default(bound = ""))]
@@ -109,6 +110,8 @@ pub struct FullBlockArtifacts<E: Engine> {
     pub log_demuxer_circuit_data: Vec<LogDemuxerCircuitInstanceWitness<E>>,
     //
     pub storage_deduplicator_circuit_data: Vec<StorageDeduplicatorInstanceWitness<E>>,
+    pub events_deduplicator_circuit_data: Vec<EventsDeduplicatorInstanceWitness<E>>,
+    pub l1_messages_deduplicator_circuit_data: Vec<EventsDeduplicatorInstanceWitness<E>>,
 }
 
 impl<E: Engine> FullBlockArtifacts<E> {
@@ -231,13 +234,34 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
         // now completely parallel process to reconstruct the states, with internally parallelism in each round function
 
-        use crate::witness::individual_circuits::log_sort_dedup::compute_logs_dedup_and_sort;
+        use crate::witness::individual_circuits::storage_sort_dedup::compute_storage_dedup_and_sort;
 
-        let storage_deduplicator_circuit_data = compute_logs_dedup_and_sort(
+        let storage_deduplicator_circuit_data = compute_storage_dedup_and_sort(
             self,
             round_function
         );
         self.storage_deduplicator_circuit_data = vec![storage_deduplicator_circuit_data];
+
+
+        use crate::witness::individual_circuits::events_sort_dedup::compute_events_dedup_and_sort;
+
+        let events_deduplicator_circuit_data = compute_events_dedup_and_sort(
+            &self.demuxed_event_queries,
+            &mut self.deduplicated_event_queries,
+            &self.demuxed_events_queue_simulator,
+            round_function
+        );
+
+        self.events_deduplicator_circuit_data = vec![events_deduplicator_circuit_data];
+
+        let l1_messages_deduplicator_circuit_data = compute_events_dedup_and_sort(
+            &self.demuxed_to_l1_queries,
+            &mut self.deduplicated_to_l1_queries,
+            &self.demuxed_to_l1_queue_simulator,
+            round_function
+        );
+
+        self.l1_messages_deduplicator_circuit_data = vec![l1_messages_deduplicator_circuit_data];
 
         self.is_processed = true;
     }

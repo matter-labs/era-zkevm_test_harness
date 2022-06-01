@@ -66,6 +66,8 @@ fn run_and_try_create_witness() {
         add 2, r0, r2
         sstore r1, r2
         sload r1, r0
+        log.event.first r1, r2, r0
+        log.to_l1.first r1, r2, r0
         near_call r0, @.to_revert, @.finish
     .finish:
         add 3, r0, r1
@@ -81,6 +83,8 @@ fn run_and_try_create_witness() {
         add 4, r0, r2
         sstore r1, r2
         sload r1, r0
+        log.event.first r1, r2, r0
+        log.to_l1.first r1, r2, r0
         ret.revert r0
     "#;
 
@@ -97,7 +101,7 @@ fn run_and_try_create_witness() {
     //     ret.ok r0
     // "#;
 
-    run_and_try_create_witness_inner(asm, 20);
+    run_and_try_create_witness_inner(asm, 28);
 }
 
 pub fn assert_equal_state(
@@ -280,7 +284,7 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
     // test
     {
         for (i, subresult) in artifacts.code_decommitter_circuits_data.iter().enumerate() {
-            println!("Running RAM permutation circuit number {}", i);
+            println!("Running code decommitter circuit number {}", i);
             // println!("Running RAM permutation for input {:?}", subresult);
             use sync_vm::glue::code_unpacker_sha256::unpack_code_into_memory_entry_point;
 
@@ -316,6 +320,7 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
 
     // test
     {
+        println!("Running storage sorter and deduplicator");
         assert!(artifacts.storage_deduplicator_circuit_data.len() == 1);
         let subresult = &artifacts.storage_deduplicator_circuit_data[0];
         // println!("Running RAM permutation for input {:?}", subresult);
@@ -330,8 +335,44 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
             &round_function,
             16
         ).unwrap();
+    }
 
+    // test
+    {
+        println!("Running events sorter and deduplicator");
+        assert!(artifacts.events_deduplicator_circuit_data.len() == 1);
+        let subresult = &artifacts.events_deduplicator_circuit_data[0];
+        // println!("Running RAM permutation for input {:?}", subresult);
+        use sync_vm::glue::log_sorter::sort_and_deduplicate_events_entry_point;
 
+        let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+        sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+
+        let _ = sort_and_deduplicate_events_entry_point(
+            &mut cs,
+            Some(subresult.clone()),
+            &round_function,
+            16
+        ).unwrap();
+    }
+
+    // test
+    {
+        println!("Running l1 messages sorter and deduplicator");
+        assert!(artifacts.l1_messages_deduplicator_circuit_data.len() == 1);
+        let subresult = &artifacts.l1_messages_deduplicator_circuit_data[0];
+        // println!("Running RAM permutation for input {:?}", subresult);
+        use sync_vm::glue::log_sorter::sort_and_deduplicate_events_entry_point;
+
+        let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+        sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+
+        let _ = sort_and_deduplicate_events_entry_point(
+            &mut cs,
+            Some(subresult.clone()),
+            &round_function,
+            16
+        ).unwrap();
     }
 
 

@@ -4,4 +4,5 @@ use super::oracle::*;
 pub mod ram_permutation;
 pub mod decommit_code;
 pub mod log_demux;
-pub mod log_sort_dedup;
+pub mod storage_sort_dedup;
+pub mod events_sort_dedup;

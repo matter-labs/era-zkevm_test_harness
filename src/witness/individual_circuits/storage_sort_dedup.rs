@@ -24,8 +24,7 @@ use sync_vm::glue::storage_validity_by_grand_product::input::StorageDeduplicator
 use crate::encodings::log_query::log_query_into_storage_record_witness;
 use crate::encodings::log_query::*;
 
-/// Take a storage log, output logs separately for events, l1 messages, storage, etc
-pub fn compute_logs_dedup_and_sort<
+pub fn compute_storage_dedup_and_sort<
     E: Engine,
     R: CircuitArithmeticRoundFunction<E, 2, 3>
 >(

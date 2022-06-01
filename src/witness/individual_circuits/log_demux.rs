@@ -90,7 +90,7 @@ pub fn compute_logs_demux<
     output_passthrough_data.sha256_access_queue_state = take_queue_state_from_simulator(&artifacts.demuxed_sha256_precompile_queue_simulator);
     output_passthrough_data.ecrecover_access_queue_state = take_queue_state_from_simulator(&artifacts.demuxed_ecrecover_queue_simulator);
 
-    // dbg!(&output_passthrough_data);
+    dbg!(&output_passthrough_data);
 
     let input_witness: Vec<_> = artifacts.original_log_queue_simulator.witness.iter().map(|(encoding, old_tail, element)| {
         let as_storage_log = log_query_into_storage_record_witness(element);
