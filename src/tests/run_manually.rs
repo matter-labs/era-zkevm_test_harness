@@ -283,6 +283,23 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
 
     // test
     {
+        println!("Running code decommittments sorter and deduplicator");
+        assert!(artifacts.decommittments_deduplicator_circuits_data.len() == 1);        let subresult = &artifacts.decommittments_deduplicator_circuits_data[0];
+        use sync_vm::glue::sort_decommittment_requests::sort_and_deduplicate_code_decommittments_entry_point;
+
+        let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+        sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+
+        let _ = sort_and_deduplicate_code_decommittments_entry_point(
+            &mut cs,
+            Some(subresult.clone()),
+            &round_function,
+            16
+        ).unwrap();
+    }
+
+    // test
+    {
         for (i, subresult) in artifacts.code_decommitter_circuits_data.iter().enumerate() {
             println!("Running code decommitter circuit number {}", i);
             // println!("Running RAM permutation for input {:?}", subresult);

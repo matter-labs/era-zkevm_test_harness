@@ -9,6 +9,7 @@ use crate::encodings::memory_query::MemoryQueueSimulator;
 use crate::utils::biguint_from_u256;
 use crate::witness_structures::transform_sponge_like_queue_state;
 use std::cmp::Ordering;
+use std::sync::Arc;
 use crate::bellman::Engine;
 use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
 use crate::witness::full_block_artifact::FullBlockArtifacts;
@@ -17,6 +18,7 @@ use crate::ff::Field;
 use crate::encodings::decommittment_request::DecommittmentQueueSimulator;
 use zk_evm::aux_structures::MemoryIndex;
 use zk_evm::aux_structures::MemoryQuery;
+use sync_vm::glue::sort_decommittment_requests::input::CodeDecommittmentsDeduplicatorInstanceWitness;
 
 pub fn compute_decommitter_circuit_snapshots<
     E: Engine,
@@ -26,18 +28,15 @@ pub fn compute_decommitter_circuit_snapshots<
     memory_queue_simulator: &mut MemoryQueueSimulator<E>,
     round_function: &R,
     per_circuit_capacity: usize
-) -> (Vec<CodeDecommitterCircuitInstanceWitness<E>>, ()) {
+) -> (Vec<CodeDecommitterCircuitInstanceWitness<E>>, CodeDecommittmentsDeduplicatorInstanceWitness<E>) {
     let start_idx_for_memory_accumulator = artifacts.all_memory_queue_states.len();
 
     let mut results: Vec<CodeDecommitterCircuitInstanceWitness<E>> = vec![];
 
-    // let initial_memory_queue_state = artifacts.all_memory_queue_states.last().unwrap().clone();
-    // let initial_memory_queue_state = transform_sponge_like_queue_state(initial_memory_queue_state);
-
     use crate::witness_structures::take_sponge_like_queue_state_from_simulator;
     let initial_memory_queue_state = take_sponge_like_queue_state_from_simulator(memory_queue_simulator);
 
-    // TODO: move to the corresponding circuit!
+    // we produce witness for two circuits at once
 
     let mut unsorted_decommittment_queue_simulator = DecommittmentQueueSimulator::<E>::empty();
     let mut sorted_decommittment_queue_simulator = DecommittmentQueueSimulator::<E>::empty();
@@ -124,7 +123,54 @@ pub fn compute_decommitter_circuit_snapshots<
     // first we assume that procedure of sorting the decommittment requests will only take 1 circuit,
     // so we can trivially form a single instance for it
 
-    // TODO
+    use sync_vm::glue::sort_decommittment_requests::input::CodeDecommittmentsDeduplicatorInputOutputWitness;
+    use sync_vm::glue::sort_decommittment_requests::input::CodeDecommittmentsDeduplicatorPassthroughData;
+
+    let mut input_passthrough_data = CodeDecommittmentsDeduplicatorPassthroughData::<E>::placeholder_witness();
+    input_passthrough_data.initial_log_queue_state = take_sponge_like_queue_state_from_simulator(&unsorted_decommittment_queue_simulator);
+
+    let input_witness: Vec<_> = unsorted_decommittment_queue_simulator.witness.iter().map(|(encoding, old_tail, element)| {
+        let wit = DecommitQueryWitness {
+            root_hash: biguint_from_u256(element.hash),
+            page: element.memory_page.0,
+            is_first: element.is_fresh,
+            timestamp: element.timestamp.0,
+            _marker: std::marker::PhantomData
+        };
+
+        (*encoding, wit, *old_tail)
+    }).collect();
+
+    let sorted_witness: Vec<_> = unsorted_decommittment_queue_simulator.witness.iter().map(|(encoding, old_tail, element)| {
+        let wit = DecommitQueryWitness {
+            root_hash: biguint_from_u256(element.hash),
+            page: element.memory_page.0,
+            is_first: element.is_fresh,
+            timestamp: element.timestamp.0,
+            _marker: std::marker::PhantomData
+        };
+
+        (*encoding, wit, *old_tail)
+    }).collect();
+
+    let mut output_passthrough_data = CodeDecommittmentsDeduplicatorPassthroughData::<E>::placeholder_witness();
+    output_passthrough_data.final_queue_state = take_sponge_like_queue_state_from_simulator(&deduplicated_decommittment_queue_simulator);
+
+    let decommittments_deduplicator_witness = CodeDecommittmentsDeduplicatorInstanceWitness {
+        closed_form_input: CodeDecommittmentsDeduplicatorInputOutputWitness {
+            start_flag: true, 
+            completion_flag: true, 
+            passthrough_input_data: input_passthrough_data, 
+            passthrough_output_data: output_passthrough_data, 
+            fsm_input: (), 
+            fsm_output: (), 
+            _marker_e: (), 
+            _marker: std::marker::PhantomData 
+        },
+        initial_queue_witness: FixedWidthEncodingSpongeLikeQueueWitness { wit: input_witness},
+        intermediate_sorted_queue_state: take_sponge_like_queue_state_from_simulator(&sorted_decommittment_queue_simulator),
+        sorted_queue_witness: FixedWidthEncodingSpongeLikeQueueWitness { wit: sorted_witness},
+    };
 
     // now we should start chunking the requests into separate decommittment circuits by running a micro-simulator
 
@@ -383,5 +429,5 @@ pub fn compute_decommitter_circuit_snapshots<
         }
     }
 
-    (results, ())
+    (results, decommittments_deduplicator_witness)
 }

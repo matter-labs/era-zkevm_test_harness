@@ -23,6 +23,7 @@ use sync_vm::glue::code_unpacker_sha256::input::CodeDecommitterCircuitInstanceWi
 use sync_vm::glue::demux_log_queue::input::LogDemuxerCircuitInstanceWitness;
 use sync_vm::glue::storage_validity_by_grand_product::input::StorageDeduplicatorInstanceWitness;
 use sync_vm::glue::log_sorter::input::EventsDeduplicatorInstanceWitness;
+use sync_vm::glue::sort_decommittment_requests::input::CodeDecommittmentsDeduplicatorInstanceWitness;
 
 #[derive(Derivative)]
 #[derivative(Clone, Default(bound = ""))]
@@ -106,6 +107,7 @@ pub struct FullBlockArtifacts<E: Engine> {
     pub ram_permutation_circuits_data: Vec<RamPermutationCircuitInstanceWitness<E>>,
     // processed code decommitter circuits, as well as sorting circuit (1)
     pub code_decommitter_circuits_data: Vec<CodeDecommitterCircuitInstanceWitness<E>>,
+    pub decommittments_deduplicator_circuits_data: Vec<CodeDecommittmentsDeduplicatorInstanceWitness<E>>,
     //
     pub log_demuxer_circuit_data: Vec<LogDemuxerCircuitInstanceWitness<E>>,
     //
@@ -143,7 +145,7 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
         use crate::witness::individual_circuits::decommit_code::compute_decommitter_circuit_snapshots;
 
-        let (code_decommitter_circuits_data, _) = compute_decommitter_circuit_snapshots(
+        let (code_decommitter_circuits_data, decommittments_deduplicator_witness) = compute_decommitter_circuit_snapshots(
             self,
             &mut memory_queue_simulator,
             round_function,
@@ -151,6 +153,7 @@ impl<E: Engine> FullBlockArtifacts<E> {
         );
 
         self.code_decommitter_circuits_data = code_decommitter_circuits_data;
+        self.decommittments_deduplicator_circuits_data = vec![decommittments_deduplicator_witness];
 
         // demux log queue
         use crate::witness::individual_circuits::log_demux::compute_logs_demux;
