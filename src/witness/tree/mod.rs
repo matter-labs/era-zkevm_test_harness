@@ -363,10 +363,10 @@ mod test {
 
     #[test]
     fn trivial() {
-        // const DEPTH: usize = 256;
-        // const INDEX_BYTES: usize = 32;
-        const DEPTH: usize = 8;
-        const INDEX_BYTES: usize = 1;
+        const DEPTH: usize = 256;
+        const INDEX_BYTES: usize = 32;
+        // const DEPTH: usize = 8;
+        // const INDEX_BYTES: usize = 1;
 
         let mut tree = InMemoryStorageTree::<DEPTH, INDEX_BYTES, 8, Blake2s256, ZkSyncStorageLeaf>::empty();
 

@@ -6,3 +6,4 @@ pub mod utils;
 pub mod vm_snapshot;
 pub mod individual_circuits;
 pub mod tree;
+pub mod sort_storage_access;
