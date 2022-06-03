@@ -7,6 +7,7 @@ use crate::encodings::decommittment_request::DecommittmentQueueSimulator;
 use crate::encodings::log_query::LogQueueSimulator;
 use crate::encodings::memory_query::MemoryQueueSimulator;
 use crate::ff::Field;
+use crate::toolset::GeometryConfig;
 use crate::u160_from_address;
 use crate::witness::tracer::WitnessTracer;
 use derivative::Derivative;
@@ -21,6 +22,7 @@ use sync_vm::{
     circuit_structures::traits::CircuitArithmeticRoundFunction,
     franklin_crypto::bellman::pairing::Engine,
 };
+use crate::ethereum_types::U256;
 use zk_evm::aux_structures::DecommittmentQuery;
 use zk_evm::aux_structures::{
     LogQuery, MemoryIndex, MemoryPage, MemoryQuery, EVENT_AUX_BYTE, L1_MESSAGE_AUX_BYTE,
@@ -157,6 +159,8 @@ struct FlattenedLogQueueIndexer<E: Engine>{
 pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction<E, 2, 3>>(
     tracer: WitnessTracer,
     round_function: &R,
+    geometry: &GeometryConfig,
+    entry_point_decommittment_query: (DecommittmentQuery, Vec<U256>),
 ) -> (Vec<VmInstanceWitness<E, VmWitnessOracle<E>>>, FullBlockArtifacts<E>) {
     let WitnessTracer {
         memory_queries,
@@ -171,6 +175,13 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
         vm_snapshots,
         ..
     } = tracer;
+
+    // we should have an initial query somewhat before the time
+    assert!(decommittment_queries.len() >= 1);
+    let (ts, q, w) = &decommittment_queries[0];
+    assert!(*ts < zk_evm::zkevm_opcode_defs::STARTING_TIMESTAMP);
+    assert_eq!(q, &entry_point_decommittment_query.0);
+    assert_eq!(w, &entry_point_decommittment_query.1);
 
     assert!(vm_snapshots.len() >= 2); // we need at least entry point and the last save (after exit)
 
@@ -648,11 +659,23 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
     artifacts.demuxed_sha256_precompile_queries = demuxed_sha256_precompile_queries;
     artifacts.demuxed_ecrecover_queries = demuxed_ecrecover_queries;
 
-    artifacts.process(round_function);
+    artifacts.process(round_function, geometry);
+
+    artifacts.special_initial_decommittment_queries = vec![entry_point_decommittment_query];
 
     let mut all_instances_witnesses = vec![];
 
-    use crate::witness_structures::{transform_queue_state, transform_sponge_like_queue_state};
+    use crate::witness_structures::transform_sponge_like_queue_state;
+
+    let initial_cycle = vm_snapshots[0].at_cycle;
+
+    // first decommittment query (for bootlaoder) must come before the beginning of time
+    let decommittment_queue_states_before_start: Vec<_> = artifacts.all_decommittment_queue_states.iter()
+        .take_while(
+            |el| el.0 < initial_cycle
+        ).collect();
+
+    assert!(decommittment_queue_states_before_start.len() == 1);
 
     for pair in vm_snapshots.windows(2) {
         let initial_state = &pair[0];
@@ -879,8 +902,7 @@ use sync_vm::vm::primitives::*;
 use sync_vm::vm::vm_state::saved_contract_context::ExecutionContextRecord;
 use sync_vm::vm::vm_state::saved_contract_context::ExecutionContextRecordWitness;
 
-use crate::entry_point::INITIAL_MONOTONIC_CYCLE_COUNTER;
-use crate::entry_point::STARTING_TIMESTAMP;
+use crate::INITIAL_MONOTONIC_CYCLE_COUNTER;
 
 impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
     fn get_memory_witness_for_read(
@@ -901,7 +923,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
 
             // println!("Query value = 0x{:064x}", query.value);
             if let Some(ts) = timestamp.get_value() {
-                let _roughly_a_cycle = (ts - STARTING_TIMESTAMP) / TIMESTAMPS_PER_CYCLE
+                let _roughly_a_cycle = (ts - zk_evm::zkevm_opcode_defs::STARTING_TIMESTAMP) / TIMESTAMPS_PER_CYCLE
                     + INITIAL_MONOTONIC_CYCLE_COUNTER;
                 // assert_eq!(_cycle, _roughly_a_cycle);
             }

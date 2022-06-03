@@ -6,6 +6,7 @@ use crate::encodings::memory_query::MemoryQueueSimulator;
 use crate::encodings::memory_query::MemoryQueueState;
 use crate::ethereum_types::U256;
 use crate::pairing::Engine;
+use crate::toolset::GeometryConfig;
 use derivative::Derivative;
 use rayon::slice::ParallelSliceMut;
 use std::cmp::Ordering;
@@ -94,6 +95,9 @@ pub struct FullBlockArtifacts<E: Engine> {
     pub deduplicated_to_l1_queries: Vec<LogQuery>,
     pub deduplicated_to_l1_queue_states: Vec<LogQueueState<E>>,
 
+    // 
+    pub special_initial_decommittment_queries: Vec<(DecommittmentQuery, Vec<U256>)>,
+
     // keep precompile round functions data
     pub keccak_round_function_witnesses: Vec<(u32, LogQuery, Vec<Keccak256RoundWitness>)>,
     pub sha256_round_function_witnesses: Vec<(u32, LogQuery, Vec<Sha256RoundWitness>)>,
@@ -117,7 +121,7 @@ pub struct FullBlockArtifacts<E: Engine> {
 }
 
 impl<E: Engine> FullBlockArtifacts<E> {
-    pub fn process<R: CircuitArithmeticRoundFunction<E, 2, 3>>(&mut self, round_function: &R) {
+    pub fn process<R: CircuitArithmeticRoundFunction<E, 2, 3>>(&mut self, round_function: &R, geometry: &GeometryConfig) {
         let mut memory_queue_simulator = MemoryQueueSimulator::<E>::empty();
 
         // this is parallelizable internally by the factor of 3 in round function implementation later on
@@ -149,7 +153,7 @@ impl<E: Engine> FullBlockArtifacts<E> {
             self,
             &mut memory_queue_simulator,
             round_function,
-            1 << 1
+            geometry.cycles_per_code_decommitter as usize,
         );
 
         self.code_decommitter_circuits_data = code_decommitter_circuits_data;
@@ -226,14 +230,14 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
         use crate::witness::individual_circuits::ram_permutation::compute_ram_circuit_snapshots;
 
-        // let ram_permutation_circuits_data = compute_ram_circuit_snapshots(
-        //     self,
-        //     memory_queue_simulator,
-        //     round_function,
-        //     1<<2
-        // );
+        let ram_permutation_circuits_data = compute_ram_circuit_snapshots(
+            self,
+            memory_queue_simulator,
+            round_function,
+            geometry.cycles_per_ram_permutation as usize,
+        );
 
-        // self.ram_permutation_circuits_data = ram_permutation_circuits_data;
+        self.ram_permutation_circuits_data = ram_permutation_circuits_data;
 
         // now completely parallel process to reconstruct the states, with internally parallelism in each round function
 

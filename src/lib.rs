@@ -14,6 +14,9 @@ pub use zk_evm::ethereum_types;
 use self::utils::*;
 
 pub mod external_calls;
+pub mod toolset;
+
+pub const INITIAL_MONOTONIC_CYCLE_COUNTER: u32 = 1024;
 
 // #[cfg(test)]
 pub(crate) mod tests;
