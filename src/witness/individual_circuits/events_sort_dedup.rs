@@ -23,7 +23,7 @@ use zk_evm::aux_structures::MemoryQuery;
 use sync_vm::glue::log_sorter::input::EventsDeduplicatorInstanceWitness;
 use crate::encodings::log_query::log_query_into_storage_record_witness;
 use crate::encodings::log_query::*;
-use sync_vm::glue::log_sorter::input::EventsDeduplicatorPassthroughData;
+use sync_vm::glue::log_sorter::input::*;
 
 pub fn compute_events_dedup_and_sort<
     E: Engine,
@@ -146,11 +146,11 @@ pub fn compute_events_dedup_and_sort<
     use sync_vm::traits::CSWitnessable;
     use crate::witness_structures::take_queue_state_from_simulator;
 
-    let mut input_passthrough_data = EventsDeduplicatorPassthroughData::placeholder_witness();
+    let mut input_passthrough_data = EventsDeduplicatorInputData::placeholder_witness();
     // we only need the state of demuxed rollup storage queue
     input_passthrough_data.initial_log_queue_state = take_queue_state_from_simulator(&unsorted_simulator);
 
-    let mut output_passthrough_data = EventsDeduplicatorPassthroughData::placeholder_witness();
+    let mut output_passthrough_data = EventsDeduplicatorOutputData::placeholder_witness();
     output_passthrough_data.final_queue_state = take_queue_state_from_simulator(&result_queue_simulator);
 
     // dbg!(take_queue_state_from_simulator(&result_queue_simulator));
@@ -166,10 +166,10 @@ pub fn compute_events_dedup_and_sort<
         closed_form_input: ClosedFormInputWitness { 
             start_flag: true, 
             completion_flag: true, 
-            passthrough_input_data: input_passthrough_data, 
-            passthrough_output_data: output_passthrough_data, 
-            fsm_input: (), 
-            fsm_output: (), 
+            observable_input: input_passthrough_data, 
+            observable_output: output_passthrough_data, 
+            hidden_fsm_input: (), 
+            hidden_fsm_output: (), 
             _marker_e: (), 
             _marker: std::marker::PhantomData 
         },

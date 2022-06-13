@@ -19,8 +19,8 @@ use crate::witness::full_block_artifact::FullBlockArtifacts;
 pub struct Keccak256RoundFunctionCircuitWitness<E: Engine> {
     pub is_finished: bool,
     pub passthrough_data: Keccak256CircuitPassthroughData<E>,
-    pub fsm_input: Keccak256CircuitFSMData<E>,
-    pub fsm_output: Keccak256CircuitFSMData<E>,
+    pub hidden_fsm_input: Keccak256CircuitFSMData<E>,
+    pub hidden_fsm_output: Keccak256CircuitFSMData<E>,
     pub memory_reads_witness: Vec<Vec<BigUint>>,
 }
 
@@ -82,10 +82,10 @@ pub fn decompose_into_per_circuit_witness<E: Engine>(
     let mut memory_queue_input_state = *memory_queue_states.first().unwrap();
     let mut current_memory_queue_state = memory_queue_input_state;
     use sync_vm::traits::CSWitnessable;
-    let mut fsm_input_state = Keccak256RoundFunctionFSM::<E>::empty()
+    let mut hidden_fsm_input_state = Keccak256RoundFunctionFSM::<E>::empty()
         .create_witness()
         .unwrap();
-    fsm_input_state.read_precompile_call = true;
+    hidden_fsm_input_state.read_precompile_call = true;
 
     let mut memory_queries_it = memory_queries.into_iter();
     let mut memory_queue_states_it = memory_queue_states.into_iter();
@@ -222,7 +222,7 @@ pub fn decompose_into_per_circuit_witness<E: Engine>(
 
                 use sync_vm::precompiles::keccak256::KeccakPrecompileCallParamsWitness;
 
-                let fsm_output_state = Keccak256RoundFunctionFSMWitness::<E> {
+                let hidden_fsm_output_state = Keccak256RoundFunctionFSMWitness::<E> {
                     completed,
                     read_unaligned_words_for_round,
                     keccak_internal_state,
@@ -261,15 +261,15 @@ pub fn decompose_into_per_circuit_witness<E: Engine>(
                         _marker: std::marker::PhantomData,
                     },
 
-                    fsm_input: fsm_input_state,
-                    fsm_output: fsm_output_state.clone(),
+                    hidden_fsm_input: hidden_fsm_input_state,
+                    hidden_fsm_output: hidden_fsm_output_state.clone(),
                     memory_reads_witness: current_witness
                 };
 
                 result.push(witness);
 
                 log_queue_input_state = queue_transition_state;
-                fsm_input_state = fsm_output_state;
+                hidden_fsm_input_state = hidden_fsm_output_state;
                 memory_queue_input_state = current_memory_queue_state;
             }
         }
@@ -314,12 +314,12 @@ mod test {
         let Keccak256RoundFunctionCircuitWitness {
             is_finished,
             passthrough_data,
-            fsm_input,
-            fsm_output,
+            hidden_fsm_input,
+            hidden_fsm_output,
             memory_reads_witness,
         } = witness;
 
-        let initial_state = KeccakPrecompileState::alloc_from_witness(cs, Some(fsm_input))?;
+        let initial_state = KeccakPrecompileState::alloc_from_witness(cs, Some(hidden_fsm_input))?;
         let Keccak256RoundFunctionPassthroughStructureWitness {
             memory_queue_input_state,
             memory_queue_output_state,
@@ -379,7 +379,7 @@ mod test {
         let final_state = final_state.create_witness().unwrap();
         assert_eq!(
             final_state.keccak_internal_state,
-            fsm_output.keccak_internal_state
+            hidden_fsm_output.keccak_internal_state
         );
 
         Ok(())

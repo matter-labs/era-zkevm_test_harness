@@ -75,15 +75,15 @@ pub fn compute_logs_demux<
     }
 
     // in general we have everything ready, just form the witness
-    use sync_vm::glue::demux_log_queue::input::LogDemuxerPassthroughData;
+    use sync_vm::glue::demux_log_queue::input::*;
     use sync_vm::traits::CSWitnessable;
     use crate::witness_structures::take_queue_state_from_simulator;
 
-    let mut input_passthrough_data = LogDemuxerPassthroughData::placeholder_witness();
+    let mut input_passthrough_data = LogDemuxerInputData::placeholder_witness();
     // we only need the state of the original input
     input_passthrough_data.initial_log_queue_state = take_queue_state_from_simulator(&artifacts.original_log_queue_simulator);
 
-    let mut output_passthrough_data = LogDemuxerPassthroughData::placeholder_witness();
+    let mut output_passthrough_data = LogDemuxerOutputData::placeholder_witness();
 
     output_passthrough_data.storage_access_queue_state = take_queue_state_from_simulator(&artifacts.demuxed_rollup_storage_queue_simulator);
     output_passthrough_data.events_access_queue_state = take_queue_state_from_simulator(&artifacts.demuxed_events_queue_simulator);
@@ -104,10 +104,10 @@ pub fn compute_logs_demux<
         closed_form_input: ClosedFormInputWitness { 
             start_flag: true, 
             completion_flag: true, 
-            passthrough_input_data: input_passthrough_data, 
-            passthrough_output_data: output_passthrough_data, 
-            fsm_input: (), 
-            fsm_output: (), 
+            observable_input: input_passthrough_data, 
+            observable_output: output_passthrough_data, 
+            hidden_fsm_input: (), 
+            hidden_fsm_output: (), 
             _marker_e: (), 
             _marker: std::marker::PhantomData 
         },

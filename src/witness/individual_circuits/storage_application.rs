@@ -76,13 +76,12 @@ pub fn decompose_into_storage_application_witnesses<
 
         let mut merkle_paths = vec![];
 
-        use sync_vm::glue::storage_application::input::StorageApplicationCycleInputOutputWitness;
-        use sync_vm::glue::storage_application::input::StorageApplicationPassthroughData;
+        use sync_vm::glue::storage_application::input::*;
         use sync_vm::circuit_structures::bytes32::Bytes32Witness;
         use crate::witness::tree::ZkSyncStorageLeaf;
         use crate::witness::tree::EnumeratedBinaryLeaf;
 
-        let mut passthrough_input = StorageApplicationPassthroughData::placeholder_witness();
+        let mut passthrough_input = StorageApplicationInputData::placeholder_witness();
         if idx == 0 {
             passthrough_input.initial_next_enumeration_counter = tree.next_enumeration_index();
             passthrough_input.initial_root = Bytes32Witness::from_bytes_array(&tree.root());
@@ -162,7 +161,7 @@ pub fn decompose_into_storage_application_witnesses<
 
         storage_queue_state_idx += chunk_len;
 
-        let mut passthrough_output = StorageApplicationPassthroughData::placeholder_witness();
+        let mut passthrough_output = StorageApplicationOutputData::placeholder_witness();
         if is_last {
             passthrough_output.final_next_enumeration_counter = tree.next_enumeration_index();
             passthrough_output.final_root = Bytes32Witness::from_bytes_array(&tree.root());
@@ -174,10 +173,10 @@ pub fn decompose_into_storage_application_witnesses<
             closed_form_input: StorageApplicationCycleInputOutputWitness {
                 start_flag: idx == 0,
                 completion_flag: is_last,
-                passthrough_input_data: passthrough_input,
-                passthrough_output_data: passthrough_output,
-                fsm_input: initial_fsm_state,
-                fsm_output: final_fsm_state,
+                observable_input: passthrough_input,
+                observable_output: passthrough_output,
+                hidden_fsm_input: initial_fsm_state,
+                hidden_fsm_output: final_fsm_state,
                 _marker_e: (),
                 _marker: std::marker::PhantomData
             },

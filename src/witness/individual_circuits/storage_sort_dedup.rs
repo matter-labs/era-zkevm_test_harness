@@ -76,15 +76,15 @@ pub fn compute_storage_dedup_and_sort<
     // dbg!(&artifacts.deduplicated_rollup_storage_queries);
 
     // in general we have everything ready, just form the witness
-    use sync_vm::glue::storage_validity_by_grand_product::input::StorageDeduplicatorPassthroughData;
+    use sync_vm::glue::storage_validity_by_grand_product::input::*;
     use sync_vm::traits::CSWitnessable;
     use crate::witness_structures::take_queue_state_from_simulator;
 
-    let mut input_passthrough_data = StorageDeduplicatorPassthroughData::placeholder_witness();
+    let mut input_passthrough_data = StorageDeduplicatorInputData::placeholder_witness();
     // we only need the state of demuxed rollup storage queue
     input_passthrough_data.initial_log_queue_state = take_queue_state_from_simulator(&artifacts.demuxed_rollup_storage_queue_simulator);
 
-    let mut output_passthrough_data = StorageDeduplicatorPassthroughData::placeholder_witness();
+    let mut output_passthrough_data = StorageDeduplicatorOutputData::placeholder_witness();
     output_passthrough_data.final_queue_state = take_queue_state_from_simulator(&result_queue_simulator);
 
     // dbg!(take_queue_state_from_simulator(&result_queue_simulator));
@@ -100,10 +100,10 @@ pub fn compute_storage_dedup_and_sort<
         closed_form_input: ClosedFormInputWitness { 
             start_flag: true, 
             completion_flag: true, 
-            passthrough_input_data: input_passthrough_data, 
-            passthrough_output_data: output_passthrough_data, 
-            fsm_input: (), 
-            fsm_output: (), 
+            observable_input: input_passthrough_data, 
+            observable_output: output_passthrough_data, 
+            hidden_fsm_input: (), 
+            hidden_fsm_output: (), 
             _marker_e: (), 
             _marker: std::marker::PhantomData 
         },

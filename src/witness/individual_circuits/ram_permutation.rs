@@ -1,5 +1,5 @@
 use sync_vm::glue::code_unpacker_sha256::memory_query_updated::RawMemoryQuery;
-use sync_vm::glue::memory_queries_validity::ram_permutation_inout::{RamPermutationFSMInputOutputWitness, RamPermutationPassthroughDataWitness};
+use sync_vm::glue::memory_queries_validity::ram_permutation_inout::*;
 use sync_vm::inputs::ClosedFormInputWitness;
 use sync_vm::utils::u64_to_fe;
 
@@ -241,7 +241,7 @@ pub fn compute_ram_circuit_snapshots<
         let placeholder_witness = FullSpongeLikeQueueState::placeholder_witness();
 
         let (current_unsorted_queue_state, current_sorted_queue_state) = results.last().map(|el: &RamPermutationCircuitInstanceWitness<E>| {
-            let tmp = &el.closed_form_input.fsm_output;
+            let tmp = &el.closed_form_input.hidden_fsm_output;
 
             (tmp.current_unsorted_queue_state.clone(), tmp.current_sorted_queue_state.clone())
         }).unwrap_or(
@@ -263,19 +263,14 @@ pub fn compute_ram_circuit_snapshots<
                 _marker_e: (),
                 start_flag: if_first,
                 completion_flag: is_last,
-                passthrough_input_data: RamPermutationPassthroughDataWitness {
+                observable_input: RamPermutationInputDataWitness {
                     unsorted_queue_initial_state: transform_sponge_like_queue_state(unsorted_global_final_state),
                     sorted_queue_initial_state: transform_sponge_like_queue_state(sorted_global_final_state),
                     non_deterministic_bootloader_memory_snapshot_length: 0,
                     _marker: std::marker::PhantomData,
                 },
-                passthrough_output_data: RamPermutationPassthroughDataWitness {
-                    unsorted_queue_initial_state: transform_sponge_like_queue_state(unsorted_global_final_state),
-                    sorted_queue_initial_state: transform_sponge_like_queue_state(sorted_global_final_state),
-                    non_deterministic_bootloader_memory_snapshot_length: 0,
-                    _marker: std::marker::PhantomData,
-                },
-                fsm_input: RamPermutationFSMInputOutputWitness {
+                observable_output: (),
+                hidden_fsm_input: RamPermutationFSMInputOutputWitness {
                     lhs_accumulator: current_lhs_product,
                     rhs_accumulator: current_rhs_product,
                     current_unsorted_queue_state,
@@ -285,7 +280,7 @@ pub fn compute_ram_circuit_snapshots<
                     previous_values_pair: previous_value_pair,
                     _marker: std::marker::PhantomData,
                 },
-                fsm_output: RamPermutationFSMInputOutputWitness {
+                hidden_fsm_output: RamPermutationFSMInputOutputWitness {
                     lhs_accumulator: accumulated_lhs,
                     rhs_accumulator: accumulated_rhs,
                     current_unsorted_queue_state: final_unsorted_state,

@@ -22,7 +22,7 @@ use zk_evm::aux_structures::MemoryIndex;
 use zk_evm::aux_structures::MemoryQuery;
 use sync_vm::glue::log_sorter::input::EventsDeduplicatorInstanceWitness;
 use crate::encodings::*;
-use sync_vm::glue::log_sorter::input::EventsDeduplicatorPassthroughData;
+use sync_vm::glue::log_sorter::input::*;
 use crate::encodings::initial_storage_write::BytesSerializable;
 pub use sha3::*;
 use crate::encodings::initial_storage_write::CircuitEquivalentReflection;
@@ -57,14 +57,14 @@ pub fn compute_pubdata_hash<
 
     // in general we have everything ready, just form the witness
     use crate::witness_structures::take_queue_state_from_simulator;
-    use sync_vm::glue::pubdata_hasher::input::PubdataHasherPassthroughData;
+    use sync_vm::glue::pubdata_hasher::input::*;
     use sync_vm::circuit_structures::bytes32::Bytes32Witness;
 
-    let mut input_passthrough_data = PubdataHasherPassthroughData::placeholder_witness();
+    let mut input_passthrough_data = PubdataHasherInputData::placeholder_witness();
     // we only need the state of demuxed rollup storage queue
     input_passthrough_data.input_queue_state = take_queue_state_from_simulator(&simulator);
 
-    let mut output_passthrough_data = PubdataHasherPassthroughData::placeholder_witness();
+    let mut output_passthrough_data = PubdataHasherOutputData::placeholder_witness();
     output_passthrough_data.pubdata_hash = Bytes32Witness::from_bytes_array(&pubdata_hash);
 
     // dbg!(take_queue_state_from_simulator(&result_queue_simulator));
@@ -80,10 +80,10 @@ pub fn compute_pubdata_hash<
         closed_form_input: ClosedFormInputWitness { 
             start_flag: true, 
             completion_flag: true, 
-            passthrough_input_data: input_passthrough_data, 
-            passthrough_output_data: output_passthrough_data, 
-            fsm_input: (), 
-            fsm_output: (), 
+            observable_input: input_passthrough_data, 
+            observable_output: output_passthrough_data, 
+            hidden_fsm_input: (), 
+            hidden_fsm_output: (), 
             _marker_e: (), 
             _marker: std::marker::PhantomData 
         },

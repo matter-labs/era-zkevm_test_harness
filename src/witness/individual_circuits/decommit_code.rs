@@ -124,9 +124,9 @@ pub fn compute_decommitter_circuit_snapshots<
     // so we can trivially form a single instance for it
 
     use sync_vm::glue::sort_decommittment_requests::input::CodeDecommittmentsDeduplicatorInputOutputWitness;
-    use sync_vm::glue::sort_decommittment_requests::input::CodeDecommittmentsDeduplicatorPassthroughData;
+    use sync_vm::glue::sort_decommittment_requests::input::*;
 
-    let mut input_passthrough_data = CodeDecommittmentsDeduplicatorPassthroughData::<E>::placeholder_witness();
+    let mut input_passthrough_data = CodeDecommittmentsDeduplicatorInputData::<E>::placeholder_witness();
     input_passthrough_data.initial_log_queue_state = take_sponge_like_queue_state_from_simulator(&unsorted_decommittment_queue_simulator);
 
     let input_witness: Vec<_> = unsorted_decommittment_queue_simulator.witness.iter().map(|(encoding, old_tail, element)| {
@@ -153,17 +153,17 @@ pub fn compute_decommitter_circuit_snapshots<
         (*encoding, wit, *old_tail)
     }).collect();
 
-    let mut output_passthrough_data = CodeDecommittmentsDeduplicatorPassthroughData::<E>::placeholder_witness();
+    let mut output_passthrough_data = CodeDecommittmentsDeduplicatorOutputData::<E>::placeholder_witness();
     output_passthrough_data.final_queue_state = take_sponge_like_queue_state_from_simulator(&deduplicated_decommittment_queue_simulator);
 
     let decommittments_deduplicator_witness = CodeDecommittmentsDeduplicatorInstanceWitness {
         closed_form_input: CodeDecommittmentsDeduplicatorInputOutputWitness {
             start_flag: true, 
             completion_flag: true, 
-            passthrough_input_data: input_passthrough_data, 
-            passthrough_output_data: output_passthrough_data, 
-            fsm_input: (), 
-            fsm_output: (), 
+            observable_input: input_passthrough_data, 
+            observable_output: output_passthrough_data, 
+            hidden_fsm_input: (), 
+            hidden_fsm_output: (), 
             _marker_e: (), 
             _marker: std::marker::PhantomData 
         },
@@ -215,10 +215,10 @@ pub fn compute_decommitter_circuit_snapshots<
             closed_form_input: ClosedFormInputWitness {
                 start_flag: start,
                 completion_flag: false,
-                passthrough_input_data: CodeDecommitterPassthroughData::placeholder_witness(),
-                passthrough_output_data: CodeDecommitterPassthroughData::placeholder_witness(),
-                fsm_input: CodeDecommitterFSMInputOutput::placeholder_witness(),
-                fsm_output: CodeDecommitterFSMInputOutput::placeholder_witness(),
+                observable_input: CodeDecommitterInputData::placeholder_witness(),
+                observable_output: CodeDecommitterOutputData::placeholder_witness(),
+                hidden_fsm_input: CodeDecommitterFSMInputOutput::placeholder_witness(),
+                hidden_fsm_output: CodeDecommitterFSMInputOutput::placeholder_witness(),
                 _marker_e: (),
                 _marker: std::marker::PhantomData,
             },
@@ -226,31 +226,31 @@ pub fn compute_decommitter_circuit_snapshots<
             code_words: vec![],
         };
 
-        current_circuit_witness.closed_form_input.fsm_input.memory_queue_state = transform_sponge_like_queue_state(artifacts.all_memory_queue_states.iter().skip(
+        current_circuit_witness.closed_form_input.hidden_fsm_input.memory_queue_state = transform_sponge_like_queue_state(artifacts.all_memory_queue_states.iter().skip(
                 start_idx_for_memory_accumulator + memory_queue_state_offset - 1
             ).next().unwrap().clone()
         );
 
         let initial_decommittment_queue_state = results.last().map(|el| {
-            el.closed_form_input.fsm_output.decommittment_requests_queue_state.clone()
+            el.closed_form_input.hidden_fsm_output.decommittment_requests_queue_state.clone()
         }).unwrap_or(
             FullSpongeLikeQueueState::placeholder_witness()
         );
 
         let initial_internal_fsm_state = results.last().map(|el| {
-            el.closed_form_input.fsm_output.internal_fsm.clone()
+            el.closed_form_input.hidden_fsm_output.internal_fsm.clone()
         }).unwrap_or(
             CodeDecommittmentFSM::placeholder_witness()
         );
 
-        current_circuit_witness.closed_form_input.fsm_input.internal_fsm = initial_internal_fsm_state;
-        current_circuit_witness.closed_form_input.fsm_input.decommittment_requests_queue_state = initial_decommittment_queue_state;
+        current_circuit_witness.closed_form_input.hidden_fsm_input.internal_fsm = initial_internal_fsm_state;
+        current_circuit_witness.closed_form_input.hidden_fsm_input.decommittment_requests_queue_state = initial_decommittment_queue_state;
 
         if start {
             // set passthrough input
             start = false;
-            current_circuit_witness.closed_form_input.passthrough_input_data.memory_queue_initial_state = initial_memory_queue_state.clone();
-            current_circuit_witness.closed_form_input.passthrough_input_data.sorted_requests_queue_initial_state = final_deduplicated_queue_state.clone();
+            current_circuit_witness.closed_form_input.observable_input.memory_queue_initial_state = initial_memory_queue_state.clone();
+            current_circuit_witness.closed_form_input.observable_input.sorted_requests_queue_initial_state = final_deduplicated_queue_state.clone();
         } else {
             if DecommitterState::BeginNew != fsm_state {
                 current_circuit_witness.code_words.push(vec![]);
@@ -410,21 +410,21 @@ pub fn compute_decommitter_circuit_snapshots<
         }
 
         // proceed with final bits
-        current_circuit_witness.closed_form_input.fsm_output.decommittment_requests_queue_state = take_sponge_like_queue_state_from_simulator(&current_decommittment_requests_queue_simulator);
-        current_circuit_witness.closed_form_input.fsm_output.decommittment_requests_queue_state = take_sponge_like_queue_state_from_simulator(&current_decommittment_requests_queue_simulator);
-        current_circuit_witness.closed_form_input.fsm_output.memory_queue_state = transform_sponge_like_queue_state(artifacts.all_memory_queue_states.iter().skip(
+        current_circuit_witness.closed_form_input.hidden_fsm_output.decommittment_requests_queue_state = take_sponge_like_queue_state_from_simulator(&current_decommittment_requests_queue_simulator);
+        current_circuit_witness.closed_form_input.hidden_fsm_output.decommittment_requests_queue_state = take_sponge_like_queue_state_from_simulator(&current_decommittment_requests_queue_simulator);
+        current_circuit_witness.closed_form_input.hidden_fsm_output.memory_queue_state = transform_sponge_like_queue_state(artifacts.all_memory_queue_states.iter().skip(
                 start_idx_for_memory_accumulator + memory_queue_state_offset - 1
             ).next().unwrap().clone()
         );
-        current_circuit_witness.closed_form_input.fsm_output.internal_fsm = fsm_internals.clone();
+        current_circuit_witness.closed_form_input.hidden_fsm_output.internal_fsm = fsm_internals.clone();
 
         results.push(current_circuit_witness);
             
         if fsm_state == DecommitterState::Done {
             // mark as done and set passthrough output
             results.last_mut().unwrap().closed_form_input.completion_flag = true;
-            let final_memory_state = results.last().unwrap().closed_form_input.fsm_output.memory_queue_state.clone();
-            results.last_mut().unwrap().closed_form_input.passthrough_output_data.memory_queue_final_state = final_memory_state;
+            let final_memory_state = results.last().unwrap().closed_form_input.hidden_fsm_output.memory_queue_state.clone();
+            results.last_mut().unwrap().closed_form_input.observable_output.memory_queue_final_state = final_memory_state;
             break 'outer;
         }
     }
