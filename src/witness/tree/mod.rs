@@ -9,6 +9,7 @@ pub trait EnumeratedBinaryLeaf<const LEAF_DATA_WIDTH: usize>: Clone + std::hash:
     fn set_index(&mut self, value: u64);
     fn value(&self) -> &[u8; LEAF_DATA_WIDTH];
     fn set_value(&mut self, value: &[u8; LEAF_DATA_WIDTH]);
+    fn value_ref_mut(&mut self) -> &mut [u8; LEAF_DATA_WIDTH];
 }
 
 pub trait BinaryHasher<const HASH_OUTPUT_WIDTH: usize>: Clone + Send + Sync {
@@ -28,6 +29,7 @@ pub struct LeafQuery<
     L: EnumeratedBinaryLeaf<LEAF_DATA_WIDTH>,
 > {
     pub leaf: L,
+    pub first_write: bool,
     pub index: [u8; INDEX_BYTES],
     pub merkle_path: Box<[[u8; HASH_OUTPUT_WIDTH]; DEPTH]>, // too large
 }
@@ -60,6 +62,8 @@ pub trait BinarySparseStorageTree<
 
         result
     }
+    // fn filter_renumerate(&self, indexes: &[[u8; INDEX_BYTES]], leafs: &[L]) -> (u64, Vec<L>, Vec<L>);
+    fn filter_renumerate<'a>(&self, indexes: impl Iterator<Item = &'a [u8; INDEX_BYTES]>, leafs: impl Iterator<Item = L>) -> (u64, Vec<([u8; INDEX_BYTES], L)>, Vec<L>);
     fn verify_inclusion(root: &[u8; 32], query: &LeafQuery<DEPTH, INDEX_BYTES, LEAF_DATA_WIDTH, HASH_OUTPUT_WIDTH, L>) -> bool;
 }
 
@@ -169,6 +173,7 @@ impl<
 
         LeafQuery {
             leaf,
+            first_write: false,
             index: *index,
             merkle_path: path
         }
@@ -200,13 +205,41 @@ impl<
 
     }
 
+    // fn filter_renumerate(&self, indexes: &[[u8; INDEX_BYTES]], leafs: &[L]) -> (u64, Vec<L>, Vec<L>) {
+    fn filter_renumerate<'a>(&self, mut indexes: impl Iterator<Item = &'a [u8; INDEX_BYTES]>, mut leafs: impl Iterator<Item = L>) -> (u64, Vec<([u8; INDEX_BYTES], L)>, Vec<L>) { 
+        // we assume that we want to write leafs and quickly get which of those will be unique writes, and which will be updates
+        let mut first_writes = vec![];
+        let mut updates = vec![];
+        let mut next_index = self.next_enumeration_index;
+        for (idx, leaf) in (&mut indexes).zip(&mut leafs) {
+            let mut leaf = leaf;
+            if let Some(existing) = self.leafs.get(idx) {
+                leaf.set_index(existing.current_index());
+                updates.push(leaf);
+            } else {
+                leaf.set_index(next_index);
+                next_index += 1;
+                first_writes.push((*idx, leaf));
+            }
+        }
+
+        assert!(indexes.next().is_none());
+        assert!(leafs.next().is_none());
+
+        (next_index, first_writes, updates)
+    }
+
     fn insert_leaf(&mut self, index: &[u8; INDEX_BYTES], leaf: L) -> LeafQuery<DEPTH, INDEX_BYTES, 32, 32, L> {
         // first decide if we enumerate
+
+        let mut first_write = false;
+
         if let Some(existing_leaf) = self.leafs.get_mut(index) {
             existing_leaf.set_value(leaf.value());
         } else {
             // enumerate
             let mut leaf = leaf;
+            first_write = true;
             leaf.set_index(self.next_enumeration_index);
             self.leafs.insert(*index, leaf);
             self.next_enumeration_index += 1;
@@ -252,6 +285,7 @@ impl<
 
         LeafQuery {
             leaf: leaf.clone(),
+            first_write,
             index: *index,
             merkle_path: path
         }
@@ -290,6 +324,10 @@ impl<
     }
     fn insert_leaf(&mut self, index: &[u8; INDEX_BYTES], leaf: L) -> LeafQuery<DEPTH, INDEX_BYTES, 32, 32, L> {
         Self::insert_leaf(self, index, leaf)
+    }
+    // fn filter_renumerate(&self, indexes: &[[u8; INDEX_BYTES]], leafs: &[L]) -> (u64, Vec<L>, Vec<L>) {
+    fn filter_renumerate<'a>(&self, indexes: impl Iterator<Item = &'a [u8; INDEX_BYTES]>, leafs: impl Iterator<Item = L>) -> (u64, Vec<([u8; INDEX_BYTES], L)>, Vec<L>) {
+        Self::filter_renumerate(&self, indexes, leafs)
     }
     fn verify_inclusion(root: &[u8; 32], query: &LeafQuery<DEPTH, INDEX_BYTES, 32, 32, L>) -> bool {
         Self::verify_inclusion(root, query)
@@ -355,6 +393,9 @@ impl EnumeratedBinaryLeaf<32> for ZkSyncStorageLeaf {
     fn set_value(&mut self, value: &[u8; 32]) {
         self.value.copy_from_slice(value);
     }
+    fn value_ref_mut(&mut self) -> &mut [u8; 32] {
+        &mut self.value
+    }
 }
 
 #[cfg(test)]
@@ -399,3 +440,5 @@ mod test {
     }
 
 }
+
+pub type ZKSyncTestingTree = InMemoryStorageTree::<256, 32, 8, Blake2s256, ZkSyncStorageLeaf>;

@@ -25,6 +25,10 @@ use sync_vm::glue::demux_log_queue::input::LogDemuxerCircuitInstanceWitness;
 use sync_vm::glue::storage_validity_by_grand_product::input::StorageDeduplicatorInstanceWitness;
 use sync_vm::glue::log_sorter::input::EventsDeduplicatorInstanceWitness;
 use sync_vm::glue::sort_decommittment_requests::input::CodeDecommittmentsDeduplicatorInstanceWitness;
+use sync_vm::glue::pubdata_hasher::input::PubdataHasherInstanceWitness;
+use sync_vm::glue::pubdata_hasher::storage_write_data::InitialStorageWriteData;
+use sync_vm::glue::pubdata_hasher::storage_write_data::RepeatedStorageWriteData;
+use sync_vm::glue::storage_application::input::StorageApplicationCircuitInstanceWitness;
 
 #[derive(Derivative)]
 #[derivative(Clone, Default(bound = ""))]
@@ -88,6 +92,7 @@ pub struct FullBlockArtifacts<E: Engine> {
     // deduplicated
     pub deduplicated_rollup_storage_queries: Vec<LogQuery>,
     pub deduplicated_rollup_storage_queue_states: Vec<LogQueueState<E>>,
+    pub deduplicated_rollup_storage_queue_simulator: LogQueueSimulator<E>,
     pub deduplicated_porter_storage_queries: Vec<LogQuery>,
     pub deduplicated_porter_storage_queue_states: Vec<LogQueueState<E>>,
     pub deduplicated_event_queries: Vec<LogQuery>,
@@ -118,10 +123,22 @@ pub struct FullBlockArtifacts<E: Engine> {
     pub storage_deduplicator_circuit_data: Vec<StorageDeduplicatorInstanceWitness<E>>,
     pub events_deduplicator_circuit_data: Vec<EventsDeduplicatorInstanceWitness<E>>,
     pub l1_messages_deduplicator_circuit_data: Vec<EventsDeduplicatorInstanceWitness<E>>,
+    //
+    pub initial_writes_pubdata_hasher_circuit_data: Vec<PubdataHasherInstanceWitness<E, 3, 64, InitialStorageWriteData<E>>>,
+    pub repeated_writes_pubdata_hasher_circuit_data: Vec<PubdataHasherInstanceWitness<E, 2, 40, RepeatedStorageWriteData<E>>>,
+    //
+    pub rollup_storage_application_circuit_data: Vec<StorageApplicationCircuitInstanceWitness<E>>
 }
 
+use crate::witness::tree::ZKSyncTestingTree;
+
 impl<E: Engine> FullBlockArtifacts<E> {
-    pub fn process<R: CircuitArithmeticRoundFunction<E, 2, 3>>(&mut self, round_function: &R, geometry: &GeometryConfig) {
+    pub fn process<R: CircuitArithmeticRoundFunction<E, 2, 3>>(
+        &mut self, 
+        round_function: &R, 
+        geometry: &GeometryConfig,
+        testing_tree: &mut ZKSyncTestingTree,
+    ) {
         let mut memory_queue_simulator = MemoryQueueSimulator::<E>::empty();
 
         // this is parallelizable internally by the factor of 3 in round function implementation later on
@@ -249,7 +266,6 @@ impl<E: Engine> FullBlockArtifacts<E> {
         );
         self.storage_deduplicator_circuit_data = vec![storage_deduplicator_circuit_data];
 
-
         use crate::witness::individual_circuits::events_sort_dedup::compute_events_dedup_and_sort;
 
         let events_deduplicator_circuit_data = compute_events_dedup_and_sort(
@@ -269,6 +285,36 @@ impl<E: Engine> FullBlockArtifacts<E> {
         );
 
         self.l1_messages_deduplicator_circuit_data = vec![l1_messages_deduplicator_circuit_data];
+
+        // process the storage application
+
+        // we can quickly determine states witness
+
+        use crate::witness::individual_circuits::get_storage_application_pubdata::compute_storage_application_pubdata_queues;
+
+        let (initial, repeated) = compute_storage_application_pubdata_queues(
+            self,
+            testing_tree,
+            round_function,
+            geometry.limit_for_first_writes_pubdata_hasher as usize,
+            geometry.limit_for_repeated_writes_pubdata_hasher as usize,
+        );
+
+        self.initial_writes_pubdata_hasher_circuit_data = vec![initial];
+        self.repeated_writes_pubdata_hasher_circuit_data = vec![repeated];
+
+        // and do the actual storage application
+        use crate::witness::individual_circuits::storage_application::decompose_into_storage_application_witnesses;
+
+        let rollup_storage_application_circuit_data = decompose_into_storage_application_witnesses(
+            self,
+            testing_tree,
+            round_function,
+            geometry.cycles_per_storage_application as usize
+        );
+
+        self.rollup_storage_application_circuit_data = rollup_storage_application_circuit_data;
+
 
         self.is_processed = true;
     }

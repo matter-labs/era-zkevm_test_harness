@@ -13,6 +13,7 @@ use crate::entry_point::*;
 use zk_evm::GenericNoopTracer;
 use crate::witness::oracle::create_artifacts_from_tracer;
 use crate::franklin_crypto::plonk::circuit::allocated_num::Num;
+use crate::witness::tree::ZKSyncTestingTree;
 
 // TODO: needs extra definitions, like block number, ergs per pubdata in block, etc
 
@@ -30,7 +31,8 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
     cycle_limit: usize,
     round_function: R, // used for all queues implementation
     geometry: GeometryConfig,
-    storage: S
+    storage: S,
+    tree: &mut ZKSyncTestingTree,
 ) -> FullBlockArtifacts<Bn256> {
     let bytecode_hash = bytecode_to_code_hash(&entry_point_code).unwrap();
 
@@ -108,7 +110,8 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
             tools.witness_tracer,
             &round_function, 
             &geometry,
-            (entry_point_decommittment_query, entry_point_decommittment_query_witness)
+            (entry_point_decommittment_query, entry_point_decommittment_query_witness),
+            tree,
         );
 
     assert!(artifacts.special_initial_decommittment_queries.len() == 1);

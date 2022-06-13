@@ -188,9 +188,16 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
         limit_for_events_or_l1_messages_sorter: 16,
         cycles_per_ram_permutation: 4,
         cycles_per_code_decommitter: 4,
+        cycles_per_storage_application: 2,
+        limit_for_first_writes_pubdata_hasher: 16,
+        limit_for_repeated_writes_pubdata_hasher: 16,
     };
 
+    use crate::witness::tree::ZKSyncTestingTree;
+    use crate::witness::tree::BinarySparseStorageTree;
+
     let storage_impl = InMemoryStorage::new();
+    let mut tree = ZKSyncTestingTree::empty();
 
     let _ = run(
         Address::zero(),
@@ -203,7 +210,8 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
         cycle_limit,
         round_function,
         geometry,
-        storage_impl
+        storage_impl,
+        &mut tree
     );
 
 

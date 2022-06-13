@@ -156,11 +156,14 @@ struct FlattenedLogQueueIndexer<E: Engine>{
     pub tail_offset: usize,
 }
 
+use crate::witness::tree::ZKSyncTestingTree;
+
 pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction<E, 2, 3>>(
     tracer: WitnessTracer,
     round_function: &R,
     geometry: &GeometryConfig,
     entry_point_decommittment_query: (DecommittmentQuery, Vec<U256>),
+    tree: &mut ZKSyncTestingTree,
 ) -> (Vec<VmInstanceWitness<E, VmWitnessOracle<E>>>, FullBlockArtifacts<E>) {
     let WitnessTracer {
         memory_queries,
@@ -659,7 +662,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
     artifacts.demuxed_sha256_precompile_queries = demuxed_sha256_precompile_queries;
     artifacts.demuxed_ecrecover_queries = demuxed_ecrecover_queries;
 
-    artifacts.process(round_function, geometry);
+    artifacts.process(round_function, geometry, tree);
 
     artifacts.special_initial_decommittment_queries = vec![entry_point_decommittment_query];
 

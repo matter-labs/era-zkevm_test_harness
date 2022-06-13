@@ -251,3 +251,12 @@ pub fn log_query_into_storage_record_witness<E: Engine>(query: &LogQuery) -> <St
         _marker: std::marker::PhantomData
     }
 }
+
+use super::initial_storage_write::CircuitEquivalentReflection;
+
+impl<E: Engine> CircuitEquivalentReflection<E> for LogQuery {
+    type Destination = StorageLogRecord<E>;
+    fn reflect(&self) -> <Self::Destination as CSWitnessable<E>>::Witness {
+        log_query_into_storage_record_witness(self)
+    }
+}

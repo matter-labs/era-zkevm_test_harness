@@ -13,6 +13,8 @@ pub mod callstack_entry;
 pub mod decommittment_request;
 pub mod log_query;
 pub mod memory_query;
+pub mod initial_storage_write;
+pub mod repeated_storage_write;
 
 #[derive(Derivative)]
 #[derivative(Debug, Clone(bound = ""), Copy(bound = ""))]
@@ -107,6 +109,47 @@ impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const
         };
 
         (old_tail, intermediate_info)
+    }
+
+    pub fn pop_and_output_intermediate_data<
+        R: CircuitArithmeticRoundFunction<E, AW, SW>,
+        const AW: usize,
+        const SW: usize,
+    >(
+        &mut self,
+        round_function: &R,
+    ) -> (
+        I, // old tail
+        QueueIntermediateStates<E, SW, ROUNDS>,
+    ) {
+        let old_head = self.head;
+        let (_, _, element) = self.witness.drain(0..1).next().unwrap();
+
+        let encoding = element.encoding_witness();
+        let mut to_hash = vec![];
+        to_hash.extend_from_slice(&encoding);
+        to_hash.push(self.head);
+
+        let states = round_function.simulate_absorb_multiple_rounds_into_empty_with_specialization(&to_hash);
+        let new_head = R::simulate_state_into_commitment(states.last().map(|el| el.1).unwrap());
+
+        self.num_items -= 1;
+        self.head = new_head;
+
+        if self.num_items == 0 {
+            assert_eq!(self.head, self.tail);
+        }
+
+        let intermediate_info = QueueIntermediateStates {
+            head: self.head,
+            tail: self.tail,
+            previous_head: old_head,
+            previous_tail: self.tail,
+            num_items: self.num_items,
+            round_function_execution_pairs: states.try_into().unwrap(),
+        };
+
+        (element, intermediate_info)
     }
 }
 

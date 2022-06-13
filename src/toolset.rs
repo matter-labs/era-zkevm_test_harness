@@ -29,6 +29,9 @@ pub struct GeometryConfig {
     pub limit_for_events_or_l1_messages_sorter: u32,
     pub cycles_per_ram_permutation: u32,
     pub cycles_per_code_decommitter: u32,
+    pub cycles_per_storage_application: u32,
+    pub limit_for_first_writes_pubdata_hasher: u32,
+    pub limit_for_repeated_writes_pubdata_hasher: u32,
 }
 
 pub fn create_tools<S: Storage>(storage: S, config: &GeometryConfig) -> ProvingToolset<S> {

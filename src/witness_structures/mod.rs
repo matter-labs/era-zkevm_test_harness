@@ -72,3 +72,23 @@ pub fn take_sponge_like_queue_state_from_simulator<
 
     result
 }
+
+use sync_vm::scheduler::queues::FixedWidthEncodingGenericQueueWitness;
+use crate::witness_structures::initial_storage_write::CircuitEquivalentReflection;
+use sync_vm::glue::traits::*;
+
+pub fn transform_queue_witness<
+    'a, 
+    E: Engine, 
+    I: OutOfCircuitFixedLengthEncodable<E, N> + 'a + CircuitEquivalentReflection<E, Destination = D>,
+    const N: usize,
+    D: CircuitFixedLengthEncodableExt<E, N> + CircuitFixedLengthDecodableExt<E, N>
+>(
+    witness_iter: impl Iterator<Item = &'a ([E::Fr; N], E::Fr, I)>,
+) -> FixedWidthEncodingGenericQueueWitness<E, D, N> {
+    let wit: Vec<_> = witness_iter.map(|(enc, old_tail, el)| {
+        (*enc, el.reflect(), *old_tail)
+    }).collect();
+
+    FixedWidthEncodingGenericQueueWitness {wit}
+}

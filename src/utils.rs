@@ -82,3 +82,17 @@ pub fn calldata_to_aligned_data(calldata: &Vec<u8>) -> Vec<U256> {
 
     result
 }
+
+pub fn bytes_to_u32_le<const N: usize, const M: usize>(bytes: &[u8; N]) -> [u32; M] {
+    assert!(M > 0);
+    assert!(M * 4 == N);
+
+    let mut result = [0u32; M];
+
+    for (idx, chunk) in bytes.chunks_exact(4).enumerate() {
+        let word = u32::from_le_bytes(chunk.try_into().unwrap());
+        result[idx] = word;
+    }
+
+    result
+}

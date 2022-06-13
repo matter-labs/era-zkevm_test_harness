@@ -113,5 +113,7 @@ pub fn compute_storage_dedup_and_sort<
         sorted_queue_witness: FixedWidthEncodingGenericQueueWitness {wit: sorted_queue_witness},
     };
 
+    artifacts.deduplicated_rollup_storage_queue_simulator = result_queue_simulator;
+
     witness
 }
