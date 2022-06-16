@@ -1,4 +1,4 @@
-use crate::{ethereum_types::{Address, U256}, witness::{full_block_artifact::FullBlockArtifacts}};
+use crate::{ethereum_types::{Address, U256}, witness::{full_block_artifact::FullBlockArtifacts}, utils::calldata_to_aligned_data};
 use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
 use crate::toolset::GeometryConfig;
 use zk_evm::abstractions::Storage;
@@ -21,6 +21,8 @@ use crate::witness::tree::ZKSyncTestingTree;
 /// setup the environment and will run out-of-circuit and then in-circuit
 /// and perform intermediate tests
 pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn256>>, S: Storage>(
+    block_number: u64,
+    block_timestamp: u64,
     caller: Address, // for real block must be zero
     entry_point_address: Address, // for real block must be the bootloader
     entry_point_code: Vec<[u8; 32]>, // for read lobkc must be a bootloader code
@@ -47,6 +49,38 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
     }
     tools.decommittment_processor.populate(to_fill);
 
+    let heap_writes = calldata_to_aligned_data(&initial_heap_content);
+    let calldata_len = calldata.len();
+    let calldata = calldata_to_aligned_data(&calldata);
+    let num_non_deterministic_heap_queries = heap_writes.len();
+
+    // first there exists non-deterministic writes into the heap of the bootloader's heap and calldata
+    // heap
+    for (idx, el) in heap_writes.into_iter().enumerate() {
+        let query = MemoryQuery { 
+            timestamp: Timestamp(0), 
+            location: MemoryLocation { memory_type: MemoryType::Heap, page: MemoryPage(zk_evm::zkevm_opcode_defs::BOOTLOADER_HEAP_PAGE), index: MemoryIndex(idx as u32) }, 
+            rw_flag: true, 
+            is_pended: false, 
+            value: el 
+        };
+        tools.witness_tracer.add_memory_query(0, query);
+        tools.memory.execute_partial_query(0, query);
+    }
+
+    // calldata
+    for (idx, el) in calldata.into_iter().enumerate() {
+        let query = MemoryQuery { 
+            timestamp: Timestamp(0), 
+            location: MemoryLocation { memory_type: MemoryType::Calldata, page: MemoryPage(zk_evm::zkevm_opcode_defs::BOOTLOADER_CALLDATA_PAGE), index: MemoryIndex(idx as u32) }, 
+            rw_flag: true, 
+            is_pended: false, 
+            value: el 
+        };
+        tools.witness_tracer.add_memory_query(0, query);
+        tools.memory.execute_partial_query(0, query);
+    }
+
     // and do the query
     let entry_point_decommittment_query = DecommittmentQuery {
         hash: bytecode_hash_as_u256,
@@ -65,8 +99,8 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
     tools.witness_tracer.add_decommittment(0, entry_point_decommittment_query, entry_point_decommittment_query_witness.clone());
 
     let block_properties = create_out_of_circuit_global_context(
-        1, 
-        1, 
+        block_number, 
+        block_timestamp, 
         true, 
         U256::zero(), 
         50, 
@@ -112,49 +146,50 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
             &geometry,
             (entry_point_decommittment_query, entry_point_decommittment_query_witness),
             tree,
+            num_non_deterministic_heap_queries
         );
 
     assert!(artifacts.special_initial_decommittment_queries.len() == 1);
 
     let in_circuit_global_context =
         create_in_circuit_global_context::<Bn256>(
-            1, 
-            1, 
+            block_number, 
+            block_timestamp, 
             true, 
             U256::zero(), 
             50, 
             2
         );
 
-    // let num_instances = instance_oracles.len();
+    let num_instances = instance_oracles.len();
 
-    // for (instance_idx, vm_instance) in instance_oracles.into_iter().enumerate() {
-    //     println!("Running VM for range {:?}", vm_instance.cycles_range);
-    //     use crate::entry_point::run_vm_instance;
+    for (instance_idx, vm_instance) in instance_oracles.into_iter().enumerate() {
+        println!("Running VM for range {:?}", vm_instance.cycles_range);
+        use crate::entry_point::run_vm_instance;
 
-    //     let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
-    //     sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+        let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+        sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
 
-    //     let vm_state = run_vm_instance(
-    //         &mut cs,
-    //         &round_function,
-    //         &in_circuit_global_context,
-    //         vm_instance
-    //     );
+        let vm_state = run_vm_instance(
+            &mut cs,
+            &round_function,
+            &in_circuit_global_context,
+            vm_instance
+        );
 
-    //     if instance_idx == num_instances - 1 {
-    //         // consistency check for storage log
-    //         assert_eq!(
-    //             vm_state.callstack.current_context.log_queue_forward_tail.get_value().unwrap(),
-    //             artifacts.original_log_queue_simulator.tail
-    //         );
+        if instance_idx == num_instances - 1 {
+            // consistency check for storage log
+            assert_eq!(
+                vm_state.callstack.current_context.log_queue_forward_tail.get_value().unwrap(),
+                artifacts.original_log_queue_simulator.tail
+            );
 
-    //         assert_eq!(
-    //             vm_state.callstack.current_context.log_queue_forward_part_length.get_value().unwrap(),
-    //             artifacts.original_log_queue_simulator.num_items
-    //         );
-    //     }
-    // }
+            assert_eq!(
+                vm_state.callstack.current_context.log_queue_forward_part_length.get_value().unwrap(),
+                artifacts.original_log_queue_simulator.num_items
+            );
+        }
+    }
 
     // test
     {

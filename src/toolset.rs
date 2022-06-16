@@ -91,7 +91,7 @@ pub fn create_out_of_circuit_vm<'a, S: Storage>(
         entry_point_address,
     );
 
-    vm.push_bootloader_context(0, initial_context);
+    vm.push_bootloader_context(crate::INITIAL_MONOTONIC_CYCLE_COUNTER-1, initial_context);
 
     vm.local_state.current_ergs_per_pubdata_byte = 0; // uninitialized yet, but we do not care
     vm.local_state.timestamp = STARTING_TIMESTAMP;

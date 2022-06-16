@@ -13,6 +13,13 @@ pub struct ExtendedCallstackEntry<E: Engine> {
     pub rollback_queue_segment_length: u32,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CallstackEntryRollbackState<E: Engine> {
+    pub rollback_queue_head: E::Fr,
+    pub rollback_queue_tail: E::Fr,
+    pub rollback_queue_segment_length: u32,
+}
+
 // from circuit VM
 // let val_0 = self.reverted_queue_head;
 // let val_1 = self.reverted_queue_tail;

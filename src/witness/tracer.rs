@@ -18,8 +18,27 @@ use zk_evm::zkevm_opcode_defs::decoding::EncodingModeProduction;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum QueryMarker {
-    Forward(usize),
-    Rollback(usize),
+    ForwardNoRollback{unique_query_id: u64, in_frame: usize, index: usize, cycle: u32},
+    Forward{unique_query_id: u64, in_frame: usize, index: usize, cycle: u32},
+    Rollback{unique_query_id: u64, in_frame: usize, index: usize, cycle_of_declaration: u32, cycle_of_applied_rollback: Option<u32>},
+}
+
+impl QueryMarker {
+    pub fn frame_index(&self) -> usize {
+        match self {
+            QueryMarker::ForwardNoRollback {in_frame, ..} => *in_frame,
+            QueryMarker::Forward {in_frame, ..} => *in_frame,
+            QueryMarker::Rollback {in_frame, ..} => *in_frame,
+        }
+    }
+
+    pub fn query_id(&self) -> u64 {
+        match self {
+            QueryMarker::ForwardNoRollback {unique_query_id, ..} => *unique_query_id,
+            QueryMarker::Forward {unique_query_id, ..} => *unique_query_id,
+            QueryMarker::Rollback {unique_query_id, ..} => *unique_query_id,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -35,7 +54,7 @@ pub struct WitnessTracer {
     pub sha256_round_function_witnesses: Vec<(u32, LogQuery, Vec<Sha256RoundWitness>)>,
     pub ecrecover_witnesses: Vec<(u32, LogQuery, ECRecoverRoundWitness)>,
     pub monotonic_query_counter: usize,
-    pub log_frames_stack: Vec<ApplicationData<((usize, usize), (QueryMarker, u32, LogQuery))>>, // keep the unique frame index
+    // pub log_frames_stack: Vec<ApplicationData<((usize, usize), (QueryMarker, u32, LogQuery))>>, // keep the unique frame index
     pub callstack_with_aux_data: CallstackWithAuxData,
     pub sponge_busy_range: HashSet<usize>,
     pub vm_snapshots: Vec<VmSnapshot>,
@@ -95,7 +114,7 @@ impl WitnessTracer {
             sha256_round_function_witnesses: vec![],
             ecrecover_witnesses: vec![],
             monotonic_query_counter: 0,
-            log_frames_stack: vec![ApplicationData::empty()],
+            // log_frames_stack: vec![ApplicationData::empty()],
             callstack_with_aux_data: CallstackWithAuxData::empty(),
             sponge_busy_range:  HashSet::with_capacity(8),
             vm_snapshots: vec![],
@@ -263,49 +282,49 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
         self.callstack_with_aux_data
             .add_log_query(monotonic_cycle_counter, log_query);
 
-        let query_counter = self.monotonic_query_counter;
-        self.monotonic_query_counter += 1;
-        // log in general
-        assert!(!log_query.rollback);
-        let parent_frame_counter = self
-            .callstack_with_aux_data
-            .current_entry
-            .parent_frame_index;
-        let current_frame_counter = self.callstack_with_aux_data.current_entry.frame_index;
-        let frames_index = (parent_frame_counter, current_frame_counter);
-        let frame_data = self.log_frames_stack.last_mut().unwrap();
-        if log_query.rw_flag {
-            //  also append rollback
-            log_query.rollback = false;
-            frame_data.forward.push((
-                frames_index,
-                (
-                    QueryMarker::Forward(query_counter),
-                    monotonic_cycle_counter,
-                    log_query,
-                ),
-            ));
-            log_query.rollback = true;
-            frame_data.rollbacks.push((
-                frames_index,
-                (
-                    QueryMarker::Rollback(query_counter),
-                    monotonic_cycle_counter,
-                    log_query,
-                ),
-            ));
-        } else {
-            // read, do not append to rollback
-            log_query.rollback = false;
-            frame_data.forward.push((
-                frames_index,
-                (
-                    QueryMarker::Forward(query_counter),
-                    monotonic_cycle_counter,
-                    log_query,
-                ),
-            ));
-        }
+        // let query_counter = self.monotonic_query_counter;
+        // self.monotonic_query_counter += 1;
+        // // log in general
+        // assert!(!log_query.rollback);
+        // let parent_frame_counter = self
+        //     .callstack_with_aux_data
+        //     .current_entry
+        //     .parent_frame_index;
+        // let current_frame_counter = self.callstack_with_aux_data.current_entry.frame_index;
+        // let frames_index = (parent_frame_counter, current_frame_counter);
+        // let frame_data = self.log_frames_stack.last_mut().unwrap();
+        // if log_query.rw_flag {
+        //     //  also append rollback
+        //     log_query.rollback = false;
+        //     frame_data.forward.push((
+        //         frames_index,
+        //         (
+        //             QueryMarker::Forward(query_counter),
+        //             monotonic_cycle_counter,
+        //             log_query,
+        //         ),
+        //     ));
+        //     log_query.rollback = true;
+        //     frame_data.rollbacks.push((
+        //         frames_index,
+        //         (
+        //             QueryMarker::Rollback(query_counter),
+        //             monotonic_cycle_counter,
+        //             log_query,
+        //         ),
+        //     ));
+        // } else {
+        //     // read, do not append to rollback
+        //     log_query.rollback = false;
+        //     frame_data.forward.push((
+        //         frames_index,
+        //         (
+        //             QueryMarker::Forward(query_counter),
+        //             monotonic_cycle_counter,
+        //             log_query,
+        //         ),
+        //     ));
+        // }
     }
 
     fn add_decommittment(
@@ -377,9 +396,9 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
             *new_context,
         );
 
-        // log part
-        let new = ApplicationData::empty();
-        self.log_frames_stack.push(new);
+        // // log part
+        // let new = ApplicationData::empty();
+        // self.log_frames_stack.push(new);
     }
 
     fn finish_execution_context(&mut self, monotonic_cycle_counter: u32, panicked: bool) {
@@ -388,22 +407,22 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
         self.callstack_with_aux_data
             .pop_entry(monotonic_cycle_counter, panicked);
 
-        // if we panic then we append forward and rollbacks to the forward of parent,
-        // otherwise we place rollbacks of child before rollbacks of the parent
-        let current_frame = self
-            .log_frames_stack
-            .pop()
-            .expect("frame must be started before finishing");
-        let ApplicationData { forward, rollbacks } = current_frame;
-        let parent_data = self.log_frames_stack.last_mut().unwrap();
-        if panicked {
-            parent_data.forward.extend(forward);
-            // add to forward part, but in reverse order
-            parent_data.forward.extend(rollbacks.into_iter().rev());
-        } else {
-            parent_data.forward.extend(forward);
-            // prepend to the parent's rollback queue
-            parent_data.rollbacks.extend(rollbacks);
-        }
+        // // if we panic then we append forward and rollbacks to the forward of parent,
+        // // otherwise we place rollbacks of child before rollbacks of the parent
+        // let current_frame = self
+        //     .log_frames_stack
+        //     .pop()
+        //     .expect("frame must be started before finishing");
+        // let ApplicationData { forward, rollbacks } = current_frame;
+        // let parent_data = self.log_frames_stack.last_mut().unwrap();
+        // if panicked {
+        //     parent_data.forward.extend(forward);
+        //     // add to forward part, but in reverse order
+        //     parent_data.forward.extend(rollbacks.into_iter().rev());
+        // } else {
+        //     parent_data.forward.extend(forward);
+        //     // prepend to the parent's rollback queue
+        //     parent_data.rollbacks.extend(rollbacks);
+        // }
     }
 }

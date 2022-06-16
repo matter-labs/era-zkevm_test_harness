@@ -138,6 +138,7 @@ impl<E: Engine> FullBlockArtifacts<E> {
         round_function: &R, 
         geometry: &GeometryConfig,
         testing_tree: &mut ZKSyncTestingTree,
+        num_non_deterministic_heap_queries: usize,
     ) {
         let mut memory_queue_simulator = MemoryQueueSimulator::<E>::empty();
 
@@ -148,8 +149,6 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
             let (_old_tail, intermediate_info) =
                 memory_queue_simulator.push_and_output_intermediate_data(*query, round_function);
-
-            // dbg!(&intermediate_info.tail);
 
             let is_pended = query.is_pended;
             self.vm_memory_queue_states
@@ -251,6 +250,7 @@ impl<E: Engine> FullBlockArtifacts<E> {
             self,
             memory_queue_simulator,
             round_function,
+            num_non_deterministic_heap_queries,
             geometry.cycles_per_ram_permutation as usize,
         );
 

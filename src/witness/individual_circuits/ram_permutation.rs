@@ -20,6 +20,7 @@ pub fn compute_ram_circuit_snapshots<
     artifacts: &mut FullBlockArtifacts<E>,
     memory_queue_simulator: MemoryQueueSimulator<E>,
     round_function: &R,
+    num_non_deterministic_heap_queries: usize,
     per_circuit_capacity: usize
 ) -> Vec<RamPermutationCircuitInstanceWitness<E>> {
     assert!(artifacts.all_memory_queries_accumulated.len() > 0, "VM should have made some memory requests");
@@ -266,7 +267,7 @@ pub fn compute_ram_circuit_snapshots<
                 observable_input: RamPermutationInputDataWitness {
                     unsorted_queue_initial_state: transform_sponge_like_queue_state(unsorted_global_final_state),
                     sorted_queue_initial_state: transform_sponge_like_queue_state(sorted_global_final_state),
-                    non_deterministic_bootloader_memory_snapshot_length: 0,
+                    non_deterministic_bootloader_memory_snapshot_length: num_non_deterministic_heap_queries as u32,
                     _marker: std::marker::PhantomData,
                 },
                 observable_output: (),

@@ -134,6 +134,7 @@ pub fn alloc_execution_context<E: Engine, CS: ConstraintSystem<E>>(
     ctx.saved_context.common_part.code_page = UInt32::allocate(cs, code_page)?;
 
     ctx.saved_context.common_part.pc = UInt16::allocate(cs, project_ref!(out_of_circuit_context, pc).cloned())?;
+    ctx.saved_context.common_part.sp = UInt16::allocate(cs, project_ref!(out_of_circuit_context, sp).cloned())?;
     ctx.saved_context.common_part.exception_handler_loc =
         UInt16::allocate(cs, project_ref!(out_of_circuit_context, exception_handler_location).cloned())?;
     ctx.saved_context.common_part.ergs_remaining =

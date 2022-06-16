@@ -68,16 +68,19 @@ fn run_and_try_create_witness() {
         sload r1, r0
         log.event.first r1, r2, r0
         log.to_l1.first r1, r2, r0
+        near_call r0, @.empty_no_rollback, @.nop
+    .continue0:
+        near_call r0, @.empty_with_rollback, @.continue1
+    .continue1:
         near_call r0, @.to_revert, @.finish
     .finish:
         add 3, r0, r1
         sload r1, r0
         ret.ok r0
-    .continue:
-        add 5, r0, r1
-        add 6, r0, r2
-        sstore r1, r2
+    .empty_no_rollback:
         ret.ok r0
+    .empty_with_rollback:
+        ret.revert r0
     .to_revert:
         add 3, r0, r1
         add 4, r0, r2
@@ -85,6 +88,8 @@ fn run_and_try_create_witness() {
         sload r1, r0
         log.event.first r1, r2, r0
         log.to_l1.first r1, r2, r0
+        ret.revert r0
+    .nop:
         ret.revert r0
     "#;
 
@@ -101,7 +106,7 @@ fn run_and_try_create_witness() {
     //     ret.ok r0
     // "#;
 
-    run_and_try_create_witness_inner(asm, 28);
+    run_and_try_create_witness_inner(asm, 36);
 }
 
 pub fn assert_equal_state(
@@ -200,6 +205,8 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
     let mut tree = ZKSyncTestingTree::empty();
 
     let _ = run(
+        1,
+        1,
         Address::zero(),
         *BOOTLOADER_FORMAL_ADDRESS,
         bytecode,

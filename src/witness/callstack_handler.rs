@@ -1,6 +1,20 @@
+use std::{collections::HashMap};
+
 use crate::witness::tracer::QueryMarker;
-use std::ops::Range;
 use zk_evm::{aux_structures::LogQuery, vm_state::CallStackEntry};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum RenumeratedQueryIndex {
+    ForwardIndexAndRollbackIndex(usize),
+    ForwardNoRollbackIndex(usize),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum LogAction {
+    ForwardAndRolledBack {forward_counter: usize, renumerated_rollback_counter_as_forward: usize},
+    ForwardAndNotRolledBack {forward_coutner: usize, rollback_counter: usize},
+    ForwardNoRollback(usize),
+}
 
 #[derive(Clone, Debug)]
 pub struct CallstackEntryWithAuxData {
@@ -10,8 +24,6 @@ pub struct CallstackEntryWithAuxData {
     pub parent_frame_index: usize,
     pub forward_queue: Vec<(QueryMarker, u32, LogQuery)>,
     pub rollback_queue: Vec<(QueryMarker, u32, LogQuery)>,
-    pub forward_queue_ranges: Vec<Range<usize>>,
-    pub rollback_queue_ranges: Vec<Range<usize>>, // we enumerate from 0 as the tail for the queue
 }
 
 impl CallstackEntryWithAuxData {
@@ -23,8 +35,6 @@ impl CallstackEntryWithAuxData {
             parent_frame_index: 0,
             forward_queue: vec![],
             rollback_queue: vec![],
-            forward_queue_ranges: vec![],
-            rollback_queue_ranges: vec![],
         }
     }
 }
@@ -42,19 +52,17 @@ pub enum CallstackAction {
     PopFromStack { panic: bool },
 }
 
+
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CallstackActionHistoryEntry {
     pub action: CallstackAction,
     pub affected_entry: CallStackEntry,
-    pub cycle_index: u32,
-    pub monotonic_forward_query_counter_on_first_entry: usize,
-    pub monotonic_forward_query_counter_on_exit: Option<usize>,
-    pub monotonic_rollback_query_counter_on_first_entry: usize,
-    pub monotonic_rollback_query_counter_on_exit: Option<usize>,
-    pub forward_queue_ranges_at_entry: Range<usize>,
-    pub forward_queue_ranges_changes: Range<usize>,
-    pub rollback_queue_ranges_change: Range<usize>,
-    pub rollback_queue_ranges_at_entry: Range<usize>,
+    pub frame_index: usize,
+    pub beginning_cycle: u32,
+    pub end_cycle: Option<u32>,
+    // pub last_action_of_parent: Option<RenumeratedQueryIndex>,
+    pub actions: Vec<(u32, LogAction)>,
 }
 
 impl CallstackActionHistoryEntry {
@@ -62,105 +70,129 @@ impl CallstackActionHistoryEntry {
         Self {
             action: CallstackAction::PushToStack,
             affected_entry: CallStackEntry::empty_context(),
-            cycle_index: 0,
-            monotonic_forward_query_counter_on_first_entry: 0,
-            monotonic_forward_query_counter_on_exit: None,
-            monotonic_rollback_query_counter_on_first_entry: 0,
-            monotonic_rollback_query_counter_on_exit: None,
-            forward_queue_ranges_at_entry: 0..0,
-            rollback_queue_ranges_at_entry: 0..0,
-            forward_queue_ranges_changes: 0..0,
-            rollback_queue_ranges_change: 0..0,
+            frame_index: 0,
+            beginning_cycle: 0,
+            end_cycle: None,
+            // last_action_of_parent: None,
+            actions: vec![],
         }
-    }
-
-    pub fn total_forward_segment_length_on_pop(&self) -> usize {
-        self.forward_queue_ranges_changes.end
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct LogQueueAccessAuxData {
-    pub monotonic_forward_query_counter: usize,
-    pub monotonic_rollback_query_counter: Option<usize>,
+// #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+// pub enum MergeType {
+//     IntoGlobalRollbackTail,
+//     IntoGlobalForwardHead,
+//     IntoForwardTail(u64),
+//     IntoRollbackHead(u64)
+// }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum MergeIntention {
+    IntoForwardTail,
+    IntoRollbackHead
+}
+
+// special cases: if we merge (potentially empty) segment of the current frame
+// to the empty segment of the parent frame, then we need somewhat immutable reference
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum QueueSegmentIndirectablePointer {
+    ForwardHeadAtFrameStart(usize),
+    RollbackTailAtFrameStart(usize),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum QueueSegmentPointer {
+    GlobalStart,
+    GlobalEnd,
+    IssuedQuery(u64),
+    Indirection(QueueSegmentIndirectablePointer),
+    OtherFrameIndirection(QueueSegmentIndirectablePointer),
+    OtherFramesQuery(u64),
+    Dangling
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct FrameSegmentData {
+    pub forward_head_pointer: QueueSegmentPointer,
+    pub forward_tail_pointer: QueueSegmentPointer,
+    pub forward_segment_length: usize,
+    pub rollback_head_pointer: QueueSegmentPointer,
+    pub rollback_tail_pointer: QueueSegmentPointer,
+    pub rollback_segment_length: usize,
+    pub did_end_up_in_panic: bool,
 }
 
 #[derive(Clone, Debug)]
 pub struct CallstackWithAuxData {
     pub monotonic_frame_counter: usize,
-    pub monotonic_forward_query_counter: usize,
-    pub monotonic_rollback_query_counter: usize,
+    pub rollbackable_monotonic_counter: usize,
+    pub non_rollbackable_monotonic_counter: usize,
+    pub forward_flattened_counter: usize,
+    pub rollback_flattened_counter: usize,
+    pub total_rolled_back: usize,
+    pub unique_query_id_counter: u64,
     pub current_entry: CallstackEntryWithAuxData,
     pub depth: usize,
     pub stack: Vec<CallstackEntryWithAuxData>,
     pub full_history: Vec<CallstackActionHistoryEntry>,
-    pub log_queue_access_snapshots: Vec<(u32, LogQueueAccessAuxData)>,
+    pub log_queue_access_snapshots: Vec<(u32, RenumeratedQueryIndex)>,
+    pub log_access_history: Vec<(u32, QueryMarker)>,
+    pub frame_segments_data: HashMap<usize, FrameSegmentData>,
+    pub child_into_parent: HashMap<usize, usize>,
 }
 
 impl CallstackWithAuxData {
     pub fn empty() -> Self {
-        Self {
+        let initial_history_record = CallstackActionHistoryEntry {
+            action: CallstackAction::OutOfScope(OutOfScopeReason::Fresh),
+            affected_entry: CallStackEntry::empty_context(),
+            frame_index: 0,
+            beginning_cycle: 0,
+            end_cycle: None,
+            actions: vec![],
+        };
+
+        let mut new = Self {
             monotonic_frame_counter: 1,
-            monotonic_forward_query_counter: 0,
-            monotonic_rollback_query_counter: 0,
+            rollbackable_monotonic_counter: 0,
+            non_rollbackable_monotonic_counter: 0,
+            forward_flattened_counter: 0,
+            rollback_flattened_counter: 0,
+            total_rolled_back: 0,
+            unique_query_id_counter: 0,
             current_entry: CallstackEntryWithAuxData::empty(),
             depth: 0,
             stack: vec![],
-            full_history: vec![],
+            full_history: vec![initial_history_record],
             log_queue_access_snapshots: vec![],
-        }
+            log_access_history: vec![],
+            frame_segments_data: HashMap::new(),
+            child_into_parent: HashMap::new(),
+        };
+
+        new.frame_segments_data.insert(
+            0, 
+            FrameSegmentData {
+                forward_head_pointer: QueueSegmentPointer::GlobalStart,
+                forward_tail_pointer: QueueSegmentPointer::Indirection(QueueSegmentIndirectablePointer::ForwardHeadAtFrameStart(0)),
+                forward_segment_length: 0,
+                rollback_head_pointer: QueueSegmentPointer::Indirection(QueueSegmentIndirectablePointer::RollbackTailAtFrameStart(0)),
+                rollback_tail_pointer: QueueSegmentPointer::GlobalEnd,
+                rollback_segment_length: 0,
+                did_end_up_in_panic: false,
+            }
+        );
+
+        new
     }
 
-    pub fn from_initial_callstack(simple_entry: CallStackEntry) -> Self {
-        let current_history_record = CallstackActionHistoryEntry {
-            action: CallstackAction::OutOfScope(OutOfScopeReason::Fresh),
-            affected_entry: simple_entry,
-            cycle_index: 0,
-            forward_queue_ranges_at_entry: 0..0,
-            rollback_queue_ranges_at_entry: 0..0,
-            forward_queue_ranges_changes: 0..0,
-            rollback_queue_ranges_change: 0..0,
-            monotonic_forward_query_counter_on_first_entry: 0,
-            monotonic_forward_query_counter_on_exit: None,
-            monotonic_rollback_query_counter_on_first_entry: 0,
-            monotonic_rollback_query_counter_on_exit: None,
-        };
+    pub fn from_initial_callstack(monotonic_cycle_counter: u32, simple_entry: CallStackEntry) -> Self {
+        let mut new = Self::empty();
+        let current = new.current_entry.entry.clone();
+        new.push_entry(monotonic_cycle_counter, current, simple_entry);
 
-        let full_entry = CallstackEntryWithAuxData {
-            entry: simple_entry,
-            current_history_record,
-            parent_frame_index: 0,
-            frame_index: 1,
-            forward_queue: vec![],
-            rollback_queue: vec![],
-            forward_queue_ranges: vec![],
-            rollback_queue_ranges: vec![],
-        };
-
-        let previous_history_record = CallstackActionHistoryEntry {
-            action: CallstackAction::PushToStack,
-            affected_entry: CallStackEntry::empty_context(),
-            cycle_index: 0,
-            forward_queue_ranges_at_entry: 0..0,
-            rollback_queue_ranges_at_entry: 0..0,
-            forward_queue_ranges_changes: 0..0,
-            rollback_queue_ranges_change: 0..0,
-            monotonic_forward_query_counter_on_first_entry: 0,
-            monotonic_forward_query_counter_on_exit: None,
-            monotonic_rollback_query_counter_on_first_entry: 0,
-            monotonic_rollback_query_counter_on_exit: None,
-        };
-
-        Self {
-            monotonic_frame_counter: 2,
-            monotonic_forward_query_counter: 0,
-            monotonic_rollback_query_counter: 0,
-            current_entry: full_entry,
-            depth: 1,
-            stack: vec![],
-            full_history: vec![previous_history_record],
-            log_queue_access_snapshots: vec![],
-        }
+        new
     }
 
     pub fn push_entry(
@@ -179,28 +211,46 @@ impl CallstackWithAuxData {
         // we only care about the history of the stack top, so we push previous entry
 
         let current_frame_index = self.current_entry.frame_index;
+        let current_frame_segment_data = self.frame_segments_data[&current_frame_index];
+
+        let this_frame_forward_head_pointer = match current_frame_segment_data.forward_tail_pointer {
+            QueueSegmentPointer::GlobalStart => QueueSegmentPointer::GlobalStart,
+            QueueSegmentPointer::GlobalEnd => unreachable!(),
+            QueueSegmentPointer::IssuedQuery(q_idx) => QueueSegmentPointer::OtherFramesQuery(q_idx),
+            QueueSegmentPointer::Indirection(ind) => QueueSegmentPointer::OtherFrameIndirection(ind),
+            QueueSegmentPointer::OtherFrameIndirection(ind) => QueueSegmentPointer::OtherFrameIndirection(ind),
+            QueueSegmentPointer::OtherFramesQuery(q_idx) => QueueSegmentPointer::OtherFramesQuery(q_idx),
+            QueueSegmentPointer::Dangling => unreachable!()
+        };
+
+        // forward tail and rollback head are yet indirections
+        self.frame_segments_data.insert(
+            new_counter, 
+            FrameSegmentData {
+                forward_head_pointer: this_frame_forward_head_pointer,
+                forward_tail_pointer: QueueSegmentPointer::Indirection(QueueSegmentIndirectablePointer::ForwardHeadAtFrameStart(new_counter)),
+                forward_segment_length: 0,
+                rollback_head_pointer: QueueSegmentPointer::Indirection(QueueSegmentIndirectablePointer::RollbackTailAtFrameStart(new_counter)),
+                rollback_tail_pointer: QueueSegmentPointer::Dangling,
+                rollback_segment_length: 0,
+                did_end_up_in_panic: false,
+            }
+        );
 
         let full_entry = CallstackEntryWithAuxData {
             entry: new_simple_entry,
             current_history_record: CallstackActionHistoryEntry {
                 action: CallstackAction::OutOfScope(OutOfScopeReason::Fresh),
                 affected_entry: new_simple_entry,
-                cycle_index: monotonic_cycle_counter,
-                forward_queue_ranges_at_entry: self.monotonic_forward_query_counter..self.monotonic_forward_query_counter,
-                rollback_queue_ranges_at_entry: self.monotonic_rollback_query_counter..self.monotonic_rollback_query_counter,
-                forward_queue_ranges_changes: self.monotonic_forward_query_counter..self.monotonic_forward_query_counter,
-                rollback_queue_ranges_change: self.monotonic_rollback_query_counter..self.monotonic_rollback_query_counter,
-                monotonic_forward_query_counter_on_first_entry: self.monotonic_forward_query_counter,
-                monotonic_forward_query_counter_on_exit: None,
-                monotonic_rollback_query_counter_on_first_entry: self.monotonic_rollback_query_counter,
-                monotonic_rollback_query_counter_on_exit: None,
+                frame_index: new_counter,
+                beginning_cycle: monotonic_cycle_counter,
+                end_cycle: None,
+                actions: vec![],
             },
             parent_frame_index: current_frame_index,
             frame_index: new_counter,
             forward_queue: vec![],
             rollback_queue: vec![],
-            forward_queue_ranges: vec![],
-            rollback_queue_ranges: vec![],
         };
 
         let history_of_new = full_entry.current_history_record.clone();
@@ -209,25 +259,10 @@ impl CallstackWithAuxData {
         // update as we do not mutate between intermediate points
         current.entry = previous_simple_entry;
         current.current_history_record.affected_entry = previous_simple_entry;
-        // and flatten the history that we already to have
-
-        assert_eq!(current.current_history_record.forward_queue_ranges_at_entry.end,
-            current.current_history_record.forward_queue_ranges_changes.start
-        );
-
-        current.current_history_record.forward_queue_ranges_at_entry.end = current.current_history_record.forward_queue_ranges_changes.end;
-        current.current_history_record.forward_queue_ranges_changes.start = current.current_history_record.forward_queue_ranges_changes.end;
-
-        assert_eq!(current.current_history_record.rollback_queue_ranges_at_entry.end,
-            current.current_history_record.rollback_queue_ranges_change.start
-        );
-
-        current.current_history_record.rollback_queue_ranges_at_entry.end = current.current_history_record.rollback_queue_ranges_change.end;
-        current.current_history_record.rollback_queue_ranges_change.start = current.current_history_record.rollback_queue_ranges_change.end;
+        current.current_history_record.end_cycle = Some(monotonic_cycle_counter);
 
         let mut history_of_current = current.current_history_record.clone();
         history_of_current.action = CallstackAction::PushToStack;
-        history_of_current.cycle_index = monotonic_cycle_counter;
 
         self.stack.push(current);
         self.full_history.push(history_of_current);
@@ -238,200 +273,337 @@ impl CallstackWithAuxData {
         let mut previous = self.stack.pop().unwrap();
         self.depth -= 1;
 
-        let previous_history_record = &mut previous.current_history_record;
-        let history_of_current = &self.current_entry.current_history_record;
-
-        // now make a history record for previous by joining that properly
-
-        if panicked {
-            // glue the forward
-            let mut full_history_of_changes = history_of_current.forward_queue_ranges_at_entry.clone();
-            assert_eq!(full_history_of_changes.end, history_of_current.forward_queue_ranges_changes.start);
-            full_history_of_changes.end = history_of_current.forward_queue_ranges_changes.end;
-            // now glue the rollback
-            full_history_of_changes.end += history_of_current.rollback_queue_ranges_change.len();
-
-            previous_history_record.forward_queue_ranges_changes = full_history_of_changes;
-        } else {
-            let mut full_history_of_changes = history_of_current.forward_queue_ranges_at_entry.clone();
-            assert_eq!(full_history_of_changes.end, history_of_current.forward_queue_ranges_changes.start);
-            full_history_of_changes.end = history_of_current.forward_queue_ranges_changes.end;
-
-            previous_history_record.forward_queue_ranges_changes = full_history_of_changes;
-
-            let mut full_history_of_changes = history_of_current.rollback_queue_ranges_at_entry.clone();
-            assert_eq!(full_history_of_changes.end, history_of_current.rollback_queue_ranges_change.start);
-            full_history_of_changes.end = history_of_current.rollback_queue_ranges_change.end;
-
-            previous_history_record.rollback_queue_ranges_change = full_history_of_changes; // ?
-        }
+        previous.current_history_record.beginning_cycle = monotonic_cycle_counter;
+        previous.current_history_record.beginning_cycle = monotonic_cycle_counter;
+        previous.current_history_record.actions = vec![]; // cleanup
+        previous.current_history_record.end_cycle = None;
 
         let mut previous_history_record = previous.current_history_record.clone();
         previous_history_record.action = CallstackAction::PopFromStack { panic: panicked };
 
         // when we pop then current goes out of scope
         let current = std::mem::replace(&mut self.current_entry, previous);
-        // keep the history as is
-        let mut history_of_current = current.current_history_record.clone();
-        history_of_current.monotonic_forward_query_counter_on_exit = Some(self.monotonic_forward_query_counter);
-        history_of_current.monotonic_rollback_query_counter_on_exit = Some(self.monotonic_rollback_query_counter);
-        history_of_current.action = CallstackAction::OutOfScope(OutOfScopeReason::Exited { panic: panicked } );
-
-        history_of_current.cycle_index = monotonic_cycle_counter;
-        previous_history_record.cycle_index = monotonic_cycle_counter;
-
-        self.full_history.push(history_of_current);
-        self.full_history.push(previous_history_record);
 
         let CallstackEntryWithAuxData {
             entry: _,
-            current_history_record: _,
-            parent_frame_index: _,
-            frame_index: _,
+            current_history_record: history_of_current,
+            parent_frame_index,
+            frame_index,
             forward_queue,
             rollback_queue,
-            forward_queue_ranges,
-            rollback_queue_ranges,
         } = current;
+
+        let mut history_of_current = history_of_current;
+
+        let mut parent_segment_data = self.frame_segments_data.get(&parent_frame_index).copied().unwrap();
+        let mut current_frame_record = self.frame_segments_data.get(&frame_index).copied().unwrap();
+
+        // we only need to distinguish situations when the target of merging is empty (100% indirected) or not
+
+        // it can be only indirection or issued query, or whatever comes from our resolver
+        let new_parent_forward_tail = match current_frame_record.forward_tail_pointer {
+            QueueSegmentPointer::GlobalStart => QueueSegmentPointer::GlobalStart,
+            QueueSegmentPointer::IssuedQuery(q_idx) => {
+                QueueSegmentPointer::OtherFramesQuery(q_idx)
+            },
+            QueueSegmentPointer::Indirection(QueueSegmentIndirectablePointer::ForwardHeadAtFrameStart(f)) => {
+                assert_eq!(f, frame_index);
+                // resolve the indirection
+                let forward_head = current_frame_record.forward_head_pointer;
+                let resolved = match forward_head {
+                    QueueSegmentPointer::GlobalStart => QueueSegmentPointer::GlobalStart, // propagate
+                    QueueSegmentPointer::GlobalEnd => unreachable!(),
+                    QueueSegmentPointer::IssuedQuery(..) => unreachable!(),
+                    QueueSegmentPointer::Indirection(..) => unreachable!(),
+                    QueueSegmentPointer::OtherFrameIndirection(ind) => QueueSegmentPointer::OtherFrameIndirection(ind),
+                    QueueSegmentPointer::OtherFramesQuery(q_idx) => QueueSegmentPointer::OtherFramesQuery(q_idx),
+                    QueueSegmentPointer::Dangling => unreachable!()
+                };
+
+                resolved
+            },
+            a @ QueueSegmentPointer::OtherFrameIndirection(..) => a,
+            a @ QueueSegmentPointer::OtherFramesQuery(..) => a,
+            a @ _ => unreachable!("encountered {:?}", a)
+        };
+
+        if let QueueSegmentPointer::Indirection(QueueSegmentIndirectablePointer::ForwardHeadAtFrameStart(f)) = current_frame_record.forward_tail_pointer {
+            assert_eq!(f, frame_index);
+            current_frame_record.forward_tail_pointer = current_frame_record.forward_head_pointer
+        }
+
+        parent_segment_data.forward_tail_pointer = new_parent_forward_tail;
+        parent_segment_data.forward_segment_length += current_frame_record.forward_segment_length;
 
         // merge the queues
         if panicked {
+            current_frame_record.did_end_up_in_panic = true;
+
+            // first we resolve a head of the rollback
+            let new_rollback_head = match current_frame_record.rollback_head_pointer {
+                QueueSegmentPointer::IssuedQuery(q_idx) => {
+                    QueueSegmentPointer::IssuedQuery(q_idx)
+                },
+                QueueSegmentPointer::Indirection(QueueSegmentIndirectablePointer::RollbackTailAtFrameStart(f)) => {
+                    // it means that we are appending an empty frame
+                    assert_eq!(f, frame_index);
+                    // resolve the indirection
+                    let rollback_tail = current_frame_record.rollback_tail_pointer;
+                    let resolved = match rollback_tail {
+                        QueueSegmentPointer::GlobalEnd => QueueSegmentPointer::GlobalEnd, // propagate
+                        QueueSegmentPointer::Dangling => {
+                            // tail of the parent becomes current
+                            parent_segment_data.forward_tail_pointer
+                        }
+                        _ => unreachable!(),
+
+                    };
+
+                    resolved
+                },
+                _ => unreachable!(),
+            };
+
+            current_frame_record.rollback_head_pointer = new_rollback_head;
+
+            // we know that the tail of rollback is dangling, but depending on the 
+            if current_frame_record.rollback_tail_pointer == QueueSegmentPointer::Dangling {
+                // it was a trivial frame that was rolled back, and we should just make it of length 0, where head == tail == parent's tail
+                current_frame_record.rollback_tail_pointer = current_frame_record.rollback_head_pointer;
+            } else {
+                assert!(matches!(current_frame_record.rollback_tail_pointer, QueueSegmentPointer::IssuedQuery(..)));
+            }
+
+            parent_segment_data.forward_segment_length += current_frame_record.rollback_segment_length;
+
             self.current_entry.forward_queue.extend(forward_queue);
-            self.current_entry
-                .forward_queue_ranges
-                .extend(forward_queue_ranges);
+
+            let adjusted_rollbacks = rollback_queue.into_iter().rev().map(|mut el| {
+                match &mut el.0 {
+                    QueryMarker::Rollback { cycle_of_applied_rollback, .. } => {
+                        *cycle_of_applied_rollback = Some(monotonic_cycle_counter);
+                    },
+                    _ => {}
+                }
+
+                el
+            });
 
             self.current_entry
                 .forward_queue
-                .extend(rollback_queue.into_iter().rev()); // keep in mind proper composition
+                .extend(adjusted_rollbacks);
+                // .extend(rollback_queue.into_iter().rev()); // keep in mind proper composition
 
-            // remap ranges of the rollback queue
-            let it = rollback_queue_ranges.into_iter().rev().map(|el| {
-                // we need to offset by the current counter and transform into the current counter + something
-                let current = self.monotonic_forward_query_counter;
-                let num_entries = el.len();
-                self.monotonic_forward_query_counter += num_entries;
+            // count adjustment
+            let mut num_rollbacks = 0;
 
-                current..(current + num_entries)
-            });
-            self.current_entry.forward_queue_ranges.extend(it)
+            for (_, el) in history_of_current.actions.iter() {
+                match el {
+                    LogAction::ForwardAndNotRolledBack { .. } => {
+                        num_rollbacks += 1;
+                    },
+                    _ => {}
+                }
+            }
+
+            for (_cycle, el) in history_of_current.actions.iter_mut() {
+                let adjusted_el = match &*el {
+                    LogAction::ForwardAndNotRolledBack { forward_coutner, rollback_counter } => {
+                        // we enumerate rollback counter from the very end of the flattened queue
+                        // and instead it should become an element from the forward queue
+                        LogAction::ForwardAndRolledBack { 
+                            forward_counter: *forward_coutner, 
+                            renumerated_rollback_counter_as_forward: self.forward_flattened_counter + *rollback_counter
+                        }
+                    },
+                    a @ LogAction::ForwardAndRolledBack { .. } => {
+                        // it has become the element of the forward queue already
+                        *a
+                    },
+                    a @ LogAction::ForwardNoRollback (..) => {
+                        // never affected
+                        *a
+                    },
+                };
+
+                *el = adjusted_el;
+            }
+
+            // renumerate for future
+            self.forward_flattened_counter += num_rollbacks;
+            self.rollback_flattened_counter -= num_rollbacks;
+            self.total_rolled_back += num_rollbacks;
         } else {
+            if current_frame_record.rollback_tail_pointer == QueueSegmentPointer::Dangling {
+                // only other option was an explicit query, so it's the only one
+                // we need to glue it somewhere
+                let new_rollback_tail = match parent_segment_data.rollback_head_pointer {
+                    QueueSegmentPointer::GlobalEnd => QueueSegmentPointer::GlobalEnd,
+                    QueueSegmentPointer::IssuedQuery(q_idx) => {
+                        QueueSegmentPointer::OtherFramesQuery(q_idx)
+                    },
+                    QueueSegmentPointer::OtherFramesQuery(q_idx) => {
+                        QueueSegmentPointer::OtherFramesQuery(q_idx)
+                    },
+                    QueueSegmentPointer::Indirection(QueueSegmentIndirectablePointer::RollbackTailAtFrameStart(f)) => {
+                        assert_eq!(f, parent_frame_index);
+
+                        match parent_segment_data.rollback_tail_pointer {
+                            QueueSegmentPointer::GlobalEnd => QueueSegmentPointer::GlobalEnd,
+                            QueueSegmentPointer::Dangling => QueueSegmentPointer::OtherFrameIndirection(QueueSegmentIndirectablePointer::RollbackTailAtFrameStart(f)), // make indirection
+                            QueueSegmentPointer::IssuedQuery(q_idx) => {
+                                QueueSegmentPointer::OtherFramesQuery(q_idx)
+                            },
+                            a @ _ => unreachable!("encountered {:?}", a),
+                        }  
+                    },
+                    a @ _ => unreachable!("encountered {:?}", a),
+                };
+
+                current_frame_record.rollback_tail_pointer = new_rollback_tail;
+            } else {
+                assert!(matches!(current_frame_record.rollback_tail_pointer, QueueSegmentPointer::IssuedQuery(..)));
+            }
+
+            parent_segment_data.rollback_segment_length += current_frame_record.rollback_segment_length;
+
+            if let QueueSegmentPointer::Indirection(QueueSegmentIndirectablePointer::RollbackTailAtFrameStart(f)) = current_frame_record.rollback_head_pointer {
+                // trivial frame, resolve indirection
+                assert_eq!(f, frame_index);
+                current_frame_record.rollback_head_pointer = current_frame_record.rollback_tail_pointer;
+            } else {
+                assert!(matches!(current_frame_record.rollback_head_pointer, QueueSegmentPointer::IssuedQuery(..)));
+            }
+
             // just glue
-
             self.current_entry.forward_queue.extend(forward_queue);
-            self.current_entry
-                .forward_queue_ranges
-                .extend(forward_queue_ranges);
-
             self.current_entry.rollback_queue.extend(rollback_queue);
-            self.current_entry
-                .rollback_queue_ranges
-                .extend(rollback_queue_ranges);
         }
+
+        let _ = self.frame_segments_data.insert(parent_frame_index, parent_segment_data);
+        let _ = self.frame_segments_data.insert(frame_index, current_frame_record);
+
+        // update the current history
+        history_of_current.action = CallstackAction::OutOfScope(OutOfScopeReason::Exited { panic: panicked } );
+        history_of_current.end_cycle = Some(monotonic_cycle_counter);
+
+        self.full_history.push(history_of_current);
+        self.full_history.push(previous_history_record);
 
         current.entry
     }
 
     pub fn add_log_query(&mut self, monotonic_cycle_counter: u32, log_query: LogQuery) {
-        let forward_query_index = self.monotonic_forward_query_counter;
-        self.monotonic_forward_query_counter += 1;
+        let current_frame_index = self.current_entry.frame_index;
+        let unique_query_id = self.unique_query_id_counter;
+        self.unique_query_id_counter += 1;
+
+        let mut current_frame_record = self.frame_segments_data.get_mut(&current_frame_index).unwrap();
+
         if log_query.rw_flag {
             // can be rolled back
+            let query_index = self.rollbackable_monotonic_counter;
+            self.rollbackable_monotonic_counter += 1;
 
-            let marker = QueryMarker::Forward(forward_query_index);
+            let marker = QueryMarker::Forward {unique_query_id, in_frame: current_frame_index, index: query_index, cycle: monotonic_cycle_counter};
+
+            current_frame_record.forward_tail_pointer = QueueSegmentPointer::IssuedQuery(marker.query_id());
+            if matches!(current_frame_record.forward_head_pointer, QueueSegmentPointer::Indirection(..) | QueueSegmentPointer::OtherFrameIndirection(..)) {
+                // remove indirection immediatelly fro simplicity
+                current_frame_record.forward_head_pointer = QueueSegmentPointer::IssuedQuery(marker.query_id());
+            }
+            current_frame_record.forward_segment_length += 1;
+
             self.current_entry
                 .forward_queue
                 .push((marker, monotonic_cycle_counter, log_query));
-                
-            if let Some(last) = self.current_entry.forward_queue_ranges.last_mut() {
-                if last.end == forward_query_index {
-                    last.end += 1;
-                } else {
-                    drop(last);
-                    self.current_entry
-                        .forward_queue_ranges
-                        .push(forward_query_index..(forward_query_index + 1));
-                }
-            } else {
-                // just push
-                self.current_entry
-                    .forward_queue_ranges
-                    .push(forward_query_index..(forward_query_index + 1));
-            }
-
-            self
-                .current_entry
-                .current_history_record
-                .forward_queue_ranges_changes.end += 1;
 
             let mut rollback_query = log_query;
             rollback_query.rollback = true;
-            let rollback_query_index = self.monotonic_rollback_query_counter;
-            self.monotonic_rollback_query_counter += 1;
-            let marker = QueryMarker::Rollback(rollback_query_index);
+
+            self.log_access_history.push((monotonic_cycle_counter, marker));
+
+            let unique_query_id = self.unique_query_id_counter;
+            self.unique_query_id_counter += 1;
+
+            let marker = QueryMarker::Rollback {unique_query_id, in_frame: current_frame_index, index: query_index, cycle_of_declaration: monotonic_cycle_counter, cycle_of_applied_rollback: None};
+
+            current_frame_record.rollback_head_pointer = QueueSegmentPointer::IssuedQuery(marker.query_id());
+            if current_frame_record.rollback_tail_pointer == QueueSegmentPointer::Dangling {
+                // it's a non-trivial frame
+                current_frame_record.rollback_tail_pointer = QueueSegmentPointer::IssuedQuery(marker.query_id());
+            }
+            current_frame_record.rollback_segment_length += 1;
+
             self.current_entry.rollback_queue.push((
                 marker,
                 monotonic_cycle_counter,
                 rollback_query,
             ));
-            if let Some(last) = self.current_entry.rollback_queue_ranges.last_mut() {
-                if last.end == rollback_query_index {
-                    last.end += 1;
-                } else {
-                    drop(last);
-                    self.current_entry
-                        .rollback_queue_ranges
-                        .push(rollback_query_index..(rollback_query_index + 1));
-                }
-            } else {
-                // just push
-                self.current_entry
-                    .rollback_queue_ranges
-                    .push(rollback_query_index..(rollback_query_index + 1));
-            }
 
-            self
-                .current_entry
-                .current_history_record
-                .rollback_queue_ranges_change.end += 1;
+            self.log_access_history.push((monotonic_cycle_counter, marker));
+
+            let forward_flattened_counter = self.forward_flattened_counter;
+            let rollback_flattened_counter = self.rollback_flattened_counter;
+
+            self.forward_flattened_counter += 1;
+            self.rollback_flattened_counter += 1;
+
+            self.current_entry.current_history_record.actions.push(
+                (
+                    monotonic_cycle_counter, 
+                    LogAction::ForwardAndNotRolledBack { forward_coutner: forward_flattened_counter, rollback_counter: rollback_flattened_counter }
+                )
+            );
 
             // snapshot it
-            self.log_queue_access_snapshots.push((monotonic_cycle_counter, LogQueueAccessAuxData {
-                monotonic_forward_query_counter: forward_query_index,
-                monotonic_rollback_query_counter: Some(rollback_query_index)
-            }));
+            self.log_queue_access_snapshots.push(
+                (
+                    monotonic_cycle_counter, 
+                    RenumeratedQueryIndex::ForwardIndexAndRollbackIndex(
+                        query_index
+                    )
+                )
+            );
         } else {
+            assert!(log_query.rollback == false);
+
+            let query_index = self.non_rollbackable_monotonic_counter;
+            self.non_rollbackable_monotonic_counter += 1;
+
+            let forward_flattened_counter = self.forward_flattened_counter;
+            self.forward_flattened_counter += 1;
+
+            self.current_entry.current_history_record.actions.push(
+                (
+                    monotonic_cycle_counter, 
+                    LogAction::ForwardNoRollback(forward_flattened_counter)
+                )
+            );
+
             // snapshot it
-            self.log_queue_access_snapshots.push((monotonic_cycle_counter, LogQueueAccessAuxData {
-                monotonic_forward_query_counter: forward_query_index,
-                monotonic_rollback_query_counter: None,
-            }));
+            self.log_queue_access_snapshots.push(
+                (
+                    monotonic_cycle_counter, 
+                    RenumeratedQueryIndex::ForwardNoRollbackIndex(query_index)
+                )
+            );
 
             // just add
-            let marker = QueryMarker::Forward(forward_query_index);
+            let marker = QueryMarker::ForwardNoRollback{unique_query_id, in_frame: current_frame_index, index: query_index, cycle: monotonic_cycle_counter};
+
+            current_frame_record.forward_tail_pointer = QueueSegmentPointer::IssuedQuery(marker.query_id());
+            if matches!(current_frame_record.forward_head_pointer, QueueSegmentPointer::Indirection(..) | QueueSegmentPointer::OtherFrameIndirection(..)) {
+                // remove indirection immediatelly fro simplicity
+                current_frame_record.forward_head_pointer = QueueSegmentPointer::IssuedQuery(marker.query_id());
+            }
+            current_frame_record.forward_segment_length += 1;
+
             self.current_entry
                 .forward_queue
                 .push((marker, monotonic_cycle_counter, log_query));
-            if let Some(last) = self.current_entry.forward_queue_ranges.last_mut() {
-                if last.end == forward_query_index {
-                    last.end += 1;
-                } else {
-                    drop(last);
-                    self.current_entry
-                        .forward_queue_ranges
-                        .push(forward_query_index..(forward_query_index + 1));
-                }
-            } else {
-                // just push
-                self.current_entry
-                    .forward_queue_ranges
-                    .push(forward_query_index..(forward_query_index + 1));
-            }
 
-            self
-                .current_entry
-                .current_history_record
-                .forward_queue_ranges_changes.end += 1;
+            self.log_access_history.push((monotonic_cycle_counter, marker));
         }
     }
 }
