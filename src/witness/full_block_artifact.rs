@@ -29,11 +29,16 @@ use sync_vm::glue::pubdata_hasher::input::PubdataHasherInstanceWitness;
 use sync_vm::glue::pubdata_hasher::storage_write_data::InitialStorageWriteData;
 use sync_vm::glue::pubdata_hasher::storage_write_data::RepeatedStorageWriteData;
 use sync_vm::glue::storage_application::input::StorageApplicationCircuitInstanceWitness;
+use sync_vm::glue::keccak256_round_function_circuit::input::Keccak256RoundFunctionInstanceWitness;
+use sync_vm::glue::sha256_round_function_circuit::input::Sha256RoundFunctionCircuitInstanceWitness;
+use sync_vm::glue::ecrecover_circuit::input::EcrecoverCircuitInstanceWitness;
 
 #[derive(Derivative)]
 #[derivative(Clone, Default(bound = ""))]
 pub struct FullBlockArtifacts<E: Engine> {
     pub is_processed: bool,
+    pub memory_queue_simulator: MemoryQueueSimulator<E>,
+
     // all the RAM (without accumulation into the queue)
     pub vm_memory_queries_accumulated: Vec<(u32, MemoryQuery)>,
     pub vm_memory_queue_states: Vec<(u32, bool, MemoryQueueState<E>)>,
@@ -112,6 +117,14 @@ pub struct FullBlockArtifacts<E: Engine> {
     pub keccak_256_memory_queries: Vec<MemoryQuery>,
     pub keccak_256_memory_states: Vec<MemoryQueueState<E>>,
 
+    // also separate copy of memory queries that are contributions from individual precompiles
+    pub sha256_memory_queries: Vec<MemoryQuery>,
+    pub sha256_memory_states: Vec<MemoryQueueState<E>>,
+
+    // also separate copy of memory queries that are contributions from individual precompiles
+    pub ecrecover_memory_queries: Vec<MemoryQuery>,
+    pub ecrecover_memory_states: Vec<MemoryQueueState<E>>,
+
     // processed RAM circuit information
     pub ram_permutation_circuits_data: Vec<RamPermutationCircuitInstanceWitness<E>>,
     // processed code decommitter circuits, as well as sorting circuit (1)
@@ -127,7 +140,13 @@ pub struct FullBlockArtifacts<E: Engine> {
     pub initial_writes_pubdata_hasher_circuit_data: Vec<PubdataHasherInstanceWitness<E, 3, 64, InitialStorageWriteData<E>>>,
     pub repeated_writes_pubdata_hasher_circuit_data: Vec<PubdataHasherInstanceWitness<E, 2, 40, RepeatedStorageWriteData<E>>>,
     //
-    pub rollup_storage_application_circuit_data: Vec<StorageApplicationCircuitInstanceWitness<E>>
+    pub rollup_storage_application_circuit_data: Vec<StorageApplicationCircuitInstanceWitness<E>>,
+    // 
+    pub keccak256_circuits_data: Vec<Keccak256RoundFunctionInstanceWitness<E>>,
+    // 
+    pub sha256_circuits_data: Vec<Sha256RoundFunctionCircuitInstanceWitness<E>>,
+    //
+    pub ecrecover_circuits_data: Vec<EcrecoverCircuitInstanceWitness<E>>,
 }
 
 use crate::witness::tree::ZKSyncTestingTree;
@@ -140,15 +159,13 @@ impl<E: Engine> FullBlockArtifacts<E> {
         testing_tree: &mut ZKSyncTestingTree,
         num_non_deterministic_heap_queries: usize,
     ) {
-        let mut memory_queue_simulator = MemoryQueueSimulator::<E>::empty();
-
         // this is parallelizable internally by the factor of 3 in round function implementation later on
 
         for (cycle, query) in self.vm_memory_queries_accumulated.iter() {
             self.all_memory_queries_accumulated.push(*query);
 
             let (_old_tail, intermediate_info) =
-                memory_queue_simulator.push_and_output_intermediate_data(*query, round_function);
+                self.memory_queue_simulator.push_and_output_intermediate_data(*query, round_function);
 
             let is_pended = query.is_pended;
             self.vm_memory_queue_states
@@ -157,7 +174,7 @@ impl<E: Engine> FullBlockArtifacts<E> {
         }
 
         assert!(
-            memory_queue_simulator.num_items as usize == self.vm_memory_queries_accumulated.len()
+            self.memory_queue_simulator.num_items as usize == self.vm_memory_queries_accumulated.len()
         );
 
         // direct VM related part is done, other subcircuit's functionality is moved to other functions
@@ -167,7 +184,6 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
         let (code_decommitter_circuits_data, decommittments_deduplicator_witness) = compute_decommitter_circuit_snapshots(
             self,
-            &mut memory_queue_simulator,
             round_function,
             geometry.cycles_per_code_decommitter as usize,
         );
@@ -184,6 +200,9 @@ impl<E: Engine> FullBlockArtifacts<E> {
         );
 
         self.log_demuxer_circuit_data = vec![log_demuxer_witness];
+
+        // for all precompiles we quickly dump out-of-circuit queries, and do the work with the real
+        // memory queues in the corresponding functions
 
         // keccak precompile
 
@@ -204,8 +223,19 @@ impl<E: Engine> FullBlockArtifacts<E> {
                     self.all_memory_queries_accumulated
                         .extend_from_slice(writes);
                 }
+
+
             }
         }
+
+        use crate::witness::individual_circuits::keccak256_round_function::keccak256_decompose_into_per_circuit_witness;
+
+        let keccak256_circuits_data = keccak256_decompose_into_per_circuit_witness(
+            self,
+            geometry.cycles_per_keccak256_circuit as usize,
+            round_function
+        );
+        self.keccak256_circuits_data = keccak256_circuits_data;
 
         // sha256 precompile
 
@@ -219,13 +249,24 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
                 // we read, then write
                 self.all_memory_queries_accumulated.extend_from_slice(reads);
+                self.sha256_memory_queries.extend_from_slice(reads);
 
                 if let Some(writes) = writes.as_ref() {
                     self.all_memory_queries_accumulated
                         .extend_from_slice(writes);
+                    self.sha256_memory_queries.extend_from_slice(reads);
                 }
             }
         }
+
+        use crate::witness::individual_circuits::sha256_round_function::sha256_decompose_into_per_circuit_witness;
+
+        let sha256_circuits_data = sha256_decompose_into_per_circuit_witness(
+            self,
+            geometry.cycles_per_sha256_circuit as usize,
+            round_function
+        );
+        self.sha256_circuits_data = sha256_circuits_data;
 
         // ecrecover precompile
 
@@ -238,9 +279,21 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
             // we read, then write
             self.all_memory_queries_accumulated.extend_from_slice(reads);
+            self.ecrecover_memory_queries.extend_from_slice(reads);
+
             self.all_memory_queries_accumulated
                 .extend_from_slice(writes);
+            self.ecrecover_memory_queries.extend_from_slice(writes);
         }
+
+        use crate::witness::individual_circuits::ecrecover::ecrecover_decompose_into_per_circuit_witness;
+
+        let ecrecover_circuits_data = ecrecover_decompose_into_per_circuit_witness(
+            self,
+            geometry.cycles_per_ecrecover_circuit as usize,
+            round_function
+        );
+        self.ecrecover_circuits_data = ecrecover_circuits_data;
 
         // we are done with a memory and can do the processing and breaking of the logical arguments into individual circits
 
@@ -248,7 +301,6 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
         let ram_permutation_circuits_data = compute_ram_circuit_snapshots(
             self,
-            memory_queue_simulator,
             round_function,
             num_non_deterministic_heap_queries,
             geometry.cycles_per_ram_permutation as usize,

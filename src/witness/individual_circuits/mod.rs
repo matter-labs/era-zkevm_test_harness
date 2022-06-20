@@ -11,3 +11,5 @@ pub mod pubdata_rehasher;
 pub mod get_storage_application_pubdata;
 pub mod data_hasher_and_merklizer;
 pub mod storage_application;
+pub mod sha256_round_function;
+pub mod ecrecover;

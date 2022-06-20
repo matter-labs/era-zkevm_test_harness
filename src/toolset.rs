@@ -32,6 +32,9 @@ pub struct GeometryConfig {
     pub cycles_per_storage_application: u32,
     pub limit_for_first_writes_pubdata_hasher: u32,
     pub limit_for_repeated_writes_pubdata_hasher: u32,
+    pub cycles_per_keccak256_circuit: u32,
+    pub cycles_per_sha256_circuit: u32,
+    pub cycles_per_ecrecover_circuit: u32,
 }
 
 pub fn create_tools<S: Storage>(storage: S, config: &GeometryConfig) -> ProvingToolset<S> {

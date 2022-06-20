@@ -18,7 +18,6 @@ pub fn compute_ram_circuit_snapshots<
     R: CircuitArithmeticRoundFunction<E, 2, 3>
 >(
     artifacts: &mut FullBlockArtifacts<E>,
-    memory_queue_simulator: MemoryQueueSimulator<E>,
     round_function: &R,
     num_non_deterministic_heap_queries: usize,
     per_circuit_capacity: usize
@@ -52,8 +51,8 @@ pub fn compute_ram_circuit_snapshots<
     let mut challenges = vec![];
 
     let mut fs_input = vec![];
-    fs_input.extend_from_slice(&memory_queue_simulator.tail);
-    fs_input.push(u64_to_fe(memory_queue_simulator.num_items as u64));
+    fs_input.extend_from_slice(&artifacts.memory_queue_simulator.tail);
+    fs_input.push(u64_to_fe(artifacts.memory_queue_simulator.num_items as u64));
     fs_input.extend_from_slice(&sorted_memory_queries_simulator.tail);
     fs_input.push(u64_to_fe(sorted_memory_queries_simulator.num_items as u64));
 
@@ -71,7 +70,7 @@ pub fn compute_ram_circuit_snapshots<
     // since encodings of the elements provide all the information necessary to perform soring argument,
     // we use them naively
 
-    let lhs_contributions: Vec<_> = memory_queue_simulator.witness.iter().map(|el| el.0).collect();
+    let lhs_contributions: Vec<_> = artifacts.memory_queue_simulator.witness.iter().map(|el| el.0).collect();
     let rhs_contributions: Vec<_> = sorted_memory_queries_simulator.witness.iter().map(|el| el.0).collect();
 
     let mut lhs_grand_product_chain: Vec<E::Fr> = vec![E::Fr::zero(); lhs_contributions.len()];
@@ -168,7 +167,7 @@ pub fn compute_ram_circuit_snapshots<
 
     assert_eq!(lhs_grand_product_chain.len(), artifacts.all_memory_queries_accumulated.len());
     assert_eq!(lhs_grand_product_chain.len(), artifacts.sorted_memory_queries_accumulated.len());
-    assert_eq!(lhs_grand_product_chain.len(), memory_queue_simulator.witness.len());
+    assert_eq!(lhs_grand_product_chain.len(), artifacts.memory_queue_simulator.witness.len());
     assert_eq!(lhs_grand_product_chain.len(), sorted_memory_queries_simulator.witness.len());
 
     // we also want to have chunks of witness for each of all the intermediate states
@@ -177,7 +176,7 @@ pub fn compute_ram_circuit_snapshots<
             .zip(artifacts.sorted_memory_queue_states.chunks(per_circuit_capacity))
             .zip(lhs_grand_product_chain.chunks(per_circuit_capacity))
             .zip(rhs_grand_product_chain.chunks(per_circuit_capacity))
-            .zip(memory_queue_simulator.witness.chunks(per_circuit_capacity))
+            .zip(artifacts.memory_queue_simulator.witness.chunks(per_circuit_capacity))
             .zip(sorted_memory_queries_simulator.witness.chunks(per_circuit_capacity));
 
     // now trivial transformation into desired data structures,

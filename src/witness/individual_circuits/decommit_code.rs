@@ -25,7 +25,6 @@ pub fn compute_decommitter_circuit_snapshots<
     R: CircuitArithmeticRoundFunction<E, 2, 3>
 >(
     artifacts: &mut FullBlockArtifacts<E>,
-    memory_queue_simulator: &mut MemoryQueueSimulator<E>,
     round_function: &R,
     per_circuit_capacity: usize
 ) -> (Vec<CodeDecommitterCircuitInstanceWitness<E>>, CodeDecommittmentsDeduplicatorInstanceWitness<E>) {
@@ -34,7 +33,7 @@ pub fn compute_decommitter_circuit_snapshots<
     let mut results: Vec<CodeDecommitterCircuitInstanceWitness<E>> = vec![];
 
     use crate::witness_structures::take_sponge_like_queue_state_from_simulator;
-    let initial_memory_queue_state = take_sponge_like_queue_state_from_simulator(memory_queue_simulator);
+    let initial_memory_queue_state = take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
 
     // we produce witness for two circuits at once
 
@@ -93,7 +92,7 @@ pub fn compute_decommitter_circuit_snapshots<
             // fill up the memory queue
             for query in as_queries_it.iter() {
                 let (_old_tail, intermediate_info) =
-                    memory_queue_simulator.push_and_output_intermediate_data(*query, round_function);
+                    artifacts.memory_queue_simulator.push_and_output_intermediate_data(*query, round_function);
 
                 artifacts.all_memory_queue_states.push(intermediate_info);
             }
@@ -198,7 +197,7 @@ pub fn compute_decommitter_circuit_snapshots<
     let mut start = true;
     let mut memory_queue_state_offset = 0;
 
-    use zk_evm::precompiles::sha256::{transmute_state, Sha256InnerState};
+    use zk_evm::precompiles::sha256::{transmute_state};
     use zk_evm::precompiles::sha256::Sha256;
     use zk_evm::precompiles::keccak256::Digest;
 

@@ -185,6 +185,19 @@ impl<
         const N: usize,
         const SW: usize,
         const ROUNDS: usize,
+    > Default for SpongeLikeQueueSimulator<E, I, N, SW, ROUNDS>
+{ 
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
+impl<
+        E: Engine,
+        I: OutOfCircuitFixedLengthEncodable<E, N>,
+        const N: usize,
+        const SW: usize,
+        const ROUNDS: usize,
     > SpongeLikeQueueSimulator<E, I, N, SW, ROUNDS>
 {
     pub fn empty() -> Self {

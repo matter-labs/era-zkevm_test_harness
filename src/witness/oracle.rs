@@ -58,6 +58,8 @@ pub struct RollbackQueueStateWitness<E: Engine> {
     pub segment_length: u32,
 }
 
+#[derive(Derivative)]
+#[derivative(Default(bound = ""))]
 pub struct VmWitnessOracle<E: Engine> {
     pub memory_read_witness: Vec<(u32, MemoryQuery)>,
     pub rollback_queue_head_segments: Vec<(u32, E::Fr)>,
@@ -490,19 +492,8 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
     // dbg!(&cycle_into_flat_sequence_index);
 
-
     let full_log_length = chain_of_states.len();
     assert_eq!(full_log_length, num_forwards + num_rollbacks);
-
-    // let mut log_state_spans = BTreeMap::new();
-
-    // mapping of cycle counter into positions in the flattened log
-    let log_accesses_history: Vec<_> = callstack_with_aux_data
-        .log_queue_access_snapshots
-        .clone();
-     
-    // dbg!(&chain_of_states);
-    // dbg!(&log_queue_simulator.tail);
     
     use super::callstack_handler::CallstackAction;
     use crate::encodings::callstack_entry::CallstackSimulator;
@@ -763,6 +754,9 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
     artifacts.process(round_function, geometry, tree, num_non_deterministic_heap_queries);
 
     artifacts.special_initial_decommittment_queries = vec![entry_point_decommittment_query];
+
+    // NOTE: here we have all the queues processed in the `process` function (actual pushing is done), so we can
+    // just read from the corresponding states
 
     let mut all_instances_witnesses = vec![];
 
