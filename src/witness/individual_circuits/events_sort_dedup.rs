@@ -32,6 +32,7 @@ pub fn compute_events_dedup_and_sort<
     unsorted_queries: &Vec<LogQuery>,
     target_deduplicated_queries: &mut Vec<LogQuery>,
     unsorted_simulator: &LogQueueSimulator<E>,
+    result_queue_simulator: &mut LogQueueSimulator<E>,
     round_function: &R,
 ) -> EventsDeduplicatorInstanceWitness<E> {
     // parallelizable 
@@ -71,9 +72,6 @@ pub fn compute_events_dedup_and_sort<
     }).collect();
 
     // now just implement the logic to sort and deduplicate
-
-    let mut result_queue_simulator = LogQueueSimulator::empty();
-
     let mut it = sorted_queries.iter().peekable();
 
     loop {

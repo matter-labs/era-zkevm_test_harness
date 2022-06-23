@@ -199,6 +199,7 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
         cycles_per_keccak256_circuit: 1,
         cycles_per_sha256_circuit: 1,
         cycles_per_ecrecover_circuit: 1,
+        limit_for_l1_messages_merklizer: 8,
     };
 
     use crate::witness::tree::ZKSyncTestingTree;

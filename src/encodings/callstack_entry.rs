@@ -5,7 +5,8 @@ use zk_evm::vm_state::CallStackEntry;
 use super::*;
 
 // we need some extra data to preserve
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(bound = "")]
 pub struct ExtendedCallstackEntry<E: Engine> {
     pub callstack_entry: CallStackEntry,
     pub rollback_queue_head: E::Fr,
@@ -77,13 +78,44 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 6> for ExtendedCallstackEntr
 
         let val_0 = self.rollback_queue_head;
         let val_1 = self.rollback_queue_tail;
-        let val_2 = address_to_fe::<E::Fr>(self.callstack_entry.this_address);
-        let val_3 = address_to_fe::<E::Fr>(self.callstack_entry.msg_sender);
+        // let val_2 = address_to_fe::<E::Fr>(self.callstack_entry.this_address);
+        // let val_3 = address_to_fe::<E::Fr>(self.callstack_entry.msg_sender);
         let val_4 = address_to_fe::<E::Fr>(self.callstack_entry.code_address);
 
         use crate::utils::*;
 
         let shifts = compute_shifts::<E::Fr>();
+
+        let mut lc = E::Fr::zero();
+        let mut shift = 0;
+
+        scale_and_accumulate::<E, _>(&mut lc, u160_from_address(self.callstack_entry.this_address), &shifts, shift);
+        shift += 160;
+        scale_and_accumulate::<E, _>(
+            &mut lc,
+            self.callstack_entry.context_u128_value as u64, // low
+            &shifts,
+            shift,
+        );
+        shift += 64;
+        assert!(shift <= E::Fr::CAPACITY as usize);
+        let val_2 = lc;
+
+        let mut lc = E::Fr::zero();
+        let mut shift = 0;
+
+        scale_and_accumulate::<E, _>(&mut lc, u160_from_address(self.callstack_entry.msg_sender), &shifts, shift);
+        shift += 160;
+        scale_and_accumulate::<E, _>(
+            &mut lc,
+            (self.callstack_entry.context_u128_value >> 64) as u64, // high
+            &shifts,
+            shift,
+        );
+        shift += 64;
+        assert!(shift <= E::Fr::CAPACITY as usize);
+        let val_3 = lc;
+
         let mut lc = E::Fr::zero();
         let mut shift = 0;
 

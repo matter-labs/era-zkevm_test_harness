@@ -359,6 +359,32 @@ impl BinaryHasher<32> for Blake2s256 {
     }
 }
 
+
+use sha3::Keccak256;
+
+impl BinaryHasher<32> for Keccak256 {
+    fn new() -> Self {
+        Digest::new()
+    }
+    fn node_hash(_depth: usize, left_node: &[u8; 32], right_node: &[u8; 32]) -> [u8; 32] {
+        let mut hasher = <Self as Digest>::new();
+        hasher.update(left_node);
+        hasher.update(right_node);
+        let mut result = [0u8; 32];
+        result.copy_from_slice(hasher.finalize().as_slice());
+
+        result
+    }
+    fn leaf_hash(leaf: &[u8]) -> [u8; 32] {
+        let mut hasher = <Self as Digest>::new();
+        hasher.update(leaf);
+        let mut result = [0u8; 32];
+        result.copy_from_slice(hasher.finalize().as_slice());
+
+        result
+    }
+}
+
 use derivative::Derivative;
 
 #[derive(Derivative)]

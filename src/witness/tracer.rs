@@ -218,7 +218,7 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
             }
 
             if !is_pending {
-                // to it immediatelly
+                // do it immediatelly
                 let snapshot = VmSnapshot {
                     local_state: current_state.clone(),
                     at_cycle: self.current_cycle_counter

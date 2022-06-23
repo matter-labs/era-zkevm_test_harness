@@ -1,5 +1,5 @@
 use crate::{ethereum_types::{Address, U256}, witness::{full_block_artifact::FullBlockArtifacts}, utils::calldata_to_aligned_data};
-use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
+use sync_vm::{circuit_structures::traits::CircuitArithmeticRoundFunction, franklin_crypto::plonk::circuit::tables::inscribe_default_range_table_for_bit_width_over_first_three_columns};
 use crate::toolset::GeometryConfig;
 use zk_evm::abstractions::Storage;
 use crate::toolset::create_tools;
@@ -118,6 +118,9 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
     let mut tracer = GenericNoopTracer::<_>::new();
     for _ in 0..cycle_limit {
         out_of_circuit_vm.cycle(&mut tracer);
+        if out_of_circuit_vm.execution_has_ended() && !out_of_circuit_vm.is_any_pending() {
+            break;
+        }
     }
 
     let vm_local_state = out_of_circuit_vm.local_state;
@@ -162,6 +165,8 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
         );
 
     let num_instances = instance_oracles.len();
+    dbg!(num_instances);
+    let mut observable_input = None;
 
     for (instance_idx, vm_instance) in instance_oracles.into_iter().enumerate() {
         println!("Running VM for range {:?}", vm_instance.cycles_range);
@@ -170,25 +175,76 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
         let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
         sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
 
-        let vm_state = run_vm_instance(
-            &mut cs,
-            &round_function,
-            &in_circuit_global_context,
-            vm_instance
+        let limit = geometry.cycles_per_vm_snapshot as usize;
+
+        // let vm_state = run_vm_instance(
+        //     &mut cs,
+        //     &round_function,
+        //     &in_circuit_global_context,
+        //     vm_instance.clone(),
+        // );
+
+        // if instance_idx == num_instances - 1 {
+        //     // consistency check for storage log
+        //     assert_eq!(
+        //         vm_state.callstack.current_context.log_queue_forward_tail.get_value().unwrap(),
+        //         artifacts.original_log_queue_simulator.tail
+        //     );
+
+        //     assert_eq!(
+        //         vm_state.callstack.current_context.log_queue_forward_part_length.get_value().unwrap(),
+        //         artifacts.original_log_queue_simulator.num_items
+        //     );
+        // }
+
+        // second check
+        println!("------------------ RUNNING FULL CHECK ------------------");
+
+        use crate::witness::utils::simulate_public_input_value_from_witness;
+        use crate::witness::utils::vm_instance_witness_to_circuit_formal_input;
+        dbg!(instance_idx);
+        let is_first = instance_idx == 0;
+        dbg!(is_first);
+        let is_last = instance_idx == num_instances - 1;
+        dbg!(is_last);
+        let mut circuit_input = vm_instance_witness_to_circuit_formal_input(
+            vm_instance,
+            is_first,
+            is_last,
+            in_circuit_global_context.clone(),
         );
 
-        if instance_idx == num_instances - 1 {
-            // consistency check for storage log
-            assert_eq!(
-                vm_state.callstack.current_context.log_queue_forward_tail.get_value().unwrap(),
-                artifacts.original_log_queue_simulator.tail
-            );
-
-            assert_eq!(
-                vm_state.callstack.current_context.log_queue_forward_part_length.get_value().unwrap(),
-                artifacts.original_log_queue_simulator.num_items
-            );
+        if observable_input.is_none() {
+            assert!(is_first);
+            observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
+        } else {
+            circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
         }
+
+        let proof_system_input = simulate_public_input_value_from_witness(
+            circuit_input.closed_form_input.clone(),
+        );
+
+        let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+        sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+        use sync_vm::vm::vm_cycle::entry_point::vm_circuit_entry_point;
+
+        dbg!(&circuit_input.closed_form_input);
+
+        let dump = serde_json::to_string(&circuit_input).unwrap();
+        println!("{}", &dump);
+        use sync_vm::vm::vm_cycle::input::VmCircuitWitness;
+        use crate::witness::oracle::VmWitnessOracle;
+        let _: VmCircuitWitness<Bn256, VmWitnessOracle<Bn256>> = serde_json::from_str(&dump).unwrap();
+
+        let circuit_input = vm_circuit_entry_point(
+            &mut cs, 
+            Some(circuit_input),
+            &round_function,
+            limit
+        ).unwrap();
+
+        assert_eq!(proof_system_input, circuit_input.get_value().unwrap());
     }
 
     // test
@@ -199,7 +255,7 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
         use sync_vm::glue::sort_decommittment_requests::sort_and_deduplicate_code_decommittments_entry_point;
 
         let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
-        sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+        inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
 
         let _ = sort_and_deduplicate_code_decommittments_entry_point(
             &mut cs,
@@ -215,9 +271,11 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
             println!("Running code decommitter circuit number {}", i);
             // println!("Running RAM permutation for input {:?}", subresult);
             use sync_vm::glue::code_unpacker_sha256::unpack_code_into_memory_entry_point;
+            use sync_vm::vm::vm_cycle::add_bitwise_8x8_table;
 
             let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
-            sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+            add_bitwise_8x8_table(&mut cs).unwrap();
+            // inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
 
             let _ = unpack_code_into_memory_entry_point(
                 &mut cs,
@@ -236,7 +294,7 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
         use sync_vm::glue::demux_log_queue::demultiplex_storage_logs_enty_point;
 
         let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
-        sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+        inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
 
         let _ = demultiplex_storage_logs_enty_point(
             &mut cs,
@@ -254,7 +312,7 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
             use sync_vm::glue::ram_permutation::ram_permutation_entry_point;
 
             let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
-            sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+            inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
 
             let _ = ram_permutation_entry_point(
                 &mut cs,
@@ -274,7 +332,7 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
         use sync_vm::glue::storage_validity_by_grand_product::sort_and_deduplicate_storage_access_entry_point;
 
         let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
-        sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+        inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
 
         let _ = sort_and_deduplicate_storage_access_entry_point(
             &mut cs,
@@ -293,7 +351,7 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
         use sync_vm::glue::log_sorter::sort_and_deduplicate_events_entry_point;
 
         let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
-        sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+        inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
 
         let _ = sort_and_deduplicate_events_entry_point(
             &mut cs,
@@ -312,13 +370,35 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
         use sync_vm::glue::log_sorter::sort_and_deduplicate_events_entry_point;
 
         let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
-        sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+        inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
 
         let _ = sort_and_deduplicate_events_entry_point(
             &mut cs,
             Some(subresult.clone()),
             &round_function,
             geometry.limit_for_events_or_l1_messages_sorter as usize
+        ).unwrap();
+    }
+
+    // test
+    {
+        println!("Running l1 messages merklizer");
+        assert!(artifacts.l1_messages_merklizer_data.len() == 1);
+        let subresult = &artifacts.l1_messages_merklizer_data[0];
+        // println!("Running RAM permutation for input {:?}", subresult);
+        use sync_vm::scheduler::merklize_messages_entry_point;
+
+        let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+        inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
+
+        use sync_vm::glue::merkleize_l1_messages::tree_hasher::CircuitKeccakTreeHasher;
+
+        let _ = merklize_messages_entry_point::<_, _, _, CircuitKeccakTreeHasher<_>, 2, 3, 2>(
+            &mut cs,
+            Some(subresult.clone()),
+            &round_function,
+            geometry.limit_for_l1_messages_merklizer as usize,
+            true,
         ).unwrap();
     }
 

@@ -260,3 +260,40 @@ impl<E: Engine> CircuitEquivalentReflection<E> for LogQuery {
         log_query_into_storage_record_witness(self)
     }
 }
+
+use super::initial_storage_write::BytesSerializable;
+
+// for purposes of L1 messages
+impl BytesSerializable<88> for LogQuery {
+    fn serialize(&self) -> [u8; 88] {
+        let mut result = [0u8; 88];
+        let mut offset = 0;
+        result[offset] = self.shard_id;
+        offset += 1;
+        result[offset] = self.is_service as u8;
+        offset += 1;
+
+        let bytes_be = self.tx_number_in_block.to_be_bytes();
+        result[offset..(offset + bytes_be.len())].copy_from_slice(&bytes_be);
+        offset += bytes_be.len();
+
+        let bytes_be = self.address.to_fixed_bytes();
+        result[offset..(offset + bytes_be.len())].copy_from_slice(&bytes_be);
+        offset += bytes_be.len();
+
+        
+        let mut bytes_be = [0u8; 32];
+        self.key.to_big_endian(&mut bytes_be);
+        result[offset..(offset + bytes_be.len())].copy_from_slice(&bytes_be);
+        offset += bytes_be.len();
+
+        let mut bytes_be = [0u8; 32];
+        self.written_value.to_big_endian(&mut bytes_be);
+        result[offset..(offset + bytes_be.len())].copy_from_slice(&bytes_be);
+        offset += bytes_be.len();
+
+        assert_eq!(offset, 88);
+
+        result
+    }
+}

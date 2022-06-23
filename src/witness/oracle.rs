@@ -58,8 +58,9 @@ pub struct RollbackQueueStateWitness<E: Engine> {
     pub segment_length: u32,
 }
 
-#[derive(Derivative)]
-#[derivative(Default(bound = ""))]
+#[derive(Derivative, serde::Serialize, serde::Deserialize)]
+#[derivative(Default(bound = ""), Clone(bound = ""))]
+#[serde(bound = "")]
 pub struct VmWitnessOracle<E: Engine> {
     pub memory_read_witness: Vec<(u32, MemoryQuery)>,
     pub rollback_queue_head_segments: Vec<(u32, E::Fr)>,
@@ -107,7 +108,7 @@ impl<E: Engine> std::default::Default for VmInCircuitAuxilaryParameters<E> {
 }
 
 #[derive(Derivative)]
-#[derivative(Debug)]
+#[derivative(Debug, Clone)]
 pub struct VmInstanceWitness<E: Engine, O: WitnessOracle<E>> {
     // we need everything to start a circuit from this point of time
     
@@ -1162,6 +1163,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
                     this_shard_id: entry.this_shard_id,
                     caller_shard_id: entry.caller_shard_id,
                     code_shard_id: entry.code_shard_id,
+                    context_u128_value_composite: [entry.context_u128_value as u64, (entry.context_u128_value >> 64) as u64],
                     _marker: std::marker::PhantomData,
                 },
                 extension: ExecutionContextRecordExtensionWitness {

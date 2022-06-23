@@ -9,6 +9,7 @@ use crate::pairing::Engine;
 use crate::toolset::GeometryConfig;
 use derivative::Derivative;
 use rayon::slice::ParallelSliceMut;
+use sync_vm::scheduler::data_access_functions::StorageLogRecord;
 use std::cmp::Ordering;
 use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
 use zk_evm::aux_structures::DecommittmentQuery;
@@ -32,6 +33,8 @@ use sync_vm::glue::storage_application::input::StorageApplicationCircuitInstance
 use sync_vm::glue::keccak256_round_function_circuit::input::Keccak256RoundFunctionInstanceWitness;
 use sync_vm::glue::sha256_round_function_circuit::input::Sha256RoundFunctionCircuitInstanceWitness;
 use sync_vm::glue::ecrecover_circuit::input::EcrecoverCircuitInstanceWitness;
+use sync_vm::glue::merkleize_l1_messages::input::MessagesMerklizerInstanceWitness;
+use crate::encodings::initial_storage_write::CircuitEquivalentReflection;
 
 #[derive(Derivative)]
 #[derivative(Clone, Default(bound = ""))]
@@ -101,8 +104,10 @@ pub struct FullBlockArtifacts<E: Engine> {
     pub deduplicated_porter_storage_queries: Vec<LogQuery>,
     pub deduplicated_porter_storage_queue_states: Vec<LogQueueState<E>>,
     pub deduplicated_event_queries: Vec<LogQuery>,
+    pub deduplicated_event_queue_simulator: LogQueueSimulator<E>,
     pub deduplicated_event_queue_states: Vec<LogQueueState<E>>,
     pub deduplicated_to_l1_queries: Vec<LogQuery>,
+    pub deduplicated_to_l1_queue_simulator: LogQueueSimulator<E>,
     pub deduplicated_to_l1_queue_states: Vec<LogQueueState<E>>,
 
     // 
@@ -147,6 +152,8 @@ pub struct FullBlockArtifacts<E: Engine> {
     pub sha256_circuits_data: Vec<Sha256RoundFunctionCircuitInstanceWitness<E>>,
     //
     pub ecrecover_circuits_data: Vec<EcrecoverCircuitInstanceWitness<E>>,
+    //
+    pub l1_messages_merklizer_data: Vec<MessagesMerklizerInstanceWitness<E, 5, 88, <LogQuery as CircuitEquivalentReflection<E>>::Destination>>,
 }
 
 use crate::witness::tree::ZKSyncTestingTree;
@@ -324,6 +331,7 @@ impl<E: Engine> FullBlockArtifacts<E> {
             &self.demuxed_event_queries,
             &mut self.deduplicated_event_queries,
             &self.demuxed_events_queue_simulator,
+            &mut self.deduplicated_event_queue_simulator,
             round_function
         );
 
@@ -333,10 +341,23 @@ impl<E: Engine> FullBlockArtifacts<E> {
             &self.demuxed_to_l1_queries,
             &mut self.deduplicated_to_l1_queries,
             &self.demuxed_to_l1_queue_simulator,
+            &mut self.deduplicated_to_l1_queue_simulator,
             round_function
         );
 
         self.l1_messages_deduplicator_circuit_data = vec![l1_messages_deduplicator_circuit_data];
+
+        // merklize some messages
+
+        use crate::witness::individual_circuits::data_hasher_and_merklizer::compute_merklizer_witness;
+
+        let l1_messages_merklizer_data = compute_merklizer_witness(
+            &self.deduplicated_to_l1_queue_simulator,
+            geometry.limit_for_l1_messages_merklizer as usize,
+            true,
+        );
+
+        self.l1_messages_merklizer_data = vec![l1_messages_merklizer_data];
 
         // process the storage application
 

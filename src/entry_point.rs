@@ -387,6 +387,10 @@ pub fn run_vm_instance<
     Num::alloc_multiple(cs, Some(decommittment_queue_state.tail)).unwrap();
     let code_decommittment_queue_length = UInt32::allocate(cs, Some(decommittment_queue_state.length)).unwrap();
 
+
+    let context_composite_0 = UInt64::allocate(cs, Some(initial_state.context_u128_register as u64)).unwrap();
+    let context_composite_1 = UInt64::allocate(cs, Some((initial_state.context_u128_register >> 64) as u64)).unwrap();
+
     let mut state = sync_vm::vm::vm_state::VmLocalState {
         previous_code_word,
         registers: regs,
@@ -404,6 +408,7 @@ pub fn run_vm_instance<
         memory_queue_length,
         code_decommittment_queue_state,
         code_decommittment_queue_length,
+        context_composite_u128: [context_composite_0, context_composite_1],
         pending_arithmetic_operations: vec![], // also guaranteed to be empty
     };
 

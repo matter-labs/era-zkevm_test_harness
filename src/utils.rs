@@ -1,6 +1,6 @@
 use std::ops::Add;
 
-use crate::ff::PrimeField;
+use crate::{ff::PrimeField, witness::tree::BinaryHasher};
 use num_bigint::BigUint;
 use sync_vm::vm::primitives::u160;
 use zk_evm::{address_to_u256, ethereum_types::*};
@@ -101,4 +101,45 @@ pub fn bytes_to_u32_le<const N: usize, const M: usize>(bytes: &[u8; N]) -> [u32;
     }
 
     result
+}
+
+use crate::encodings::initial_storage_write::BytesSerializable;
+
+pub fn binary_merklize_set<'a, const N: usize, T: BytesSerializable<N> + 'a, H: BinaryHasher<32>>(
+    input: impl Iterator<Item = &'a T> + ExactSizeIterator,
+    tree_size: usize,
+) -> [u8; 32] {
+    let input_len = input.len();
+    assert!(tree_size >= input_len);
+    assert!(tree_size.is_power_of_two());
+    let mut leaf_hashes =  Vec::with_capacity(tree_size);
+
+    for el in input {
+        let encoding = el.serialize();
+        let leaf_hash = H::leaf_hash(&encoding);
+        leaf_hashes.push(leaf_hash);
+    }
+
+    let trivial_leaf_hash = H::leaf_hash(&[0u8; N]);
+    leaf_hashes.resize(tree_size, trivial_leaf_hash);
+    
+    let mut previous_layer_hashes = leaf_hashes;
+    let mut node_hashes = vec![];
+
+    let num_layers = tree_size.trailing_zeros();
+
+    for level in 0..num_layers {
+        for pair in previous_layer_hashes.chunks(2) {
+            let new_node_hash = H::node_hash(level as usize, &pair[0], &pair[1]);
+            node_hashes.push(new_node_hash);
+        }
+
+        let p = std::mem::replace(&mut node_hashes, vec![]);
+        previous_layer_hashes = p;   
+    }
+
+    assert_eq!(previous_layer_hashes.len(), 1);
+    let root = previous_layer_hashes[0];
+
+    root
 }

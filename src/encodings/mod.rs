@@ -290,14 +290,23 @@ impl<
 
 }
 
-#[derive(Derivative)]
+#[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Debug, Clone(bound = ""), Copy(bound = ""))]
+#[serde(bound = "")]
 pub struct SpongeLikeStackIntermediateStates<E: Engine, const SW: usize, const ROUNDS: usize> {
     pub is_push: bool,
+    #[serde(with = "sync_vm::utils::BigArraySerde")]
     pub previous_state: [E::Fr; SW],
+    #[serde(with = "sync_vm::utils::BigArraySerde")]
     pub new_state: [E::Fr; SW],
     pub depth: u32,
+    #[serde(skip)]
+    #[serde(default = "empty_array_of_arrays::<E, SW, ROUNDS>")]
     pub round_function_execution_pairs: [([E::Fr; SW], [E::Fr; SW]); ROUNDS],
+}
+
+fn empty_array_of_arrays<E: Engine, const SW: usize, const ROUNDS: usize>() -> [([E::Fr; SW], [E::Fr; SW]); ROUNDS] {
+    [([E::Fr::zero(); SW], [E::Fr::zero(); SW]); ROUNDS]
 }
 
 pub struct SpongeLikeStackSimulator<
