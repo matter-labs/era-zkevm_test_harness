@@ -164,6 +164,8 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
             2
         );
 
+    use crate::witness::utils::simulate_public_input_value_from_witness;
+    
     let num_instances = instance_oracles.len();
     dbg!(num_instances);
     let mut observable_input = None;
@@ -200,13 +202,9 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
         // second check
         println!("------------------ RUNNING FULL CHECK ------------------");
 
-        use crate::witness::utils::simulate_public_input_value_from_witness;
         use crate::witness::utils::vm_instance_witness_to_circuit_formal_input;
-        dbg!(instance_idx);
         let is_first = instance_idx == 0;
-        dbg!(is_first);
         let is_last = instance_idx == num_instances - 1;
-        dbg!(is_last);
         let mut circuit_input = vm_instance_witness_to_circuit_formal_input(
             vm_instance,
             is_first,
@@ -229,13 +227,13 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
         sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
         use sync_vm::vm::vm_cycle::entry_point::vm_circuit_entry_point;
 
-        dbg!(&circuit_input.closed_form_input);
+        // dbg!(&circuit_input.closed_form_input);
 
-        let dump = serde_json::to_string(&circuit_input).unwrap();
-        println!("{}", &dump);
-        use sync_vm::vm::vm_cycle::input::VmCircuitWitness;
-        use crate::witness::oracle::VmWitnessOracle;
-        let _: VmCircuitWitness<Bn256, VmWitnessOracle<Bn256>> = serde_json::from_str(&dump).unwrap();
+        // use sync_vm::vm::vm_cycle::input::VmCircuitWitness;
+        // use crate::witness::oracle::VmWitnessOracle;
+        // let dump = serde_json::to_string(&circuit_input).unwrap();
+        // println!("{}", &dump);
+        // let _: VmCircuitWitness<Bn256, VmWitnessOracle<Bn256>> = serde_json::from_str(&dump).unwrap();
 
         let circuit_input = vm_circuit_entry_point(
             &mut cs, 
@@ -251,38 +249,65 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
     {
         println!("Running code decommittments sorter and deduplicator");
         assert!(artifacts.decommittments_deduplicator_circuits_data.len() == 1);        
-        let subresult = &artifacts.decommittments_deduplicator_circuits_data[0];
+        let circuit_input = &artifacts.decommittments_deduplicator_circuits_data[0];
         use sync_vm::glue::sort_decommittment_requests::sort_and_deduplicate_code_decommittments_entry_point;
 
         let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
         inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
 
-        let _ = sort_and_deduplicate_code_decommittments_entry_point(
+        let proof_system_input = simulate_public_input_value_from_witness(
+            circuit_input.closed_form_input.clone(),
+        );
+
+        let circuit_input = sort_and_deduplicate_code_decommittments_entry_point(
             &mut cs,
-            Some(subresult.clone()),
+            Some(circuit_input.clone()),
             &round_function,
             geometry.limit_for_code_decommitter_sorter as usize,
         ).unwrap();
+
+        assert_eq!(proof_system_input, circuit_input.get_value().unwrap());
     }
 
     // test
     {
-        for (i, subresult) in artifacts.code_decommitter_circuits_data.iter().enumerate() {
+        let num_circuits = artifacts.code_decommitter_circuits_data.len();
+        let mut observable_input = None;
+
+        for (i, circuit_input) in artifacts.code_decommitter_circuits_data.iter().enumerate() {
             println!("Running code decommitter circuit number {}", i);
             // println!("Running RAM permutation for input {:?}", subresult);
             use sync_vm::glue::code_unpacker_sha256::unpack_code_into_memory_entry_point;
             use sync_vm::vm::vm_cycle::add_bitwise_8x8_table;
 
+            let mut circuit_input = circuit_input.clone();
+
             let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
             add_bitwise_8x8_table(&mut cs).unwrap();
             // inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
 
-            let _ = unpack_code_into_memory_entry_point(
+            let is_first = i == 0;
+            let is_last = i == num_circuits - 1;
+
+            if observable_input.is_none() {
+                assert!(is_first);
+                observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
+            } else {
+                circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
+            }
+    
+            let proof_system_input = simulate_public_input_value_from_witness(
+                circuit_input.closed_form_input.clone(),
+            );
+
+            let circuit_input = unpack_code_into_memory_entry_point(
                 &mut cs,
-                Some(subresult.clone()),
+                Some(circuit_input.clone()),
                 &round_function,
                 geometry.cycles_per_code_decommitter as usize,
             ).unwrap();
+
+            assert_eq!(proof_system_input, circuit_input.get_value().unwrap());
         }
     }
 

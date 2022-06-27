@@ -16,6 +16,8 @@ use self::utils::*;
 pub mod external_calls;
 pub mod toolset;
 
+pub mod abstract_zksync_circuit;
+
 pub const INITIAL_MONOTONIC_CYCLE_COUNTER: u32 = 1024;
 
 // #[cfg(test)]
