@@ -1,4 +1,3 @@
-
 use derivative::*;
 
 use super::*;
@@ -8,14 +7,13 @@ use sync_vm::rescue_poseidon::RescueParams;
 
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone, Copy, Debug, Default(bound = ""))]
-pub struct VmMainInstanceSynthesisFunction<E: Engine, W: WitnessOracle<E>> {
-    _marker: std::marker::PhantomData<(E, W)>
-}
+pub struct RAMPermutationInstanceSynthesisFunction;
 
-use sync_vm::vm::vm_cycle::input::VmCircuitWitness;
+use sync_vm::glue::ram_permutation::RamPermutationCircuitInstanceWitness;
+use sync_vm::glue::ram_permutation::ram_permutation_entry_point;
 
-impl<E: Engine, W: WitnessOracle<E>> ZkSyncUniformSynthesisFunction<E> for VmMainInstanceSynthesisFunction<E, W> {
-    type Witness = VmCircuitWitness<E, W>;
+impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for RAMPermutationInstanceSynthesisFunction {
+    type Witness = RamPermutationCircuitInstanceWitness<E>;
     type Config = usize;
     type RoundFunction = GenericHasher<E, RescueParams<E, 2, 3>, 2, 3>;
 
@@ -23,6 +21,6 @@ impl<E: Engine, W: WitnessOracle<E>> ZkSyncUniformSynthesisFunction<E> for VmMai
         'a,
         CS: ConstraintSystem<E> + 'a,
     >() -> Box<dyn FnOnce(&mut CS, Option<Self::Witness>, &Self::RoundFunction, Self::Config) -> Result<AllocatedNum<E>, SynthesisError> + 'a> {
-        Box::new(vm_circuit_entry_point)
+        Box::new(ram_permutation_entry_point)
     }
 }

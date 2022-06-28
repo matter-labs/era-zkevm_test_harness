@@ -422,8 +422,7 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
             &mut cs,
             Some(subresult.clone()),
             &round_function,
-            geometry.limit_for_l1_messages_merklizer as usize,
-            true,
+            (geometry.limit_for_l1_messages_merklizer as usize, true),
         ).unwrap();
     }
 
