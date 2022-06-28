@@ -15,9 +15,7 @@ use crate::bellman::plonk::better_better_cs::cs::Circuit;
 use crate::bellman::plonk::better_better_cs::cs::GateInternal;
 use crate::bellman::plonk::better_better_cs::cs::Gate;
 
-// use crate::bellman::bn256::Bn256;
-
-pub trait ZkSyncUniformSynthesisFunction<E: Engine> {
+pub trait ZkSyncUniformSynthesisFunction<E: Engine>: Clone { 
     type Witness: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned;
     type Config: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned;
     type RoundFunction: CircuitArithmeticRoundFunction<E, 2, 3, StateElement = Num<E>>;
@@ -33,44 +31,54 @@ pub trait ZkSyncUniformSynthesisFunction<E: Engine> {
     >() -> Box<dyn FnOnce(&mut CS, Option<Self::Witness>, &Self::RoundFunction, Self::Config) -> Result<AllocatedNum<E>, SynthesisError> + 'a>;
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(bound = "")]
 pub struct ZkSyncUniformCircuitCircuitInstance<
     E: Engine,
     S: ZkSyncUniformSynthesisFunction<E>,
 > {
+    #[serde(serialize_with = "serialize_atomic_cell")]
+    #[serde(deserialize_with = "deserialize_atomic_cell")]
     pub witness: AtomicCell<Option<S::Witness>>,
+    #[serde(serialize_with = "serialize_arc")]
+    #[serde(deserialize_with = "deserialize_arc")]
     pub config: std::sync::Arc<S::Config>,
+    #[serde(serialize_with = "serialize_arc")]
+    #[serde(deserialize_with = "deserialize_arc")]
+    #[serde(bound(serialize = "S::RoundFunction: serde::Serialize"))]
+    #[serde(bound(deserialize = "S::RoundFunction: serde::de::DeserializeOwned"))]
     pub round_function: std::sync::Arc<S::RoundFunction>,
 }
 
-// fn serialize_atomic_cell<T: serde::Serialize, S>(t: &AtomicCell<Option<T>>, serializer: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
-//     let el = t.take();
-//     let res = match &el {
-//         Some(el) => serializer.serialize_some(el),
-//         None => serializer.serialize_none(),
-//     };
+fn serialize_atomic_cell<T: serde::Serialize, S>(t: &AtomicCell<Option<T>>, serializer: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
+    let el = t.take();
+    let res = match &el {
+        Some(el) => serializer.serialize_some(el),
+        None => serializer.serialize_none(),
+    };
     
-//     t.store(el);
+    t.store(el);
 
-//     res
-// }
+    res
+}
 
-// fn serialize_arc<T: serde::Serialize, S>(t: std::sync::Arc<T>, serializer: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
-//     (*t).serialize(serializer)
-// }
+fn serialize_arc<T: serde::Serialize, S>(t: &std::sync::Arc<T>, serializer: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
+    (*t).serialize(serializer)
+}
 
-// fn deserialize_atomic_cell<'de, D, T: serde::Deserialize<'de>>(deserializer: D) -> Result<AtomicCell<T>, D::Error> where D: serde::Deserializer<'de> {
-//     let res = T::deserialize(deserializer)?;
-//     let cell = AtomicCell::new(res);
+fn deserialize_atomic_cell<'de, D, T: serde::Deserialize<'de>>(deserializer: D) -> Result<AtomicCell<T>, D::Error> where D: serde::Deserializer<'de> {
+    let res = T::deserialize(deserializer)?;
+    let cell = AtomicCell::new(res);
 
-//     Ok(cell)
-// }
+    Ok(cell)
+}
 
-// fn deserialize_arc<'de, D, T: serde::Deserialize<'de>>(deserializer: D) -> Result<std::sync::Arc<T>, D::Error> where D: serde::Deserializer<'de> {
-//     let res = T::deserialize(deserializer)?;
-//     let arc = std::sync::Arc::new(res);
+fn deserialize_arc<'de, D, T: serde::Deserialize<'de>>(deserializer: D) -> Result<std::sync::Arc<T>, D::Error> where D: serde::Deserializer<'de> {
+    let res = T::deserialize(deserializer)?;
+    let arc = std::sync::Arc::new(res);
 
-//     Ok(arc)
-// }
+    Ok(arc)
+}
 
 impl<
     E: Engine, 

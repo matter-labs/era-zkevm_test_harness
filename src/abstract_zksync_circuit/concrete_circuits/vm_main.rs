@@ -8,6 +8,7 @@ use sync_vm::rescue_poseidon::RescueParams;
 
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone, Copy, Debug, Default(bound = ""))]
+#[serde(bound = "")]
 pub struct VmMainInstanceSynthesisFunction<E: Engine, W: WitnessOracle<E>> {
     _marker: std::marker::PhantomData<(E, W)>
 }

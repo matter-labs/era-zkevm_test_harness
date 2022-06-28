@@ -369,7 +369,7 @@ impl<E: Engine> FullBlockArtifacts<E> {
             self,
             testing_tree,
             round_function,
-            geometry.limit_for_first_writes_pubdata_hasher as usize,
+            geometry.limit_for_initial_writes_pubdata_hasher as usize,
             geometry.limit_for_repeated_writes_pubdata_hasher as usize,
         );
 
@@ -391,4 +391,43 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
         self.is_processed = true;
     }
+}
+
+use crate::abstract_zksync_circuit::concrete_circuits::*;
+use crate::witness::oracle::VmWitnessOracle;
+
+#[derive(Derivative, serde::Serialize, serde::Deserialize)]
+#[derivative(Clone)]
+pub struct BlockBasicCircuits<E: Engine> {
+    // main VM circuit. Many of them
+    pub main_vm_circuits: Vec<VMMainCircuit<E, VmWitnessOracle<E>>>,
+    // code decommittments sorter is only 1 circuit per block
+    pub code_decommittments_sorter_circuit: CodeDecommittsSorterCircuit<E>,
+    // few code decommitters: code hash -> memory
+    pub code_decommitter_circuits: Vec<CodeDecommitterCircuit<E>>,
+    // demux logs to get precompiles for RAM too. 1 circuit
+    pub log_demux_circuit: LogDemuxerCircuit<E>,
+    // process precompiles
+    // keccak
+    pub keccak_precompile_circuits: Vec<()>,
+    // sha256
+    pub sha256_precompile_circuits: Vec<()>,
+    // ecrecover
+    pub ecrecover_precompile_circuits: Vec<()>,
+    // when it's all done we prove the memory validity and finish with it
+    pub ram_permutation_circuits: Vec<RAMPermutationCircuit<E>>,
+    // sort storage changes
+    pub storage_sorter_circuit: StorageSorterCircuit<E>,
+    // apply them
+    pub storage_application_circuits: Vec<()>,
+    // rehash initial writes
+    pub initial_writes_hasher_circuit: InitialStorageWritesPubdataHasherCircuit<E>,
+    // rehash repeated writes
+    pub repeated_writes_hasher_circuit: RepeatedStorageWritesPubdataHasherCircuit<E>,
+    // sort and dedup events
+    pub events_sorter_circuit: EventsSorterCircuit<E>,
+    // sort and dedup L1 messages
+    pub l1_messages_sorter_circuit: L1MessagesSorterCircuit<E>,
+    // merklize L1 message
+    pub l1_messages_merklizer_circuit: L1MessagesMerklizerCircuit<E>
 }

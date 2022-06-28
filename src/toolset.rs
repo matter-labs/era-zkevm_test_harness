@@ -31,7 +31,7 @@ pub struct GeometryConfig {
     pub cycles_per_ram_permutation: u32,
     pub cycles_per_code_decommitter: u32,
     pub cycles_per_storage_application: u32,
-    pub limit_for_first_writes_pubdata_hasher: u32,
+    pub limit_for_initial_writes_pubdata_hasher: u32,
     pub limit_for_repeated_writes_pubdata_hasher: u32,
     pub cycles_per_keccak256_circuit: u32,
     pub cycles_per_sha256_circuit: u32,
