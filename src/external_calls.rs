@@ -14,8 +14,7 @@ use zk_evm::GenericNoopTracer;
 use crate::witness::oracle::create_artifacts_from_tracer;
 use crate::franklin_crypto::plonk::circuit::allocated_num::Num;
 use crate::witness::tree::ZKSyncTestingTree;
-
-// TODO: needs extra definitions, like block number, ergs per pubdata in block, etc
+use crate::witness::full_block_artifact::BlockBasicCircuits;
 
 /// This is a testing interface that basically will
 /// setup the environment and will run out-of-circuit and then in-circuit
@@ -27,6 +26,10 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
     entry_point_address: Address, // for real block must be the bootloader
     entry_point_code: Vec<[u8; 32]>, // for read lobkc must be a bootloader code
     initial_heap_content: Vec<u8>, // bootloader starts with non-deterministic heap
+    zk_porter_is_available: bool,
+    default_aa_code_hash: U256,
+    ergs_per_pubdata_in_block: u32,
+    ergs_per_code_word_decommittment: u16,
     used_bytecodes: std::collections::HashMap<U256, Vec<[u8; 32]>>, // auxilary information to avoid passing a full set of all used codes
     calldata: Vec<u8>, // for real block must be empty
     ram_verification_queries: Vec<(u32, U256)>, // we may need to check that after the bootloader's memory is filled
@@ -34,8 +37,9 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
     round_function: R, // used for all queues implementation
     geometry: GeometryConfig,
     storage: S,
-    tree: &mut ZKSyncTestingTree,
-) -> FullBlockArtifacts<Bn256> {
+    tree: &mut ZKSyncTestingTree, // change it to impl ...
+// ) -> FullBlockArtifacts<Bn256> {
+) -> BlockBasicCircuits<Bn256> {
     let bytecode_hash = bytecode_to_code_hash(&entry_point_code).unwrap();
 
     let mut tools = create_tools(storage, &geometry);
@@ -101,10 +105,11 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
     let block_properties = create_out_of_circuit_global_context(
         block_number, 
         block_timestamp, 
-        true, 
-        U256::zero(), 
-        50, 
-        2);
+        zk_porter_is_available, 
+        default_aa_code_hash, 
+        ergs_per_pubdata_in_block, 
+        ergs_per_code_word_decommittment,
+    );
 
     use crate::toolset::create_out_of_circuit_vm;
 
@@ -158,273 +163,323 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
         create_in_circuit_global_context::<Bn256>(
             block_number, 
             block_timestamp, 
-            true, 
-            U256::zero(), 
-            50, 
-            2
+            zk_porter_is_available, 
+            default_aa_code_hash, 
+            ergs_per_pubdata_in_block, 
+            ergs_per_code_word_decommittment,
         );
 
     use crate::witness::utils::simulate_public_input_value_from_witness;
     
-    let num_instances = instance_oracles.len();
-    dbg!(num_instances);
-    let mut observable_input = None;
+    // let num_instances = instance_oracles.len();
+    // dbg!(num_instances);
+    // let mut observable_input = None;
 
-    for (instance_idx, vm_instance) in instance_oracles.into_iter().enumerate() {
-        println!("Running VM for range {:?}", vm_instance.cycles_range);
-        use crate::entry_point::run_vm_instance;
+    // for (instance_idx, vm_instance) in instance_oracles.iter().enumerate() {
+    //     println!("Running VM for range {:?}", vm_instance.cycles_range);
+    //     use crate::entry_point::run_vm_instance;
 
-        let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
-        sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+    //     let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+    //     sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
 
-        let limit = geometry.cycles_per_vm_snapshot as usize;
+    //     let limit = geometry.cycles_per_vm_snapshot as usize;
 
-        // let vm_state = run_vm_instance(
-        //     &mut cs,
-        //     &round_function,
-        //     &in_circuit_global_context,
-        //     vm_instance.clone(),
-        // );
+    //     // let vm_state = run_vm_instance(
+    //     //     &mut cs,
+    //     //     &round_function,
+    //     //     &in_circuit_global_context,
+    //     //     vm_instance.clone(),
+    //     // );
 
-        // if instance_idx == num_instances - 1 {
-        //     // consistency check for storage log
-        //     assert_eq!(
-        //         vm_state.callstack.current_context.log_queue_forward_tail.get_value().unwrap(),
-        //         artifacts.original_log_queue_simulator.tail
-        //     );
+    //     // if instance_idx == num_instances - 1 {
+    //     //     // consistency check for storage log
+    //     //     assert_eq!(
+    //     //         vm_state.callstack.current_context.log_queue_forward_tail.get_value().unwrap(),
+    //     //         artifacts.original_log_queue_simulator.tail
+    //     //     );
 
-        //     assert_eq!(
-        //         vm_state.callstack.current_context.log_queue_forward_part_length.get_value().unwrap(),
-        //         artifacts.original_log_queue_simulator.num_items
-        //     );
-        // }
+    //     //     assert_eq!(
+    //     //         vm_state.callstack.current_context.log_queue_forward_part_length.get_value().unwrap(),
+    //     //         artifacts.original_log_queue_simulator.num_items
+    //     //     );
+    //     // }
 
-        // second check
-        println!("------------------ RUNNING FULL CHECK ------------------");
+    //     // second check
+    //     println!("------------------ RUNNING FULL CHECK ------------------");
 
-        use crate::witness::utils::vm_instance_witness_to_circuit_formal_input;
-        let is_first = instance_idx == 0;
-        let is_last = instance_idx == num_instances - 1;
-        let mut circuit_input = vm_instance_witness_to_circuit_formal_input(
-            vm_instance,
-            is_first,
-            is_last,
-            in_circuit_global_context.clone(),
-        );
+    //     use crate::witness::utils::vm_instance_witness_to_circuit_formal_input;
+    //     let is_first = instance_idx == 0;
+    //     let is_last = instance_idx == num_instances - 1;
+    //     let mut circuit_input = vm_instance_witness_to_circuit_formal_input(
+    //         vm_instance.clone(),
+    //         is_first,
+    //         is_last,
+    //         in_circuit_global_context.clone(),
+    //     );
 
-        if observable_input.is_none() {
-            assert!(is_first);
-            observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
-        } else {
-            circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
-        }
+    //     if observable_input.is_none() {
+    //         assert!(is_first);
+    //         observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
+    //     } else {
+    //         circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
+    //     }
 
-        let proof_system_input = simulate_public_input_value_from_witness(
-            circuit_input.closed_form_input.clone(),
-        );
+    //     let proof_system_input = simulate_public_input_value_from_witness(
+    //         circuit_input.closed_form_input.clone(),
+    //     );
 
-        let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
-        sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
-        use sync_vm::vm::vm_cycle::entry_point::vm_circuit_entry_point;
+    //     let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+    //     sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+    //     use sync_vm::vm::vm_cycle::entry_point::vm_circuit_entry_point;
 
-        // dbg!(&circuit_input.closed_form_input);
+    //     // dbg!(&circuit_input.closed_form_input);
 
-        // use sync_vm::vm::vm_cycle::input::VmCircuitWitness;
-        // use crate::witness::oracle::VmWitnessOracle;
-        // let dump = serde_json::to_string(&circuit_input).unwrap();
-        // println!("{}", &dump);
-        // let _: VmCircuitWitness<Bn256, VmWitnessOracle<Bn256>> = serde_json::from_str(&dump).unwrap();
+    //     // use sync_vm::vm::vm_cycle::input::VmCircuitWitness;
+    //     // use crate::witness::oracle::VmWitnessOracle;
+    //     // let dump = serde_json::to_string(&circuit_input).unwrap();
+    //     // println!("{}", &dump);
+    //     // let _: VmCircuitWitness<Bn256, VmWitnessOracle<Bn256>> = serde_json::from_str(&dump).unwrap();
 
-        let circuit_input = vm_circuit_entry_point(
-            &mut cs, 
-            Some(circuit_input),
-            &round_function,
-            limit
-        ).unwrap();
+    //     let circuit_input = vm_circuit_entry_point(
+    //         &mut cs, 
+    //         Some(circuit_input),
+    //         &round_function,
+    //         limit
+    //     ).unwrap();
 
-        assert_eq!(proof_system_input, circuit_input.get_value().unwrap());
-    }
+    //     assert_eq!(proof_system_input, circuit_input.get_value().unwrap());
+    // }
 
-    // test
-    {
-        println!("Running code decommittments sorter and deduplicator");
-        assert!(artifacts.decommittments_deduplicator_circuits_data.len() == 1);        
-        let circuit_input = &artifacts.decommittments_deduplicator_circuits_data[0];
-        use sync_vm::glue::sort_decommittment_requests::sort_and_deduplicate_code_decommittments_entry_point;
+    // // test
+    // {
+    //     println!("Running code decommittments sorter and deduplicator");
+    //     assert!(artifacts.decommittments_deduplicator_circuits_data.len() == 1);        
+    //     let circuit_input = &artifacts.decommittments_deduplicator_circuits_data[0];
+    //     use sync_vm::glue::sort_decommittment_requests::sort_and_deduplicate_code_decommittments_entry_point;
 
-        let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
-        inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
+    //     let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+    //     inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
 
-        let proof_system_input = simulate_public_input_value_from_witness(
-            circuit_input.closed_form_input.clone(),
-        );
+    //     let proof_system_input = simulate_public_input_value_from_witness(
+    //         circuit_input.closed_form_input.clone(),
+    //     );
 
-        let circuit_input = sort_and_deduplicate_code_decommittments_entry_point(
-            &mut cs,
-            Some(circuit_input.clone()),
-            &round_function,
-            geometry.limit_for_code_decommitter_sorter as usize,
-        ).unwrap();
+    //     let circuit_input = sort_and_deduplicate_code_decommittments_entry_point(
+    //         &mut cs,
+    //         Some(circuit_input.clone()),
+    //         &round_function,
+    //         geometry.limit_for_code_decommitter_sorter as usize,
+    //     ).unwrap();
 
-        assert_eq!(proof_system_input, circuit_input.get_value().unwrap());
-    }
+    //     assert_eq!(proof_system_input, circuit_input.get_value().unwrap());
+    // }
 
-    // test
-    {
-        let num_circuits = artifacts.code_decommitter_circuits_data.len();
-        let mut observable_input = None;
+    // // test
+    // {
+    //     let num_circuits = artifacts.code_decommitter_circuits_data.len();
+    //     let mut observable_input = None;
 
-        for (i, circuit_input) in artifacts.code_decommitter_circuits_data.iter().enumerate() {
-            println!("Running code decommitter circuit number {}", i);
-            // println!("Running RAM permutation for input {:?}", subresult);
-            use sync_vm::glue::code_unpacker_sha256::unpack_code_into_memory_entry_point;
-            use sync_vm::vm::vm_cycle::add_bitwise_8x8_table;
+    //     for (i, circuit_input) in artifacts.code_decommitter_circuits_data.iter().enumerate() {
+    //         println!("Running code decommitter circuit number {}", i);
+    //         // println!("Running RAM permutation for input {:?}", subresult);
+    //         use sync_vm::glue::code_unpacker_sha256::unpack_code_into_memory_entry_point;
+    //         use sync_vm::vm::vm_cycle::add_bitwise_8x8_table;
 
-            let mut circuit_input = circuit_input.clone();
+    //         let mut circuit_input = circuit_input.clone();
 
-            let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
-            add_bitwise_8x8_table(&mut cs).unwrap();
-            // inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
+    //         let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+    //         add_bitwise_8x8_table(&mut cs).unwrap();
+    //         // inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
 
-            let is_first = i == 0;
-            let is_last = i == num_circuits - 1;
+    //         let is_first = i == 0;
+    //         let is_last = i == num_circuits - 1;
 
-            if observable_input.is_none() {
-                assert!(is_first);
-                observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
-            } else {
-                circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
-            }
+    //         if observable_input.is_none() {
+    //             assert!(is_first);
+    //             observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
+    //         } else {
+    //             circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
+    //         }
     
-            let proof_system_input = simulate_public_input_value_from_witness(
-                circuit_input.closed_form_input.clone(),
-            );
+    //         let proof_system_input = simulate_public_input_value_from_witness(
+    //             circuit_input.closed_form_input.clone(),
+    //         );
 
-            let circuit_input = unpack_code_into_memory_entry_point(
-                &mut cs,
-                Some(circuit_input.clone()),
-                &round_function,
-                geometry.cycles_per_code_decommitter as usize,
-            ).unwrap();
+    //         let circuit_input = unpack_code_into_memory_entry_point(
+    //             &mut cs,
+    //             Some(circuit_input.clone()),
+    //             &round_function,
+    //             geometry.cycles_per_code_decommitter as usize,
+    //         ).unwrap();
 
-            assert_eq!(proof_system_input, circuit_input.get_value().unwrap());
-        }
-    }
+    //         assert_eq!(proof_system_input, circuit_input.get_value().unwrap());
+    //     }
+    // }
 
-    // test
-    {
-        println!("Running log demuxer circuit");
-        assert!(artifacts.log_demuxer_circuit_data.len() == 1);        
-        let subresult = &artifacts.log_demuxer_circuit_data[0];
-        use sync_vm::glue::demux_log_queue::demultiplex_storage_logs_enty_point;
+    // // test
+    // {
+    //     println!("Running log demuxer circuit");
+    //     assert!(artifacts.log_demuxer_circuit_data.len() == 1);        
+    //     let circuit_input = &artifacts.log_demuxer_circuit_data[0];
+    //     use sync_vm::glue::demux_log_queue::demultiplex_storage_logs_enty_point;
 
-        let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
-        inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
+    //     let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+    //     inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
 
-        let _ = demultiplex_storage_logs_enty_point(
-            &mut cs,
-            Some(subresult.clone()),
-            &round_function,
-            geometry.limit_for_log_demuxer as usize
-        ).unwrap();
-    }
+    //     let proof_system_input = simulate_public_input_value_from_witness(
+    //         circuit_input.closed_form_input.clone(),
+    //     );
 
-    // test
-    {
-        for (i, subresult) in artifacts.ram_permutation_circuits_data.iter().enumerate() {
-            println!("Running RAM permutation circuit number {}", i);
-            // println!("Running RAM permutation for input {:?}", subresult);
-            use sync_vm::glue::ram_permutation::ram_permutation_entry_point;
+    //     let circuit_input = demultiplex_storage_logs_enty_point(
+    //         &mut cs,
+    //         Some(circuit_input.clone()),
+    //         &round_function,
+    //         geometry.limit_for_log_demuxer as usize
+    //     ).unwrap();
 
-            let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
-            inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
+    //     assert_eq!(proof_system_input, circuit_input.get_value().unwrap());
+    // }
 
-            let _ = ram_permutation_entry_point(
-                &mut cs,
-                Some(subresult.clone()),
-                &round_function,
-                geometry.cycles_per_ram_permutation as usize
-            ).unwrap();
-        }
-    }
+    // // test
+    // {
+    //     for (i, circuit_input) in artifacts.ram_permutation_circuits_data.iter().enumerate() {
+    //         println!("Running RAM permutation circuit number {}", i);
+    //         // println!("Running RAM permutation for input {:?}", subresult);
+    //         use sync_vm::glue::ram_permutation::ram_permutation_entry_point;
 
-    // test
-    {
-        println!("Running storage sorter and deduplicator");
-        assert!(artifacts.storage_deduplicator_circuit_data.len() == 1);
-        let subresult = &artifacts.storage_deduplicator_circuit_data[0];
-        // println!("Running RAM permutation for input {:?}", subresult);
-        use sync_vm::glue::storage_validity_by_grand_product::sort_and_deduplicate_storage_access_entry_point;
+    //         let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+    //         inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
 
-        let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
-        inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
+    //         let proof_system_input = simulate_public_input_value_from_witness(
+    //             circuit_input.closed_form_input.clone(),
+    //         );
 
-        let _ = sort_and_deduplicate_storage_access_entry_point(
-            &mut cs,
-            Some(subresult.clone()),
-            &round_function,
-            geometry.limit_for_storage_sorter as usize
-        ).unwrap();
-    }
+    //         let circuit_input = ram_permutation_entry_point(
+    //             &mut cs,
+    //             Some(circuit_input.clone()),
+    //             &round_function,
+    //             geometry.cycles_per_ram_permutation as usize
+    //         ).unwrap();
 
-    // test
-    {
-        println!("Running events sorter and deduplicator");
-        assert!(artifacts.events_deduplicator_circuit_data.len() == 1);
-        let subresult = &artifacts.events_deduplicator_circuit_data[0];
-        // println!("Running RAM permutation for input {:?}", subresult);
-        use sync_vm::glue::log_sorter::sort_and_deduplicate_events_entry_point;
+    //         assert_eq!(proof_system_input, circuit_input.get_value().unwrap());
+    //     }
+    // }
 
-        let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
-        inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
+    // // test
+    // {
+    //     println!("Running storage sorter and deduplicator");
+    //     assert!(artifacts.storage_deduplicator_circuit_data.len() == 1);
+    //     let circuit_input = &artifacts.storage_deduplicator_circuit_data[0];
+    //     // println!("Running RAM permutation for input {:?}", subresult);
+    //     use sync_vm::glue::storage_validity_by_grand_product::sort_and_deduplicate_storage_access_entry_point;
 
-        let _ = sort_and_deduplicate_events_entry_point(
-            &mut cs,
-            Some(subresult.clone()),
-            &round_function,
-            geometry.limit_for_events_or_l1_messages_sorter as usize
-        ).unwrap();
-    }
+    //     let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+    //     inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
 
-    // test
-    {
-        println!("Running l1 messages sorter and deduplicator");
-        assert!(artifacts.l1_messages_deduplicator_circuit_data.len() == 1);
-        let subresult = &artifacts.l1_messages_deduplicator_circuit_data[0];
-        // println!("Running RAM permutation for input {:?}", subresult);
-        use sync_vm::glue::log_sorter::sort_and_deduplicate_events_entry_point;
+    //     let proof_system_input = simulate_public_input_value_from_witness(
+    //         circuit_input.closed_form_input.clone(),
+    //     );
 
-        let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
-        inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
+    //     let circuit_input = sort_and_deduplicate_storage_access_entry_point(
+    //         &mut cs,
+    //         Some(circuit_input.clone()),
+    //         &round_function,
+    //         geometry.limit_for_storage_sorter as usize
+    //     ).unwrap();
 
-        let _ = sort_and_deduplicate_events_entry_point(
-            &mut cs,
-            Some(subresult.clone()),
-            &round_function,
-            geometry.limit_for_events_or_l1_messages_sorter as usize
-        ).unwrap();
-    }
+    //     assert_eq!(proof_system_input, circuit_input.get_value().unwrap());
+    // }
 
-    // test
-    {
-        println!("Running l1 messages merklizer");
-        assert!(artifacts.l1_messages_merklizer_data.len() == 1);
-        let subresult = &artifacts.l1_messages_merklizer_data[0];
-        // println!("Running RAM permutation for input {:?}", subresult);
-        use sync_vm::scheduler::merklize_messages_entry_point;
+    // // test
+    // {
+    //     println!("Running events sorter and deduplicator");
+    //     assert!(artifacts.events_deduplicator_circuit_data.len() == 1);
+    //     let circuit_input = &artifacts.events_deduplicator_circuit_data[0];
+    //     // println!("Running RAM permutation for input {:?}", subresult);
+    //     use sync_vm::glue::log_sorter::sort_and_deduplicate_events_entry_point;
 
-        let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
-        inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
+    //     let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+    //     inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
 
-        use sync_vm::glue::merkleize_l1_messages::tree_hasher::CircuitKeccakTreeHasher;
+    //     let proof_system_input = simulate_public_input_value_from_witness(
+    //         circuit_input.closed_form_input.clone(),
+    //     );
 
-        let _ = merklize_messages_entry_point::<_, _, _, CircuitKeccakTreeHasher<_>, 2, 3, 2>(
-            &mut cs,
-            Some(subresult.clone()),
-            &round_function,
-            (geometry.limit_for_l1_messages_merklizer as usize, true),
-        ).unwrap();
-    }
+    //     let circuit_input = sort_and_deduplicate_events_entry_point(
+    //         &mut cs,
+    //         Some(circuit_input.clone()),
+    //         &round_function,
+    //         geometry.limit_for_events_or_l1_messages_sorter as usize
+    //     ).unwrap();
 
-    artifacts
+    //     assert_eq!(proof_system_input, circuit_input.get_value().unwrap());
+    // }
+
+    // // test
+    // {
+    //     println!("Running l1 messages sorter and deduplicator");
+    //     assert!(artifacts.l1_messages_deduplicator_circuit_data.len() == 1);
+    //     let circuit_input = &artifacts.l1_messages_deduplicator_circuit_data[0];
+    //     // println!("Running RAM permutation for input {:?}", subresult);
+    //     use sync_vm::glue::log_sorter::sort_and_deduplicate_events_entry_point;
+
+    //     let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+    //     inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
+
+    //     let proof_system_input = simulate_public_input_value_from_witness(
+    //         circuit_input.closed_form_input.clone(),
+    //     );
+
+    //     let circuit_input = sort_and_deduplicate_events_entry_point(
+    //         &mut cs,
+    //         Some(circuit_input.clone()),
+    //         &round_function,
+    //         geometry.limit_for_events_or_l1_messages_sorter as usize
+    //     ).unwrap();
+
+    //     assert_eq!(proof_system_input, circuit_input.get_value().unwrap());
+    // }
+
+    // // test
+    // {
+    //     println!("Running l1 messages merklizer");
+    //     assert!(artifacts.l1_messages_merklizer_data.len() == 1);
+    //     let circuit_input = &artifacts.l1_messages_merklizer_data[0];
+    //     // println!("Running RAM permutation for input {:?}", subresult);
+    //     use sync_vm::scheduler::merklize_messages_entry_point;
+
+    //     let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+    //     inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
+
+    //     use sync_vm::glue::merkleize_l1_messages::tree_hasher::CircuitKeccakTreeHasher;
+
+    //     let proof_system_input = simulate_public_input_value_from_witness(
+    //         circuit_input.closed_form_input.clone(),
+    //     );
+
+    //     let circuit_input = merklize_messages_entry_point::<_, _, _, CircuitKeccakTreeHasher<_>, 2, 3, 2>(
+    //         &mut cs,
+    //         Some(circuit_input.clone()),
+    //         &round_function,
+    //         (geometry.limit_for_l1_messages_merklizer as usize, true),
+    //     ).unwrap();
+
+    //     assert_eq!(proof_system_input, circuit_input.get_value().unwrap());
+    // }
+
+    use crate::witness::postprocessing::create_leaf_level_circuits_and_scheduler_witness;
+
+    let (basic_circuits, _) = create_leaf_level_circuits_and_scheduler_witness(
+        block_number,
+        block_timestamp,
+        zk_porter_is_available,
+        default_aa_code_hash,
+        ergs_per_pubdata_in_block,
+        ergs_per_code_word_decommittment,
+        instance_oracles,
+        artifacts,
+        geometry
+    );
+
+    basic_circuits
 }

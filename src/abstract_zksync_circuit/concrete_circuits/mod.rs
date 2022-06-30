@@ -42,3 +42,73 @@ pub type L1MessagesSorterCircuit<E> = ZkSyncUniformCircuitCircuitInstance<E, Eve
 pub type L1MessagesMerklizerCircuit<E> = ZkSyncUniformCircuitCircuitInstance<E, MessagesMerklizerInstanceSynthesisFunction>;
 pub type InitialStorageWritesPubdataHasherCircuit<E> = ZkSyncUniformCircuitCircuitInstance<E, StorageInitialWritesRehasherInstanceSynthesisFunction>;
 pub type RepeatedStorageWritesPubdataHasherCircuit<E> = ZkSyncUniformCircuitCircuitInstance<E, StorageRepeatedWritesRehasherInstanceSynthesisFunction>;
+
+#[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
+#[derivative(Clone(bound = ""))]
+#[serde(bound = "")]
+pub enum ZkSyncCircuit<E: Engine, W: WitnessOracle<E>> {
+    Scheduler(()),
+    LeafAggregation(()),
+    NodeAggregation(()),
+    MainVM(VMMainCircuit<E, W>),
+    CodeDecommittmentsSorter(CodeDecommittsSorterCircuit<E>),
+    CodeDecommitter(CodeDecommitterCircuit<E>),
+    LogDemuxer(LogDemuxerCircuit<E>),
+    KeccakRoundFunction(()),
+    Sha256RoundFunction(()),
+    ECRecover(()),
+    RAMPermutation(RAMPermutationCircuit<E>),
+    StorageSorter(StorageSorterCircuit<E>),
+    StorageApplication(()),
+    EventsSorter(RAMPermutationCircuit<E>),
+    L1MessagesSorter(L1MessagesSorterCircuit<E>),
+    L1MessagesMerklier(L1MessagesMerklizerCircuit<E>),
+    InitialWritesPubdataHasher(InitialStorageWritesPubdataHasherCircuit<E>),
+    RepeatedWritesPubdataHasher(RepeatedStorageWritesPubdataHasherCircuit<E>),
+}
+
+impl<E: Engine,  W: WitnessOracle<E>> Circuit<E> for ZkSyncCircuit<E, W> {
+    type MainGate = SelectorOptimizedWidth4MainGateWithDNext;
+    // always two gates
+    fn declare_used_gates() -> Result<Vec<Box<dyn GateInternal<E>>>, SynthesisError> {
+        Ok(
+            vec![
+                Self::MainGate::default().into_internal(),
+                Rescue5CustomGate::default().into_internal()
+            ]
+        )
+    }
+    fn synthesize<CS: ConstraintSystem<E>>(&self, cs: &mut CS) -> Result<(), SynthesisError> {
+        match &self {
+            ZkSyncCircuit::Scheduler(()) => {unimplemented!()},
+            ZkSyncCircuit::LeafAggregation(()) => {unimplemented!()},
+            ZkSyncCircuit::NodeAggregation(()) => {unimplemented!()},
+            ZkSyncCircuit::MainVM(inner) => {inner.synthesize(cs)},
+            ZkSyncCircuit::CodeDecommittmentsSorter(inner) => {inner.synthesize(cs)},
+            ZkSyncCircuit::CodeDecommitter(inner) => {inner.synthesize(cs)},
+            ZkSyncCircuit::LogDemuxer(inner) => {inner.synthesize(cs)},
+            ZkSyncCircuit::KeccakRoundFunction(()) => {unimplemented!()},
+            ZkSyncCircuit::Sha256RoundFunction(()) => {unimplemented!()},
+            ZkSyncCircuit::ECRecover(()) => {unimplemented!()},
+            ZkSyncCircuit::RAMPermutation(inner) => {inner.synthesize(cs)},
+            ZkSyncCircuit::StorageSorter(inner) => {inner.synthesize(cs)},
+            ZkSyncCircuit::StorageApplication(()) => {unimplemented!()},
+            ZkSyncCircuit::EventsSorter(inner) => {inner.synthesize(cs)},
+            ZkSyncCircuit::L1MessagesSorter(inner) => {inner.synthesize(cs)},
+            ZkSyncCircuit::L1MessagesMerklier(inner) => {inner.synthesize(cs)},
+            ZkSyncCircuit::InitialWritesPubdataHasher(inner) => {inner.synthesize(cs)},
+            ZkSyncCircuit::RepeatedWritesPubdataHasher(inner) => {inner.synthesize(cs)},
+        }
+    }
+}
+
+// use sync_vm::*;
+
+// impl<E: Engine, W: WitnessOracle<E>> ZkSyncCircuit<E, W> {
+//     pub fn numeric_circuit_type(&self) -> u8 {
+//         match &self {
+//             ZkSyncCircuit::MainVM(..) => VM_CIRCUIT_TYPE,
+//             _ => unreachable!()
+//         }
+//     }
+// }

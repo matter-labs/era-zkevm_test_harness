@@ -1,6 +1,8 @@
 use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
 use sync_vm::franklin_crypto::bellman::plonk::better_better_cs::gates::selector_optimized_with_d_next::SelectorOptimizedWidth4MainGateWithDNext;
 use sync_vm::franklin_crypto::plonk::circuit::custom_rescue_gate::Rescue5CustomGate;
+use sync_vm::franklin_crypto::plonk::circuit::tables::inscribe_default_range_table_for_bit_width_over_first_three_columns;
+use sync_vm::vm::vm_cycle::add_all_tables;
 use sync_vm::vm::vm_cycle::entry_point::vm_circuit_entry_point;
 use sync_vm::vm::vm_cycle::witness_oracle::WitnessOracle;
 use crate::bellman::Engine;
@@ -24,6 +26,22 @@ pub trait ZkSyncUniformSynthesisFunction<E: Engine>: Clone {
     //     CS: ConstraintSystem<E>, 
     //     F: for<'r, 's> FnOnce(&'r mut CS, Option<Self::Witness>, &'s Self::RoundFunction, Self::Config) -> Result<AllocatedNum<E>, SynthesisError>
     // >() -> F;
+
+    fn get_setup_function_dyn<
+        'a, 
+        CS: ConstraintSystem<E> + 'a,
+    >() -> Box<dyn FnOnce(&mut CS) -> Result<(), SynthesisError> + 'a> {
+        Box::new(|_| {
+            Ok(())
+        })
+
+        // Box::new(|cs| {
+        //     inscribe_default_range_table_for_bit_width_over_first_three_columns(cs, 16)?;
+        //     add_all_tables(cs)?;
+
+        //     Ok(())
+        // })
+    }
 
     fn get_synthesis_function_dyn<
         'a, 
@@ -114,11 +132,15 @@ impl<
     }
     fn synthesize<CS: ConstraintSystem<E>>(&self, cs: &mut CS) -> Result<(), SynthesisError> {
         let witness = self.witness.take();
+        let ww = witness.clone();
+        self.witness.store(witness);
         let config: S::Config = (*self.config).clone();
         let round_function = &*self.round_function;
+        let setup_fn = S::get_setup_function_dyn();
         let synthesis_fn = S::get_synthesis_function_dyn();
         // let synthesis_fn = S::get_synthesis_function();
-        let _public_input_var = synthesis_fn(cs, witness, round_function, config)?;
+        setup_fn(cs)?;
+        let _public_input_var = synthesis_fn(cs, ww, round_function, config)?;
 
         Ok(())
     }

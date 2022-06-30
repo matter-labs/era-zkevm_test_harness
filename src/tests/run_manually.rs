@@ -50,6 +50,9 @@ fn run_and_try_create_witness() {
     //     ret.revert r0
     // "#;
 
+
+    // nop stack+=[4]
+    // nop stack-=[1]
     let asm = r#"
         .text
         .file	"Test_26"
@@ -59,8 +62,8 @@ fn run_and_try_create_witness() {
         .globl	__entry
     __entry:
     .main:
-        nop stack+=[4]
-        nop stack-=[1]
+        add 12345, r0, r1
+        shl.s 7, r1, r1
         add 1, r0, r1
         sload r1, r0
         add 2, r0, r2
@@ -208,13 +211,17 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
     let storage_impl = InMemoryStorage::new();
     let mut tree = ZKSyncTestingTree::empty();
 
-    let _ = run(
+    let mut basic_block_circuits = run(
         1,
         1,
         Address::zero(),
         *BOOTLOADER_FORMAL_ADDRESS,
         bytecode,
         vec![],
+        false,
+        U256::zero(),
+        50,
+        2,
         std::collections::HashMap::new(),
         vec![],
         vec![],
@@ -224,6 +231,11 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
         storage_impl,
         &mut tree
     );
+
+    let vm_circuit = basic_block_circuits.main_vm_circuits.drain(0..1).next().unwrap();
+    use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
+
+    circuit_testing::prove_and_verify_circuit::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(vm_circuit).unwrap();
 
 
     // for el in bytecode.iter() {
