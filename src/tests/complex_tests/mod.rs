@@ -53,7 +53,7 @@ fn save_predeployed_contracts(storage: &mut InMemoryStorage, contracts: &HashMap
     storage.populate(storage_logs);
 }
 
-fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: usize) {
+fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit: usize) {
     use zk_evm::precompiles::BOOTLOADER_FORMAL_ADDRESS;
 
     use crate::external_calls::run;
@@ -86,6 +86,8 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
     save_predeployed_contracts(&mut storage_impl, &test_artifact.predeployed_contracts);
 
     let used_bytecodes = HashMap::from_iter(test_artifact.predeployed_contracts.iter().map(|(_,bytecode)| (bytecode_to_code_hash(&bytecode).unwrap().into(), bytecode.clone())));
+
+    test_artifact.entry_point_address = *zk_evm::precompiles::BOOTLOADER_FORMAL_ADDRESS;
 
     let mut basic_block_circuits = run(
         1,

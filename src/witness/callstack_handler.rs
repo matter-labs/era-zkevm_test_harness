@@ -105,10 +105,10 @@ pub enum QueueSegmentIndirectablePointer {
 pub enum QueueSegmentPointer {
     GlobalStart,
     GlobalEnd,
-    IssuedQuery(u64),
+    IssuedQuery{idx: u64, is_head: bool},
     Indirection(QueueSegmentIndirectablePointer),
     OtherFrameIndirection(QueueSegmentIndirectablePointer),
-    OtherFramesQuery(u64),
+    OtherFramesQuery{idx: u64, is_head: bool},
     Dangling
 }
 
@@ -213,13 +213,16 @@ impl CallstackWithAuxData {
         let current_frame_index = self.current_entry.frame_index;
         let current_frame_segment_data = self.frame_segments_data[&current_frame_index];
 
+        // NOTE: those are SEGMENTS, so head/tail of "forward" are NOT from global start to something. Those are only history of this frame
+
+        // we continue from the current tail in any case
         let this_frame_forward_head_pointer = match current_frame_segment_data.forward_tail_pointer {
-            QueueSegmentPointer::GlobalStart => QueueSegmentPointer::GlobalStart,
+            QueueSegmentPointer::GlobalStart => unreachable!(),
             QueueSegmentPointer::GlobalEnd => unreachable!(),
-            QueueSegmentPointer::IssuedQuery(q_idx) => QueueSegmentPointer::OtherFramesQuery(q_idx),
+            QueueSegmentPointer::IssuedQuery{idx, is_head} => QueueSegmentPointer::OtherFramesQuery{idx, is_head},
             QueueSegmentPointer::Indirection(ind) => QueueSegmentPointer::OtherFrameIndirection(ind),
-            QueueSegmentPointer::OtherFrameIndirection(ind) => QueueSegmentPointer::OtherFrameIndirection(ind),
-            QueueSegmentPointer::OtherFramesQuery(q_idx) => QueueSegmentPointer::OtherFramesQuery(q_idx),
+            a @ QueueSegmentPointer::OtherFrameIndirection(ind) => a,
+            a @ QueueSegmentPointer::OtherFramesQuery {..} => a,
             QueueSegmentPointer::Dangling => unreachable!()
         };
 
@@ -298,62 +301,89 @@ impl CallstackWithAuxData {
         let mut parent_segment_data = self.frame_segments_data.get(&parent_frame_index).copied().unwrap();
         let mut current_frame_record = self.frame_segments_data.get(&frame_index).copied().unwrap();
 
-        // we only need to distinguish situations when the target of merging is empty (100% indirected) or not
+        // NOTE: those are SEGMENTS, so head/tail of "forward" are NOT from global start to something. Those are only history of this frame 
 
+        // we only need to distinguish situations when the target of merging is empty (100% indirected) or not
         // it can be only indirection or issued query, or whatever comes from our resolver
+
+        // we basically carry the current frame's forward tail into the history of the parent (since parrent is supersegment)
         let new_parent_forward_tail = match current_frame_record.forward_tail_pointer {
-            QueueSegmentPointer::GlobalStart => QueueSegmentPointer::GlobalStart,
-            QueueSegmentPointer::IssuedQuery(q_idx) => {
-                QueueSegmentPointer::OtherFramesQuery(q_idx)
+            // QueueSegmentPointer::GlobalStart => QueueSegmentPointer::GlobalStart,
+            QueueSegmentPointer::GlobalStart => unreachable!(),
+            QueueSegmentPointer::IssuedQuery{idx, is_head} => {
+                assert!(!is_head);
+                QueueSegmentPointer::OtherFramesQuery{idx, is_head}
             },
             QueueSegmentPointer::Indirection(QueueSegmentIndirectablePointer::ForwardHeadAtFrameStart(f)) => {
+                // it's an empty frame
                 assert_eq!(f, frame_index);
                 // resolve the indirection
                 let forward_head = current_frame_record.forward_head_pointer;
                 let resolved = match forward_head {
-                    QueueSegmentPointer::GlobalStart => QueueSegmentPointer::GlobalStart, // propagate
+                    // QueueSegmentPointer::GlobalStart => QueueSegmentPointer::GlobalStart, // propagate
+                    QueueSegmentPointer::GlobalStart => unreachable!(),
                     QueueSegmentPointer::GlobalEnd => unreachable!(),
-                    QueueSegmentPointer::IssuedQuery(..) => unreachable!(),
+                    QueueSegmentPointer::IssuedQuery{..} => unreachable!(),
                     QueueSegmentPointer::Indirection(..) => unreachable!(),
                     QueueSegmentPointer::OtherFrameIndirection(ind) => QueueSegmentPointer::OtherFrameIndirection(ind),
-                    QueueSegmentPointer::OtherFramesQuery(q_idx) => QueueSegmentPointer::OtherFramesQuery(q_idx),
+                    QueueSegmentPointer::OtherFramesQuery{idx, is_head} => {
+                        assert!(!is_head);
+                        QueueSegmentPointer::OtherFramesQuery{idx, is_head}
+                    },
                     QueueSegmentPointer::Dangling => unreachable!()
                 };
 
                 resolved
             },
             a @ QueueSegmentPointer::OtherFrameIndirection(..) => a,
-            a @ QueueSegmentPointer::OtherFramesQuery(..) => a,
+            QueueSegmentPointer::OtherFramesQuery{idx, is_head} => {
+                assert!(!is_head);
+                QueueSegmentPointer::OtherFramesQuery{idx, is_head}
+            },
             a @ _ => unreachable!("encountered {:?}", a)
         };
 
         if let QueueSegmentPointer::Indirection(QueueSegmentIndirectablePointer::ForwardHeadAtFrameStart(f)) = current_frame_record.forward_tail_pointer {
+            // quick indirection resolution
             assert_eq!(f, frame_index);
             current_frame_record.forward_tail_pointer = current_frame_record.forward_head_pointer
         }
 
+        // update the parent
         parent_segment_data.forward_tail_pointer = new_parent_forward_tail;
         parent_segment_data.forward_segment_length += current_frame_record.forward_segment_length;
 
-        // merge the queues
+        // work with the rollback parts
         if panicked {
             current_frame_record.did_end_up_in_panic = true;
 
-            // first we resolve a head of the rollback
+            // first we resolve a head of the rollback of the current frame
             let new_rollback_head = match current_frame_record.rollback_head_pointer {
-                QueueSegmentPointer::IssuedQuery(q_idx) => {
-                    QueueSegmentPointer::IssuedQuery(q_idx)
+                QueueSegmentPointer::IssuedQuery{idx, is_head} => {
+                    assert!(is_head);
+                    QueueSegmentPointer::IssuedQuery{idx, is_head}
                 },
                 QueueSegmentPointer::Indirection(QueueSegmentIndirectablePointer::RollbackTailAtFrameStart(f)) => {
-                    // it means that we are appending an empty frame
+                    // it means that we are appending an empty frame, or a frame where only reads have happened
+                    // since forward queue is done (glued to the parent trivially), we can use it's information
                     assert_eq!(f, frame_index);
                     // resolve the indirection
-                    let rollback_tail = current_frame_record.rollback_tail_pointer;
-                    let resolved = match rollback_tail {
+                    let rollback_tail_of_current = current_frame_record.rollback_tail_pointer;
+                    let resolved = match rollback_tail_of_current {
                         QueueSegmentPointer::GlobalEnd => QueueSegmentPointer::GlobalEnd, // propagate
                         QueueSegmentPointer::Dangling => {
-                            // tail of the parent becomes current
-                            parent_segment_data.forward_tail_pointer
+                            // we are formally panicking, and we have panicked an empty frame,
+                            // so appended nothing to the parent's forward queue, and can use parent's
+                            // forward queue tail as the rollback head (and indeed tail) of the current 
+                            match parent_segment_data.forward_tail_pointer {
+                                QueueSegmentPointer::IssuedQuery{idx, is_head} => {
+                                    QueueSegmentPointer::OtherFramesQuery{idx, is_head: false}
+                                },
+                                QueueSegmentPointer::OtherFramesQuery{idx, is_head} => {
+                                    QueueSegmentPointer::OtherFramesQuery{idx, is_head: false}
+                                },
+                                a @ _ => a,
+                            }
                         }
                         _ => unreachable!(),
 
@@ -364,14 +394,16 @@ impl CallstackWithAuxData {
                 _ => unreachable!(),
             };
 
+            // we resolved rollback head of the current frame, and since we panicked we can now adjust the tail
             current_frame_record.rollback_head_pointer = new_rollback_head;
 
-            // we know that the tail of rollback is dangling, but depending on the 
+            // if the tail is dangling then we had an empty frame
             if current_frame_record.rollback_tail_pointer == QueueSegmentPointer::Dangling {
                 // it was a trivial frame that was rolled back, and we should just make it of length 0, where head == tail == parent's tail
                 current_frame_record.rollback_tail_pointer = current_frame_record.rollback_head_pointer;
             } else {
-                assert!(matches!(current_frame_record.rollback_tail_pointer, QueueSegmentPointer::IssuedQuery(..)));
+                // otherwise make sure that it's 
+                assert!(matches!(current_frame_record.rollback_tail_pointer, QueueSegmentPointer::IssuedQuery{..}));
             }
 
             parent_segment_data.forward_segment_length += current_frame_record.rollback_segment_length;
@@ -434,16 +466,19 @@ impl CallstackWithAuxData {
             self.rollback_flattened_counter -= num_rollbacks;
             self.total_rolled_back += num_rollbacks;
         } else {
+            // frame did end up ok, so we merge into parent's rollback
+
             if current_frame_record.rollback_tail_pointer == QueueSegmentPointer::Dangling {
-                // only other option was an explicit query, so it's the only one
-                // we need to glue it somewhere
+                // it means we either did read only, or frame is empty in general
                 let new_rollback_tail = match parent_segment_data.rollback_head_pointer {
                     QueueSegmentPointer::GlobalEnd => QueueSegmentPointer::GlobalEnd,
-                    QueueSegmentPointer::IssuedQuery(q_idx) => {
-                        QueueSegmentPointer::OtherFramesQuery(q_idx)
+                    QueueSegmentPointer::IssuedQuery{idx, is_head} => {
+                        assert!(is_head);
+                        QueueSegmentPointer::OtherFramesQuery{idx, is_head: true}
                     },
-                    QueueSegmentPointer::OtherFramesQuery(q_idx) => {
-                        QueueSegmentPointer::OtherFramesQuery(q_idx)
+                    QueueSegmentPointer::OtherFramesQuery{idx, is_head} => {
+                        assert!(is_head);
+                        QueueSegmentPointer::OtherFramesQuery{idx, is_head: true}
                     },
                     QueueSegmentPointer::Indirection(QueueSegmentIndirectablePointer::RollbackTailAtFrameStart(f)) => {
                         assert_eq!(f, parent_frame_index);
@@ -451,8 +486,9 @@ impl CallstackWithAuxData {
                         match parent_segment_data.rollback_tail_pointer {
                             QueueSegmentPointer::GlobalEnd => QueueSegmentPointer::GlobalEnd,
                             QueueSegmentPointer::Dangling => QueueSegmentPointer::OtherFrameIndirection(QueueSegmentIndirectablePointer::RollbackTailAtFrameStart(f)), // make indirection
-                            QueueSegmentPointer::IssuedQuery(q_idx) => {
-                                QueueSegmentPointer::OtherFramesQuery(q_idx)
+                            QueueSegmentPointer::IssuedQuery{idx, is_head} => {
+                                assert!(!is_head);
+                                QueueSegmentPointer::OtherFramesQuery{idx, is_head: true}
                             },
                             a @ _ => unreachable!("encountered {:?}", a),
                         }  
@@ -462,7 +498,7 @@ impl CallstackWithAuxData {
 
                 current_frame_record.rollback_tail_pointer = new_rollback_tail;
             } else {
-                assert!(matches!(current_frame_record.rollback_tail_pointer, QueueSegmentPointer::IssuedQuery(..)));
+                assert!(matches!(current_frame_record.rollback_tail_pointer, QueueSegmentPointer::IssuedQuery{..}));
             }
 
             parent_segment_data.rollback_segment_length += current_frame_record.rollback_segment_length;
@@ -472,7 +508,7 @@ impl CallstackWithAuxData {
                 assert_eq!(f, frame_index);
                 current_frame_record.rollback_head_pointer = current_frame_record.rollback_tail_pointer;
             } else {
-                assert!(matches!(current_frame_record.rollback_head_pointer, QueueSegmentPointer::IssuedQuery(..)));
+                assert!(matches!(current_frame_record.rollback_head_pointer, QueueSegmentPointer::IssuedQuery{..}));
             }
 
             // just glue
@@ -507,10 +543,10 @@ impl CallstackWithAuxData {
 
             let marker = QueryMarker::Forward {unique_query_id, in_frame: current_frame_index, index: query_index, cycle: monotonic_cycle_counter};
 
-            current_frame_record.forward_tail_pointer = QueueSegmentPointer::IssuedQuery(marker.query_id());
+            current_frame_record.forward_tail_pointer = QueueSegmentPointer::IssuedQuery{idx: marker.query_id(), is_head: false};
             if matches!(current_frame_record.forward_head_pointer, QueueSegmentPointer::Indirection(..) | QueueSegmentPointer::OtherFrameIndirection(..)) {
                 // remove indirection immediatelly fro simplicity
-                current_frame_record.forward_head_pointer = QueueSegmentPointer::IssuedQuery(marker.query_id());
+                current_frame_record.forward_head_pointer = QueueSegmentPointer::IssuedQuery{idx: marker.query_id(), is_head: true};
             }
             current_frame_record.forward_segment_length += 1;
 
@@ -528,10 +564,10 @@ impl CallstackWithAuxData {
 
             let marker = QueryMarker::Rollback {unique_query_id, in_frame: current_frame_index, index: query_index, cycle_of_declaration: monotonic_cycle_counter, cycle_of_applied_rollback: None};
 
-            current_frame_record.rollback_head_pointer = QueueSegmentPointer::IssuedQuery(marker.query_id());
+            current_frame_record.rollback_head_pointer = QueueSegmentPointer::IssuedQuery{idx: marker.query_id(), is_head: true};
             if current_frame_record.rollback_tail_pointer == QueueSegmentPointer::Dangling {
                 // it's a non-trivial frame
-                current_frame_record.rollback_tail_pointer = QueueSegmentPointer::IssuedQuery(marker.query_id());
+                current_frame_record.rollback_tail_pointer = QueueSegmentPointer::IssuedQuery{idx: marker.query_id(), is_head: false};
             }
             current_frame_record.rollback_segment_length += 1;
 
@@ -592,10 +628,10 @@ impl CallstackWithAuxData {
             // just add
             let marker = QueryMarker::ForwardNoRollback{unique_query_id, in_frame: current_frame_index, index: query_index, cycle: monotonic_cycle_counter};
 
-            current_frame_record.forward_tail_pointer = QueueSegmentPointer::IssuedQuery(marker.query_id());
+            current_frame_record.forward_tail_pointer = QueueSegmentPointer::IssuedQuery{idx: marker.query_id(), is_head: false};
             if matches!(current_frame_record.forward_head_pointer, QueueSegmentPointer::Indirection(..) | QueueSegmentPointer::OtherFrameIndirection(..)) {
-                // remove indirection immediatelly fro simplicity
-                current_frame_record.forward_head_pointer = QueueSegmentPointer::IssuedQuery(marker.query_id());
+                // remove indirection immediatelly for simplicity
+                current_frame_record.forward_head_pointer = QueueSegmentPointer::IssuedQuery{idx: marker.query_id(), is_head: true};
             }
             current_frame_record.forward_segment_length += 1;
 

@@ -520,7 +520,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
     // - get witnesses for heads when encountering the new spans
 
     let global_end_of_storage_log = chain_of_states.last().map(|el| el.2.1).unwrap_or(E::Fr::zero());
-
+    dbg!(global_end_of_storage_log);
     let mut frame_rollback_tails = BTreeMap::new();
 
     let mut rollback_queue_initial_tails_for_new_frames = vec![];
@@ -543,6 +543,9 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
         }
     }
 
+    dbg!(&unresolved_indirections);
+    dbg!(&callstack_with_aux_data.frame_segments_data);
+
     let mut resolved = vec![];
 
     'outer: loop {
@@ -556,10 +559,10 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
                         a @ QueueSegmentPointer::GlobalEnd => {
                             callstack_with_aux_data.frame_segments_data.get_mut(frame_to_resolve).unwrap().rollback_tail_pointer = a;
                         } ,
-                        QueueSegmentPointer::IssuedQuery(f) => {
-                            callstack_with_aux_data.frame_segments_data.get_mut(frame_to_resolve).unwrap().rollback_tail_pointer = QueueSegmentPointer::OtherFramesQuery(f);
+                        QueueSegmentPointer::IssuedQuery{idx, is_head} => {
+                            callstack_with_aux_data.frame_segments_data.get_mut(frame_to_resolve).unwrap().rollback_tail_pointer = QueueSegmentPointer::OtherFramesQuery{idx, is_head};
                         },
-                        a @ QueueSegmentPointer::OtherFramesQuery(..) => {
+                        a @ QueueSegmentPointer::OtherFramesQuery{..} => {
                             callstack_with_aux_data.frame_segments_data.get_mut(frame_to_resolve).unwrap().rollback_tail_pointer = a;
                         },
                         _ => continue
@@ -589,19 +592,29 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
         let segment_data = &callstack_with_aux_data.frame_segments_data[&frame_index];
         let tail = match segment_data.rollback_tail_pointer {
             QueueSegmentPointer::GlobalEnd => global_end_of_storage_log,
-            QueueSegmentPointer::IssuedQuery(q_idx) => {
-                let pointer = unique_query_id_into_chain_positions[&q_idx];
-                let tail = chain_of_states[pointer].2.1;
+            QueueSegmentPointer::IssuedQuery{idx, is_head} => {
+                let pointer = unique_query_id_into_chain_positions[&idx];
+                let tail = if is_head {
+                    chain_of_states[pointer].2.0
+                } else {
+                    chain_of_states[pointer].2.1
+                };
 
                 tail
             },
-            QueueSegmentPointer::OtherFramesQuery(q_idx) => {
-                let pointer = unique_query_id_into_chain_positions[&q_idx];
-                let tail = if segment_data.did_end_up_in_panic {
-                    chain_of_states[pointer].2.1
+            QueueSegmentPointer::OtherFramesQuery{idx, is_head} => {
+                let pointer = unique_query_id_into_chain_positions[&idx];
+                let tail = if is_head {
+                    chain_of_states[pointer].2.0
                 } else {
-                    chain_of_states[pointer].2.0 // if we are referencing another frame's query, then we should take a head if we didn't panic
+                    chain_of_states[pointer].2.1
                 };
+
+                // let tail = if segment_data.did_end_up_in_panic {
+                //     chain_of_states[pointer].2.1
+                // } else {
+                //     chain_of_states[pointer].2.0 // if we are referencing another frame's query, then we should take a head if we didn't panic
+                // };
 
                 tail
             },
@@ -642,8 +655,14 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
     // and now do trivial simulation
 
+    // dbg!(&callstack_with_aux_data.full_history);
+
+    dbg!(&frame_rollback_tails);
+
     for (idx, el) in callstack_with_aux_data.full_history.iter().cloned().enumerate() {
         let frame_index = el.frame_index;
+        dbg!(&current_storage_log_state);
+        dbg!(&el);
         match el.action {
             CallstackAction::PushToStack => {
                 // we did push some(!) context to the stack
@@ -699,6 +718,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
             CallstackAction::PopFromStack { panic } => {
                 // an item that was in the stack becomes current
                 assert!(state_to_merge.is_some());
+                dbg!(&state_to_merge);
 
                 let (claimed_panic, state_to_merge) = state_to_merge.take().unwrap();
                 assert_eq!(panic, claimed_panic);
@@ -709,22 +729,22 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
                 let (entry, intermediate_info) =
                     callstack_argebraic_simulator.pop_and_output_intermediate_data(round_function);
 
-                assert_eq!(entry.rollback_queue_head, popped_state.rollback_head);
-                assert_eq!(entry.rollback_queue_tail, popped_state.rollback_tail);
-                assert_eq!(entry.rollback_queue_segment_length, popped_state.rollback_length);
+                assert_eq!(entry.rollback_queue_head, popped_state.rollback_head, "divergence at frame {}", frame_index);
+                assert_eq!(entry.rollback_queue_tail, popped_state.rollback_tail, "divergence at frame {}", frame_index);
+                assert_eq!(entry.rollback_queue_segment_length, popped_state.rollback_length, "divergence at frame {}", frame_index);
 
                 current_storage_log_state = popped_state;
                 current_storage_log_state.forward_tail = state_to_merge.forward_tail;
-                assert!(current_storage_log_state.forward_length <= state_to_merge.forward_length);
+                assert!(current_storage_log_state.forward_length <= state_to_merge.forward_length, "divergence at frame {}", frame_index);
                 current_storage_log_state.forward_length = state_to_merge.forward_length;
 
                 if panic {
-                    assert_eq!(current_storage_log_state.forward_tail, state_to_merge.rollback_head);
+                    assert_eq!(current_storage_log_state.forward_tail, state_to_merge.rollback_head, "divergence at frame {} with panic: {:?}", frame_index, el);
 
                     current_storage_log_state.forward_tail = state_to_merge.rollback_tail;
                     current_storage_log_state.forward_length += state_to_merge.rollback_length;
                 } else {
-                    assert_eq!(current_storage_log_state.rollback_head, state_to_merge.rollback_tail);
+                    assert_eq!(current_storage_log_state.rollback_head, state_to_merge.rollback_tail, "divergence at frame {} without panic: {:?}", frame_index, el);
 
                     current_storage_log_state.rollback_head = state_to_merge.rollback_head;
                     current_storage_log_state.rollback_length += state_to_merge.rollback_length;
@@ -742,7 +762,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
             CallstackAction::OutOfScope(OutOfScopeReason::Fresh) => {
                 // we already identified initial rollback tails for new frames
                 let rollback_tail = frame_rollback_tails[&frame_index];
-
+                dbg!(&rollback_tail);
                 // do not reset forward length as it's easy to merge
 
                 current_storage_log_state.rollback_length = 0;
@@ -780,6 +800,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
                     history_of_storage_log_states.insert(*cycle, current_storage_log_state);
                 }
 
+                dbg!(&current_storage_log_state);
                 state_to_merge = Some((panic, current_storage_log_state));
             }
         }
@@ -798,7 +819,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
     artifacts.sha256_round_function_witnesses = sha256_round_function_witnesses;
     artifacts.ecrecover_witnesses = ecrecover_witnesses;
     artifacts.original_log_queue = original_log_queue;
-    artifacts.original_log_queue_simulator = original_log_queue_simulator.unwrap();
+    artifacts.original_log_queue_simulator = original_log_queue_simulator.unwrap_or(LogQueueSimulator::empty());
     artifacts.original_log_queue_states = original_log_queue_states;
 
     artifacts.demuxed_rollup_storage_queries = demuxed_rollup_storage_queries;
@@ -1077,7 +1098,12 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
                     "invalid memory access location at cycle {:?}",
                     timestamp.get_value()
                 );
-                // assert_eq!(location.index, query.location.index.0);
+                assert_eq!(
+                    location.index,
+                    query.location.index.0,
+                    "invalid memory access location at cycle {:?}",
+                    timestamp.get_value()
+                );
             }
 
             // println!("memory word = 0x{:x}", query.value);
