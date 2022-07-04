@@ -1,0 +1,3 @@
+[submodule "src/system-contracts"]
+	path = src/system-contracts
+	url = git@github.com:matter-labs/system-contracts.git
