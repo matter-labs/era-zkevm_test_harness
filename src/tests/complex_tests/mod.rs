@@ -1,0 +1,422 @@
+mod utils;
+mod serialize_utils;
+
+use std::collections::HashMap;
+
+use super::*;
+use crate::entry_point::{create_out_of_circuit_global_context};
+
+use crate::ethereum_types::*;
+use crate::pairing::bn256::Bn256;
+use crate::witness::oracle::create_artifacts_from_tracer;
+use crate::witness::oracle::VmWitnessOracle;
+use sync_vm::glue::traits::GenericHasher;
+use sync_vm::rescue_poseidon::rescue::params::RescueParams;
+use sync_vm::traits::CSWitnessable;
+use sync_vm::vm::vm_cycle::cycle::vm_cycle;
+use sync_vm::vm::vm_cycle::witness_oracle::u256_to_biguint;
+use zk_evm::abstractions::*;
+use zk_evm::aux_structures::DecommittmentQuery;
+use zk_evm::aux_structures::*;
+use zk_evm::utils::{bytecode_to_code_hash, contract_bytecode_to_words};
+use zk_evm::witness_trace::VmWitnessTracer;
+use zk_evm::GenericNoopTracer;
+use zkevm_assembly::Assembly;
+use zk_evm::testing::storage::InMemoryStorage;
+use crate::toolset::create_tools;
+use utils::{read_test_artifact, TestArtifact};
+use crate::witness::tree::{ZKSyncTestingTree, BinarySparseStorageTree};
+
+const ACCOUNT_CODE_STORAGE_ADDRESS: Address = H160([
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x80, 0x02,
+]);
+
+
+#[test]
+fn basic_test() {
+    let test_artifact = read_test_artifact("basic_test");
+    run_and_try_create_witness_inner(test_artifact, 10000);
+}
+
+fn save_predeployed_contracts(storage: &mut InMemoryStorage, contracts: &HashMap<Address, Vec<[u8;32]>>) {
+    let storage_logs: Vec<(u8, Address, U256, U256)> = contracts
+        .clone()
+        .into_iter()
+        .map(|(address, bytecode)| {
+            let hash = bytecode_to_code_hash(&bytecode).unwrap();
+
+            (0, ACCOUNT_CODE_STORAGE_ADDRESS, U256::from_big_endian(address.as_bytes()), U256::from(hash))
+        })
+        .collect();
+
+    storage.populate(storage_logs);
+}
+
+pub fn assert_equal_state(
+    out_of_circuit: &zk_evm::vm_state::VmLocalState,
+    in_circuit: &sync_vm::vm::vm_state::VmLocalState<Bn256, 3>,
+) {
+    let wit = in_circuit.clone().split().0.create_witness().unwrap();
+
+    for (reg_idx, (circuit, not_circuit)) in wit
+        .registers
+        .iter()
+        .zip(out_of_circuit.registers.iter())
+        .enumerate()
+    {
+        compare_reg_values(reg_idx + 1, circuit.inner, *not_circuit);
+    }
+
+    // compare flags
+    let flags = wit.flags;
+    assert_eq!(
+        flags.overflow_or_less_than, out_of_circuit.flags.overflow_or_less_than_flag,
+        "OF flag divergence"
+    );
+    assert_eq!(
+        flags.equal, out_of_circuit.flags.equality_flag,
+        "EQ flag divergence"
+    );
+    assert_eq!(
+        flags.greater_than, out_of_circuit.flags.greater_than_flag,
+        "GT flag divergence"
+    );
+}
+
+fn compare_reg_values(reg_idx: usize, in_circuit: [u128; 2], out_of_circuit: U256) {
+    let l0_a = in_circuit[0] as u64;
+    let l1_a = (in_circuit[0] >> 64) as u64;
+    let l2_a = in_circuit[1] as u64;
+    let l3_a = (in_circuit[1] >> 64) as u64;
+
+    let equal = out_of_circuit.0[0] == l0_a
+        && out_of_circuit.0[1] == l1_a
+        && out_of_circuit.0[2] == l2_a
+        && out_of_circuit.0[3] == l3_a;
+    if !equal {
+        println!(
+            "Limb 0 in circuit = 0x{:016x}, out = 0x{:016x}",
+            l0_a, out_of_circuit.0[0]
+        );
+        println!(
+            "Limb 1 in circuit = 0x{:016x}, out = 0x{:016x}",
+            l1_a, out_of_circuit.0[1]
+        );
+        println!(
+            "Limb 2 in circuit = 0x{:016x}, out = 0x{:016x}",
+            l2_a, out_of_circuit.0[2]
+        );
+        println!(
+            "Limb 3 in circuit = 0x{:016x}, out = 0x{:016x}",
+            l3_a, out_of_circuit.0[3]
+        );
+
+        panic!("Failed as reg {}:", reg_idx);
+    }
+}
+
+fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: usize) {
+    use zk_evm::precompiles::BOOTLOADER_FORMAL_ADDRESS;
+
+    use crate::external_calls::run;
+
+    use sync_vm::testing::create_test_artifacts_with_optimized_gate;
+    let (_, round_function, _) = create_test_artifacts_with_optimized_gate();
+
+    use crate::toolset::GeometryConfig;
+
+    let geometry = GeometryConfig {
+        cycles_per_vm_snapshot: 10,
+        limit_for_code_decommitter_sorter: 16,
+        limit_for_log_demuxer: 16,
+        limit_for_storage_sorter: 16,
+        limit_for_events_or_l1_messages_sorter: 16,
+        cycles_per_ram_permutation: 4,
+        cycles_per_code_decommitter: 4,
+        cycles_per_storage_application: 2,
+        limit_for_initial_writes_pubdata_hasher: 16,
+        limit_for_repeated_writes_pubdata_hasher: 16,
+        cycles_per_keccak256_circuit: 1,
+        cycles_per_sha256_circuit: 1,
+        cycles_per_ecrecover_circuit: 1,
+        limit_for_l1_messages_merklizer: 8,
+    };
+
+    let mut storage_impl = InMemoryStorage::new();
+    let mut tree = ZKSyncTestingTree::empty();
+
+    save_predeployed_contracts(&mut storage_impl, &test_artifact.predeployed_contracts);
+
+    let used_bytecodes = HashMap::from_iter(test_artifact.predeployed_contracts.iter().map(|(_,bytecode)| (bytecode_to_code_hash(&bytecode).unwrap().into(), bytecode.clone())));
+
+    let mut basic_block_circuits = run(
+        1,
+        1,
+        Address::zero(),
+        test_artifact.entry_point_address,
+        test_artifact.entry_point_code,
+        vec![],
+        false,
+        U256::zero(),
+        50,
+        2,
+        used_bytecodes,
+        vec![],
+        vec![],
+        cycle_limit,
+        round_function,
+        geometry,
+        storage_impl,
+        &mut tree
+    );
+
+    let vm_circuit = basic_block_circuits.main_vm_circuits.drain(0..1).next().unwrap();
+    use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
+
+    circuit_testing::prove_and_verify_circuit::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(vm_circuit).unwrap();
+
+
+    // for el in bytecode.iter() {
+    //     println!("{}", hex::encode(el));
+    // }
+    // dbg!(bytecode.len());
+    // let bytecode_hash = bytecode_to_code_hash(&bytecode).unwrap();
+
+
+
+
+    // let mut tools = create_tools(storage_impl, &geometry);
+
+    // // fill the tools
+    // let mut to_fill = vec![];
+    // let bytecode_hash_as_u256 = U256::from_big_endian(&bytecode_hash);
+    // to_fill.push((bytecode_hash_as_u256, contract_bytecode_to_words(&bytecode)));
+    // tools.decommittment_processor.populate(to_fill);
+
+    // // and do the query
+    // let initial_decommittment_query = DecommittmentQuery {
+    //     hash: bytecode_hash_as_u256,
+    //     timestamp: Timestamp(1u32),
+    //     memory_page: MemoryPage(zk_evm::zkevm_opcode_defs::BOOTLOADER_CODE_PAGE),
+    //     decommitted_length: bytecode.len() as u16,
+    //     is_fresh: true,
+    // };
+
+    // let (query, witness) = tools.decommittment_processor.decommit_into_memory(
+    //     0,
+    //     initial_decommittment_query,
+    //     &mut tools.memory,
+    // );
+    // let wit = witness.unwrap();
+    // tools.witness_tracer.add_decommittment(0, query, wit);
+
+    // let block_properties = create_out_of_circuit_global_context(1, 1, true, U256::zero(), 50, 2);
+
+    // use crate::toolset::create_out_of_circuit_vm;
+
+    // let mut out_of_circuit_vm = create_out_of_circuit_vm(
+    //     &mut tools, 
+    //     &block_properties,
+    //     Address::zero(),
+    //     *BOOTLOADER_FORMAL_ADDRESS
+    // );
+
+    // let mut tracer = GenericNoopTracer::<_>::new();
+    // for _ in 0..cycle_limit {
+    //     out_of_circuit_vm.cycle(&mut tracer);
+    // }
+
+    // let vm_local_state = out_of_circuit_vm.local_state;
+
+    // // perform the final snapshot
+    // let current_cycle_counter = tools.witness_tracer.current_cycle_counter;
+    // use crate::witness::vm_snapshot::VmSnapshot;
+    // let snapshot = VmSnapshot {
+    //     local_state: vm_local_state.clone(),
+    //     at_cycle: current_cycle_counter,
+    // };
+    // tools.witness_tracer.vm_snapshots.push(snapshot);
+
+    // // use crate::franklin_crypto::plonk::circuit::tables::inscribe_default_range_table_for_bit_width_over_first_three_columns;
+    // // inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
+
+    // // let params = sync_vm::utils::bn254_rescue_params();
+    // // let round_function = GenericHasher::<Bn256, RescueParams<_, 2, 3>, 2, 3>::new_from_params(&params);
+
+    // let (instance_oracles, artifacts) =
+    //     create_artifacts_from_tracer(tools.witness_tracer, &round_function, &geometry, (query, wit));
+
+    // use crate::entry_point::create_in_circuit_global_context;
+    // let in_circuit_global_context =
+    //     create_in_circuit_global_context::<Bn256>(
+    //         1, 
+    //         1, 
+    //         true, 
+    //         U256::zero(), 
+    //         50, 
+    //         2
+    //     );
+
+    // // let num_instances = instance_oracles.len();
+
+    // // for (instance_idx, vm_instance) in instance_oracles.into_iter().enumerate() {
+    // //     println!("Running VM for range {:?}", vm_instance.cycles_range);
+    // //     use crate::entry_point::run_vm_instance;
+
+    // //     let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+    // //     sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+
+    // //     let vm_state = run_vm_instance(
+    // //         &mut cs,
+    // //         &round_function,
+    // //         &in_circuit_global_context,
+    // //         vm_instance
+    // //     );
+
+    // //     if instance_idx == num_instances - 1 {
+    // //         // consistency check for storage log
+    // //         assert_eq!(
+    // //             vm_state.callstack.current_context.log_queue_forward_tail.get_value().unwrap(),
+    // //             artifacts.original_log_queue_simulator.tail
+    // //         );
+
+    // //         assert_eq!(
+    // //             vm_state.callstack.current_context.log_queue_forward_part_length.get_value().unwrap(),
+    // //             artifacts.original_log_queue_simulator.num_items
+    // //         );
+    // //     }
+    // // }
+
+    // // test
+    // {
+    //     println!("Running code decommittments sorter and deduplicator");
+    //     assert!(artifacts.decommittments_deduplicator_circuits_data.len() == 1);        
+    //     let subresult = &artifacts.decommittments_deduplicator_circuits_data[0];
+    //     use sync_vm::glue::sort_decommittment_requests::sort_and_deduplicate_code_decommittments_entry_point;
+
+    //     let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+    //     sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+
+    //     let _ = sort_and_deduplicate_code_decommittments_entry_point(
+    //         &mut cs,
+    //         Some(subresult.clone()),
+    //         &round_function,
+    //         geometry.limit_for_code_decommitter_sorter as usize,
+    //     ).unwrap();
+    // }
+
+    // // test
+    // {
+    //     for (i, subresult) in artifacts.code_decommitter_circuits_data.iter().enumerate() {
+    //         println!("Running code decommitter circuit number {}", i);
+    //         // println!("Running RAM permutation for input {:?}", subresult);
+    //         use sync_vm::glue::code_unpacker_sha256::unpack_code_into_memory_entry_point;
+
+    //         let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+    //         sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+
+    //         let _ = unpack_code_into_memory_entry_point(
+    //             &mut cs,
+    //             Some(subresult.clone()),
+    //             &round_function,
+    //             geometry.cycles_per_code_decommitter as usize,
+    //         ).unwrap();
+    //     }
+    // }
+
+    // // test
+    // {
+    //     println!("Running log demuxer circuit");
+    //     assert!(artifacts.log_demuxer_circuit_data.len() == 1);        
+    //     let subresult = &artifacts.log_demuxer_circuit_data[0];
+    //     use sync_vm::glue::demux_log_queue::demultiplex_storage_logs_enty_point;
+
+    //     let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+    //     sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+
+    //     let _ = demultiplex_storage_logs_enty_point(
+    //         &mut cs,
+    //         Some(subresult.clone()),
+    //         &round_function,
+    //         geometry.limit_for_log_demuxer as usize
+    //     ).unwrap();
+    // }
+
+    
+
+    // // // test
+    // // {
+    // //     for subresult in artifacts.ram_permutation_circuits_data.iter() {
+    // //         // println!("Running RAM permutation for input {:?}", subresult);
+    // //         use sync_vm::glue::ram_permutation::ram_permutation_entry_point;
+
+    // //         let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+    // //         sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+
+    // //         let _ = ram_permutation_entry_point(
+    // //             &mut cs,
+    // //             Some(subresult.clone()),
+    // //             &round_function,
+    // //             1<<2,
+    // //         ).unwrap();
+    // //     }
+    // // }
+
+    // // test
+    // {
+    //     println!("Running storage sorter and deduplicator");
+    //     assert!(artifacts.storage_deduplicator_circuit_data.len() == 1);
+    //     let subresult = &artifacts.storage_deduplicator_circuit_data[0];
+    //     // println!("Running RAM permutation for input {:?}", subresult);
+    //     use sync_vm::glue::storage_validity_by_grand_product::sort_and_deduplicate_storage_access_entry_point;
+
+    //     let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+    //     sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+
+    //     let _ = sort_and_deduplicate_storage_access_entry_point(
+    //         &mut cs,
+    //         Some(subresult.clone()),
+    //         &round_function,
+    //         geometry.limit_for_storage_sorter as usize
+    //     ).unwrap();
+    // }
+
+    // // test
+    // {
+    //     println!("Running events sorter and deduplicator");
+    //     assert!(artifacts.events_deduplicator_circuit_data.len() == 1);
+    //     let subresult = &artifacts.events_deduplicator_circuit_data[0];
+    //     // println!("Running RAM permutation for input {:?}", subresult);
+    //     use sync_vm::glue::log_sorter::sort_and_deduplicate_events_entry_point;
+
+    //     let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+    //     sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+
+    //     let _ = sort_and_deduplicate_events_entry_point(
+    //         &mut cs,
+    //         Some(subresult.clone()),
+    //         &round_function,
+    //         geometry.limit_for_events_or_l1_messages_sorter as usize
+    //     ).unwrap();
+    // }
+
+    // // test
+    // {
+    //     println!("Running l1 messages sorter and deduplicator");
+    //     assert!(artifacts.l1_messages_deduplicator_circuit_data.len() == 1);
+    //     let subresult = &artifacts.l1_messages_deduplicator_circuit_data[0];
+    //     // println!("Running RAM permutation for input {:?}", subresult);
+    //     use sync_vm::glue::log_sorter::sort_and_deduplicate_events_entry_point;
+
+    //     let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+    //     sync_vm::vm::vm_cycle::add_all_tables(&mut cs).unwrap();
+
+    //     let _ = sort_and_deduplicate_events_entry_point(
+    //         &mut cs,
+    //         Some(subresult.clone()),
+    //         &round_function,
+    //         geometry.limit_for_events_or_l1_messages_sorter as usize
+    //     ).unwrap();
+    // }
+}
