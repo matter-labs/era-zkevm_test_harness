@@ -191,7 +191,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
         ..
     } = tracer;
 
-    // let mut callstack_with_aux_data = callstack_with_aux_data;
+    let mut callstack_with_aux_data = callstack_with_aux_data;
     // callstack_with_aux_data.finish_merge_queue();
 
     // we should have an initial query somewhat before the time
@@ -525,7 +525,63 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
     let mut rollback_queue_initial_tails_for_new_frames = vec![];
 
-    use super::callstack_handler::QueueSegmentPointer;
+    use super::callstack_handler::{QueueSegmentPointer, QueueSegmentIndirectablePointer};
+
+    // ideally we should have some query framework for it (a-la Rust's Salsa), but for how just sinlge hash map is fine
+
+    let mut unresolved_indirections = std::collections::HashMap::new();
+
+    for (k, v) in callstack_with_aux_data.frame_segments_data.iter() {
+        match &v.rollback_tail_pointer {
+            QueueSegmentPointer::OtherFrameIndirection(ind) => {
+                unresolved_indirections.insert(ind.clone(), *k);
+            },
+            QueueSegmentPointer::Indirection(ind) => {
+                unresolved_indirections.insert(ind.clone(), *k);
+            },
+            _ => {}
+        }
+    }
+
+    let mut resolved = vec![];
+
+    'outer: loop {
+        for (ind, frame_to_resolve) in unresolved_indirections.iter() {
+        // for (ind, frame_to_resolve) in unresolved_indirections.iter().cloned() {
+            match ind {
+                QueueSegmentIndirectablePointer::RollbackTailAtFrameStart(indirected_frame) => {
+                    // try to resovle immediatelly
+                    let parent = callstack_with_aux_data.frame_segments_data[indirected_frame].rollback_tail_pointer;
+                    match parent {
+                        a @ QueueSegmentPointer::GlobalEnd => {
+                            callstack_with_aux_data.frame_segments_data.get_mut(frame_to_resolve).unwrap().rollback_tail_pointer = a;
+                        } ,
+                        QueueSegmentPointer::IssuedQuery(f) => {
+                            callstack_with_aux_data.frame_segments_data.get_mut(frame_to_resolve).unwrap().rollback_tail_pointer = QueueSegmentPointer::OtherFramesQuery(f);
+                        },
+                        a @ QueueSegmentPointer::OtherFramesQuery(..) => {
+                            callstack_with_aux_data.frame_segments_data.get_mut(frame_to_resolve).unwrap().rollback_tail_pointer = a;
+                        },
+                        _ => continue
+                    }
+                },
+                QueueSegmentIndirectablePointer::ForwardHeadAtFrameStart(..) => unreachable!(),
+            }
+
+            resolved.push(ind.clone());
+        }
+
+        for el in resolved.drain(..) {
+            unresolved_indirections.remove(&el);
+        }
+
+        if unresolved_indirections.is_empty() {
+            break 'outer;
+        }
+    }
+
+    dbg!(&chain_of_states);
+    dbg!(&callstack_with_aux_data.frame_segments_data);
 
     let max_frame_idx = callstack_with_aux_data.monotonic_frame_counter;
 
@@ -549,7 +605,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
                 tail
             },
-            a @ _ => unreachable!("encountered {:?}", a)
+            a @ _ => unreachable!("encountered {:?} at frame {}", a, frame_index)
         };
 
         frame_rollback_tails.insert(frame_index, tail);

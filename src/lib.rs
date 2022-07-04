@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+
 pub mod encodings;
 pub mod entry_point;
 pub mod utils;

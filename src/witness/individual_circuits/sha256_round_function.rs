@@ -1,8 +1,6 @@
 use super::*;
-use crate::ff::{Field, PrimeField};
 use crate::pairing::Engine;
 use derivative::Derivative;
-use num_bigint::BigUint;
 use sync_vm::franklin_crypto::plonk::circuit::utils::u64_to_fe;
 use crate::biguint_from_u256;
 use crate::witness_structures::*;
