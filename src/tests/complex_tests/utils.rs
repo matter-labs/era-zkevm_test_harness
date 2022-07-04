@@ -2,7 +2,7 @@ use std::{fs, path::PathBuf};
 use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
 use zk_evm::ethereum_types::Address;
-use super::serialize_utils::{deserialize_bytecode, deserialize_bytecodes, deserialize_bytecodes_with_addresses};
+use super::serialize_utils::{deserialize_bytecode, deserialize_bytecodes_with_addresses};
 
 const TEST_ARTIFACTS_DIR: &'static str = "./src/tests/complex_tests/test_artifacts/";
 
@@ -11,8 +11,6 @@ pub struct TestArtifact {
     pub entry_point_address: Address,
     #[serde(deserialize_with = "deserialize_bytecode")]
     pub entry_point_code: Vec<[u8;32]>,
-    #[serde(deserialize_with = "deserialize_bytecodes")]
-    pub used_bytecodes: Vec<Vec<[u8;32]>>,
     #[serde(deserialize_with = "deserialize_bytecodes_with_addresses")]
     pub predeployed_contracts: HashMap<Address, Vec<[u8;32]>>
 }

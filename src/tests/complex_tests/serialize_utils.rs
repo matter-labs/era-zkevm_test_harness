@@ -46,16 +46,3 @@ where
 
     result
 }
-
-pub fn deserialize_bytecodes<'de, D>(deserializer: D) -> Result<Vec<Vec<[u8; 32]>>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let deserialized_strings: Vec<String> = Vec::deserialize(deserializer)?;
-    let result : Result<Vec<_>, _> = deserialized_strings
-        .iter()
-        .map(|deserialized_str| hex_string_to_bytecode::<D>(deserialized_str))
-        .collect();
-
-    result
-}

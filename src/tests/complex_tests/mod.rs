@@ -25,11 +25,32 @@ use zkevm_assembly::Assembly;
 use zk_evm::testing::storage::InMemoryStorage;
 use crate::toolset::create_tools;
 use utils::{read_test_artifact, TestArtifact};
+use crate::witness::tree::{ZKSyncTestingTree, BinarySparseStorageTree};
+
+const ACCOUNT_CODE_STORAGE_ADDRESS: Address = H160([
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x80, 0x02,
+]);
+
 
 #[test]
 fn basic_test() {
     let test_artifact = read_test_artifact("basic_test");
     run_and_try_create_witness_inner(test_artifact, 10000);
+}
+
+fn save_predeployed_contracts(storage: &mut InMemoryStorage, contracts: &HashMap<Address, Vec<[u8;32]>>) {
+    let storage_logs: Vec<(u8, Address, U256, U256)> = contracts
+        .clone()
+        .into_iter()
+        .map(|(address, bytecode)| {
+            let hash = bytecode_to_code_hash(&bytecode).unwrap();
+
+            (0, ACCOUNT_CODE_STORAGE_ADDRESS, U256::from_big_endian(address.as_bytes()), U256::from(hash))
+        })
+        .collect();
+
+    storage.populate(storage_logs);
 }
 
 pub fn assert_equal_state(
@@ -122,13 +143,12 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
         limit_for_l1_messages_merklizer: 8,
     };
 
-    use crate::witness::tree::ZKSyncTestingTree;
-    use crate::witness::tree::BinarySparseStorageTree;
-
-    let storage_impl = InMemoryStorage::new();
+    let mut storage_impl = InMemoryStorage::new();
     let mut tree = ZKSyncTestingTree::empty();
 
-    let used_bytecodes = HashMap::from_iter(test_artifact.used_bytecodes.iter().map(|bytecode| (bytecode_to_code_hash(&bytecode).unwrap().into(), bytecode.clone())));
+    save_predeployed_contracts(&mut storage_impl, &test_artifact.predeployed_contracts);
+
+    let used_bytecodes = HashMap::from_iter(test_artifact.predeployed_contracts.iter().map(|(_,bytecode)| (bytecode_to_code_hash(&bytecode).unwrap().into(), bytecode.clone())));
 
     let mut basic_block_circuits = run(
         1,
