@@ -26,14 +26,16 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 3> for InitialStorageWrite {
         assert!(shift <= E::Fr::CAPACITY as usize);
         let el0 = lc;
 
+        let mut lc = E::Fr::zero();
         let mut shift = 0;
-        for el in self.key[32..].iter().chain(self.value[..28].iter()) {
+        for el in self.key[30..].iter().chain(self.value[..28].iter()) {
             scale_and_accumulate::<E, _>(&mut lc, *el, &shifts, shift);
             shift += 8;
         }
         assert!(shift <= E::Fr::CAPACITY as usize);
         let el1 = lc;
 
+        let mut lc = E::Fr::zero();
         let mut shift = 0;
         for el in self.value[28..].iter() {
             scale_and_accumulate::<E, _>(&mut lc, *el, &shifts, shift);

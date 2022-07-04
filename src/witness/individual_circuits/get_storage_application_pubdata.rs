@@ -18,6 +18,7 @@ use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
 use sync_vm::glue::pubdata_hasher::storage_write_data::InitialStorageWriteData;
 use sync_vm::glue::pubdata_hasher::storage_write_data::RepeatedStorageWriteData;
 use sync_vm::glue::pubdata_hasher::input::*;
+use blake2::Blake2s256;
 
 // We only quickly walk over the sequence of storage related logs, and separate them into either repeated application or a new one
 pub fn compute_storage_application_pubdata_queues<
@@ -25,7 +26,7 @@ pub fn compute_storage_application_pubdata_queues<
     R: CircuitArithmeticRoundFunction<E, 2, 3>,
 >(
     artifacts: &mut FullBlockArtifacts<E>,
-    tree: &ZKSyncTestingTree,
+    tree: &impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
     round_function: &R,
     first_writes_capacity: usize,
     repeated_writes_capacity: usize,

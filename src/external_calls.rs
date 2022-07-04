@@ -15,6 +15,9 @@ use crate::witness::oracle::create_artifacts_from_tracer;
 use crate::franklin_crypto::plonk::circuit::allocated_num::Num;
 use crate::witness::tree::ZKSyncTestingTree;
 use crate::witness::full_block_artifact::BlockBasicCircuits;
+use blake2::Blake2s256;
+use crate::witness::tree::ZkSyncStorageLeaf;
+use crate::witness::tree::BinarySparseStorageTree;
 
 /// This is a testing interface that basically will
 /// setup the environment and will run out-of-circuit and then in-circuit
@@ -37,7 +40,7 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
     round_function: R, // used for all queues implementation
     geometry: GeometryConfig,
     storage: S,
-    tree: &mut ZKSyncTestingTree, // change it to impl ...
+    tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
 // ) -> FullBlockArtifacts<Bn256> {
 ) -> BlockBasicCircuits<Bn256> {
     let bytecode_hash = bytecode_to_code_hash(&entry_point_code).unwrap();

@@ -156,14 +156,15 @@ pub struct FullBlockArtifacts<E: Engine> {
     pub l1_messages_merklizer_data: Vec<MessagesMerklizerInstanceWitness<E, 5, 88, <LogQuery as CircuitEquivalentReflection<E>>::Destination>>,
 }
 
-use crate::witness::tree::ZKSyncTestingTree;
+use crate::witness::tree::*;
+use blake2::Blake2s256;
 
 impl<E: Engine> FullBlockArtifacts<E> {
     pub fn process<R: CircuitArithmeticRoundFunction<E, 2, 3>>(
         &mut self, 
         round_function: &R, 
         geometry: &GeometryConfig,
-        testing_tree: &mut ZKSyncTestingTree,
+        tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
         num_non_deterministic_heap_queries: usize,
     ) {
         // this is parallelizable internally by the factor of 3 in round function implementation later on
@@ -367,7 +368,7 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
         let (initial, repeated) = compute_storage_application_pubdata_queues(
             self,
-            testing_tree,
+            tree,
             round_function,
             geometry.limit_for_initial_writes_pubdata_hasher as usize,
             geometry.limit_for_repeated_writes_pubdata_hasher as usize,
@@ -381,7 +382,7 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
         let rollup_storage_application_circuit_data = decompose_into_storage_application_witnesses(
             self,
-            testing_tree,
+            tree,
             round_function,
             geometry.cycles_per_storage_application as usize
         );
@@ -430,4 +431,53 @@ pub struct BlockBasicCircuits<E: Engine> {
     pub l1_messages_sorter_circuit: L1MessagesSorterCircuit<E>,
     // merklize L1 message
     pub l1_messages_merklizer_circuit: L1MessagesMerklizerCircuit<E>
+}
+
+impl<E: Engine> BlockBasicCircuits<E> {
+    pub fn into_flattened_set(self) -> Vec<ZkSyncCircuit<E, VmWitnessOracle<E>>> {
+        let BlockBasicCircuits { 
+            main_vm_circuits, 
+            code_decommittments_sorter_circuit, 
+            code_decommitter_circuits, 
+            log_demux_circuit, 
+            keccak_precompile_circuits, 
+            sha256_precompile_circuits, 
+            ecrecover_precompile_circuits, 
+            ram_permutation_circuits, 
+            storage_sorter_circuit, 
+            storage_application_circuits, 
+            initial_writes_hasher_circuit, 
+            repeated_writes_hasher_circuit, 
+            events_sorter_circuit, 
+            l1_messages_sorter_circuit, 
+            l1_messages_merklizer_circuit 
+        } = self;
+
+        let mut result = vec![];
+        result.extend(main_vm_circuits.into_iter().map(|el| ZkSyncCircuit::MainVM(el)));
+
+        result.push(ZkSyncCircuit::CodeDecommittmentsSorter(code_decommittments_sorter_circuit));
+
+        result.extend(code_decommitter_circuits.into_iter().map(|el| ZkSyncCircuit::CodeDecommitter(el)));
+
+        result.push(ZkSyncCircuit::LogDemuxer(log_demux_circuit));
+
+        result.extend(keccak_precompile_circuits.into_iter().map(|el| ZkSyncCircuit::KeccakRoundFunction(el)));
+        result.extend(sha256_precompile_circuits.into_iter().map(|el| ZkSyncCircuit::Sha256RoundFunction(el)));
+        result.extend(ecrecover_precompile_circuits.into_iter().map(|el| ZkSyncCircuit::ECRecover(el)));
+
+        result.extend(ram_permutation_circuits.into_iter().map(|el| ZkSyncCircuit::RAMPermutation(el)));
+
+        result.push(ZkSyncCircuit::StorageSorter(storage_sorter_circuit));
+
+        result.extend(storage_application_circuits.into_iter().map(|el| ZkSyncCircuit::StorageApplication(el)));
+
+        result.push(ZkSyncCircuit::InitialWritesPubdataHasher(initial_writes_hasher_circuit));
+        result.push(ZkSyncCircuit::RepeatedWritesPubdataHasher(repeated_writes_hasher_circuit));
+        result.push(ZkSyncCircuit::EventsSorter(events_sorter_circuit));
+        result.push(ZkSyncCircuit::L1MessagesSorter(l1_messages_sorter_circuit));
+        result.push(ZkSyncCircuit::L1MessagesMerklier(l1_messages_merklizer_circuit));
+
+        result
+    }
 }

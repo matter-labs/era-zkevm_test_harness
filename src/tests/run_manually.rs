@@ -232,10 +232,22 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
         &mut tree
     );
 
-    let vm_circuit = basic_block_circuits.main_vm_circuits.drain(0..1).next().unwrap();
-    use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
+    let flattened = basic_block_circuits.into_flattened_set();
+    // for el in flattened.into_iter() {
+    //     use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
+    //     let is_satisfied = circuit_testing::check_if_satisfied::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(el).unwrap();
+    //     assert!(is_satisfied);
+    // }
 
-    circuit_testing::prove_and_verify_circuit::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(vm_circuit).unwrap();
+    for el in flattened.into_iter() {
+        use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
+        circuit_testing::prove_and_verify_circuit::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(el).unwrap();
+    }
+
+    // let vm_circuit = basic_block_circuits.main_vm_circuits.drain(0..1).next().unwrap();
+    // use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
+
+    // circuit_testing::prove_and_verify_circuit::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(vm_circuit).unwrap();
 
 
     // for el in bytecode.iter() {

@@ -43,6 +43,11 @@ pub type L1MessagesMerklizerCircuit<E> = ZkSyncUniformCircuitCircuitInstance<E, 
 pub type InitialStorageWritesPubdataHasherCircuit<E> = ZkSyncUniformCircuitCircuitInstance<E, StorageInitialWritesRehasherInstanceSynthesisFunction>;
 pub type RepeatedStorageWritesPubdataHasherCircuit<E> = ZkSyncUniformCircuitCircuitInstance<E, StorageRepeatedWritesRehasherInstanceSynthesisFunction>;
 
+
+
+/// NOTE: It DOES implement Circuit<E>, but one would need to load the
+/// setup for it's INNER contents somehow, so do NOT synthesise it directly
+/// unless you know what you are doing!
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone(bound = ""))]
 #[serde(bound = "")]
@@ -60,7 +65,7 @@ pub enum ZkSyncCircuit<E: Engine, W: WitnessOracle<E>> {
     RAMPermutation(RAMPermutationCircuit<E>),
     StorageSorter(StorageSorterCircuit<E>),
     StorageApplication(()),
-    EventsSorter(RAMPermutationCircuit<E>),
+    EventsSorter(EventsSorterCircuit<E>),
     L1MessagesSorter(L1MessagesSorterCircuit<E>),
     L1MessagesMerklier(L1MessagesMerklizerCircuit<E>),
     InitialWritesPubdataHasher(InitialStorageWritesPubdataHasherCircuit<E>),

@@ -24,6 +24,7 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 2> for RepeatedStorageWrite 
         assert!(shift <= E::Fr::CAPACITY as usize);
         let el0 = lc;
 
+        let mut lc = E::Fr::zero();
         let mut shift = 0;
         for el in self.value[16..].iter() {
             scale_and_accumulate::<E, _>(&mut lc, *el, &shifts, shift);

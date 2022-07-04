@@ -8,18 +8,19 @@ use sync_vm::glue::keccak256_round_function_circuit::*;
 use zk_evm::precompiles::keccak256::BUFFER_SIZE;
 use crate::biguint_from_u256;
 use crate::witness_structures::*;
-use crate::witness::tree::{ZKSyncTestingTree, LeafQuery};
+use crate::witness::tree::*;
 use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
 use sync_vm::glue::storage_application::input::{StorageApplicationCircuitInstanceWitness};
 use crate::witness::full_block_artifact::FullBlockArtifacts;
 use sync_vm::glue::storage_application::input::StorageApplicationFSM;
+use blake2::Blake2s256;
 
 pub fn decompose_into_storage_application_witnesses<
     E: Engine,
     R: CircuitArithmeticRoundFunction<E, 2, 3>,
 >(
     artifacts: &mut FullBlockArtifacts<E>,
-    tree: &mut ZKSyncTestingTree,
+    tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
     round_function: &R,
     num_rounds_per_circuit: usize,
 ) -> Vec<StorageApplicationCircuitInstanceWitness<E>> {
