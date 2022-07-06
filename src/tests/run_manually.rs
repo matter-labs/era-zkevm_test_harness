@@ -53,6 +53,49 @@ fn run_and_try_create_witness() {
 
     // nop stack+=[4]
     // nop stack-=[1]
+    // let asm = r#"
+    //     .text
+    //     .file	"Test_26"
+    //     .rodata.cst32
+    //     .p2align	5
+    //     .text
+    //     .globl	__entry
+    // __entry:
+    // .main:
+    //     add 12345, r0, r1
+    //     shl.s 7, r1, r1
+    //     add 1, r0, r1
+    //     sload r1, r0
+    //     add 2, r0, r2
+    //     sstore r1, r2
+    //     sload r1, r0
+    //     log.event.first r1, r2, r0
+    //     log.to_l1.first r1, r2, r0
+    //     near_call r0, @.empty_no_rollback, @.nop
+    // .continue0:
+    //     near_call r0, @.empty_with_rollback, @.continue1
+    // .continue1:
+    //     near_call r0, @.to_revert, @.finish
+    // .finish:
+    //     add 3, r0, r1
+    //     sload r1, r0
+    //     ret.ok r0
+    // .empty_no_rollback:
+    //     ret.ok r0
+    // .empty_with_rollback:
+    //     ret.revert r0
+    // .to_revert:
+    //     add 3, r0, r1
+    //     add 4, r0, r2
+    //     sstore r1, r2
+    //     sload r1, r0
+    //     log.event.first r1, r2, r0
+    //     log.to_l1.first r1, r2, r0
+    //     ret.revert r0
+    // .nop:
+    //     ret.revert r0
+    // "#;
+
     let asm = r#"
         .text
         .file	"Test_26"
@@ -65,34 +108,14 @@ fn run_and_try_create_witness() {
         add 12345, r0, r1
         shl.s 7, r1, r1
         add 1, r0, r1
-        sload r1, r0
-        add 2, r0, r2
-        sstore r1, r2
-        sload r1, r0
-        log.event.first r1, r2, r0
-        log.to_l1.first r1, r2, r0
-        near_call r0, @.empty_no_rollback, @.nop
-    .continue0:
-        near_call r0, @.empty_with_rollback, @.continue1
-    .continue1:
         near_call r0, @.to_revert, @.finish
     .finish:
-        add 3, r0, r1
-        sload r1, r0
-        ret.ok r0
-    .empty_no_rollback:
-        ret.ok r0
-    .empty_with_rollback:
         ret.revert r0
     .to_revert:
         add 3, r0, r1
         add 4, r0, r2
         sstore r1, r2
         sload r1, r0
-        log.event.first r1, r2, r0
-        log.to_l1.first r1, r2, r0
-        ret.revert r0
-    .nop:
         ret.revert r0
     "#;
 

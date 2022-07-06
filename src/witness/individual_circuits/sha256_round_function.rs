@@ -28,6 +28,29 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
     num_rounds_per_circuit: usize,
     round_function: &R,
 ) -> Vec<Sha256RoundFunctionCircuitInstanceWitness<E>> {
+    assert_eq!(artifacts.all_memory_queries_accumulated.len(), artifacts.all_memory_queue_states.len());
+    assert_eq!(artifacts.all_memory_queries_accumulated.len(), artifacts.memory_queue_simulator.num_items as usize);
+
+    // split into aux witness, don't mix with the memory
+    use zk_evm::precompiles::sha256::Sha256RoundWitness;
+    
+    for (_cycle, _query, witness) in artifacts.sha256_round_function_witnesses.iter() {
+        for el in witness.iter() {
+            let Sha256RoundWitness {
+                new_request: _,
+                reads,
+                writes,
+            } = el;
+
+            // we read, then write
+            artifacts.sha256_memory_queries.extend_from_slice(reads);
+
+            if let Some(writes) = writes.as_ref() {
+                artifacts.sha256_memory_queries.extend_from_slice(writes);
+            }
+        }
+    }
+
     let mut result = vec![];
 
     let precompile_calls =
@@ -119,10 +142,12 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
                 let data = read.value;
                 data.to_big_endian(&mut block[32*query_index..32*(query_index+1)]);
                 let read_query = memory_queries_it.next().unwrap();
-                assert!(read == read_query);
+                assert_eq!(read, read_query);
                 memory_reads_per_request.push(biguint_from_u256(read_query.value));
 
-                artifacts.memory_queue_simulator.push(read, round_function);
+                artifacts.all_memory_queries_accumulated.push(read);
+                let (_, intermediate_info) = artifacts.memory_queue_simulator.push_and_output_intermediate_data(read, round_function);
+                artifacts.all_memory_queue_states.push(intermediate_info);
                 current_memory_queue_state = take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
 
                 precompile_request.input_memory_offset += 1;
@@ -139,8 +164,11 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
                 assert!(round.writes.is_some());
                 let [write] = round.writes.unwrap();
                 let write_query = memory_queries_it.next().unwrap();
-                assert!(write == write_query);
-                artifacts.memory_queue_simulator.push(write, round_function);
+                assert_eq!(write, write_query);
+
+                artifacts.all_memory_queries_accumulated.push(write);
+                let (_, intermediate_info) = artifacts.memory_queue_simulator.push_and_output_intermediate_data(write, round_function);
+                artifacts.all_memory_queue_states.push(intermediate_info);
                 current_memory_queue_state = take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
 
                 if is_last_request {
@@ -275,6 +303,9 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
 
         memory_read_witnesses.push(memory_reads_per_request);
     }
+
+    assert_eq!(artifacts.all_memory_queries_accumulated.len(), artifacts.all_memory_queue_states.len());
+    assert_eq!(artifacts.all_memory_queries_accumulated.len(), artifacts.memory_queue_simulator.num_items as usize);
 
     result
 }

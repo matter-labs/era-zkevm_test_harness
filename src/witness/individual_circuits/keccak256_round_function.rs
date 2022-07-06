@@ -33,6 +33,31 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
     num_rounds_per_circuit: usize,
     round_function: &R,
 ) -> Vec<Keccak256RoundFunctionInstanceWitness<E>> {
+    assert_eq!(artifacts.all_memory_queries_accumulated.len(), artifacts.all_memory_queue_states.len());
+    assert_eq!(artifacts.all_memory_queries_accumulated.len(), artifacts.memory_queue_simulator.num_items as usize);
+
+    // split into aux witness, don't mix with the memory
+    use zk_evm::precompiles::keccak256::Keccak256RoundWitness;
+
+    for (_cycle, _query, witness) in artifacts.keccak_round_function_witnesses.iter() {
+        for el in witness.iter() {
+            let Keccak256RoundWitness {
+                new_request: _,
+                reads,
+                writes,
+            } = el;
+
+            // we read, then write
+            if let Some(reads) = reads.as_ref() {
+                artifacts.keccak_256_memory_queries.extend_from_slice(reads);
+            }
+
+            if let Some(writes) = writes.as_ref() {
+                artifacts.keccak_256_memory_queries.extend_from_slice(writes);
+            }
+        }
+    }
+
     let mut result = vec![];
 
     let keccak_precompile_calls =
@@ -48,16 +73,13 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
     let memory_queries = std::mem::replace(&mut artifacts.keccak_256_memory_queries, vec![]);
 
     // check basic consistency
-    assert!(keccak_precompile_calls.len() == keccak_precompile_calls_queue_states.len());
-    assert!(keccak_precompile_calls.len() == round_function_witness.len());
+    assert_eq!(keccak_precompile_calls.len(), keccak_precompile_calls_queue_states.len());
+    assert_eq!(keccak_precompile_calls.len(), round_function_witness.len());
 
     if keccak_precompile_calls.len() == 0 {
         return result;
     }
 
-    let mut input_buffer = zk_evm::precompiles::keccak256::Buffer::new();
-    use zk_evm::precompiles::keccak256::NEW_WORDS_PER_CYCLE;
-    let mut words_buffer = [0u64; NEW_WORDS_PER_CYCLE];
 
     let mut round_counter = 0;
     let num_requests = keccak_precompile_calls.len();
@@ -106,6 +128,11 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
         let (_cycle, _req, round_witness) = per_request_work;
         assert_eq!(request, _req);
 
+        // those are refreshed every cycle
+        let mut input_buffer = zk_evm::precompiles::keccak256::Buffer::new();
+        use zk_evm::precompiles::keccak256::NEW_WORDS_PER_CYCLE;
+        let mut words_buffer = [0u64; NEW_WORDS_PER_CYCLE];
+
         use zk_evm::precompiles::precompile_abi_in_log;
         let mut precompile_request = precompile_abi_in_log(request);
         let num_rounds = precompile_request.precompile_interpreted_data as usize;
@@ -137,10 +164,12 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
                     }
 
                     let read_query = memory_queries_it.next().unwrap();
-                    assert!(read == read_query);
+                    assert_eq!(read, read_query);
                     memory_reads_per_request.push(biguint_from_u256(read_query.value));
 
-                    artifacts.memory_queue_simulator.push(read, round_function);
+                    artifacts.all_memory_queries_accumulated.push(read);
+                    let (_, intermediate_info) = artifacts.memory_queue_simulator.push_and_output_intermediate_data(read, round_function);
+                    artifacts.all_memory_queue_states.push(intermediate_info);
                     current_memory_queue_state = take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
 
                     precompile_request.input_memory_offset += 1;
@@ -168,10 +197,12 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
                 assert!(round.writes.is_some());
                 let [write] = round.writes.unwrap();
                 let write_query = memory_queries_it.next().unwrap();
-                assert!(write == write_query);
-                artifacts.memory_queue_simulator.push(write, round_function);
-                current_memory_queue_state = take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
+                assert_eq!(write, write_query);
 
+                artifacts.all_memory_queries_accumulated.push(write);
+                let (_, intermediate_info) = artifacts.memory_queue_simulator.push_and_output_intermediate_data(write, round_function);
+                artifacts.all_memory_queue_states.push(intermediate_info);
+                current_memory_queue_state = take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
 
                 if is_last_request {
                     precompile_state = Keccak256PrecompileState::Finished;
@@ -310,6 +341,9 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
 
         memory_read_witnesses.push(memory_reads_per_request);
     }
+
+    assert_eq!(artifacts.all_memory_queries_accumulated.len(), artifacts.all_memory_queue_states.len());
+    assert_eq!(artifacts.all_memory_queries_accumulated.len(), artifacts.memory_queue_simulator.num_items as usize);
 
     result
 }

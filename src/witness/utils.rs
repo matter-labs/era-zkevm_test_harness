@@ -57,7 +57,7 @@ pub fn simulate_public_input_value_from_witness<
     use sync_vm::inputs::ClosedFormInputCompactForm;
     let compact_form = ClosedFormInputCompactForm::from_full_form(&mut cs, &full_input, &round_function).unwrap();
     // compute the encoding and committment of compact form
-    dbg!(compact_form.create_witness());
+    // dbg!(compact_form.create_witness());
 
     use sync_vm::glue::optimizable_queue::commit_encodable_item;
     let public_input = commit_encodable_item(&mut cs, &compact_form, &round_function).unwrap();
@@ -130,8 +130,8 @@ pub fn vm_instance_witness_to_vm_formal_state<E: Engine>(
     // registers
     assert_eq!(hidden_fsm.registers.len(), vm_state.registers.len());
     for (dst, src) in hidden_fsm.registers.iter_mut().zip(vm_state.registers.iter()) {
-        let low = (src.0[0] as u128) | (src.0[1] as u128);
-        let high = (src.0[2] as u128) | (src.0[3] as u128);
+        let low = (src.0[0] as u128) + ((src.0[1] as u128) << 64);
+        let high = (src.0[2] as u128) + ((src.0[3] as u128) << 64);
         dst.inner[0] = low;
         dst.inner[1] = high;
     }
@@ -170,7 +170,7 @@ pub fn vm_instance_witness_to_circuit_formal_input<E: Engine, O: WitnessOracle<E
         initial_state,
         witness_oracle,
         auxilary_initial_parameters,
-        cycles_range,
+        cycles_range: _,
     
         // final state for test purposes
         final_state,

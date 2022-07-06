@@ -188,7 +188,9 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 5> for LogQuery {
 
         let el4 = lc;
 
-        // dbg!([el0, el1, el2, el3, el4]);
+        // if self.address.0[19] == 0x02 {
+            // dbg!([el0, el1, el2, el3, el4]);
+        // }
 
         [el0, el1, el2, el3, el4]
     }

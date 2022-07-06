@@ -28,6 +28,9 @@ pub fn compute_decommitter_circuit_snapshots<
     round_function: &R,
     per_circuit_capacity: usize
 ) -> (Vec<CodeDecommitterCircuitInstanceWitness<E>>, CodeDecommittmentsDeduplicatorInstanceWitness<E>) {
+    assert_eq!(artifacts.all_memory_queries_accumulated.len(), artifacts.all_memory_queue_states.len());
+    assert_eq!(artifacts.all_memory_queries_accumulated.len(), artifacts.memory_queue_simulator.num_items as usize);
+    
     let start_idx_for_memory_accumulator = artifacts.all_memory_queue_states.len();
 
     let mut results: Vec<CodeDecommitterCircuitInstanceWitness<E>> = vec![];
@@ -119,6 +122,8 @@ pub fn compute_decommitter_circuit_snapshots<
         artifacts.sorted_decommittment_queries.push(query);
     }
 
+    assert_eq!(artifacts.all_memory_queue_states.len(), artifacts.all_memory_queries_accumulated.len());
+
     // first we assume that procedure of sorting the decommittment requests will only take 1 circuit,
     // so we can trivially form a single instance for it
 
@@ -140,7 +145,7 @@ pub fn compute_decommitter_circuit_snapshots<
         (*encoding, wit, *old_tail)
     }).collect();
 
-    let sorted_witness: Vec<_> = unsorted_decommittment_queue_simulator.witness.iter().map(|(encoding, old_tail, element)| {
+    let sorted_witness: Vec<_> = sorted_decommittment_queue_simulator.witness.iter().map(|(encoding, old_tail, element)| {
         let wit = DecommitQueryWitness {
             root_hash: biguint_from_u256(element.hash),
             page: element.memory_page.0,
@@ -427,6 +432,9 @@ pub fn compute_decommitter_circuit_snapshots<
             break 'outer;
         }
     }
+
+    assert_eq!(artifacts.all_memory_queries_accumulated.len(), artifacts.all_memory_queue_states.len());
+    assert_eq!(artifacts.all_memory_queries_accumulated.len(), artifacts.memory_queue_simulator.num_items as usize);
 
     (results, decommittments_deduplicator_witness)
 }

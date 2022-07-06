@@ -124,6 +124,7 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
     );
 
     let mut tracer = GenericNoopTracer::<_>::new();
+    println!("Running out of circuit for {} cycles", cycle_limit);
     for _cycle in 0..cycle_limit {
         out_of_circuit_vm.cycle(&mut tracer);
         if out_of_circuit_vm.execution_has_ended() && !out_of_circuit_vm.is_any_pending() {

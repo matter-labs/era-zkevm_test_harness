@@ -272,59 +272,16 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
             .push((monotonic_cycle_counter, memory_query));
     }
 
-    fn add_log_query(&mut self, monotonic_cycle_counter: u32, mut log_query: LogQuery) {
+    fn add_log_query(&mut self, monotonic_cycle_counter: u32, log_query: LogQuery) {
         // log reads
-        if !log_query.rw_flag && log_query.aux_byte == STORAGE_AUX_BYTE {
+        // if !log_query.rw_flag && log_query.aux_byte == STORAGE_AUX_BYTE {
+        if log_query.aux_byte == STORAGE_AUX_BYTE {
             self.storage_read_queries
                 .push((monotonic_cycle_counter, log_query));
         }
 
         self.callstack_with_aux_data
             .add_log_query(monotonic_cycle_counter, log_query);
-
-        // let query_counter = self.monotonic_query_counter;
-        // self.monotonic_query_counter += 1;
-        // // log in general
-        // assert!(!log_query.rollback);
-        // let parent_frame_counter = self
-        //     .callstack_with_aux_data
-        //     .current_entry
-        //     .parent_frame_index;
-        // let current_frame_counter = self.callstack_with_aux_data.current_entry.frame_index;
-        // let frames_index = (parent_frame_counter, current_frame_counter);
-        // let frame_data = self.log_frames_stack.last_mut().unwrap();
-        // if log_query.rw_flag {
-        //     //  also append rollback
-        //     log_query.rollback = false;
-        //     frame_data.forward.push((
-        //         frames_index,
-        //         (
-        //             QueryMarker::Forward(query_counter),
-        //             monotonic_cycle_counter,
-        //             log_query,
-        //         ),
-        //     ));
-        //     log_query.rollback = true;
-        //     frame_data.rollbacks.push((
-        //         frames_index,
-        //         (
-        //             QueryMarker::Rollback(query_counter),
-        //             monotonic_cycle_counter,
-        //             log_query,
-        //         ),
-        //     ));
-        // } else {
-        //     // read, do not append to rollback
-        //     log_query.rollback = false;
-        //     frame_data.forward.push((
-        //         frames_index,
-        //         (
-        //             QueryMarker::Forward(query_counter),
-        //             monotonic_cycle_counter,
-        //             log_query,
-        //         ),
-        //     ));
-        // }
     }
 
     fn add_decommittment(

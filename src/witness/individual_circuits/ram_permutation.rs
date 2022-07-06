@@ -46,6 +46,8 @@ pub fn compute_ram_circuit_snapshots<
         artifacts.sorted_memory_queue_states.push(intermediate_info);
     }
 
+    assert_eq!(sorted_memory_queries_simulator.num_items, artifacts.memory_queue_simulator.num_items);
+
     // now we should chunk it by circuits but briefly simulating their logic
 
     let mut challenges = vec![];
@@ -70,6 +72,9 @@ pub fn compute_ram_circuit_snapshots<
     // since encodings of the elements provide all the information necessary to perform soring argument,
     // we use them naively
 
+    assert_eq!(artifacts.memory_queue_simulator.num_items, sorted_memory_queries_simulator.num_items);
+    assert_eq!(artifacts.memory_queue_simulator.num_items as usize, artifacts.all_memory_queries_accumulated.len());
+    
     let lhs_contributions: Vec<_> = artifacts.memory_queue_simulator.witness.iter().map(|el| el.0).collect();
     let rhs_contributions: Vec<_> = sorted_memory_queries_simulator.witness.iter().map(|el| el.0).collect();
 
@@ -154,11 +159,6 @@ pub fn compute_ram_circuit_snapshots<
         }
     );
 
-    // dbg!(&lhs_grand_product_chain);
-    // dbg!(&rhs_grand_product_chain);
-
-    // dbg!(lhs_grand_product_chain.last().unwrap());
-
     // sanity check
     assert_eq!(lhs_grand_product_chain.last().unwrap(), rhs_grand_product_chain.last().unwrap());
 
@@ -194,7 +194,7 @@ pub fn compute_ram_circuit_snapshots<
     let unsorted_global_final_state = artifacts.all_memory_queue_states.last().unwrap().clone();
     let sorted_global_final_state = artifacts.sorted_memory_queue_states.last().unwrap().clone();
 
-    let total_queue_length = artifacts.all_memory_queue_states.len() as u32;
+    assert_eq!(unsorted_global_final_state.num_items, sorted_global_final_state.num_items);
 
     for (idx, (((((unsorted_sponge_states, sorted_sponge_states), lhs_grand_product), rhs_grand_product), unsorted_states), sorted_states)) in it.enumerate() {
         // we need witnesses to pop elements from the front of the queue
@@ -248,15 +248,20 @@ pub fn compute_ram_circuit_snapshots<
             (placeholder_witness.clone(), placeholder_witness)
         );
 
+        assert_eq!(current_unsorted_queue_state.length, current_sorted_queue_state.length);
+
         // we use current final state as the intermediate head
         let mut final_unsorted_state = transform_sponge_like_queue_state(last_unsorted_state);
         final_unsorted_state.head = final_unsorted_state.tail;
         final_unsorted_state.tail = unsorted_global_final_state.tail;
         final_unsorted_state.length = unsorted_global_final_state.num_items - final_unsorted_state.length;
+
         let mut final_sorted_state = transform_sponge_like_queue_state(last_sorted_state);
         final_sorted_state.head = final_sorted_state.tail;
         final_sorted_state.tail = sorted_global_final_state.tail;
         final_sorted_state.length = sorted_global_final_state.num_items - final_sorted_state.length;
+
+        assert_eq!(final_unsorted_state.length, final_sorted_state.length);
 
         let instance_witness = RamPermutationCircuitInstanceWitness {
             closed_form_input: ClosedFormInputWitness {
