@@ -350,7 +350,6 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
         self.rollup_storage_application_circuit_data = rollup_storage_application_circuit_data;
 
-
         self.is_processed = true;
     }
 }
@@ -371,9 +370,9 @@ pub struct BlockBasicCircuits<E: Engine> {
     pub log_demux_circuit: LogDemuxerCircuit<E>,
     // process precompiles
     // keccak
-    pub keccak_precompile_circuits: Vec<()>,
+    pub keccak_precompile_circuits: Vec<Keccak256RoundFunctionCircuit<E>>,
     // sha256
-    pub sha256_precompile_circuits: Vec<()>,
+    pub sha256_precompile_circuits: Vec<Sha256RoundFunctionCircuit<E>>,
     // ecrecover
     pub ecrecover_precompile_circuits: Vec<()>,
     // when it's all done we prove the memory validity and finish with it
@@ -438,6 +437,94 @@ impl<E: Engine> BlockBasicCircuits<E> {
         result.push(ZkSyncCircuit::EventsSorter(events_sorter_circuit));
         result.push(ZkSyncCircuit::L1MessagesSorter(l1_messages_sorter_circuit));
         result.push(ZkSyncCircuit::L1MessagesMerklier(l1_messages_merklizer_circuit));
+
+        result
+    }
+}
+
+
+#[derive(Derivative, serde::Serialize, serde::Deserialize)]
+#[derivative(Clone)]
+pub struct BlockBasicCircuitsPublicInputs<E: Engine> {
+    // main VM circuit. Many of them
+    pub main_vm_circuits: Vec<E::Fr>,
+    // code decommittments sorter is only 1 circuit per block
+    pub code_decommittments_sorter_circuit: E::Fr,
+    // few code decommitters: code hash -> memory
+    pub code_decommitter_circuits: Vec<E::Fr>,
+    // demux logs to get precompiles for RAM too. 1 circuit
+    pub log_demux_circuit: E::Fr,
+    // process precompiles
+    // keccak
+    pub keccak_precompile_circuits: Vec<E::Fr>,
+    // sha256
+    pub sha256_precompile_circuits: Vec<E::Fr>,
+    // ecrecover
+    pub ecrecover_precompile_circuits: Vec<()>,
+    // when it's all done we prove the memory validity and finish with it
+    pub ram_permutation_circuits: Vec<E::Fr>,
+    // sort storage changes
+    pub storage_sorter_circuit: E::Fr,
+    // apply them
+    pub storage_application_circuits: Vec<()>,
+    // rehash initial writes
+    pub initial_writes_hasher_circuit: E::Fr,
+    // rehash repeated writes
+    pub repeated_writes_hasher_circuit: E::Fr,
+    // sort and dedup events
+    pub events_sorter_circuit: E::Fr,
+    // sort and dedup L1 messages
+    pub l1_messages_sorter_circuit: E::Fr,
+    // merklize L1 message
+    pub l1_messages_merklizer_circuit: E::Fr,
+}
+
+impl<E: Engine> BlockBasicCircuitsPublicInputs<E> {
+    pub fn into_flattened_set(self) -> Vec<E::Fr> {
+        let BlockBasicCircuitsPublicInputs { 
+            main_vm_circuits, 
+            code_decommittments_sorter_circuit, 
+            code_decommitter_circuits, 
+            log_demux_circuit, 
+            keccak_precompile_circuits, 
+            sha256_precompile_circuits, 
+            ecrecover_precompile_circuits, 
+            ram_permutation_circuits, 
+            storage_sorter_circuit, 
+            storage_application_circuits, 
+            initial_writes_hasher_circuit, 
+            repeated_writes_hasher_circuit, 
+            events_sorter_circuit, 
+            l1_messages_sorter_circuit, 
+            l1_messages_merklizer_circuit 
+        } = self;
+
+        use ff::Field;
+
+        let mut result = vec![];
+        result.extend(main_vm_circuits);
+
+        result.push(code_decommittments_sorter_circuit);
+
+        result.extend(code_decommitter_circuits);
+
+        result.push(log_demux_circuit);
+
+        result.extend(keccak_precompile_circuits);
+        result.extend(sha256_precompile_circuits);
+        result.extend(ecrecover_precompile_circuits.into_iter().map(|_| E::Fr::zero()));
+
+        result.extend(ram_permutation_circuits);
+
+        result.push(storage_sorter_circuit);
+
+        result.extend(storage_application_circuits.into_iter().map(|_| E::Fr::zero()));
+
+        result.push(initial_writes_hasher_circuit);
+        result.push(repeated_writes_hasher_circuit);
+        result.push(events_sorter_circuit);
+        result.push(l1_messages_sorter_circuit);
+        result.push(l1_messages_merklizer_circuit);
 
         result
     }

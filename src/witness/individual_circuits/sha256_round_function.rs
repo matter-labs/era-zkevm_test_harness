@@ -33,7 +33,7 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
 
     // split into aux witness, don't mix with the memory
     use zk_evm::precompiles::sha256::Sha256RoundWitness;
-    
+
     for (_cycle, _query, witness) in artifacts.sha256_round_function_witnesses.iter() {
         for el in witness.iter() {
             let Sha256RoundWitness {
@@ -76,9 +76,6 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
     let mut round_counter = 0;
     let num_requests = precompile_calls.len();
 
-    use zk_evm::precompiles::sha256::Sha256;
-    let mut internal_state = Sha256::default();
-
     // convension
     let mut log_queue_input_state = take_queue_state_from_simulator(&artifacts.demuxed_sha256_precompile_queue_simulator);
     use sync_vm::traits::CSWitnessable;
@@ -118,6 +115,9 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
 
         let (_cycle, _req, round_witness) = per_request_work;
         assert_eq!(request, _req);
+
+        use zk_evm::precompiles::sha256::Sha256;
+        let mut internal_state = Sha256::default();
 
         use zk_evm::precompiles::precompile_abi_in_log;
         let mut precompile_request = precompile_abi_in_log(request);
@@ -301,7 +301,10 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
             }
         }
 
-        memory_read_witnesses.push(memory_reads_per_request);
+        if !memory_reads_per_request.is_empty() {
+            // we may have drained it already if it was the end of the circuit
+            memory_read_witnesses.push(memory_reads_per_request);
+        }
     }
 
     assert_eq!(artifacts.all_memory_queries_accumulated.len(), artifacts.all_memory_queue_states.len());

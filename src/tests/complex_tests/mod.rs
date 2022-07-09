@@ -67,21 +67,21 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     use crate::toolset::GeometryConfig;
 
     let geometry = GeometryConfig {
-        cycles_per_vm_snapshot: 300,
+        cycles_per_vm_snapshot: 4,
         cycles_per_ram_permutation: 1024,
         cycles_per_code_decommitter: 32,
         cycles_per_storage_application: 32,
         cycles_per_keccak256_circuit: 1,
         cycles_per_sha256_circuit: 1,
         cycles_per_ecrecover_circuit: 1,
-        
-        limit_for_code_decommitter_sorter: 32,
+
+        limit_for_code_decommitter_sorter: 512,
         limit_for_log_demuxer: 512,
         limit_for_storage_sorter: 512,
-        limit_for_events_or_l1_messages_sorter: 32,
+        limit_for_events_or_l1_messages_sorter: 128,
         limit_for_initial_writes_pubdata_hasher: 16,
         limit_for_repeated_writes_pubdata_hasher: 16,
-        limit_for_l1_messages_merklizer: 8,
+        limit_for_l1_messages_merklizer: 128,
     };
 
     let mut storage_impl = InMemoryStorage::new();
@@ -95,7 +95,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     }
     test_artifact.entry_point_address = *zk_evm::precompiles::BOOTLOADER_FORMAL_ADDRESS;
 
-    let mut basic_block_circuits = run(
+    let (basic_block_circuits, basic_block_circuits_inputs) = run(
         1,
         1,
         Address::zero(),
@@ -118,13 +118,27 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
 
     use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
 
+    let num_vm_circuits = basic_block_circuits.main_vm_circuits.len();
     let flattened = basic_block_circuits.into_flattened_set();
+    let flattened_inputs = basic_block_circuits_inputs.into_flattened_set();
 
-    for el in flattened.into_iter() {
-        if matches!(&el, ZkSyncCircuit::MainVM(..)) {
-            continue;
-        }
+    for (idx, (el, input_value)) in flattened.into_iter().zip(flattened_inputs.into_iter()).enumerate() {
+        let descr = el.short_description();
+        println!("Doing {}: {}", idx, descr);
+        // if matches!(&el, ZkSyncCircuit::MainVM(..)) {
+        //     if idx != num_vm_circuits - 1 {
+        //         continue;
+        //     }
+        // }
+        el.debug_witness();
         use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
-        circuit_testing::check_if_satisfied::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(el).unwrap();
+        let (is_satisfied, public_input) = circuit_testing::check_if_satisfied::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(el).unwrap();
+        assert!(is_satisfied);
+        assert_eq!(public_input, input_value, "Public input diverged for circuit {} of type {}", idx, descr);
+        // if public_input != input_value {
+        //     println!("Public input diverged for circuit {} of type {}", idx, descr);
+        // }
     }
+
+    println!("Done");
 }
