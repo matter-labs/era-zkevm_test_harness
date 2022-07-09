@@ -68,6 +68,14 @@ pub struct ZkSyncUniformCircuitCircuitInstance<
     pub round_function: std::sync::Arc<S::RoundFunction>,
 }
 
+impl<E: Engine, S: ZkSyncUniformSynthesisFunction<E>> ZkSyncUniformCircuitCircuitInstance<E, S> {
+    pub fn debug_witness(&self) {
+        let wit = self.witness.take();
+        dbg!(&wit);
+        self.witness.store(wit);
+    }
+}
+
 fn serialize_atomic_cell<T: serde::Serialize, S>(t: &AtomicCell<Option<T>>, serializer: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
     let el = t.take();
     let res = match &el {

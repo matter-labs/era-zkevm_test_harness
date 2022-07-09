@@ -80,15 +80,8 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
         return result;
     }
 
-
     let mut round_counter = 0;
     let num_requests = keccak_precompile_calls.len();
-
-    // let global_queue_tail = *keccak_precompile_calls_queue_states.last().unwrap();
-    // let mut queue_length = keccak_precompile_calls_queue_states.len();
-
-    use zk_evm::precompiles::keccak256::Keccak256;
-    let mut internal_state = Keccak256::default();
 
     // convension
     let mut log_queue_input_state = take_queue_state_from_simulator(&artifacts.demuxed_keccak_precompile_queue_simulator);
@@ -118,6 +111,12 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
             .zip(round_function_witness.into_iter())
             .enumerate()
     {
+        // request level. Each request can be broken into few rounds
+
+        use zk_evm::precompiles::keccak256::Keccak256;
+        let mut internal_state = Keccak256::default();
+    
+
         let mut memory_reads_per_request = vec![];
 
         assert_eq!(
@@ -145,6 +144,7 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
         precompile_state = Keccak256PrecompileState::RunRoundFunction;
 
         for (round_idx, round) in round_witness.into_iter().enumerate() {
+            // we proceed the request as long as we can
             if round_idx == 0 {
                 assert!(round.new_request.is_some());
             }
@@ -228,22 +228,32 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
                     u64_words_buffer_markers[i] = true;
                 }
 
-                let keccak_internal_state: [E::Fr; 25] = state_inner
+                let mut keccak_internal_state = vec![];
+                for i in 0..5 {
+                    for j in 0..5 {
+                        let el = state_inner[i + 5*j]; // circuit and non-circuit impls have different order
+                        keccak_internal_state.push(el);
+                    }
+                }
+
+                let keccak_internal_state: [E::Fr; 25] = keccak_internal_state
                     .into_iter()
                     .map(|el| u64_to_fe::<E::Fr>(el))
                     .collect::<Vec<_>>()
                     .try_into()
                     .unwrap();
 
+                // let keccak_internal_state: [E::Fr; 25] = state_inner
+                //     .into_iter()
+                //     .map(|el| u64_to_fe::<E::Fr>(el))
+                //     .collect::<Vec<_>>()
+                //     .try_into()
+                //     .unwrap();
+
                 let input_is_empty = is_last_request;
                 let nothing_left = is_last_round && input_is_empty;
-                // let process_next = is_last_round && !input_is_empty;
 
                 assert_eq!(nothing_left, finished);
-
-                // let read_precompile_call = process_next;
-                // let completed = nothing_left;
-                // let read_unaligned_words_for_round = !(read_precompile_call || completed);
 
                 let completed = precompile_state == Keccak256PrecompileState::Finished;
                 let read_unaligned_words_for_round =
@@ -316,7 +326,7 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
                         },
                         hidden_fsm_output: Keccak256RoundFunctionFSMWitness::<E> {
                             precompile_state: hidden_fsm_output_state.clone(),
-                            log_queue_state: take_queue_state_from_simulator(&artifacts.demuxed_sha256_precompile_queue_simulator),
+                            log_queue_state: take_queue_state_from_simulator(&artifacts.demuxed_keccak_precompile_queue_simulator),
                             memory_queue_state: current_memory_queue_state.clone(),
                             _marker: std::marker::PhantomData,
                         },
@@ -333,13 +343,16 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
 
                 result.push(witness);
 
-                log_queue_input_state = take_queue_state_from_simulator(&artifacts.demuxed_sha256_precompile_queue_simulator);
+                log_queue_input_state = take_queue_state_from_simulator(&artifacts.demuxed_keccak_precompile_queue_simulator);
                 hidden_fsm_input_state = hidden_fsm_output_state;
                 memory_queue_input_state = current_memory_queue_state.clone();
             }
         }
 
-        memory_read_witnesses.push(memory_reads_per_request);
+        if !memory_reads_per_request.is_empty() {
+            // we may have drained it already if it was the end of the circuit
+            memory_read_witnesses.push(memory_reads_per_request);
+        }
     }
 
     assert_eq!(artifacts.all_memory_queries_accumulated.len(), artifacts.all_memory_queue_states.len());

@@ -3,6 +3,16 @@ use zk_evm::aux_structures::LogQuery;
 use std::cmp::Ordering;
 use rayon::prelude::*;
 
+use crate::ethereum_types::U256;
+
+#[derive(Default, Debug)]
+pub struct StorageSlotHistoryKeeper {
+    pub initial_value: Option<U256>,
+    pub current_value: Option<U256>,
+    pub changes_stack: Vec<LogQueryWithExtendedEnumeration>,
+    pub did_read_at_depth_zero: bool,
+}
+
 pub fn sort_storage_access_queries(unsorted_storage_queries: &[LogQuery]) -> (Vec<LogQueryWithExtendedEnumeration>, Vec<LogQuery>) {
     let mut sorted_storage_queries_with_extra_timestamp: Vec<_> = unsorted_storage_queries.iter()
         .enumerate().map(|(i, el)| {
@@ -51,102 +61,120 @@ pub fn sort_storage_access_queries(unsorted_storage_queries: &[LogQuery]) -> (Ve
             el.raw_query.key == candidate.raw_query.key
         });
 
-        // let tmp: Vec<_> = it.clone().take_while(|el| {
-        //     el.raw_query.shard_id == candidate.raw_query.shard_id &&
-        //     el.raw_query.address == candidate.raw_query.address &&
-        //     el.raw_query.key == candidate.raw_query.key
-        // }).collect();
+        let mut current_element_history = StorageSlotHistoryKeeper::default();
 
-        // dbg!(&tmp);
-
-        let mut did_read_at_no_rollback = false;
-
-        for (idx, el) in subit.enumerate() {
+        for (_idx, el) in subit.enumerate() {
             let _ = it.next().unwrap();
 
-            if idx == 0 {
+            if current_element_history.current_value.is_none() {
+                assert!(current_element_history.initial_value.is_none(), "invalid for query {:?}", el);
+                // first read potentially
                 if el.raw_query.rw_flag == false {
-                    did_read_at_no_rollback = true;
+                    current_element_history.did_read_at_depth_zero = true;
                 }
             } else {
-                if stack.len() == 0 && el.raw_query.rw_flag == false {
-                    did_read_at_no_rollback = true;
+                // explicit read at zero
+                if el.raw_query.rw_flag == false && current_element_history.changes_stack.is_empty() {
+                    current_element_history.did_read_at_depth_zero = true;
                 }
             }
 
-            if el.raw_query.rollback {
-                loop {
-                    // if we see rollback then we start unwinding the stack until we see a write
-                    // that we should effectively cancel
-                    if let Some(previous) = stack.pop() {
-                        if previous.raw_query.rw_flag {
-                            assert_eq!(el.raw_query.written_value, previous.raw_query.written_value);
-                            break;
-                        } else {
-                            // we have reads, do nothing until we find write
-                        }
-                    } else {
-                        // nothing in there, we rolled back literally everything
-                        // and no reads ever were issued
-                        break;
-                    }
-
-                }
-            } else {
-                stack.push(*el);
-            }
-        }
-
-        if stack.len() == 0 {
-            continue;
-        }
-
-        let initial_value = stack.first().unwrap().raw_query.read_value;
-        let mut final_value = initial_value;
-        let mut was_written = false;
-        for el in stack.into_iter().rev() {
-            if el.raw_query.rw_flag {
-                // rollback just indicates, and doesn't swap values out of circuit
-                if el.raw_query.rollback {
-                    final_value = el.raw_query.read_value;
+            if current_element_history.current_value.is_none() {
+                assert!(current_element_history.initial_value.is_none(), "invalid for query {:?}", el);
+                if el.raw_query.rw_flag == false {
+                    current_element_history.initial_value = Some(el.raw_query.read_value);
+                    current_element_history.current_value = Some(el.raw_query.read_value);
                 } else {
-                    final_value = el.raw_query.written_value;
+                    assert!(el.raw_query.rollback == false);
+                    current_element_history.initial_value = Some(el.raw_query.read_value);
+                    current_element_history.current_value = Some(el.raw_query.read_value); // note: We apply updates few lines later
                 }
+            }
 
-                was_written = true;
-                break;
+            if el.raw_query.rw_flag == false {
+                assert_eq!(&el.raw_query.read_value, current_element_history.current_value.as_ref().unwrap(), "invalid for query {:?}", el);
+                // and do not place reads into the stack
+            } else if el.raw_query.rw_flag == true {
+                // write-like things manipulate the stack
+                if el.raw_query.rollback == false {
+                    // write
+                    assert_eq!(&el.raw_query.read_value, current_element_history.current_value.as_ref().unwrap(), "invalid for query {:?}", el);
+                    current_element_history.current_value = Some(el.raw_query.written_value);
+                    current_element_history.changes_stack.push(*el);
+                } else {
+                    // pop from stack
+                    let popped_change = current_element_history.changes_stack.pop().unwrap();
+                    // we do not explicitly swap values, and use rollback flag instead, so compare this way
+                    assert_eq!(el.raw_query.read_value, popped_change.raw_query.read_value, "invalid for query {:?}", el);
+                    assert_eq!(el.raw_query.written_value, popped_change.raw_query.written_value, "invalid for query {:?}", el);
+                    assert_eq!(&el.raw_query.written_value, current_element_history.current_value.as_ref().unwrap(), "invalid for query {:?}", el);
+                    // check that we properly apply rollbacks
+                    assert_eq!(el.raw_query.shard_id, popped_change.raw_query.shard_id, "invalid for query {:?}", el);
+                    assert_eq!(el.raw_query.address, popped_change.raw_query.address, "invalid for query {:?}", el);
+                    assert_eq!(el.raw_query.key, popped_change.raw_query.key, "invalid for query {:?}", el);
+                    // apply rollback
+                    current_element_history.current_value = Some(el.raw_query.read_value); // our convension
+                }
             }
         }
-
-        let write_different = initial_value != final_value && was_written;
-        let protective_read_only = !write_different && did_read_at_no_rollback;
-
-        let sorted_rw_flag = if write_different {
-            true
-        } else if protective_read_only {
-            false
-        } else {
-            unreachable!()
-        };
 
         use zk_evm::aux_structures::Timestamp;
 
-        let sorted_log_query = LogQuery {
-            timestamp: Timestamp(0),
-            tx_number_in_block: 0,
-            aux_byte: 0,
-            shard_id: candidate.raw_query.shard_id,
-            address: candidate.raw_query.address,
-            key: candidate.raw_query.key,
-            read_value: initial_value,
-            written_value: final_value,
-            rw_flag: sorted_rw_flag,
-            rollback: false,
-            is_service: false,
-        };
+        if current_element_history.did_read_at_depth_zero == false && current_element_history.changes_stack.is_empty() {
+            // whatever happened there didn't produce any final changes
+            assert_eq!(current_element_history.initial_value.unwrap(), current_element_history.current_value.unwrap());
+            continue;
+        } else {
+            if current_element_history.initial_value.unwrap() == current_element_history.current_value.unwrap() {
+                // no change, but we may need protective read
+                if current_element_history.did_read_at_depth_zero {
+                    // protective read
+                    let sorted_log_query = LogQuery {
+                        timestamp: Timestamp(0),
+                        tx_number_in_block: 0,
+                        aux_byte: 0,
+                        shard_id: candidate.raw_query.shard_id,
+                        address: candidate.raw_query.address,
+                        key: candidate.raw_query.key,
+                        read_value: current_element_history.initial_value.unwrap(),
+                        written_value: current_element_history.current_value.unwrap(),
+                        rw_flag: false,
+                        rollback: false,
+                        is_service: false,
+                    };
+            
+                    deduplicated_storage_queries.push(sorted_log_query);
+                } else {
+                    // we didn't read at depth zero, so it's something like 
+                    // - write cell from a into b
+                    // ....
+                    // - write cell from b into a
 
-        deduplicated_storage_queries.push(sorted_log_query);
+                    // we just do nothing!
+                    continue;
+                }
+            } else {
+                // it's final net write
+                let sorted_log_query = LogQuery {
+                    timestamp: Timestamp(0),
+                    tx_number_in_block: 0,
+                    aux_byte: 0,
+                    shard_id: candidate.raw_query.shard_id,
+                    address: candidate.raw_query.address,
+                    key: candidate.raw_query.key,
+                    read_value: current_element_history.initial_value.unwrap(),
+                    written_value: current_element_history.current_value.unwrap(),
+                    rw_flag: true,
+                    rollback: false,
+                    is_service: false,
+                };
+        
+                deduplicated_storage_queries.push(sorted_log_query);
+            }
+        }
     }
+
+    dbg!(&deduplicated_storage_queries);
 
     (sorted_storage_queries_with_extra_timestamp, deduplicated_storage_queries)
 }

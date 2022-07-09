@@ -51,8 +51,58 @@ fn run_and_try_create_witness() {
     // "#;
 
 
-    // nop stack+=[4]
-    // nop stack-=[1]
+
+    let asm = r#"
+        .text
+        .file	"Test_26"
+        .rodata.cst32
+        .p2align	5
+        .text
+        .globl	__entry
+    __entry:
+    .main:
+        nop stack+=[4]
+        nop stack-=[1]
+        add 12345, r0, r1
+        shl.s 7, r1, r1
+        add 1, r0, r1
+        sload r1, r0
+        add 2, r0, r2
+        sstore r1, r2
+        sload r1, r0
+        log.event.first r1, r2, r0
+        log.to_l1.first r1, r2, r0
+        add 5, r0, r1
+        add 6, r0, r2
+        sstore r1, r2
+        sload r1, r0
+        sstore r1, r0
+        near_call r0, @.empty_no_rollback, @.nop
+    .continue0:
+        near_call r0, @.empty_with_rollback, @.continue1
+    .continue1:
+        near_call r0, @.to_revert, @.finish
+    .finish:
+        add 3, r0, r1
+        sload r1, r0
+        sstore r1, r0
+        ret.ok r0
+    .empty_no_rollback:
+        ret.ok r0
+    .empty_with_rollback:
+        ret.revert r0
+    .to_revert:
+        add 3, r0, r1
+        add 4, r0, r2
+        sstore r1, r2
+        sload r1, r0
+        log.event.first r1, r2, r0
+        log.to_l1.first r1, r2, r0
+        ret.revert r0
+    .nop:
+        ret.revert r0
+    "#;
+
     // let asm = r#"
     //     .text
     //     .file	"Test_26"
@@ -65,59 +115,16 @@ fn run_and_try_create_witness() {
     //     add 12345, r0, r1
     //     shl.s 7, r1, r1
     //     add 1, r0, r1
-    //     sload r1, r0
-    //     add 2, r0, r2
-    //     sstore r1, r2
-    //     sload r1, r0
-    //     log.event.first r1, r2, r0
-    //     log.to_l1.first r1, r2, r0
-    //     near_call r0, @.empty_no_rollback, @.nop
-    // .continue0:
-    //     near_call r0, @.empty_with_rollback, @.continue1
-    // .continue1:
     //     near_call r0, @.to_revert, @.finish
     // .finish:
-    //     add 3, r0, r1
-    //     sload r1, r0
-    //     ret.ok r0
-    // .empty_no_rollback:
-    //     ret.ok r0
-    // .empty_with_rollback:
     //     ret.revert r0
     // .to_revert:
     //     add 3, r0, r1
     //     add 4, r0, r2
     //     sstore r1, r2
     //     sload r1, r0
-    //     log.event.first r1, r2, r0
-    //     log.to_l1.first r1, r2, r0
-    //     ret.revert r0
-    // .nop:
     //     ret.revert r0
     // "#;
-
-    let asm = r#"
-        .text
-        .file	"Test_26"
-        .rodata.cst32
-        .p2align	5
-        .text
-        .globl	__entry
-    __entry:
-    .main:
-        add 12345, r0, r1
-        shl.s 7, r1, r1
-        add 1, r0, r1
-        near_call r0, @.to_revert, @.finish
-    .finish:
-        ret.revert r0
-    .to_revert:
-        add 3, r0, r1
-        add 4, r0, r2
-        sstore r1, r2
-        sload r1, r0
-        ret.revert r0
-    "#;
 
     // let asm = r#"
     //     .text
@@ -132,7 +139,7 @@ fn run_and_try_create_witness() {
     //     ret.ok r0
     // "#;
 
-    run_and_try_create_witness_inner(asm, 36);
+    run_and_try_create_witness_inner(asm, 50);
 }
 
 pub fn assert_equal_state(
@@ -234,7 +241,7 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
     let storage_impl = InMemoryStorage::new();
     let mut tree = ZKSyncTestingTree::empty();
 
-    let mut basic_block_circuits = run(
+    let (basic_block_circuits, basic_block_circuits_inputs) = run(
         1,
         1,
         Address::zero(),
@@ -255,16 +262,36 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
         &mut tree
     );
 
-    let flattened = basic_block_circuits.into_flattened_set();
+    // let flattened = basic_block_circuits.into_flattened_set();
     // for el in flattened.into_iter() {
     //     use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
     //     let is_satisfied = circuit_testing::check_if_satisfied::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(el).unwrap();
     //     assert!(is_satisfied);
     // }
 
-    for el in flattened.into_iter() {
+    // for el in flattened.into_iter() {
+    //     use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
+    //     circuit_testing::prove_and_verify_circuit::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(el).unwrap();
+    // }
+
+    let flattened = basic_block_circuits.into_flattened_set();
+    let flattened_inputs = basic_block_circuits_inputs.into_flattened_set();
+
+    for (idx, (el, input_value)) in flattened.into_iter().zip(flattened_inputs.into_iter()).enumerate() {
+        let descr = el.short_description();
+        println!("Doing {}: {}", idx, descr);
+        // if matches!(&el, ZkSyncCircuit::MainVM(..)) {
+        //     if idx != num_vm_circuits - 1 {
+        //         continue;
+        //     }
+        // }
         use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
-        circuit_testing::prove_and_verify_circuit::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(el).unwrap();
+        let (is_satisfied, public_input) = circuit_testing::check_if_satisfied::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(el).unwrap();
+        assert!(is_satisfied);
+        assert_eq!(public_input, input_value, "Public input diverged for circuit {} of type {}", idx, descr);
+        // if public_input != input_value {
+        //     println!("Public input diverged for circuit {} of type {}", idx, descr);
+        // }
     }
 
     // let vm_circuit = basic_block_circuits.main_vm_circuits.drain(0..1).next().unwrap();

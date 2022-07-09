@@ -159,7 +159,7 @@ impl AuxCallstackProto {
         new_entry: CallStackEntry,
     ) {
         let new_counter = self.monotonic_frame_counter;
-        let current_counter = self.current.0 .1;
+        let current_counter = self.current.0.1;
         self.monotonic_frame_counter += 1;
         let mut old = std::mem::replace(
             &mut self.current,
