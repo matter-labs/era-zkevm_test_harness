@@ -67,7 +67,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     use crate::toolset::GeometryConfig;
 
     let geometry = GeometryConfig {
-        cycles_per_vm_snapshot: 4,
+        cycles_per_vm_snapshot: 1024,
         cycles_per_ram_permutation: 1024,
         cycles_per_code_decommitter: 32,
         cycles_per_storage_application: 32,
@@ -118,19 +118,18 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
 
     use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
 
-    let num_vm_circuits = basic_block_circuits.main_vm_circuits.len();
+    let _num_vm_circuits = basic_block_circuits.main_vm_circuits.len();
+    // dbg!(_num_vm_circuits);
     let flattened = basic_block_circuits.into_flattened_set();
     let flattened_inputs = basic_block_circuits_inputs.into_flattened_set();
 
     for (idx, (el, input_value)) in flattened.into_iter().zip(flattened_inputs.into_iter()).enumerate() {
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
-        // if matches!(&el, ZkSyncCircuit::MainVM(..)) {
-        //     if idx != num_vm_circuits - 1 {
-        //         continue;
-        //     }
+        // if matches!(&el, ZkSyncCircuit::MainVM(..) | ZkSyncCircuit::CodeDecommittmentsSorter(..) | ZkSyncCircuit::CodeDecommitter(..) | ZkSyncCircuit::LogDemuxer(..) | ZkSyncCircuit::KeccakRoundFunction(..)) {
+        //     continue;
         // }
-        el.debug_witness();
+        // el.debug_witness();
         use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
         let (is_satisfied, public_input) = circuit_testing::check_if_satisfied::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(el).unwrap();
         assert!(is_satisfied);

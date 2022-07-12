@@ -72,7 +72,7 @@ pub struct VmWitnessOracle<E: Engine> {
 }
 
 #[derive(Derivative)]
-#[derivative(Clone(bound = ""), Copy(bound = ""), Debug, Default)]
+#[derivative(Clone(bound = ""), Copy(bound = ""), Debug, Default, PartialEq, Eq)]
 pub struct StorageLogDetailedState<E: Engine> {
     pub forward_tail: E::Fr,
     pub forward_length: u32,
@@ -627,8 +627,9 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
     println!("Running callstack sumulation");
 
-    for (idx, el) in callstack_with_aux_data.full_history.iter().cloned().enumerate() {
+    for (_idx, el) in callstack_with_aux_data.full_history.iter().cloned().enumerate() {
         let frame_index = el.frame_index;
+
         match el.action {
             CallstackAction::PushToStack => {
                 // we did push some(!) context to the stack
@@ -641,12 +642,17 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
                 let begin_at_cycle = el.beginning_cycle;
                 let end_cycle = el.end_cycle.expect("frame must end");
 
-                let frame_action_span = cycle_into_flat_sequence_index.range(begin_at_cycle..=end_cycle);
+                let range_of_interest = (begin_at_cycle+1)..=end_cycle; // begin_at_cycle is formally bound to the previous one
+                // let range_of_interest = begin_at_cycle..=end_cycle;
+                let frame_action_span = cycle_into_flat_sequence_index.range(range_of_interest);
                 for (cycle, (_forward_pointer, rollback_pointer)) in frame_action_span {
                     // always add to the forward
                     let new_forward_tail = chain_of_states[*_forward_pointer].2.1;
-                    current_storage_log_state.forward_tail = new_forward_tail;
-                    current_storage_log_state.forward_length += 1;
+                    if new_forward_tail != current_storage_log_state.forward_tail {
+                        // edge case of double data on fram boudary, reword later
+                        current_storage_log_state.forward_tail = new_forward_tail;
+                        current_storage_log_state.forward_length += 1;
+                    }
 
                     // if there is a rollback then let's process it too
 
@@ -658,7 +664,11 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
                         // we didn't in fact rollback, but it nevertheless can be counted as formal rollback
                     }
 
-                    history_of_storage_log_states.insert(*cycle, current_storage_log_state);
+                    let previous = history_of_storage_log_states.insert(*cycle, current_storage_log_state);
+                    if !previous.is_none() {
+                        assert_eq!(previous.unwrap(), current_storage_log_state, "duplicate divergence for cycle {}: previous is {:?}, new is {:?}", cycle, previous.unwrap(), current_storage_log_state)
+                    }
+                    // assert!(previous.is_none(), "duplicate for cycle {}: previous is {:?}, new is {:?}", *cycle, previous.unwrap(), current_storage_log_state);
                 }
 
                 // dump it into the entry and dump entry into simulator
@@ -715,7 +725,12 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
                 let beginning_cycle = el.beginning_cycle;
 
-                history_of_storage_log_states.insert(beginning_cycle, current_storage_log_state);
+                let previous = history_of_storage_log_states.insert(beginning_cycle, current_storage_log_state);
+                if !previous.is_none() {
+                    assert_eq!(previous.unwrap(), current_storage_log_state, "duplicate divergence for cycle {}: previous is {:?}, new is {:?}", beginning_cycle, previous.unwrap(), current_storage_log_state)
+                }
+
+                // assert!(previous.is_none(), "duplicate for cycle {}: previous is {:?}, new is {:?}", beginning_cycle, previous.unwrap(), current_storage_log_state);
 
                 callstack_values_for_returns.push((beginning_cycle, (entry, intermediate_info)));
 
@@ -733,7 +748,11 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
                 let cycle = el.beginning_cycle;
 
-                history_of_storage_log_states.insert(cycle, current_storage_log_state);
+                let previous = history_of_storage_log_states.insert(cycle, current_storage_log_state);
+                if !previous.is_none() {
+                    assert_eq!(previous.unwrap(), current_storage_log_state, "duplicate divergence for cycle {}: previous is {:?}, new is {:?}", cycle, previous.unwrap(), current_storage_log_state)
+                }
+                // assert!(previous.is_none(), "duplicate for cycle {}: previous is {:?}, new is {:?}", cycle, previous.unwrap(), current_storage_log_state);
             },
             CallstackAction::OutOfScope(OutOfScopeReason::Exited { panic }) => {
                 // we are not too interested, frame just ends, and all the storage log logic was resolved before it
@@ -743,12 +762,17 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
                 let begin_at_cycle = el.beginning_cycle;
                 let end_cycle = el.end_cycle.expect("frame must end");
 
-                let frame_action_span = cycle_into_flat_sequence_index.range(begin_at_cycle..=end_cycle);
+                let range_of_interest = (begin_at_cycle+1)..=end_cycle; // begin_at_cycle is formally bound to the previous one
+                // let range_of_interest = begin_at_cycle..=end_cycle;
+                let frame_action_span = cycle_into_flat_sequence_index.range(range_of_interest);
                 for (cycle, (_forward_pointer, rollback_pointer)) in frame_action_span {
                     // always add to the forward
                     let new_forward_tail = chain_of_states[*_forward_pointer].2.1;
-                    current_storage_log_state.forward_tail = new_forward_tail;
-                    current_storage_log_state.forward_length += 1;
+                    if new_forward_tail != current_storage_log_state.forward_tail {
+                        // edge case of double data on fram boudary, reword later
+                        current_storage_log_state.forward_tail = new_forward_tail;
+                        current_storage_log_state.forward_length += 1;
+                    }
 
                     // if there is a rollback then let's process it too
 
@@ -758,7 +782,12 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
                         current_storage_log_state.rollback_length += 1;
                     }
 
-                    history_of_storage_log_states.insert(*cycle, current_storage_log_state);
+                    let previous = history_of_storage_log_states.insert(*cycle, current_storage_log_state);
+                    if !previous.is_none() {
+                        assert_eq!(previous.unwrap(), current_storage_log_state, "duplicate divergence for cycle {}: previous is {:?}, new is {:?}", cycle, previous.unwrap(), current_storage_log_state)
+                    }
+
+                    // assert!(previous.is_none(), "duplicate for cycle {}: previous is {:?}, new is {:?}", *cycle, previous.unwrap(), current_storage_log_state);
                 }
 
                 state_to_merge = Some((panic, current_storage_log_state));
@@ -836,6 +865,30 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
             .last()
             .map(|el| transform_sponge_like_queue_state(el.2))
             .unwrap_or(FullSpongeLikeQueueState::<E>::placeholder_witness());
+        
+        // if _circuit_idx == 0 {
+        //     let start_ptr = artifacts.vm_memory_queue_states.iter()
+        //     .take_while(
+        //         |el| el.0 < initial_state.at_cycle
+        //     ).count();
+        //     let end_ptr = artifacts.vm_memory_queue_states.iter()
+        //     .take_while(
+        //         |el| el.0 <= final_state.at_cycle
+        //     ).count();
+
+        //     let it = artifacts.vm_memory_queue_states.iter()
+        //     .skip_while(
+        //         |el| el.0 < initial_state.at_cycle
+        //     )
+        //     .take_while(
+        //         |el| el.0 <= final_state.at_cycle
+        //     )
+        //     .map(|el| transform_sponge_like_queue_state(el.2))
+        //     .collect::<Vec<_>>();
+        //     dbg!(&it);
+
+        //     // dbg!(&artifacts.all_memory_queries_accumulated[start_ptr..=end_ptr]);
+        // }
 
         let decommittment_queue_state_for_entry = artifacts.all_decommittment_queue_states.iter()
             .take_while(
@@ -1083,6 +1136,9 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
     }
 
     fn push_memory_witness(&mut self, _memory_query: &RawMemoryQuery<E>, _execute: &Boolean) {
+        // if _execute.get_value().unwrap_or(false) {
+        //     dbg!(_memory_query.create_witness());
+        // }
         // we do not care
     }
 

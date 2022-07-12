@@ -209,6 +209,7 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
                 at_cycle: self.current_cycle_counter
             };
             self.vm_snapshots.push(snapshot);
+            println!("Made snapshot at cycle {:?}", self.current_cycle_counter);
         }
 
         if self.cycle_counter_in_this_snapshot >= self.cycles_to_use_per_snapshot {
@@ -224,6 +225,7 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
                     at_cycle: self.current_cycle_counter
                 };
                 self.vm_snapshots.push(snapshot);
+                println!("Made snapshot at cycle {:?}", self.current_cycle_counter);
 
                 // we made a snapshot now, but the cycle itself will be the first one for the next snapshot 
                 self.cycle_counter_in_this_snapshot = 1;

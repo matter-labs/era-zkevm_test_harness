@@ -6,15 +6,15 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-# zk_evm = {path = "../zk_evm"}
+zk_evm = {path = "../zk_evm"}
 sync_vm = {path = "../sync_vm", features = ["external_testing"]}
-# zkevm-assembly = {path = "../zkEVM-assembly"}
-# circuit_testing = {path = "../circuit_testing"}
+zkevm-assembly = {path = "../zkEVM-assembly"}
+circuit_testing = {path = "../circuit_testing"}
 
-zkevm-assembly = {git = "https://github.com/matter-labs/zkEVM-assembly.git", branch = "v1.1.1"}
-zk_evm = {git = "https://github.com/matter-labs/zk_evm.git", branch = "v1.1.1"}
+# zkevm-assembly = {git = "https://github.com/matter-labs/zkEVM-assembly.git", branch = "v1.1.1"}
+# zk_evm = {git = "https://github.com/matter-labs/zk_evm.git", branch = "v1.1.1"}
 # sync_vm = {git = "https://github.com/matter-labs/sync_vm.git", branch = "release", features = ["external_testing"]}
-circuit_testing = {git = "https://github.com/matter-labs/circuit_testing.git", branch = "main"}
+# circuit_testing = {git = "https://github.com/matter-labs/circuit_testing.git", branch = "main"}
 
 num-bigint = "0.4"
 num-integer = "0.1"

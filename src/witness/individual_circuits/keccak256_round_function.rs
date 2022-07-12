@@ -113,10 +113,11 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
     {
         // request level. Each request can be broken into few rounds
 
+        let _ = artifacts.demuxed_keccak_precompile_queue_simulator.pop_and_output_intermediate_data(round_function);
+
         use zk_evm::precompiles::keccak256::Keccak256;
         let mut internal_state = Keccak256::default();
     
-
         let mut memory_reads_per_request = vec![];
 
         assert_eq!(
@@ -276,7 +277,7 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
                         input_page: precompile_request.memory_page_to_read,
                         input_offset: precompile_request.input_memory_offset,
                         output_page: precompile_request.memory_page_to_write,
-                        output_offset: precompile_request.input_memory_offset,
+                        output_offset: precompile_request.output_memory_offset,
                         num_rounds: num_rounds_left as u16,
                         _marker: std::marker::PhantomData,
                     },

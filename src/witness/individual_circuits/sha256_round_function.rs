@@ -106,6 +106,9 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
     {
         let _ = artifacts.demuxed_sha256_precompile_queue_simulator.pop_and_output_intermediate_data(round_function);
 
+        use zk_evm::precompiles::sha256::Sha256;
+        let mut internal_state = Sha256::default();
+
         let mut memory_reads_per_request = vec![];
 
         assert_eq!(
@@ -115,9 +118,6 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
 
         let (_cycle, _req, round_witness) = per_request_work;
         assert_eq!(request, _req);
-
-        use zk_evm::precompiles::sha256::Sha256;
-        let mut internal_state = Sha256::default();
 
         use zk_evm::precompiles::precompile_abi_in_log;
         let mut precompile_request = precompile_abi_in_log(request);
@@ -228,7 +228,7 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
                         input_page: precompile_request.memory_page_to_read,
                         input_offset: precompile_request.input_memory_offset,
                         output_page: precompile_request.memory_page_to_write,
-                        output_offset: precompile_request.input_memory_offset,
+                        output_offset: precompile_request.output_memory_offset,
                         num_rounds: num_rounds_left as u16,
                         _marker: std::marker::PhantomData,
                     },

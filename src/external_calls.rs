@@ -124,12 +124,14 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
         entry_point_address,
     );
 
+    let mut early_breakpoint_after_snapshot = false;
     let mut tracer = GenericNoopTracer::<_>::new();
     println!("Running out of circuit for {} cycles", cycle_limit);
     for _cycle in 0..cycle_limit {
         if out_of_circuit_vm.execution_has_ended() && !out_of_circuit_vm.is_any_pending() {
             if out_of_circuit_vm.witness_tracer.cycle_counter_in_this_snapshot  == 1 {
                 println!("Ran for {} cycles", _cycle + 1);
+                early_breakpoint_after_snapshot = true;
                 break;
             }
         }
@@ -138,14 +140,16 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
 
     let vm_local_state = out_of_circuit_vm.local_state;
 
-    // perform the final snapshot
-    let current_cycle_counter = tools.witness_tracer.current_cycle_counter;
-    use crate::witness::vm_snapshot::VmSnapshot;
-    let snapshot = VmSnapshot {
-        local_state: vm_local_state.clone(),
-        at_cycle: current_cycle_counter,
-    };
-    tools.witness_tracer.vm_snapshots.push(snapshot);
+    if !early_breakpoint_after_snapshot {
+        // perform the final snapshot
+        let current_cycle_counter = tools.witness_tracer.current_cycle_counter;
+        use crate::witness::vm_snapshot::VmSnapshot;
+        let snapshot = VmSnapshot {
+            local_state: vm_local_state.clone(),
+            at_cycle: current_cycle_counter,
+        };
+        tools.witness_tracer.vm_snapshots.push(snapshot);
+    }
 
     let (instance_oracles, artifacts) =
         create_artifacts_from_tracer(

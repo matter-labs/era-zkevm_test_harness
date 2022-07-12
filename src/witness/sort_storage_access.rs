@@ -51,8 +51,6 @@ pub fn sort_storage_access_queries(unsorted_storage_queries: &[LogQuery]) -> (Ve
             break;
         }
 
-        let mut stack: Vec<LogQueryWithExtendedEnumeration> = vec![];
-
         let candidate = it.peek().unwrap().clone();
 
         let subit = it.clone().take_while(|el| {
@@ -173,8 +171,6 @@ pub fn sort_storage_access_queries(unsorted_storage_queries: &[LogQuery]) -> (Ve
             }
         }
     }
-
-    dbg!(&deduplicated_storage_queries);
 
     (sorted_storage_queries_with_extra_timestamp, deduplicated_storage_queries)
 }

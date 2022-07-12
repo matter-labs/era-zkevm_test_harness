@@ -30,7 +30,7 @@ pub fn compute_decommitter_circuit_snapshots<
 ) -> (Vec<CodeDecommitterCircuitInstanceWitness<E>>, CodeDecommittmentsDeduplicatorInstanceWitness<E>) {
     assert_eq!(artifacts.all_memory_queries_accumulated.len(), artifacts.all_memory_queue_states.len());
     assert_eq!(artifacts.all_memory_queries_accumulated.len(), artifacts.memory_queue_simulator.num_items as usize);
-    
+
     let start_idx_for_memory_accumulator = artifacts.all_memory_queue_states.len();
 
     let mut results: Vec<CodeDecommitterCircuitInstanceWitness<E>> = vec![];
@@ -123,6 +123,8 @@ pub fn compute_decommitter_circuit_snapshots<
     }
 
     assert_eq!(artifacts.all_memory_queue_states.len(), artifacts.all_memory_queries_accumulated.len());
+
+    // dbg!(&deduplicated_decommittment_queue_simulator.witness);
 
     // first we assume that procedure of sorting the decommittment requests will only take 1 circuit,
     // so we can trivially form a single instance for it

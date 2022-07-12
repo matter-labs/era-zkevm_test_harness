@@ -87,7 +87,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         } else {
             circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
         }
-        
+
         let proof_system_input = simulate_public_input_value_from_witness(
             circuit_input.closed_form_input.clone(),
         );
@@ -183,7 +183,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
             circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
         }
 
-        let _proof_system_input = simulate_public_input_value_from_witness(
+        let proof_system_input = simulate_public_input_value_from_witness(
             circuit_input.closed_form_input.clone(),
         );
 
