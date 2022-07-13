@@ -10,7 +10,7 @@ use sync_vm::rescue_poseidon::RescueParams;
 pub struct MessagesMerklizerInstanceSynthesisFunction;
 
 use sync_vm::glue::merkleize_l1_messages::input::MessagesMerklizerInstanceWitness;
-use sync_vm::scheduler::merklize_messages_entry_point;
+use sync_vm::glue::merkleize_l1_messages::merkleize::merklize_messages_entry_point;
 use sync_vm::glue::merkleize_l1_messages::tree_hasher::CircuitKeccakTreeHasher;
 use sync_vm::scheduler::queues::storage_log::STORAGE_LOG_RECORD_ENCODING_LEN;
 use sync_vm::glue::merkleize_l1_messages::input::MESSAGE_SERIALIZATION_BYTES;

@@ -178,7 +178,6 @@ impl<
         }
 
         if let Some(node_hash) = self.layers[level].get(&index) {
-            println!("Node hash at level {} = {}", level, hex::encode(node_hash));
             node_hash
         } else {
             &self.empty_hashes[level]

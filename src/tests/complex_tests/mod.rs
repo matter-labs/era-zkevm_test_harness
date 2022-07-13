@@ -40,7 +40,10 @@ fn basic_test() {
     run_and_try_create_witness_inner(test_artifact, 20000);
 }
 
-fn save_predeployed_contracts(storage: &mut InMemoryStorage, contracts: &HashMap<Address, Vec<[u8;32]>>) {
+use blake2::Blake2s256;
+use crate::witness::tree::ZkSyncStorageLeaf;
+
+fn save_predeployed_contracts(storage: &mut InMemoryStorage, tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>, contracts: &HashMap<Address, Vec<[u8; 32]>>) {
     let storage_logs: Vec<(u8, Address, U256, U256)> = contracts
         .clone()
         .into_iter()
@@ -53,7 +56,20 @@ fn save_predeployed_contracts(storage: &mut InMemoryStorage, contracts: &HashMap
         })
         .collect();
 
-    storage.populate(storage_logs);
+    storage.populate(storage_logs.clone());
+
+    for (shard_id, address, key, value) in storage_logs.into_iter() {
+        assert!(shard_id == 0);
+        let index = LogQuery::derive_final_address_for_params(&address, &key);
+
+        use crate::witness::tree::EnumeratedBinaryLeaf;
+        let mut leaf = ZkSyncStorageLeaf::empty();
+        let mut buffer = [0u8; 32];
+        value.to_big_endian(&mut buffer);
+        leaf.set_value(&buffer);
+
+        tree.insert_leaf(&index, leaf);
+    }
 }
 
 fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit: usize) {
@@ -69,7 +85,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     let geometry = GeometryConfig {
         cycles_per_vm_snapshot: 1024,
         cycles_per_ram_permutation: 1024,
-        cycles_per_code_decommitter: 32,
+        cycles_per_code_decommitter: 256,
         cycles_per_storage_application: 2,
         cycles_per_keccak256_circuit: 1,
         cycles_per_sha256_circuit: 1,
@@ -90,13 +106,12 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     test_artifact.entry_point_address = *zk_evm::precompiles::BOOTLOADER_FORMAL_ADDRESS;
     
     let predeployed_contracts = test_artifact.predeployed_contracts.clone().into_iter().chain(Some((test_artifact.entry_point_address, test_artifact.entry_point_code.clone()))).collect::<HashMap<_,_>>();
-    save_predeployed_contracts(&mut storage_impl, &predeployed_contracts);
+    save_predeployed_contracts(&mut storage_impl, &mut tree, &predeployed_contracts);
 
     let used_bytecodes = HashMap::from_iter(test_artifact.predeployed_contracts.iter().map(|(_,bytecode)| (bytecode_to_code_hash(&bytecode).unwrap().into(), bytecode.clone())));
     for (k, _) in used_bytecodes.iter() {
         println!("Have bytecode hash {}", k);
     }
-    
 
     let (basic_block_circuits, basic_block_circuits_inputs) = run(
         1,

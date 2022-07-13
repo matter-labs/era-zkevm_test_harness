@@ -104,7 +104,8 @@ pub fn decompose_into_storage_application_witnesses<
                 assert!(tree.verify_inclusion_proxy(&tree.root(), &read_query));
                 let mut buffer = [0u8; 32];
                 el.read_value.to_big_endian(&mut buffer);
-                assert_eq!(read_query.leaf.value, buffer);
+                assert_eq!(&buffer, read_query.leaf.value(), "While writing: divergent leaf read value for index {}: expecting to read {}, got {}", hex::encode(&key), hex::encode(&buffer), hex::encode(&read_query.leaf.value()));
+
                 let leaf_index = read_query.leaf.current_index();
                 leaf_enumeration_index_for_read.push(leaf_index);
 
@@ -155,7 +156,7 @@ pub fn decompose_into_storage_application_witnesses<
 
                 let mut buffer = [0u8; 32];
                 el.read_value.to_big_endian(&mut buffer);
-                assert_eq!(buffer, leaf.value);
+                assert_eq!(&buffer, leaf.value(), "While reading: divergent leaf value for index {}: expecting to read {}, got {}", hex::encode(&key), hex::encode(&buffer), hex::encode(&leaf.value()));
 
                 let path = (*merkle_path).into_iter().map(|el| bytes_to_u32_le(&el)).collect::<Vec<_>>();
                 assert_eq!(path.len(), 256);

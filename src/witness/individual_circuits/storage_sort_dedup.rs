@@ -3,7 +3,6 @@ use sync_vm::glue::code_unpacker_sha256::memory_query_updated::RawMemoryQuery;
 use sync_vm::glue::code_unpacker_sha256::input::*;
 use sync_vm::glue::optimizable_queue::FixedWidthEncodingGenericQueueWitness;
 use sync_vm::inputs::ClosedFormInputWitness;
-use sync_vm::scheduler::circuit::input::rollup_shard_id;
 use sync_vm::scheduler::queues::DecommitQueryWitness;
 use sync_vm::utils::u64_to_fe;
 use zk_evm::aux_structures::*;

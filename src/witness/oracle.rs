@@ -74,6 +74,7 @@ pub struct VmWitnessOracle<E: Engine> {
 #[derive(Derivative)]
 #[derivative(Clone(bound = ""), Copy(bound = ""), Debug, Default, PartialEq, Eq)]
 pub struct StorageLogDetailedState<E: Engine> {
+    pub frame_idx: usize,
     pub forward_tail: E::Fr,
     pub forward_length: u32,
     pub rollback_head: E::Fr,
@@ -708,6 +709,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
                 assert_eq!(entry.rollback_queue_segment_length, popped_state.rollback_length, "divergence at frame {}", frame_index);
 
                 current_storage_log_state = popped_state;
+                current_storage_log_state.frame_idx = frame_index;
                 current_storage_log_state.forward_tail = state_to_merge.forward_tail;
                 assert!(current_storage_log_state.forward_length <= state_to_merge.forward_length, "divergence at frame {}", frame_index);
                 current_storage_log_state.forward_length = state_to_merge.forward_length;
@@ -741,7 +743,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
                 // we already identified initial rollback tails for new frames
                 let rollback_tail = frame_rollback_tails[&frame_index];
                 // do not reset forward length as it's easy to merge
-
+                current_storage_log_state.frame_idx = frame_index;
                 current_storage_log_state.rollback_length = 0;
                 current_storage_log_state.rollback_head = rollback_tail;
                 current_storage_log_state.rollback_tail = rollback_tail;
@@ -750,7 +752,12 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
                 let previous = history_of_storage_log_states.insert(cycle, current_storage_log_state);
                 if !previous.is_none() {
-                    assert_eq!(previous.unwrap(), current_storage_log_state, "duplicate divergence for cycle {}: previous is {:?}, new is {:?}", cycle, previous.unwrap(), current_storage_log_state)
+                    // ensure that basic properties hold: we replace the current frame with a new one, so
+                    // it should have large frame_idx and the same forward tail and length
+                    let previous = previous.unwrap();
+                    assert!(previous.frame_idx < current_storage_log_state.frame_idx, "frame divergence for cycle {}: previous is {:?}, new is {:?}", cycle, previous, current_storage_log_state);
+                    assert_eq!(previous.forward_tail, current_storage_log_state.forward_tail, "frame divergence for cycle {}: previous is {:?}, new is {:?}", cycle, previous, current_storage_log_state);
+                    assert_eq!(previous.forward_length, current_storage_log_state.forward_length, "frame divergence for cycle {}: previous is {:?}, new is {:?}", cycle, previous, current_storage_log_state);
                 }
                 // assert!(previous.is_none(), "duplicate for cycle {}: previous is {:?}, new is {:?}", cycle, previous.unwrap(), current_storage_log_state);
             },

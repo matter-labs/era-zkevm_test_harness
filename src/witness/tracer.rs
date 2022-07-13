@@ -1,5 +1,4 @@
 use crate::witness::callstack_handler::CallstackWithAuxData;
-use sync_vm::vm::state::NUM_SPONGES_PER_CYCLE;
 use zk_evm::abstractions::PrecompileCyclesWitness;
 use zk_evm::aux_structures::LogQuery;
 use zk_evm::aux_structures::*;
@@ -13,6 +12,7 @@ use zk_evm::precompiles::sha256::Sha256RoundWitness;
 
 use zk_evm::vm_state::MAX_CALLSTACK_DEPTH;
 use zk_evm::zkevm_opcode_defs::decoding::EncodingModeProduction;
+use sync_vm::vm::vm_state::NUM_SPONGES_PER_CYCLE;
 
 // cycle indicators below are not timestamps!
 

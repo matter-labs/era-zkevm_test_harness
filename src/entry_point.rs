@@ -387,7 +387,6 @@ pub fn run_vm_instance<
     Num::alloc_multiple(cs, Some(decommittment_queue_state.tail)).unwrap();
     let code_decommittment_queue_length = UInt32::allocate(cs, Some(decommittment_queue_state.length)).unwrap();
 
-
     let context_composite_0 = UInt64::allocate(cs, Some(initial_state.context_u128_register as u64)).unwrap();
     let context_composite_1 = UInt64::allocate(cs, Some((initial_state.context_u128_register >> 64) as u64)).unwrap();
 
