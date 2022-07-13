@@ -380,7 +380,7 @@ pub struct BlockBasicCircuits<E: Engine> {
     // sort storage changes
     pub storage_sorter_circuit: StorageSorterCircuit<E>,
     // apply them
-    pub storage_application_circuits: Vec<()>,
+    pub storage_application_circuits: Vec<StorageApplicationCircuit<E>>,
     // rehash initial writes
     pub initial_writes_hasher_circuit: InitialStorageWritesPubdataHasherCircuit<E>,
     // rehash repeated writes
@@ -466,7 +466,7 @@ pub struct BlockBasicCircuitsPublicInputs<E: Engine> {
     // sort storage changes
     pub storage_sorter_circuit: E::Fr,
     // apply them
-    pub storage_application_circuits: Vec<()>,
+    pub storage_application_circuits: Vec<E::Fr>,
     // rehash initial writes
     pub initial_writes_hasher_circuit: E::Fr,
     // rehash repeated writes
@@ -518,7 +518,7 @@ impl<E: Engine> BlockBasicCircuitsPublicInputs<E> {
 
         result.push(storage_sorter_circuit);
 
-        result.extend(storage_application_circuits.into_iter().map(|_| E::Fr::zero()));
+        result.extend(storage_application_circuits);
 
         result.push(initial_writes_hasher_circuit);
         result.push(repeated_writes_hasher_circuit);

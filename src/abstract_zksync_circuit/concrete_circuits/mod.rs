@@ -10,7 +10,7 @@ pub mod sha256_round_function;
 // pub mod ecrecover;
 pub mod ram_permutation;
 pub mod storage_sort_dedup;
-// pub mod storage_apply;
+pub mod storage_apply;
 pub mod events_sort_dedup;
 // pub mod l1_messages_sort_dedup; // equal to one 
 pub mod l1_messages_merklize;
@@ -25,6 +25,7 @@ pub use self::keccak256_round_function::Keccak256RoundFunctionInstanceSynthesisF
 pub use self::sha256_round_function::Sha256RoundFunctionInstanceSynthesisFunction;
 pub use self::ram_permutation::RAMPermutationInstanceSynthesisFunction;
 pub use self::storage_sort_dedup::StorageSortAndDedupInstanceSynthesisFunction;
+pub use self::storage_apply::StorageApplicationInstanceSynthesisFunction;
 pub use self::events_sort_dedup::EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction;
 pub use self::l1_messages_merklize::MessagesMerklizerInstanceSynthesisFunction;
 pub use self::storage_initial_writes_pubdata_hasher::StorageInitialWritesRehasherInstanceSynthesisFunction;
@@ -41,6 +42,7 @@ pub type Keccak256RoundFunctionCircuit<E> = ZkSyncUniformCircuitCircuitInstance<
 pub type Sha256RoundFunctionCircuit<E> = ZkSyncUniformCircuitCircuitInstance<E, Sha256RoundFunctionInstanceSynthesisFunction>;
 pub type RAMPermutationCircuit<E> = ZkSyncUniformCircuitCircuitInstance<E, RAMPermutationInstanceSynthesisFunction>;
 pub type StorageSorterCircuit<E> = ZkSyncUniformCircuitCircuitInstance<E, StorageSortAndDedupInstanceSynthesisFunction>;
+pub type StorageApplicationCircuit<E> = ZkSyncUniformCircuitCircuitInstance<E, StorageApplicationInstanceSynthesisFunction>;
 pub type EventsSorterCircuit<E> = ZkSyncUniformCircuitCircuitInstance<E, EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction>;
 pub type L1MessagesSorterCircuit<E> = ZkSyncUniformCircuitCircuitInstance<E, EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction>;
 pub type L1MessagesMerklizerCircuit<E> = ZkSyncUniformCircuitCircuitInstance<E, MessagesMerklizerInstanceSynthesisFunction>;
@@ -68,7 +70,7 @@ pub enum ZkSyncCircuit<E: Engine, W: WitnessOracle<E>> {
     ECRecover(()),
     RAMPermutation(RAMPermutationCircuit<E>),
     StorageSorter(StorageSorterCircuit<E>),
-    StorageApplication(()),
+    StorageApplication(StorageApplicationCircuit<E>),
     EventsSorter(EventsSorterCircuit<E>),
     L1MessagesSorter(L1MessagesSorterCircuit<E>),
     L1MessagesMerklier(L1MessagesMerklizerCircuit<E>),
@@ -101,7 +103,7 @@ impl<E: Engine,  W: WitnessOracle<E>> Circuit<E> for ZkSyncCircuit<E, W> {
             ZkSyncCircuit::ECRecover(()) => {unimplemented!()},
             ZkSyncCircuit::RAMPermutation(inner) => {inner.synthesize(cs)},
             ZkSyncCircuit::StorageSorter(inner) => {inner.synthesize(cs)},
-            ZkSyncCircuit::StorageApplication(()) => {unimplemented!()},
+            ZkSyncCircuit::StorageApplication(inner) => {inner.synthesize(cs)},
             ZkSyncCircuit::EventsSorter(inner) => {inner.synthesize(cs)},
             ZkSyncCircuit::L1MessagesSorter(inner) => {inner.synthesize(cs)},
             ZkSyncCircuit::L1MessagesMerklier(inner) => {inner.synthesize(cs)},
@@ -151,7 +153,7 @@ impl<E: Engine, W: WitnessOracle<E>> ZkSyncCircuit<E, W> {
             ZkSyncCircuit::ECRecover(inner) => {dbg!(inner);},
             ZkSyncCircuit::RAMPermutation(inner) => {inner.debug_witness();},
             ZkSyncCircuit::StorageSorter(inner) => {inner.debug_witness();},
-            ZkSyncCircuit::StorageApplication(inner) => {dbg!(inner);},
+            ZkSyncCircuit::StorageApplication(inner) => {inner.debug_witness();},
             ZkSyncCircuit::EventsSorter(inner) => {inner.debug_witness();},
             ZkSyncCircuit::L1MessagesSorter(inner) => {inner.debug_witness();},
             ZkSyncCircuit::L1MessagesMerklier(inner) => {inner.debug_witness();},

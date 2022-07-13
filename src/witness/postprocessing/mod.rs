@@ -284,6 +284,32 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
 
     let mut storage_application_circuits = vec![];
     let mut storage_application_circuits_inputs = vec![];
+    let num_instances = rollup_storage_application_circuit_data.len();
+    let mut observable_input = None;
+    for (instance_idx, mut circuit_input) in rollup_storage_application_circuit_data.into_iter().enumerate() {
+        let is_first = instance_idx == 0;
+        let _is_last = instance_idx == num_instances - 1;
+
+        if observable_input.is_none() {
+            assert!(is_first);
+            observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
+        } else {
+            circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
+        }
+
+        let proof_system_input = simulate_public_input_value_from_witness(
+            circuit_input.closed_form_input.clone(),
+        );
+
+        let instance = StorageApplicationCircuit {
+            witness: AtomicCell::new(Some(circuit_input)),
+            config: Arc::new((geometry.cycles_per_storage_application as usize, false)),
+            round_function: round_function.clone(),
+        };
+
+        storage_application_circuits.push(instance);
+        storage_application_circuits_inputs.push(proof_system_input);
+    }
 
     // initial writes rehasher
 

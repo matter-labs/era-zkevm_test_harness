@@ -46,6 +46,7 @@ pub fn decompose_into_storage_application_witnesses<
         // we leave 1 to make a final application of "write"
         if total_tree_queries >= num_rounds_per_circuit - 1 {
             let current = std::mem::replace(&mut current_chunk, vec![]);
+            assert!(current.len() <= num_rounds_per_circuit);
             chunks.push(current);
             total_tree_queries = 0;
         }
@@ -57,7 +58,7 @@ pub fn decompose_into_storage_application_witnesses<
     use crate::bytes_to_u32_le;
     use sync_vm::traits::CSWitnessable;
 
-    let mut fsm_witness = StorageApplicationFSM::<E>::placeholder_witness();
+    let mut initial_fsm_state = StorageApplicationFSM::<E>::placeholder_witness();
     // queue states are trivial for a start
 
     use crate::encodings::initial_storage_write::*;
@@ -73,9 +74,9 @@ pub fn decompose_into_storage_application_witnesses<
 
     for (idx, chunk) in chunks.into_iter().enumerate() {
         let is_last = idx == num_chunks - 1;
-        let initial_fsm_state = fsm_witness.clone();
 
         let mut merkle_paths = vec![];
+        let mut leaf_enumeration_index_for_read = vec![];
 
         use sync_vm::glue::storage_application::input::*;
         use sync_vm::circuit_structures::bytes32::Bytes32Witness;
@@ -85,7 +86,8 @@ pub fn decompose_into_storage_application_witnesses<
         let mut passthrough_input = StorageApplicationInputData::placeholder_witness();
         if idx == 0 {
             passthrough_input.initial_next_enumeration_counter = tree.next_enumeration_index();
-            passthrough_input.initial_root = Bytes32Witness::from_bytes_array(&tree.root());
+            let root_as_u128 = bytes_to_u128_le(&tree.root());
+            passthrough_input.initial_root = root_as_u128;
             passthrough_input.storage_application_log_state = take_queue_state_from_simulator(&artifacts.deduplicated_rollup_storage_queue_simulator);
         }
 
@@ -97,18 +99,29 @@ pub fn decompose_into_storage_application_witnesses<
 
             let key = el.derive_final_address();
             if el.rw_flag {
-                // write
+                // by convension we have read and write both
+                let read_query = tree.get_leaf(&key);
+                assert!(tree.verify_inclusion_proxy(&tree.root(), &read_query));
+                let mut buffer = [0u8; 32];
+                el.read_value.to_big_endian(&mut buffer);
+                assert_eq!(read_query.leaf.value, buffer);
+                let leaf_index = read_query.leaf.current_index();
+                leaf_enumeration_index_for_read.push(leaf_index);
+
                 let mut leaf = ZkSyncStorageLeaf::empty();
                 el.written_value.to_big_endian(leaf.value_ref_mut());
+                // we expect that tree properly updates enumeration index on insert
+                let write_query = tree.insert_leaf(&key, leaf);
+                assert!(tree.verify_inclusion_proxy(&tree.root(), &write_query));
 
-                let tree_query = tree.insert_leaf(&key, leaf);
+                assert_eq!(&*read_query.merkle_path, &*write_query.merkle_path);
 
                 let LeafQuery {
                     leaf,
                     first_write,
                     index: _,
                     merkle_path,
-                } = tree_query;
+                } = write_query;
 
                 let path = (*merkle_path).into_iter().map(|el| bytes_to_u32_le(&el)).collect::<Vec<_>>().try_into().unwrap();
                 
@@ -129,32 +142,38 @@ pub fn decompose_into_storage_application_witnesses<
                 }
             } else {
                 // read
-                let tree_query = tree.get_leaf(&key);
-
+                let read_query = tree.get_leaf(&key);
+                assert!(tree.verify_inclusion_proxy(&tree.root(), &read_query));
                 let LeafQuery {
                     leaf,
                     first_write: _,
                     index: _,
                     merkle_path,
-                } = tree_query;
+                } = read_query;
+                let leaf_index = leaf.current_index();
+                leaf_enumeration_index_for_read.push(leaf_index);
 
                 let mut buffer = [0u8; 32];
                 el.read_value.to_big_endian(&mut buffer);
                 assert_eq!(buffer, leaf.value);
 
-                let path = (*merkle_path).into_iter().map(|el| bytes_to_u32_le(&el)).collect::<Vec<_>>().try_into().unwrap();
+                let path = (*merkle_path).into_iter().map(|el| bytes_to_u32_le(&el)).collect::<Vec<_>>();
+                assert_eq!(path.len(), 256);
                 
                 merkle_paths.push(path);
             }
         }
 
+        assert_eq!(leaf_enumeration_index_for_read.len(), merkle_paths.len());
+
         let mut final_fsm_state = StorageApplicationFSM::<E>::placeholder_witness();
         // set current values
-        final_fsm_state.root_hash_as_u32_words = bytes_to_u32_le(&tree.root());
+        let root_as_u128 = bytes_to_u128_le(&tree.root());
+        final_fsm_state.root_hash = root_as_u128;
         final_fsm_state.next_enumeration_counter = tree.next_enumeration_index();
         final_fsm_state.current_storage_application_log_state = take_queue_state_from_simulator(&storage_application_simulator);
-        final_fsm_state.repeated_writes_pubdata_queue_state = take_queue_state_from_simulator(&first_writes_simulator);
-        final_fsm_state.initial_writes_pubdata_queue_state = take_queue_state_from_simulator(&repeated_writes_simulator);
+        final_fsm_state.repeated_writes_pubdata_queue_state = take_queue_state_from_simulator(&repeated_writes_simulator);
+        final_fsm_state.initial_writes_pubdata_queue_state = take_queue_state_from_simulator(&first_writes_simulator);
 
         let wit = transform_queue_witness(
             artifacts.deduplicated_rollup_storage_queue_simulator.witness.iter().skip(storage_queue_state_idx).take(chunk_len)
@@ -165,9 +184,10 @@ pub fn decompose_into_storage_application_witnesses<
         let mut passthrough_output = StorageApplicationOutputData::placeholder_witness();
         if is_last {
             passthrough_output.final_next_enumeration_counter = tree.next_enumeration_index();
-            passthrough_output.final_root = Bytes32Witness::from_bytes_array(&tree.root());
-            passthrough_output.repeated_writes_pubdata_queue_state = take_queue_state_from_simulator(&first_writes_simulator);
-            passthrough_output.initial_writes_pubdata_queue_state = take_queue_state_from_simulator(&repeated_writes_simulator);
+            let root_as_u128 = bytes_to_u128_le(&tree.root());
+            passthrough_output.final_root = root_as_u128;
+            passthrough_output.repeated_writes_pubdata_queue_state = take_queue_state_from_simulator(&repeated_writes_simulator);
+            passthrough_output.initial_writes_pubdata_queue_state = take_queue_state_from_simulator(&first_writes_simulator);
         }
 
         let input = StorageApplicationCircuitInstanceWitness {
@@ -176,14 +196,18 @@ pub fn decompose_into_storage_application_witnesses<
                 completion_flag: is_last,
                 observable_input: passthrough_input,
                 observable_output: passthrough_output,
-                hidden_fsm_input: initial_fsm_state,
-                hidden_fsm_output: final_fsm_state,
+                hidden_fsm_input: initial_fsm_state.clone(),
+                hidden_fsm_output: final_fsm_state.clone(),
                 _marker_e: (),
                 _marker: std::marker::PhantomData
             },
-            sorted_storage_queue_witness: wit,
+            storage_queue_witness: wit,
+            leaf_indexes_for_reads: leaf_enumeration_index_for_read,
             merkle_paths,
+
         };
+
+        initial_fsm_state = final_fsm_state.clone();
 
         result.push(input);
     }

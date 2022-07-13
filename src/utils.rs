@@ -103,6 +103,20 @@ pub fn bytes_to_u32_le<const N: usize, const M: usize>(bytes: &[u8; N]) -> [u32;
     result
 }
 
+pub fn bytes_to_u128_le<const N: usize, const M: usize>(bytes: &[u8; N]) -> [u128; M] {
+    assert!(M > 0);
+    assert!(M * 16 == N);
+
+    let mut result = [0u128; M];
+
+    for (idx, chunk) in bytes.chunks_exact(16).enumerate() {
+        let word = u128::from_le_bytes(chunk.try_into().unwrap());
+        result[idx] = word;
+    }
+
+    result
+}
+
 use crate::encodings::initial_storage_write::BytesSerializable;
 
 pub fn binary_merklize_set<'a, const N: usize, T: BytesSerializable<N> + 'a, H: BinaryHasher<32>>(

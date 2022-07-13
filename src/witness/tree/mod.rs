@@ -65,6 +65,9 @@ pub trait BinarySparseStorageTree<
     // fn filter_renumerate(&self, indexes: &[[u8; INDEX_BYTES]], leafs: &[L]) -> (u64, Vec<L>, Vec<L>);
     fn filter_renumerate<'a>(&self, indexes: impl Iterator<Item = &'a [u8; INDEX_BYTES]>, leafs: impl Iterator<Item = L>) -> (u64, Vec<([u8; INDEX_BYTES], L)>, Vec<L>);
     fn verify_inclusion(root: &[u8; 32], query: &LeafQuery<DEPTH, INDEX_BYTES, LEAF_DATA_WIDTH, HASH_OUTPUT_WIDTH, L>) -> bool;
+    fn verify_inclusion_proxy(&self, root: &[u8; 32], query: &LeafQuery<DEPTH, INDEX_BYTES, LEAF_DATA_WIDTH, HASH_OUTPUT_WIDTH, L>) -> bool {
+        Self::verify_inclusion(root, query)
+    }
 }
 
 use std::{collections::HashMap};
@@ -153,6 +156,35 @@ impl<
         }
     }
 
+    fn insert_path_element(&mut self, level: usize, index: [u8; INDEX_BYTES], value: [u8; 32]) {
+        // the only important thing is to cleanup the lowest bits for consistency
+        let mut index = index;
+        for bit in 0..level {
+            let word_idx = bit / 8;
+            let bit_idx = bit % 8;
+            index[word_idx] = index[word_idx] & (!(1 << bit_idx));
+        }
+
+        self.layers[level].insert(index, value);
+    }
+
+    fn get_path_element(&self, level: usize, index: [u8; INDEX_BYTES]) -> &[u8; 32] {
+        // the only important thing is to cleanup the lowest bits for consistency
+        let mut index = index;
+        for bit in 0..level {
+            let word_idx = bit / 8;
+            let bit_idx = bit % 8;
+            index[word_idx] = index[word_idx] & (!(1 << bit_idx));
+        }
+
+        if let Some(node_hash) = self.layers[level].get(&index) {
+            println!("Node hash at level {} = {}", level, hex::encode(node_hash));
+            node_hash
+        } else {
+            &self.empty_hashes[level]
+        }
+    }
+
     fn get_leaf(&self, index: &[u8; INDEX_BYTES]) -> LeafQuery<DEPTH, INDEX_BYTES, 32, 32, L> {
         let leaf = if let Some(leaf) = self.leafs.get(index) {
             leaf.clone()
@@ -163,12 +195,8 @@ impl<
         let mut path: Box::<[[u8; 32]; DEPTH]> = Box::new([[0u8; 32]; DEPTH]);
         for level in 0..DEPTH {
             let pair_idx = create_neighbour_index(index, level);
-            let node_hash = if let Some(node_hash) = self.layers[level].get(&pair_idx) {
-                node_hash
-            } else {
-                &self.empty_hashes[level]
-            };
-            path[level] = *node_hash;
+            let pair_node_hash = self.get_path_element(level, pair_idx);
+            path[level] = *pair_node_hash;
         }
 
         LeafQuery {
@@ -246,7 +274,7 @@ impl<
         }
 
         // now recompute the path
-        let leaf = self.leafs.get(index).unwrap();
+        let leaf = self.leafs.get(index).cloned().unwrap();
         let mut leaf_bytes = vec![0u8; LEAF_METADATA_WIDTH + 32]; // can make a scratch space somewhere later on
         leaf_bytes[LEAF_METADATA_WIDTH..].copy_from_slice(leaf.value());
 
@@ -254,37 +282,30 @@ impl<
         leaf_bytes[(LEAF_METADATA_WIDTH - 8)..LEAF_METADATA_WIDTH].copy_from_slice(&leaf_index_bytes);
 
         let leaf_hash = H::leaf_hash(&leaf_bytes);
-        let _ = self.layers[0].insert(*index, leaf_hash);
 
         let mut current_hash = leaf_hash;
         let mut path: Box::<[[u8; 32]; DEPTH]> = Box::new([[0u8; 32]; DEPTH]);
-        for level in 1..=DEPTH {
-            let pair_idx = create_neighbour_index(index, level-1);
-            let node_hash = if let Some(node_hash) = self.layers[level-1].get(&pair_idx) {
-                node_hash
-            } else {
-                &self.empty_hashes[level-1]
-            };
-            path[level - 1] = *node_hash;
+        for level in 0..DEPTH {
+            self.insert_path_element(level, *index, current_hash);
+            let pair_idx = create_neighbour_index(index, level);
+            let pair_node_hash = self.get_path_element(level, pair_idx);
+           
+            path[level] = *pair_node_hash;
 
-            let (l, r) = if is_right_side_node(index, level - 1) {
-                (node_hash, &current_hash)
+            let (l, r) = if is_right_side_node(index, level) {
+                (pair_node_hash, &current_hash)
             } else {
-                (&current_hash, node_hash)
+                (&current_hash, pair_node_hash)
             };
 
-            let this_level_hash = H::node_hash(level, l, r);
-
-            if level < DEPTH {
-                self.layers[level].insert(*index, this_level_hash);
-                current_hash = this_level_hash;
-            } else {
-                self.root = this_level_hash;
-            }
+            let parent_node_hash = H::node_hash(level, l, r);
+            current_hash = parent_node_hash;
         }
 
+        self.root = current_hash;
+
         LeafQuery {
-            leaf: leaf.clone(),
+            leaf: leaf,
             first_write,
             index: *index,
             merkle_path: path
@@ -445,6 +466,12 @@ mod test {
         assert!(query.leaf.current_index() == 1);
         assert!(tree.next_enumeration_index() == 2);
 
+        let included = InMemoryStorageTree::<DEPTH, INDEX_BYTES, 8, Blake2s256, ZkSyncStorageLeaf>::verify_inclusion(&root, &query);
+        assert!(included);
+
+        let mut index = [255u8; INDEX_BYTES];
+        index[31] = 0;
+        let query = tree.get_leaf(&index);
         let included = InMemoryStorageTree::<DEPTH, INDEX_BYTES, 8, Blake2s256, ZkSyncStorageLeaf>::verify_inclusion(&root, &query);
         assert!(included);
 

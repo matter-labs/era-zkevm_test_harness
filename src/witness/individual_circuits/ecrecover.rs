@@ -132,9 +132,6 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
                 assert!(memory_queries_it.next().is_none());
             }
 
-
-            let completed = finished;
-
             use sync_vm::glue::ecrecover_circuit::input::*;
 
             use crate::encodings::log_query::log_query_into_storage_record_witness;
