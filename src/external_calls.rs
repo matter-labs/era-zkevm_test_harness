@@ -138,6 +138,8 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
         out_of_circuit_vm.cycle(&mut tracer);
     }
 
+    assert_eq!(out_of_circuit_vm.local_state.callstack.current.pc, 0);
+
     let vm_local_state = out_of_circuit_vm.local_state;
 
     if !early_breakpoint_after_snapshot {
