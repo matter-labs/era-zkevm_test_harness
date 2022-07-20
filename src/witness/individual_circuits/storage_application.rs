@@ -52,6 +52,12 @@ pub fn decompose_into_storage_application_witnesses<
         }
     }
 
+    if total_tree_queries != 0 {
+        let current = std::mem::replace(&mut current_chunk, vec![]);
+        assert!(current.len() <= num_rounds_per_circuit);
+        chunks.push(current);
+    }
+
     // now proceed as FSM over individual circuits
 
     use crate::witness::tree::BinarySparseStorageTree;
@@ -71,6 +77,9 @@ pub fn decompose_into_storage_application_witnesses<
     let num_chunks = chunks.len();
 
     let mut storage_application_simulator = artifacts.deduplicated_rollup_storage_queue_simulator.clone();
+
+    println!("Initial enumeration index = {}", tree.next_enumeration_index());
+    println!("Initial root = {}", hex::encode(&tree.root()));
 
     for (idx, chunk) in chunks.into_iter().enumerate() {
         let is_last = idx == num_chunks - 1;
@@ -212,6 +221,9 @@ pub fn decompose_into_storage_application_witnesses<
 
         result.push(input);
     }
+
+    println!("Final enumeration index = {}", tree.next_enumeration_index());
+    println!("Final root = {}", hex::encode(&tree.root()));
 
     result
 }

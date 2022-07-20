@@ -69,10 +69,22 @@ pub struct ZkSyncUniformCircuitCircuitInstance<
 }
 
 impl<E: Engine, S: ZkSyncUniformSynthesisFunction<E>> ZkSyncUniformCircuitCircuitInstance<E, S> {
+    pub fn new(witness: Option<S::Witness>, config: S::Config, round_function: S::RoundFunction) -> Self {
+        Self { witness: AtomicCell::new(witness), config: std::sync::Arc::new(config), round_function: std::sync::Arc::new(round_function) }
+    }
+
     pub fn debug_witness(&self) {
         let wit = self.witness.take();
         dbg!(&wit);
         self.witness.store(wit);
+    }
+
+    pub fn clone_witness(&self) -> Option<S::Witness> {
+        let wit = self.witness.take();
+        let ww = wit.clone();
+        self.witness.store(wit);
+
+        ww
     }
 }
 

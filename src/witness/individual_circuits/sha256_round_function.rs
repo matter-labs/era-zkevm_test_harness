@@ -5,8 +5,10 @@ use sync_vm::franklin_crypto::plonk::circuit::utils::u64_to_fe;
 use crate::biguint_from_u256;
 use crate::witness_structures::*;
 use crate::witness::full_block_artifact::FullBlockArtifacts;
-use sync_vm::glue::sha256_round_function_circuit::input::Sha256RoundFunctionCircuitInstanceWitness;
 use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
+use sync_vm::glue::sha256_round_function_circuit::input::*;
+use sync_vm::glue::sha256_round_function_circuit::Sha256PrecompileCallParamsWitness;
+use sync_vm::scheduler::queues::FixedWidthEncodingGenericQueueWitness;
 
 #[derive(Derivative)]
 #[derivative(Clone, Copy, Debug, PartialEq, Eq)]
@@ -70,6 +72,50 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
     assert!(precompile_calls.len() == round_function_witness.len());
 
     if precompile_calls.len() == 0 {
+        // we can not skip the circuit (at least for now), so we have to create a dummy on
+        let log_queue_input_state = take_queue_state_from_simulator(&artifacts.demuxed_ecrecover_queue_simulator);
+        let memory_queue_input_state = take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
+        let current_memory_queue_state = memory_queue_input_state.clone();
+
+        let mut observable_input_data = Sha256RoundFunctionInputData::placeholder_witness();
+        observable_input_data.memory_queue_initial_state = memory_queue_input_state.clone();
+        observable_input_data.sorted_requests_queue_initial_state = log_queue_input_state.clone();
+
+        let mut observable_output_data = Sha256RoundFunctionOutputData::placeholder_witness();
+        observable_output_data.memory_queue_final_state = current_memory_queue_state.clone();
+
+        let mut hidden_fsm_input_state = Sha256RoundFunctionFSM::<E>::placeholder_witness();
+        hidden_fsm_input_state.read_precompile_call = true;
+
+        let mut hidden_fsm_output_state = Sha256RoundFunctionFSM::<E>::placeholder_witness();
+        hidden_fsm_output_state.completed = true;
+
+        let witness = Sha256RoundFunctionCircuitInstanceWitness::<E> {
+            closed_form_input: Sha256RoundFunctionCircuitInputOutputWitness::<E> {
+                start_flag: true,
+                completion_flag: true,
+                observable_input: observable_input_data,
+                observable_output: observable_output_data,
+                hidden_fsm_input: Sha256RoundFunctionFSMInputOutputWitness::<E> {
+                    internal_fsm: hidden_fsm_input_state,
+                    log_queue_state: log_queue_input_state.clone(),
+                    memory_queue_state: memory_queue_input_state,
+                    _marker: std::marker::PhantomData,
+                },
+                hidden_fsm_output: Sha256RoundFunctionFSMInputOutputWitness::<E> {
+                    internal_fsm: hidden_fsm_output_state,
+                    log_queue_state: take_queue_state_from_simulator(&artifacts.demuxed_sha256_precompile_queue_simulator),
+                    memory_queue_state: current_memory_queue_state.clone(),
+                    _marker: std::marker::PhantomData,
+                },
+                _marker_e: (),
+                _marker: std::marker::PhantomData
+            },
+            requests_queue_witness: FixedWidthEncodingGenericQueueWitness {wit: vec![]},
+            memory_reads_witness: vec![],
+        };
+        result.push(witness);
+
         return result;
     }
 
@@ -214,9 +260,6 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
                 let read_precompile_call =
                     precompile_state == Sha256PrecompileState::GetRequestFromQueue;
 
-                use sync_vm::glue::sha256_round_function_circuit::input::*;
-                use sync_vm::glue::sha256_round_function_circuit::Sha256PrecompileCallParamsWitness;
-
                 let hidden_fsm_output_state = Sha256RoundFunctionFSMWitness::<E> {
                     completed,
                     read_words_for_round,
@@ -248,8 +291,6 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
                 let current_reads = std::mem::replace(&mut memory_reads_per_request, vec![]);
                 let mut current_witness = std::mem::replace(&mut memory_read_witnesses, vec![]);
                 current_witness.push(current_reads);
-
-                use sync_vm::scheduler::queues::FixedWidthEncodingGenericQueueWitness;
 
                 let mut observable_input_data = Sha256RoundFunctionInputData::placeholder_witness();
                 if result.len() == 0 {

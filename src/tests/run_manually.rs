@@ -241,7 +241,8 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
     let storage_impl = InMemoryStorage::new();
     let mut tree = ZKSyncTestingTree::empty();
 
-    let (basic_block_circuits, basic_block_circuits_inputs) = run(
+    let (basic_block_circuits, basic_block_circuits_inputs, scheduler_input) = run(
+        0,
         1,
         1,
         Address::zero(),

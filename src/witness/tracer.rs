@@ -241,7 +241,7 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
         // monotonic counter always increases
         self.current_cycle_counter += 1;
     }
-    fn end_execution_cycle(&mut self, current_state: &VmLocalState) {
+    fn end_execution_cycle(&mut self, _current_state: &VmLocalState) {
         // dbg!(&self.sponge_busy_range);
         if !self.sponge_busy_range.is_empty() {
             for i in 0..NUM_SPONGES_PER_CYCLE {
@@ -255,10 +255,10 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
     }
     fn add_sponge_marker(
         &mut self,
-        monotonic_cycle_counter: u32,
-        marker: SpongeExecutionMarker,
+        _monotonic_cycle_counter: u32,
+        _marker: SpongeExecutionMarker,
         sponges_range: Range<usize>,
-        is_pended: bool,
+        _is_pended: bool,
     ) {
         // println!("Adding sponges range {:?}", &sponges_range);
         for el in sponges_range {

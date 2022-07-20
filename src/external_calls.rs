@@ -1,5 +1,5 @@
 use crate::{ethereum_types::{Address, U256}, witness::{full_block_artifact::FullBlockArtifacts}, utils::calldata_to_aligned_data};
-use sync_vm::{circuit_structures::traits::CircuitArithmeticRoundFunction, franklin_crypto::plonk::circuit::tables::inscribe_default_range_table_for_bit_width_over_first_three_columns};
+use sync_vm::{circuit_structures::traits::CircuitArithmeticRoundFunction, franklin_crypto::plonk::circuit::tables::inscribe_default_range_table_for_bit_width_over_first_three_columns, scheduler::SchedulerCircuitInstanceWitness, glue::code_unpacker_sha256::memory_query_updated::MemoryQueriesQueue};
 use crate::toolset::GeometryConfig;
 use zk_evm::abstractions::Storage;
 use crate::toolset::create_tools;
@@ -19,11 +19,15 @@ use blake2::Blake2s256;
 use crate::witness::tree::ZkSyncStorageLeaf;
 use crate::witness::tree::BinarySparseStorageTree;
 use crate::witness::full_block_artifact::BlockBasicCircuitsPublicInputs;
+use sync_vm::scheduler::block_header::*;
+
+use sync_vm::circuit_structures::bytes32::Bytes32;
 
 /// This is a testing interface that basically will
 /// setup the environment and will run out-of-circuit and then in-circuit
 /// and perform intermediate tests
 pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn256>>, S: Storage>(
+    previous_block_timestamp: u64,
     block_number: u64,
     block_timestamp: u64,
     caller: Address, // for real block must be zero
@@ -43,15 +47,22 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
     storage: S,
     tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
 // ) -> FullBlockArtifacts<Bn256> {
-) -> (BlockBasicCircuits<Bn256>, BlockBasicCircuitsPublicInputs<Bn256>) {
+) -> (BlockBasicCircuits<Bn256>, BlockBasicCircuitsPublicInputs<Bn256>, SchedulerCircuitInstanceWitness<Bn256>) {
+    assert!(zk_porter_is_available == false);
+
+    assert!(block_number >= 1);
+
+    let initial_rollup_root = tree.root();
+    let initial_rollup_enumeration_counter = tree.next_enumeration_index();
+
     let bytecode_hash = bytecode_to_code_hash(&entry_point_code).unwrap();
 
     let mut tools = create_tools(storage, &geometry);
 
     // fill the tools
     let mut to_fill = vec![];
-    let bytecode_hash_as_u256 = U256::from_big_endian(&bytecode_hash);
-    to_fill.push((bytecode_hash_as_u256, contract_bytecode_to_words(&entry_point_code)));
+    let entry_point_code_hash_as_u256 = U256::from_big_endian(&bytecode_hash);
+    to_fill.push((entry_point_code_hash_as_u256, contract_bytecode_to_words(&entry_point_code)));
     for (k, v) in used_bytecodes.into_iter() {
         to_fill.push((k, contract_bytecode_to_words(&v)));
     }
@@ -64,6 +75,7 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
 
     // first there exists non-deterministic writes into the heap of the bootloader's heap and calldata
     // heap
+
     for (idx, el) in heap_writes.into_iter().enumerate() {
         let query = MemoryQuery { 
             timestamp: Timestamp(0), 
@@ -91,7 +103,7 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
 
     // and do the query
     let entry_point_decommittment_query = DecommittmentQuery {
-        hash: bytecode_hash_as_u256,
+        hash: entry_point_code_hash_as_u256,
         timestamp: Timestamp(1u32),
         memory_page: MemoryPage(zk_evm::zkevm_opcode_defs::BOOTLOADER_CODE_PAGE),
         decommitted_length: entry_point_code.len() as u16,
@@ -164,10 +176,24 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
         );
 
     assert!(artifacts.special_initial_decommittment_queries.len() == 1);
+    use sync_vm::scheduler::queues::SpongeLikeQueueStateWitness;
+    let memory_state_after_bootloader_heap_writes = if num_non_deterministic_heap_queries == 0 {
+        // empty
+        SpongeLikeQueueStateWitness::<Bn256, 3>::empty()
+    } else {
+        let full_info = &artifacts.all_memory_queue_states[num_non_deterministic_heap_queries-1];
+        let sponge_state = full_info.tail;
+        let length = full_info.num_items;
+
+        SpongeLikeQueueStateWitness::<Bn256, 3> {
+            length,
+            sponge_state
+        }
+    };
     
     use crate::witness::postprocessing::create_leaf_level_circuits_and_scheduler_witness;
 
-    let (basic_circuits, basic_circuits_inputs, _) = create_leaf_level_circuits_and_scheduler_witness(
+    let (basic_circuits, basic_circuits_inputs, compact_form_witnesses) = create_leaf_level_circuits_and_scheduler_witness(
         block_number,
         block_timestamp,
         zk_porter_is_available,
@@ -179,5 +205,112 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
         geometry
     );
 
-    (basic_circuits, basic_circuits_inputs)
+    let scheduler_circuit_witness = {
+        use sync_vm::circuit_structures::bytes32::Bytes32Witness;
+
+        fn u256_to_bytes32witness_be<E: crate::bellman::Engine>(value: U256) -> Bytes32Witness<E> {
+            let mut buffer = [0u8; 32];
+            value.to_big_endian(&mut buffer);
+            Bytes32Witness::from_bytes_array(&buffer)
+        }
+
+        let prev_rollup_state = PerShardStateWitness {
+            enumeration_counter: initial_rollup_enumeration_counter,
+            state_root: Bytes32Witness::from_bytes_array(&initial_rollup_root),
+            _marker: std::marker::PhantomData
+        };
+
+        let prev_porter_state = PerShardStateWitness {
+            enumeration_counter: 0,
+            state_root: Bytes32Witness::from_bytes_array(&[0u8; 32]),
+            _marker: std::marker::PhantomData
+        };
+
+        let previous_block_passthrough = BlockPassthroughDataWitness { 
+            block_number: block_number - 1,
+            timestamp: previous_block_timestamp,
+            per_shard_states: [prev_rollup_state, prev_porter_state],
+            _marker: std::marker::PhantomData
+        };
+
+        // now we need parameters and aux
+        // parameters
+        let block_meta_parameters = BlockMetaParametersWitness {
+            bootloader_code_hash: u256_to_bytes32witness_be(entry_point_code_hash_as_u256),
+            default_aa_code_hash: u256_to_bytes32witness_be(default_aa_code_hash),
+            ergs_per_code_decommittment_word: ergs_per_code_word_decommittment,
+            ergs_per_pubdata_byte_in_block: ergs_per_pubdata_in_block,
+            zkporter_is_available: zk_porter_is_available,
+            timestamp: block_timestamp,
+            _marker: std::marker::PhantomData
+        };
+
+        // aux
+        let _aux_data = BlockAuxilaryOutputWitness {
+            l1_messages_linear_hash: basic_circuits.l1_messages_merklizer_circuit.clone_witness().unwrap().closed_form_input.observable_output.linear_hash,
+            l1_messages_root: basic_circuits.l1_messages_merklizer_circuit.clone_witness().unwrap().closed_form_input.observable_output.root_hash,
+            rollup_initital_writes_pubdata_hash: basic_circuits.initial_writes_hasher_circuit.clone_witness().unwrap().closed_form_input.observable_output.pubdata_hash,
+            rollup_repeated_writes_pubdata_hash: basic_circuits.repeated_writes_hasher_circuit.clone_witness().unwrap().closed_form_input.observable_output.pubdata_hash,
+            _marker: std::marker::PhantomData
+        };
+
+        let per_circuit_inputs = compact_form_witnesses.clone().into_flattened_set();
+
+        let ram_permutation_full_sorted_state = basic_circuits.ram_permutation_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_input.sorted_queue_initial_state;
+        let tail = ram_permutation_full_sorted_state.tail;
+        let length = ram_permutation_full_sorted_state.length;
+
+        let ram_permutation_sorted_state = SpongeLikeQueueStateWitness::<Bn256, 3> {
+            length,
+            sponge_state: tail
+        };
+
+        use sync_vm::traits::CSWitnessable;
+        use sync_vm::recursion::node_aggregation::NodeAggregationOutputData;
+
+        let scheduler_circuit_witness = SchedulerCircuitInstanceWitness {
+            prev_block_data: previous_block_passthrough,
+            block_meta_parameters,
+            vm_end_of_execution_observable_output: basic_circuits.main_vm_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
+            decommits_sorter_observable_output: basic_circuits.code_decommittments_sorter_circuit.clone_witness().unwrap().closed_form_input.observable_output,
+            code_decommitter_observable_output: basic_circuits.code_decommitter_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
+            log_demuxer_observable_output: basic_circuits.log_demux_circuit.clone_witness().unwrap().closed_form_input.observable_output,
+            keccak256_observable_output: basic_circuits.keccak_precompile_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
+            sha256_observable_output: basic_circuits.sha256_precompile_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
+            ecrecover_observable_output: basic_circuits.ecrecover_precompile_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
+            storage_sorter_observable_output: basic_circuits.storage_sorter_circuit.clone_witness().unwrap().closed_form_input.observable_output,
+            storage_application_observable_output: basic_circuits.storage_application_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
+            initial_writes_rehasher_observable_output: basic_circuits.initial_writes_hasher_circuit.clone_witness().unwrap().closed_form_input.observable_output,
+            repeated_writes_rehasher_observable_output: basic_circuits.repeated_writes_hasher_circuit.clone_witness().unwrap().closed_form_input.observable_output,
+            events_sorter_observable_output: basic_circuits.events_sorter_circuit.clone_witness().unwrap().closed_form_input.observable_output,
+            l1messages_sorter_observable_output: basic_circuits.l1_messages_sorter_circuit.clone_witness().unwrap().closed_form_input.observable_output,
+            l1messages_merklizer_observable_output: basic_circuits.l1_messages_merklizer_circuit.clone_witness().unwrap().closed_form_input.observable_output,
+            storage_log_tail: basic_circuits.main_vm_circuits.first().unwrap().clone_witness().unwrap().closed_form_input.observable_input.rollback_queue_tail_for_block,
+            memory_queries_to_verify: [sync_vm::glue::code_unpacker_sha256::memory_query_updated::MemoryQuery::placeholder_witness(); 1],
+            per_circuit_closed_form_inputs: per_circuit_inputs,
+            bootloader_heap_memory_state: memory_state_after_bootloader_heap_writes,
+            ram_sorted_queue_state: ram_permutation_sorted_state,
+            // storage_sorted_queue_state: basic_circuits.storage_sorter_circuit.clone_witness().unwrap().intermediate_sorted_queue_state,
+            // events_sorted_queue_state: basic_circuits.events_sorter_circuit.clone_witness().unwrap().closed_form_input.observable_input.sorted_queue_state,
+            // l1messages_sorted_queue_state: basic_circuits.l1_messages_sorter_circuit.clone_witness().unwrap().closed_form_input.observable_input.sorted_queue_state,
+            rollup_initital_writes_pubdata_hash: basic_circuits.initial_writes_hasher_circuit.clone_witness().unwrap().closed_form_input.observable_output.pubdata_hash,
+            rollup_repeated_writes_pubdata_hash: basic_circuits.repeated_writes_hasher_circuit.clone_witness().unwrap().closed_form_input.observable_output.pubdata_hash,
+
+            previous_block_meta_hash: Bytes32::placeholder_witness(),
+            previous_block_aux_hash: Bytes32::placeholder_witness(),
+            recursion_node_verification_key_hash: Bytes32::placeholder_witness(),
+            recursion_leaf_verification_key_hash: Bytes32::placeholder_witness(),
+            all_different_circuits_keys_hash: Bytes32::placeholder_witness(),
+
+            aggregation_result: NodeAggregationOutputData::placeholder_witness(),
+
+            proof_witnesses: vec![],
+            vk_encoding_witnesses: vec![],
+        };
+
+        scheduler_circuit_witness
+    };
+
+    (basic_circuits, basic_circuits_inputs, scheduler_circuit_witness)
 }
+

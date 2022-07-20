@@ -9,6 +9,7 @@ use crate::pairing::Engine;
 use crate::toolset::GeometryConfig;
 use derivative::Derivative;
 use rayon::slice::ParallelSliceMut;
+use sync_vm::inputs::ClosedFormInputCompactForm;
 use sync_vm::scheduler::data_access_functions::StorageLogRecord;
 use std::cmp::Ordering;
 use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
@@ -374,7 +375,7 @@ pub struct BlockBasicCircuits<E: Engine> {
     // sha256
     pub sha256_precompile_circuits: Vec<Sha256RoundFunctionCircuit<E>>,
     // ecrecover
-    pub ecrecover_precompile_circuits: Vec<()>,
+    pub ecrecover_precompile_circuits: Vec<ECRecoverFunctionCircuit<E>>,
     // when it's all done we prove the memory validity and finish with it
     pub ram_permutation_circuits: Vec<RAMPermutationCircuit<E>>,
     // sort storage changes
@@ -460,7 +461,7 @@ pub struct BlockBasicCircuitsPublicInputs<E: Engine> {
     // sha256
     pub sha256_precompile_circuits: Vec<E::Fr>,
     // ecrecover
-    pub ecrecover_precompile_circuits: Vec<()>,
+    pub ecrecover_precompile_circuits: Vec<E::Fr>,
     // when it's all done we prove the memory validity and finish with it
     pub ram_permutation_circuits: Vec<E::Fr>,
     // sort storage changes
@@ -512,7 +513,96 @@ impl<E: Engine> BlockBasicCircuitsPublicInputs<E> {
 
         result.extend(keccak_precompile_circuits);
         result.extend(sha256_precompile_circuits);
-        result.extend(ecrecover_precompile_circuits.into_iter().map(|_| E::Fr::zero()));
+        result.extend(ecrecover_precompile_circuits);
+
+        result.extend(ram_permutation_circuits);
+
+        result.push(storage_sorter_circuit);
+
+        result.extend(storage_application_circuits);
+
+        result.push(initial_writes_hasher_circuit);
+        result.push(repeated_writes_hasher_circuit);
+        result.push(events_sorter_circuit);
+        result.push(l1_messages_sorter_circuit);
+        result.push(l1_messages_merklizer_circuit);
+
+        result
+    }
+}
+
+use sync_vm::inputs::ClosedFormInputCompactFormWitness;
+
+#[derive(Derivative, serde::Serialize, serde::Deserialize)]
+#[derivative(Clone)]
+pub struct BlockBasicCircuitsPublicCompactFormsWitnesses<E: Engine> {
+    // main VM circuit. Many of them
+    pub main_vm_circuits: Vec<ClosedFormInputCompactFormWitness<E>>,
+    // code decommittments sorter is only 1 circuit per block
+    pub code_decommittments_sorter_circuit: ClosedFormInputCompactFormWitness<E>,
+    // few code decommitters: code hash -> memory
+    pub code_decommitter_circuits: Vec<ClosedFormInputCompactFormWitness<E>>,
+    // demux logs to get precompiles for RAM too. 1 circuit
+    pub log_demux_circuit: ClosedFormInputCompactFormWitness<E>,
+    // process precompiles
+    // keccak
+    pub keccak_precompile_circuits: Vec<ClosedFormInputCompactFormWitness<E>>,
+    // sha256
+    pub sha256_precompile_circuits: Vec<ClosedFormInputCompactFormWitness<E>>,
+    // ecrecover
+    pub ecrecover_precompile_circuits: Vec<ClosedFormInputCompactFormWitness<E>>,
+    // when it's all done we prove the memory validity and finish with it
+    pub ram_permutation_circuits: Vec<ClosedFormInputCompactFormWitness<E>>,
+    // sort storage changes
+    pub storage_sorter_circuit: ClosedFormInputCompactFormWitness<E>,
+    // apply them
+    pub storage_application_circuits: Vec<ClosedFormInputCompactFormWitness<E>>,
+    // rehash initial writes
+    pub initial_writes_hasher_circuit: ClosedFormInputCompactFormWitness<E>,
+    // rehash repeated writes
+    pub repeated_writes_hasher_circuit: ClosedFormInputCompactFormWitness<E>,
+    // sort and dedup events
+    pub events_sorter_circuit: ClosedFormInputCompactFormWitness<E>,
+    // sort and dedup L1 messages
+    pub l1_messages_sorter_circuit: ClosedFormInputCompactFormWitness<E>,
+    // merklize L1 message
+    pub l1_messages_merklizer_circuit: ClosedFormInputCompactFormWitness<E>,
+}
+
+impl<E: Engine> BlockBasicCircuitsPublicCompactFormsWitnesses<E> {
+    pub fn into_flattened_set(self) -> Vec<ClosedFormInputCompactFormWitness<E>> {
+        let BlockBasicCircuitsPublicCompactFormsWitnesses { 
+            main_vm_circuits, 
+            code_decommittments_sorter_circuit, 
+            code_decommitter_circuits, 
+            log_demux_circuit, 
+            keccak_precompile_circuits, 
+            sha256_precompile_circuits, 
+            ecrecover_precompile_circuits, 
+            ram_permutation_circuits, 
+            storage_sorter_circuit, 
+            storage_application_circuits, 
+            initial_writes_hasher_circuit, 
+            repeated_writes_hasher_circuit, 
+            events_sorter_circuit, 
+            l1_messages_sorter_circuit, 
+            l1_messages_merklizer_circuit 
+        } = self;
+
+        use sync_vm::traits::CSWitnessable;
+
+        let mut result = vec![];
+        result.extend(main_vm_circuits);
+
+        result.push(code_decommittments_sorter_circuit);
+
+        result.extend(code_decommitter_circuits);
+
+        result.push(log_demux_circuit);
+
+        result.extend(keccak_precompile_circuits);
+        result.extend(sha256_precompile_circuits);
+        result.extend(ecrecover_precompile_circuits);
 
         result.extend(ram_permutation_circuits);
 

@@ -32,14 +32,15 @@ use sync_vm::glue::traits::CSAllocatable;
 use sync_vm::glue::traits::CircuitVariableLengthEncodableExt;
 use sync_vm::inputs::ClosedFormInputWitness;
 use sync_vm::traits::CSWitnessable;
+use sync_vm::inputs::ClosedFormInputCompactFormWitness;
 
 pub fn simulate_public_input_value_from_witness<
     T: std::fmt::Debug + CSAllocatable<Bn256> + CircuitVariableLengthEncodableExt<Bn256>, 
     IN: std::fmt::Debug + CSAllocatable<Bn256> + CircuitVariableLengthEncodableExt<Bn256>,
     OUT: std::fmt::Debug + CSAllocatable<Bn256> + CircuitVariableLengthEncodableExt<Bn256>
 >(
-    input_witness: ClosedFormInputWitness<Bn256, T, IN, OUT>
-) -> <Bn256 as ScalarEngine>::Fr 
+    input_witness: ClosedFormInputWitness<Bn256, T, IN, OUT>, 
+) -> (<Bn256 as ScalarEngine>::Fr, ClosedFormInputCompactFormWitness<Bn256>)
     where <T as CSWitnessable<Bn256>>::Witness: serde::Serialize + serde::de::DeserializeOwned,
         <IN as CSWitnessable<Bn256>>::Witness: serde::Serialize + serde::de::DeserializeOwned,
         <OUT as CSWitnessable<Bn256>>::Witness: serde::Serialize + serde::de::DeserializeOwned
@@ -50,6 +51,26 @@ pub fn simulate_public_input_value_from_witness<
 
     // allocate in full
     let (mut cs, round_function, _) = create_test_artifacts_with_optimized_gate();
+    use sync_vm::vm::VM_BITWISE_LOGICAL_OPS_TABLE_NAME;
+    use sync_vm::vm::tables::BitwiseLogicTable;
+    use crate::bellman::plonk::better_better_cs::cs::LookupTableApplication;
+    use crate::bellman::plonk::better_better_cs::data_structures::PolyIdentifier;
+
+    let columns3 = vec![
+        PolyIdentifier::VariablesPolynomial(0), 
+        PolyIdentifier::VariablesPolynomial(1), 
+        PolyIdentifier::VariablesPolynomial(2)
+    ];
+
+    use crate::bellman::plonk::better_better_cs::cs::ConstraintSystem;
+    
+    if cs.get_table(VM_BITWISE_LOGICAL_OPS_TABLE_NAME).is_err() {
+        let name = VM_BITWISE_LOGICAL_OPS_TABLE_NAME;
+        let bitwise_logic_table = LookupTableApplication::new(
+            name, BitwiseLogicTable::new(&name, 8), columns3.clone(), None, true
+        );
+        cs.add_table(bitwise_logic_table).unwrap();
+    };
     inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
 
     let full_input = ClosedFormInput::alloc_from_witness(&mut cs, Some(input_witness)).unwrap();
@@ -57,12 +78,13 @@ pub fn simulate_public_input_value_from_witness<
     use sync_vm::inputs::ClosedFormInputCompactForm;
     let compact_form = ClosedFormInputCompactForm::from_full_form(&mut cs, &full_input, &round_function).unwrap();
     // compute the encoding and committment of compact form
-    // dbg!(compact_form.create_witness());
+    let compact_form_witness = compact_form.create_witness().unwrap();
+    // dbg!(&compact_form_witness);
 
     use sync_vm::glue::optimizable_queue::commit_encodable_item;
     let public_input = commit_encodable_item(&mut cs, &compact_form, &round_function).unwrap();
 
-    public_input.get_value().unwrap()
+    (public_input.get_value().unwrap(), compact_form_witness)
 }
 
 use crate::witness::oracle::VmInstanceWitness;

@@ -15,6 +15,7 @@ pub mod log_query;
 pub mod memory_query;
 pub mod initial_storage_write;
 pub mod repeated_storage_write;
+pub mod recursion_request;
 
 #[derive(Derivative)]
 #[derivative(Debug, Clone(bound = ""), Copy(bound = ""))]
@@ -41,7 +42,7 @@ impl<E: Engine, const SW: usize, const ROUNDS: usize> QueueIntermediateStates<E,
 }
 
 #[derive(Derivative)]
-#[derivative(Clone(bound = ""), Default(bound = ""))]
+#[derivative(Clone(bound = ""), Default(bound = ""), Debug)]
 pub struct QueueSimulator<
     E: Engine,
     I: OutOfCircuitFixedLengthEncodable<E, N>,
@@ -63,6 +64,50 @@ impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const
             tail: E::Fr::zero(),
             num_items: 0,
             witness: vec![],
+        }
+    }
+
+    pub fn split(mut self, at: u32) -> (Self, Self) {
+        if at >= self.num_items {
+            let mut artificial_empty = Self::empty();
+            artificial_empty.head = self.tail;
+            artificial_empty.tail = self.tail;
+            return (self, artificial_empty)
+        }
+
+        let first_wit: Vec<_> = self.witness.drain(..(at as usize)).collect();
+        let rest_wit = self.witness;
+
+        let splitting_point = rest_wit.first().unwrap().1;
+
+        let first = Self {
+            head: self.head,
+            tail: splitting_point,
+            num_items: at,
+            witness: first_wit,
+        };
+
+        let rest = Self {
+            head: splitting_point,
+            tail: self.tail, 
+            num_items: self.num_items - at,
+            witness: rest_wit,
+        };
+        
+        (first, rest)
+    }
+
+    pub fn merge(first: Self, second: Self) -> Self {
+        assert_eq!(first.tail, second.head);
+
+        let mut wit = first.witness;
+        wit.extend(second.witness);
+
+        Self {
+            head: first.head,
+            tail: second.tail,
+            num_items: first.num_items + second.num_items,
+            witness: wit
         }
     }
 
@@ -95,7 +140,8 @@ impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const
         let states =
             round_function.simulate_absorb_multiple_rounds_into_empty_with_specialization(&to_hash);
         let new_tail = R::simulate_state_into_commitment(states.last().map(|el| el.1).unwrap());
-        self.witness.push((encoding, new_tail, element));
+        self.witness.push((encoding, old_tail, element));
+        // self.witness.push((encoding, new_tail, element));
         self.num_items += 1;
         self.tail = new_tail;
 

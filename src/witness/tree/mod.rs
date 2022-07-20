@@ -457,6 +457,10 @@ mod test {
 
         let mut tree = InMemoryStorageTree::<DEPTH, INDEX_BYTES, 8, Blake2s256, ZkSyncStorageLeaf>::empty();
 
+        let tree2 = InMemoryStorageTree::<DEPTH, INDEX_BYTES, 8, Blake2s256, ZkSyncStorageLeaf>::empty();
+
+        assert_eq!(tree.root(), tree2.root());
+
         let dummy_leaf = ZkSyncStorageLeaf::from_value([1u8; 32]);
         let index = [2u8; INDEX_BYTES];
 

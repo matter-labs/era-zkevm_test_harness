@@ -8,7 +8,8 @@ use crate::biguint_from_u256;
 use crate::witness_structures::*;
 use crate::witness::full_block_artifact::FullBlockArtifacts;
 use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
-use sync_vm::glue::ecrecover_circuit::input::EcrecoverCircuitInstanceWitness;
+use sync_vm::glue::ecrecover_circuit::input::*;
+use sync_vm::scheduler::queues::FixedWidthEncodingGenericQueueWitness;
 
 // we want to simulate splitting of data into many separate instances of the same circuit.
 // So we basically need to reconstruct the FSM state on input/output, and passthrough data.
@@ -60,6 +61,42 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
     assert!(precompile_calls.len() == round_function_witness.len());
 
     if precompile_calls.len() == 0 {
+        // we can not skip the circuit (at least for now), so we have to create a dummy on
+        let log_queue_input_state = take_queue_state_from_simulator(&artifacts.demuxed_ecrecover_queue_simulator);
+        let memory_queue_input_state = take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
+        let current_memory_queue_state = memory_queue_input_state.clone();
+
+        let mut observable_input_data = EcrecoverCircuitInputData::placeholder_witness();
+        observable_input_data.memory_queue_initial_state = memory_queue_input_state.clone();
+        observable_input_data.sorted_requests_queue_initial_state = log_queue_input_state.clone();
+
+        let mut observable_output_data = EcrecoverCircuitOutputData::placeholder_witness();
+        observable_output_data.memory_queue_final_state = current_memory_queue_state.clone();
+
+        let witness = EcrecoverCircuitInstanceWitness::<E> {
+            closed_form_input: EcrecoverCircuitInputOutputWitness::<E> {
+                start_flag: true,
+                completion_flag: true,
+                observable_input: observable_input_data,
+                observable_output: observable_output_data,
+                hidden_fsm_input: EcrecoverCircuitFSMInputOutputWitness::<E> {
+                    log_queue_state: log_queue_input_state.clone(),
+                    memory_queue_state: memory_queue_input_state,
+                    _marker: std::marker::PhantomData,
+                },
+                hidden_fsm_output: EcrecoverCircuitFSMInputOutputWitness::<E> {
+                    log_queue_state: take_queue_state_from_simulator(&artifacts.demuxed_sha256_precompile_queue_simulator),
+                    memory_queue_state: current_memory_queue_state.clone(),
+                    _marker: std::marker::PhantomData,
+                },
+                _marker_e: (),
+                _marker: std::marker::PhantomData
+            },
+            requests_queue_witness: FixedWidthEncodingGenericQueueWitness {wit: vec![]},
+            memory_reads_witness: vec![],
+        };
+        result.push(witness);
+
         return result;
     }
 
@@ -88,6 +125,7 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
             .enumerate()
     {
         let _ = artifacts.demuxed_ecrecover_queue_simulator.pop_and_output_intermediate_data(round_function);
+        let initial_memory_len = artifacts.memory_queue_simulator.num_items;
 
         let mut memory_reads_per_request = vec![];
 
@@ -98,10 +136,11 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
         let mut precompile_request = precompile_abi_in_log(request);
         let is_last_request = request_idx == num_requests - 1;
 
-        // we have two reads
+        // we have 4 reads
         for (_query_index, read) in round_witness.reads.into_iter().enumerate() {
             let read_query = memory_queries_it.next().unwrap();
             assert!(read == read_query);
+            assert!(read_query.rw_flag == false);
             memory_reads_per_request.push(biguint_from_u256(read_query.value));
 
             artifacts.all_memory_queries_accumulated.push(read);
@@ -112,16 +151,21 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
             precompile_request.input_memory_offset += 1;
         }
 
+        // and 2 writes
         for (_query_index, write) in round_witness.writes.into_iter().enumerate() {
             let write_query = memory_queries_it.next().unwrap();
             assert!(write == write_query);
+            assert!(write_query.rw_flag == true);
 
             artifacts.all_memory_queries_accumulated.push(write);
             let (_, intermediate_info) = artifacts.memory_queue_simulator.push_and_output_intermediate_data(write, round_function);
             artifacts.all_memory_queue_states.push(intermediate_info);
             current_memory_queue_state = take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
+
+            precompile_request.output_memory_offset += 1;
         }
 
+        assert_eq!(artifacts.memory_queue_simulator.num_items - initial_memory_len, 6);
         round_counter += 1;
 
         if round_counter == num_rounds_per_circuit || is_last_request {
@@ -131,8 +175,6 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
             if finished {
                 assert!(memory_queries_it.next().is_none());
             }
-
-            use sync_vm::glue::ecrecover_circuit::input::*;
 
             use crate::encodings::log_query::log_query_into_storage_record_witness;
 
@@ -146,8 +188,6 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
             let current_reads = std::mem::replace(&mut memory_reads_per_request, vec![]);
             let mut current_witness = std::mem::replace(&mut memory_read_witnesses, vec![]);
             current_witness.push(current_reads);
-
-            use sync_vm::scheduler::queues::FixedWidthEncodingGenericQueueWitness;
 
             let mut observable_input_data = EcrecoverCircuitInputData::placeholder_witness();
             if result.len() == 0 {
@@ -193,7 +233,10 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
             memory_queue_input_state = current_memory_queue_state.clone();
         }
 
-        memory_read_witnesses.push(memory_reads_per_request);
+        if !memory_reads_per_request.is_empty() {
+            // we may have drained it already if it was the end of the circuit
+            memory_read_witnesses.push(memory_reads_per_request);
+        }
     }
 
     result
