@@ -545,8 +545,50 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
 
     dbg!(leaf_vk_committment);
 
+    let padding_aggregation = {
+        let mut output_file_for_json = std::fs::File::open("rec_output_0_0.json").unwrap();
+        let output: LeafAggregationOutputDataWitness<Bn256> = serde_json::from_reader(&mut output_file_for_json).unwrap();
+
+        (
+            output.pair_with_generator_x,
+            output.pair_with_generator_y,
+            output.pair_with_x_x,
+            output.pair_with_x_y,
+        )
+    };
+
     let node_vk_file_name = "rec_vk_1_0.json";
-    let node_vk_committment = if std::path::Path::new(&node_vk_file_name).exists() {
+    if std::path::Path::new(&node_vk_file_name).exists() == false {
+        // generate setup
+
+        let circuit = NodeAggregationCircuit::new(
+            None,
+            (
+                level == 1,
+                splitting_factor,
+                rns_params.clone(),
+                aggregation_params.clone(),
+                padding_vk_committment,
+                padding_vk_encoding.to_vec(),
+                padding_proof_public_input,
+                padding_proof.clone(),
+                padding_aggregation,
+                g2_points.clone(),
+            ),
+            round_function.clone()
+        );
+
+        let vk = circuit_testing::create_vk::<
+            Bn256, 
+            _, 
+            PlonkCsWidth4WithNextStepAndCustomGatesParams, 
+        >(circuit).unwrap();
+
+        let mut vk_file_for_json = std::fs::File::create(node_vk_file_name).unwrap();
+        serde_json::to_writer(&mut vk_file_for_json, &vk).unwrap();
+    }
+
+    let node_vk_committment = {
         let mut vk_file_for_json = std::fs::File::open(&node_vk_file_name).unwrap();
 
         let vk: VerificationKey<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_reader(&mut vk_file_for_json).unwrap();
@@ -559,23 +601,11 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         let committment = simulate_variable_length_hash(&encoding, &round_function);
 
         committment
-    } else {
-        <Bn256 as ScalarEngine>::Fr::zero()
     };
 
     use sync_vm::recursion::node_aggregation::*;
 
-    let padding_aggregation = {
-        let mut output_file_for_json = std::fs::File::open("rec_output_0_0.json").unwrap();
-        let output: LeafAggregationOutputDataWitness<Bn256> = serde_json::from_reader(&mut output_file_for_json).unwrap();
-
-        (
-            output.pair_with_generator_x,
-            output.pair_with_generator_y,
-            output.pair_with_x_x,
-            output.pair_with_x_y,
-        )
-    };
+    
 
     let mut previous_sequence = leaf_layer_subqueues;
     let num_previous_level_proofs = previous_sequence.len();
@@ -1049,6 +1079,18 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         PlonkCsWidth4WithNextStepAndCustomGatesParams, 
         RollingKeccakTranscript<<Bn256 as ScalarEngine>::Fr>
     >(circuit, None).unwrap(); 
+
+    let mut vk_file_for_bytes = std::fs::File::create("scheduler_vk.key").unwrap();
+    let mut vk_file_for_json = std::fs::File::create("scheduler_vk.json").unwrap();
+
+    let mut proof_file_for_bytes = std::fs::File::create("scheduler_proof.key").unwrap();
+    let mut proof_file_for_json = std::fs::File::create("scheduler_proof.json")).unwrap();
+
+    vk.write(&mut vk_file_for_bytes).unwrap();
+    proof.write(&mut proof_file_for_bytes).unwrap();
+
+    serde_json::to_writer(&mut vk_file_for_json, &vk).unwrap();
+    serde_json::to_writer(&mut proof_file_for_json, &proof).unwrap();
 
     println!("Done");
 }
