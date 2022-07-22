@@ -1084,7 +1084,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     let mut vk_file_for_json = std::fs::File::create("scheduler_vk.json").unwrap();
 
     let mut proof_file_for_bytes = std::fs::File::create("scheduler_proof.key").unwrap();
-    let mut proof_file_for_json = std::fs::File::create("scheduler_proof.json")).unwrap();
+    let mut proof_file_for_json = std::fs::File::create("scheduler_proof.json").unwrap();
 
     vk.write(&mut vk_file_for_bytes).unwrap();
     proof.write(&mut proof_file_for_bytes).unwrap();
