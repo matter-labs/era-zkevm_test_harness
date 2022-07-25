@@ -104,7 +104,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         cycles_per_vm_snapshot: 1024,
         cycles_per_ram_permutation: 1024,
         cycles_per_code_decommitter: 256,
-        cycles_per_storage_application: 32,
+        cycles_per_storage_application: 2,
         cycles_per_keccak256_circuit: 1,
         cycles_per_sha256_circuit: 1,
         cycles_per_ecrecover_circuit: 4,
@@ -130,22 +130,62 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     for (k, _) in used_bytecodes.iter() {
         println!("Have bytecode hash {}", k);
     }
+    use sha3::{Digest, Keccak256};
+
+    const BLOCK_NUMBER: u64 = 1;
+    const BLOCK_TIMESTAMP: u64 = 1;
+
+    let previous_enumeration_index = tree.next_enumeration_index();
+    let previous_root = tree.root();
+    let previous_block_number = BLOCK_NUMBER - 1;
+    let previous_block_number_bytes = previous_block_number.to_be_bytes();
+    let previous_block_timestamp_bytes = 0u64.to_be_bytes();
+    // simualate content hash
+
+    let mut hasher = Keccak256::new();
+    hasher.update(&previous_block_number_bytes);
+    hasher.update(&previous_block_timestamp_bytes);
+    hasher.update(&previous_enumeration_index.to_be_bytes());
+    hasher.update(&previous_root);
+    hasher.update(&0u64.to_be_bytes()); // porter shart
+    hasher.update(&[0u8; 32]); // porter shard
+
+    let mut previous_data_hash = [0u8; 32];
+    (&mut previous_data_hash[..]).copy_from_slice(&hasher.finalize().as_slice());  
+
+    let previous_aux_hash = [0u8; 32];
+    let previous_meta_hash = [0u8; 32];
+
+    // simulate block header
+
+    let mut hasher = Keccak256::new();
+    hasher.update(&previous_data_hash);
+    hasher.update(&previous_meta_hash);
+    hasher.update(&previous_aux_hash);
+
+    let mut previous_content_hash = [0u8; 32];
+    (&mut previous_content_hash[..]).copy_from_slice(&hasher.finalize().as_slice());
+
+    // RAM verification queries
+    let ram_queries = vec![
+        (sync_vm::scheduler::PREVIOUS_BLOCK_HASH_HEAP_SLOT, U256::from_big_endian(&previous_content_hash))
+    ];
 
     let (basic_block_circuits, basic_block_circuits_inputs, mut scheduler_partial_input) = run(
-        0,
-        1,
-        1,
+        previous_block_number,
+        BLOCK_NUMBER,
+        BLOCK_TIMESTAMP,
         Address::zero(),
         test_artifact.entry_point_address,
         test_artifact.entry_point_code,
         vec![],
         false,
-        U256::zero(),
+        U256::zero(), // no default AA for this test
         50,
         2,
         used_bytecodes,
         vec![],
-        vec![],
+        ram_queries,
         cycle_limit,
         round_function.clone(),
         geometry,
@@ -160,7 +200,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     // dbg!(_num_vm_circuits);
     let flattened = basic_block_circuits.clone().into_flattened_set();
     let flattened_inputs = basic_block_circuits_inputs.clone().into_flattened_set();
-    dbg!(&flattened_inputs);
+    // dbg!(&flattened_inputs);
 
     let sponge_params = bn254_rescue_params();
     let rns_params = get_prefered_rns_params();
@@ -183,52 +223,52 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     for (idx, (el, input_value)) in flattened.into_iter().zip(flattened_inputs.into_iter()).enumerate() {
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
-        // if matches!(&el, ZkSyncCircuit::MainVM(..) | ZkSyncCircuit::CodeDecommittmentsSorter(..) | ZkSyncCircuit::CodeDecommitter(..) | ZkSyncCircuit::LogDemuxer(..) | ZkSyncCircuit::KeccakRoundFunction(..)) {
+        // if !matches!(&el, ZkSyncCircuit::StorageApplication(..)) {
         //     continue;
         // }
         // el.debug_witness();
         use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
-        // let (is_satisfied, public_input) = circuit_testing::check_if_satisfied::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(el).unwrap();
-        // assert!(is_satisfied);
-        // assert_eq!(public_input, input_value, "Public input diverged for circuit {} of type {}", idx, descr);
+        let (is_satisfied, public_input) = circuit_testing::check_if_satisfied::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(el).unwrap();
+        assert!(is_satisfied);
+        assert_eq!(public_input, input_value, "Public input diverged for circuit {} of type {}", idx, descr);
         // if public_input != input_value {
         //     println!("Public input diverged for circuit {} of type {}", idx, descr);
         // }
 
-        let vk_file_name = format!("vk_{}", idx);
+        // let vk_file_name = format!("vk_{}", idx);
 
-        if std::path::Path::new(&format!("{}.key", &vk_file_name)).exists() {
-            continue;
-        }
+        // if std::path::Path::new(&format!("{}.key", &vk_file_name)).exists() {
+        //     continue;
+        // }
 
         // el.debug_witness();
 
         // let (is_satisfied, public_input) = circuit_testing::check_if_satisfied::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(el).unwrap();
         // assert!(is_satisfied);
 
-        let (proof, vk) = circuit_testing::prove_and_verify_circuit_for_params::<
-            Bn256, 
-            _, 
-            PlonkCsWidth4WithNextStepAndCustomGatesParams, 
-            RescueTranscriptForRecursion<'_>
-        >(el, Some(transcript_params)).unwrap();
+        // let (proof, vk) = circuit_testing::prove_and_verify_circuit_for_params::<
+        //     Bn256, 
+        //     _, 
+        //     PlonkCsWidth4WithNextStepAndCustomGatesParams, 
+        //     RescueTranscriptForRecursion<'_>
+        // >(el, Some(transcript_params)).unwrap();
 
-        assert_eq!(proof.inputs[0], input_value, "Public input diverged for circuit {} of type {}", idx, descr);
+        // assert_eq!(proof.inputs[0], input_value, "Public input diverged for circuit {} of type {}", idx, descr);
 
-        let vk_file_name = format!("vk_{}", idx);
-        let proof_file_name = format!("proof_{}", idx);
+        // let vk_file_name = format!("vk_{}", idx);
+        // let proof_file_name = format!("proof_{}", idx);
 
-        let mut vk_file_for_bytes = std::fs::File::create(format!("{}.key", &vk_file_name)).unwrap();
-        let mut vk_file_for_json = std::fs::File::create(format!("{}.json", &vk_file_name)).unwrap();
+        // let mut vk_file_for_bytes = std::fs::File::create(format!("{}.key", &vk_file_name)).unwrap();
+        // let mut vk_file_for_json = std::fs::File::create(format!("{}.json", &vk_file_name)).unwrap();
 
-        let mut proof_file_for_bytes = std::fs::File::create(format!("{}.key", &proof_file_name)).unwrap();
-        let mut proof_file_for_json = std::fs::File::create(format!("{}.json", &proof_file_name)).unwrap();
+        // let mut proof_file_for_bytes = std::fs::File::create(format!("{}.key", &proof_file_name)).unwrap();
+        // let mut proof_file_for_json = std::fs::File::create(format!("{}.json", &proof_file_name)).unwrap();
 
-        vk.write(&mut vk_file_for_bytes).unwrap();
-        proof.write(&mut proof_file_for_bytes).unwrap();
+        // vk.write(&mut vk_file_for_bytes).unwrap();
+        // proof.write(&mut proof_file_for_bytes).unwrap();
 
-        serde_json::to_writer(&mut vk_file_for_json, &vk).unwrap();
-        serde_json::to_writer(&mut proof_file_for_json, &proof).unwrap();
+        // serde_json::to_writer(&mut vk_file_for_json, &vk).unwrap();
+        // serde_json::to_writer(&mut proof_file_for_json, &proof).unwrap();
     }
 
     // recursion step. We decide on some arbitrary parameters

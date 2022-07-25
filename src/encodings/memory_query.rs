@@ -2,6 +2,7 @@ use super::*;
 use num_bigint::BigUint;
 use sync_vm::franklin_crypto::plonk::circuit::bigint::biguint_to_fe;
 use sync_vm::utils::compute_shifts;
+use sync_vm::vm::vm_cycle::witness_oracle::u256_to_biguint;
 use sync_vm::vm::vm_state::saved_contract_context::scale_and_accumulate;
 
 use zk_evm::aux_structures::MemoryQuery;
@@ -67,3 +68,20 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 2> for MemoryQuery {
 
 pub type MemoryQueueSimulator<E> = SpongeLikeQueueSimulator<E, MemoryQuery, 2, 3, 1>;
 pub type MemoryQueueState<E> = SpongeLikeQueueIntermediateStates<E, 3, 1>;
+
+use super::initial_storage_write::CircuitEquivalentReflection;
+use sync_vm::traits::CSWitnessable;
+
+impl<E: Engine> CircuitEquivalentReflection<E> for MemoryQuery {
+    type Destination = sync_vm::glue::code_unpacker_sha256::memory_query_updated::MemoryQuery<E>;
+    fn reflect(&self) -> <Self::Destination as CSWitnessable<E>>::Witness {
+        sync_vm::glue::code_unpacker_sha256::memory_query_updated::MemoryQueryWitness::<E> {
+            timestamp: self.timestamp.0,
+            memory_page: self.location.page.0,
+            memory_index: self.location.index.0,
+            rw_flag: self.rw_flag,
+            value: u256_to_biguint(self.value),
+            _marker: std::marker::PhantomData
+        }
+    }
+}

@@ -21,7 +21,7 @@ pub fn compute_pubdata_hasher_witness<
     simulator: &QueueSimulator<E, I, ENCODING_ELEMS, ROUNDS>,
     capacity: usize
 ) -> PubdataHasherInstanceWitness<E, ENCODING_ELEMS, SERIALIZATION_WIDTH, D> {
-    dbg!(&simulator.num_items);
+    // dbg!(&simulator.num_items);
     assert!(capacity <= u32::MAX as usize);
     let mut full_bytestring = vec![];
     let num_elements = simulator.witness.len();

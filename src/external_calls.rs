@@ -22,6 +22,7 @@ use crate::witness::full_block_artifact::BlockBasicCircuitsPublicInputs;
 use sync_vm::scheduler::block_header::*;
 
 use sync_vm::circuit_structures::bytes32::Bytes32;
+use sync_vm::scheduler::{NUM_MEMORY_QUERIES_TO_VERIFY, SCHEDULER_TIMESTAMP};
 
 /// This is a testing interface that basically will
 /// setup the environment and will run out-of-circuit and then in-circuit
@@ -101,10 +102,29 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
         tools.memory.execute_partial_query(0, query);
     }
 
-    // and do the query
+    let mut memory_verification_queries: Vec<sync_vm::glue::code_unpacker_sha256::memory_query_updated::MemoryQueryWitness<Bn256>> = vec![];
+
+    // heap content verification queries
+    for (idx, el) in ram_verification_queries.into_iter() {
+        let query = MemoryQuery { 
+            timestamp: Timestamp(SCHEDULER_TIMESTAMP), 
+            location: MemoryLocation { memory_type: MemoryType::Heap, page: MemoryPage(zk_evm::zkevm_opcode_defs::BOOTLOADER_HEAP_PAGE), index: MemoryIndex(idx as u32) }, 
+            rw_flag: false, 
+            is_pended: false, 
+            value: el 
+        };
+        tools.witness_tracer.add_memory_query(0, query);
+        tools.memory.execute_partial_query(0, query);
+
+        use crate::encodings::initial_storage_write::CircuitEquivalentReflection;
+        let as_vm_query = query.reflect();
+        memory_verification_queries.push(as_vm_query);
+    }
+
+    // bootloader decommit query
     let entry_point_decommittment_query = DecommittmentQuery {
         hash: entry_point_code_hash_as_u256,
-        timestamp: Timestamp(1u32),
+        timestamp: Timestamp(SCHEDULER_TIMESTAMP),
         memory_page: MemoryPage(zk_evm::zkevm_opcode_defs::BOOTLOADER_CODE_PAGE),
         decommitted_length: entry_point_code.len() as u16,
         is_fresh: true,
@@ -268,6 +288,8 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
         use sync_vm::traits::CSWitnessable;
         use sync_vm::recursion::node_aggregation::NodeAggregationOutputData;
 
+        let memory_verification_queries: [sync_vm::glue::code_unpacker_sha256::memory_query_updated::MemoryQueryWitness<Bn256>; NUM_MEMORY_QUERIES_TO_VERIFY] = memory_verification_queries.try_into().unwrap();
+
         let scheduler_circuit_witness = SchedulerCircuitInstanceWitness {
             prev_block_data: previous_block_passthrough,
             block_meta_parameters,
@@ -286,7 +308,7 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
             l1messages_sorter_observable_output: basic_circuits.l1_messages_sorter_circuit.clone_witness().unwrap().closed_form_input.observable_output,
             l1messages_merklizer_observable_output: basic_circuits.l1_messages_merklizer_circuit.clone_witness().unwrap().closed_form_input.observable_output,
             storage_log_tail: basic_circuits.main_vm_circuits.first().unwrap().clone_witness().unwrap().closed_form_input.observable_input.rollback_queue_tail_for_block,
-            memory_queries_to_verify: [sync_vm::glue::code_unpacker_sha256::memory_query_updated::MemoryQuery::placeholder_witness(); 1],
+            memory_queries_to_verify: memory_verification_queries,
             per_circuit_closed_form_inputs: per_circuit_inputs,
             bootloader_heap_memory_state: memory_state_after_bootloader_heap_writes,
             ram_sorted_queue_state: ram_permutation_sorted_state,

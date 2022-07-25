@@ -348,7 +348,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
 
         let instance = StorageApplicationCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
-            config: Arc::new((geometry.cycles_per_storage_application as usize, false)),
+            config: Arc::new((geometry.cycles_per_storage_application as usize, true)),
             round_function: round_function.clone(),
         };
 

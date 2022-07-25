@@ -13,6 +13,10 @@ use rayon::prelude::*;
 use crate::ff::Field;
 use sync_vm::glue::ram_permutation::RamPermutationCircuitInstanceWitness;
 
+use zk_evm::zkevm_opcode_defs::BOOTLOADER_HEAP_PAGE;
+
+pub const RAM_PERMUTATION_CHUNK_SIZE: usize = 1 << 18;
+
 pub fn compute_ram_circuit_snapshots<
     E: Engine,
     R: CircuitArithmeticRoundFunction<E, 2, 3>
@@ -81,11 +85,9 @@ pub fn compute_ram_circuit_snapshots<
     let mut lhs_grand_product_chain: Vec<E::Fr> = vec![E::Fr::zero(); lhs_contributions.len()];
     let mut rhs_grand_product_chain: Vec<E::Fr> = vec![E::Fr::zero(); rhs_contributions.len()];
 
-    const CHUNK_SIZE: usize = 1 << 18;
-
     let challenges: [E::Fr; 3] = challenges.try_into().unwrap();
 
-    lhs_grand_product_chain.par_chunks_mut(CHUNK_SIZE).zip(lhs_contributions.par_chunks(CHUNK_SIZE)).for_each(
+    lhs_grand_product_chain.par_chunks_mut(RAM_PERMUTATION_CHUNK_SIZE).zip(lhs_contributions.par_chunks(RAM_PERMUTATION_CHUNK_SIZE)).for_each(
         |(dst, src)| {
             let mut grand_product = E::Fr::one();
             for (dst, src) in dst.iter_mut().zip(src.iter()) {
@@ -106,7 +108,7 @@ pub fn compute_ram_circuit_snapshots<
         }
     );
 
-    rhs_grand_product_chain.par_chunks_mut(CHUNK_SIZE).zip(rhs_contributions.par_chunks(CHUNK_SIZE)).for_each(
+    rhs_grand_product_chain.par_chunks_mut(RAM_PERMUTATION_CHUNK_SIZE).zip(rhs_contributions.par_chunks(RAM_PERMUTATION_CHUNK_SIZE)).for_each(
         |(dst, src)| {
             let mut grand_product = E::Fr::one();
             for (dst, src) in dst.iter_mut().zip(src.iter()) {
@@ -129,19 +131,19 @@ pub fn compute_ram_circuit_snapshots<
 
     // elementwise products are done, now must fold
 
-    let lhs_intermediates: Vec<E::Fr> = lhs_grand_product_chain.par_chunks(CHUNK_SIZE).map(
+    let lhs_intermediates: Vec<E::Fr> = lhs_grand_product_chain.par_chunks(RAM_PERMUTATION_CHUNK_SIZE).map(
         |slice: &[E::Fr]| {
             *slice.last().unwrap()
         }
     ).collect();
 
-    let rhs_intermediates: Vec<E::Fr> = rhs_grand_product_chain.par_chunks(CHUNK_SIZE).map(
+    let rhs_intermediates: Vec<E::Fr> = rhs_grand_product_chain.par_chunks(RAM_PERMUTATION_CHUNK_SIZE).map(
         |slice: &[E::Fr]| {
             *slice.last().unwrap()
         }
     ).collect();
 
-    lhs_grand_product_chain.par_chunks_mut(CHUNK_SIZE).skip(1).zip(lhs_intermediates.par_chunks(1)).for_each(
+    lhs_grand_product_chain.par_chunks_mut(RAM_PERMUTATION_CHUNK_SIZE).skip(1).zip(lhs_intermediates.par_chunks(1)).for_each(
         |(dst, src)| {
             let src = src[0];
             for dst in dst.iter_mut() {
@@ -150,7 +152,7 @@ pub fn compute_ram_circuit_snapshots<
         }
     );
 
-    rhs_grand_product_chain.par_chunks_mut(CHUNK_SIZE).skip(1).zip(rhs_intermediates.par_chunks(1)).for_each(
+    rhs_grand_product_chain.par_chunks_mut(RAM_PERMUTATION_CHUNK_SIZE).skip(1).zip(rhs_intermediates.par_chunks(1)).for_each(
         |(dst, src)| {
             let src = src[0];
             for dst in dst.iter_mut() {
@@ -196,6 +198,8 @@ pub fn compute_ram_circuit_snapshots<
 
     assert_eq!(unsorted_global_final_state.num_items, sorted_global_final_state.num_items);
 
+    let mut current_number_of_nondet_writes = 0u32;
+
     for (idx, (((((unsorted_sponge_states, sorted_sponge_states), lhs_grand_product), rhs_grand_product), unsorted_states), sorted_states)) in it.enumerate() {
         // we need witnesses to pop elements from the front of the queue
         use sync_vm::scheduler::queues::FixedWidthEncodingSpongeLikeQueueWitness;
@@ -219,6 +223,13 @@ pub fn compute_ram_circuit_snapshots<
 
         let if_first = idx == 0;
         let is_last = idx == num_circuits - 1;
+
+        let num_nondet_writes_in_chunk = sorted_states.iter().filter(|el| {
+            let query = &el.2;
+            query.rw_flag == true && query.timestamp.0 == 0 && query.location.page.0 == BOOTLOADER_HEAP_PAGE
+        }).count();
+
+        let new_num_nondet_writes = current_number_of_nondet_writes + (num_nondet_writes_in_chunk as u32);
 
         let last_unsorted_state = unsorted_sponge_states.last().unwrap().clone();
         let last_sorted_state = sorted_sponge_states.last().unwrap().clone();
@@ -263,6 +274,7 @@ pub fn compute_ram_circuit_snapshots<
 
         assert_eq!(final_unsorted_state.length, final_sorted_state.length);
 
+
         let instance_witness = RamPermutationCircuitInstanceWitness {
             closed_form_input: ClosedFormInputWitness {
                 _marker_e: (),
@@ -283,6 +295,7 @@ pub fn compute_ram_circuit_snapshots<
                     previous_sorting_key: previous_sorting_key,
                     previous_full_key: previous_comparison_key,
                     previous_values_pair: previous_value_pair,
+                    num_nondeterministic_writes: current_number_of_nondet_writes,
                     _marker: std::marker::PhantomData,
                 },
                 hidden_fsm_output: RamPermutationFSMInputOutputWitness {
@@ -293,6 +306,7 @@ pub fn compute_ram_circuit_snapshots<
                     previous_sorting_key: sorting_key,
                     previous_full_key: comparison_key,
                     previous_values_pair: [value_low, value_high],
+                    num_nondeterministic_writes: new_num_nondet_writes,
                     _marker: std::marker::PhantomData,
                 },
                 _marker: std::marker::PhantomData,
@@ -307,6 +321,8 @@ pub fn compute_ram_circuit_snapshots<
         previous_sorting_key = sorting_key;
         previous_comparison_key = comparison_key;
         previous_value_pair = [value_low, value_high];
+
+        current_number_of_nondet_writes = new_num_nondet_writes;
 
         results.push(instance_witness);
     }

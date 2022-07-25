@@ -360,6 +360,7 @@ use crate::witness::oracle::VmWitnessOracle;
 
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone)]
+#[serde(bound = "")]
 pub struct BlockBasicCircuits<E: Engine> {
     // main VM circuit. Many of them
     pub main_vm_circuits: Vec<VMMainCircuit<E, VmWitnessOracle<E>>>,
@@ -446,6 +447,7 @@ impl<E: Engine> BlockBasicCircuits<E> {
 
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone)]
+#[serde(bound = "")]
 pub struct BlockBasicCircuitsPublicInputs<E: Engine> {
     // main VM circuit. Many of them
     pub main_vm_circuits: Vec<E::Fr>,
@@ -535,6 +537,7 @@ use sync_vm::inputs::ClosedFormInputCompactFormWitness;
 
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone)]
+#[serde(bound = "")]
 pub struct BlockBasicCircuitsPublicCompactFormsWitnesses<E: Engine> {
     // main VM circuit. Many of them
     pub main_vm_circuits: Vec<ClosedFormInputCompactFormWitness<E>>,
