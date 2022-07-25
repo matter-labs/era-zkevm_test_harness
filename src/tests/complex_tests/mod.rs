@@ -1057,6 +1057,9 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     let encoding = vk_in_rns.encode().unwrap();
     scheduler_partial_input.vk_encoding_witnesses = vec![encoding];
 
+    scheduler_partial_input.previous_block_aux_hash = Bytes32Witness::from_bytes_array(&previous_aux_hash);
+    scheduler_partial_input.previous_block_meta_hash = Bytes32Witness::from_bytes_array(&previous_meta_hash);
+
     // now also all the key sets
     use crate::bellman::{PrimeField, PrimeFieldRepr};
     use sync_vm::circuit_structures::bytes32::Bytes32Witness;
