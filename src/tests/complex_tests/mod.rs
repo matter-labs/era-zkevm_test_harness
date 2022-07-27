@@ -107,7 +107,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         cycles_per_storage_application: 2,
         cycles_per_keccak256_circuit: 1,
         cycles_per_sha256_circuit: 1,
-        cycles_per_ecrecover_circuit: 4,
+        cycles_per_ecrecover_circuit: 2,
 
         limit_for_code_decommitter_sorter: 512,
         limit_for_log_demuxer: 512,
@@ -223,9 +223,9 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     for (idx, (el, input_value)) in flattened.into_iter().zip(flattened_inputs.into_iter()).enumerate() {
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
-        // if !matches!(&el, ZkSyncCircuit::StorageApplication(..)) {
-        //     continue;
-        // }
+        if !matches!(&el, ZkSyncCircuit::ECRecover(..)) {
+            continue;
+        }
         // el.debug_witness();
         use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
         let (is_satisfied, public_input) = circuit_testing::check_if_satisfied::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(el).unwrap();

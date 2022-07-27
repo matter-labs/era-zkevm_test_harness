@@ -212,7 +212,7 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
                         _marker: std::marker::PhantomData,
                     },
                     hidden_fsm_output: EcrecoverCircuitFSMInputOutputWitness::<E> {
-                        log_queue_state: take_queue_state_from_simulator(&artifacts.demuxed_sha256_precompile_queue_simulator),
+                        log_queue_state: take_queue_state_from_simulator(&artifacts.demuxed_ecrecover_queue_simulator),
                         memory_queue_state: current_memory_queue_state.clone(),
                         _marker: std::marker::PhantomData,
                     },
@@ -227,9 +227,11 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
             request_ranges.push(starting_request_idx..(request_idx+1));
             starting_request_idx = request_idx+1;
 
+            dbg!(&witness);
+
             result.push(witness);
 
-            log_queue_input_state = take_queue_state_from_simulator(&artifacts.demuxed_sha256_precompile_queue_simulator);
+            log_queue_input_state = take_queue_state_from_simulator(&artifacts.demuxed_ecrecover_queue_simulator);
             memory_queue_input_state = current_memory_queue_state.clone();
         }
 
