@@ -15,6 +15,7 @@ use crate::witness::oracle::VmWitnessOracle;
 use crate::witness_structures::take_queue_state_from_simulator;
 use num_integer::Integer;
 use sync_vm::franklin_crypto::bellman::plonk::commitments::transcript::keccak_transcript::RollingKeccakTranscript;
+use sync_vm::franklin_crypto::plonk::circuit::bigint::split_into_limbs;
 use sync_vm::franklin_crypto::plonk::circuit::verifier_circuit::utils::verification_key_into_allocated_limb_witnesses;
 use sync_vm::glue::traits::GenericHasher;
 use sync_vm::recursion::leaf_aggregation::LeafAggregationCircuitInstanceWitness;
@@ -51,6 +52,14 @@ fn basic_test() {
 
 use blake2::Blake2s256;
 use crate::witness::tree::ZkSyncStorageLeaf;
+
+fn basic_circuit_vk_name(circuit_type_idx: u8) -> String {
+    format!("basic_circuit_vk_{}", circuit_type_idx)
+}
+
+fn basic_circuit_proof_name(circuit_type_idx: u8, absolute_idx: usize) -> String {
+    format!("basic_circuit_proof_{}_{}", circuit_type_idx, absolute_idx)
+}
 
 fn save_predeployed_contracts(storage: &mut InMemoryStorage, tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>, contracts: &HashMap<Address, Vec<[u8; 32]>>) {
     let mut sorted_contracts = vec![];
@@ -107,7 +116,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         cycles_per_storage_application: 2,
         cycles_per_keccak256_circuit: 1,
         cycles_per_sha256_circuit: 1,
-        cycles_per_ecrecover_circuit: 4,
+        cycles_per_ecrecover_circuit: 2,
 
         limit_for_code_decommitter_sorter: 512,
         limit_for_log_demuxer: 512,
@@ -166,10 +175,10 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     let mut previous_content_hash = [0u8; 32];
     (&mut previous_content_hash[..]).copy_from_slice(&hasher.finalize().as_slice());
 
-    // RAM verification queries
-    let ram_queries = vec![
-        (sync_vm::scheduler::PREVIOUS_BLOCK_HASH_HEAP_SLOT, U256::from_big_endian(&previous_content_hash))
-    ];
+    // // RAM verification queries
+    // let ram_queries = vec![
+    //     (sync_vm::scheduler::PREVIOUS_BLOCK_HASH_HEAP_SLOT, U256::from_big_endian(&previous_content_hash))
+    // ];
 
     let (basic_block_circuits, basic_block_circuits_inputs, mut scheduler_partial_input) = run(
         previous_block_number,
@@ -185,7 +194,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         2,
         used_bytecodes,
         vec![],
-        ram_queries,
+        vec![],
         cycle_limit,
         round_function.clone(),
         geometry,
@@ -197,10 +206,6 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     use sync_vm::recursion::transcript::GenericTranscriptGadget;
 
     let _num_vm_circuits = basic_block_circuits.main_vm_circuits.len();
-    // dbg!(_num_vm_circuits);
-    let flattened = basic_block_circuits.clone().into_flattened_set();
-    let flattened_inputs = basic_block_circuits_inputs.clone().into_flattened_set();
-    // dbg!(&flattened_inputs);
 
     let sponge_params = bn254_rescue_params();
     let rns_params = get_prefered_rns_params();
@@ -217,62 +222,108 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
 
     use sync_vm::recursion::RescueTranscriptForRecursion;
 
-    let num_proofs = flattened.len();
-    dbg!(num_proofs);
+    // verification keys for basic circuits
 
-    for (idx, (el, input_value)) in flattened.into_iter().zip(flattened_inputs.into_iter()).enumerate() {
+    let mut unique_set = vec![];
+    let mut previous_discr = -1isize;
+    for el in basic_block_circuits.clone().into_flattened_set().into_iter() {
+        let circuit_idx = el.numeric_circuit_type();
+        if circuit_idx as isize != previous_discr {
+            unique_set.push(el);
+            previous_discr = circuit_idx as isize;
+        }
+    }
+
+    for circuit in unique_set.iter().cloned() {
+        let descr = circuit.short_description();
+        println!("Creating VK for {}", descr);
+        let base_name = basic_circuit_vk_name(circuit.numeric_circuit_type());
+
+        let vk_file_name_for_bytes = format!("{}.key", &base_name);
+        let vk_file_name_for_json = format!("{}.json", &base_name);
+
+        if std::path::Path::new(&vk_file_name_for_bytes).exists() {
+            continue;
+        }
+
+        let vk = circuit_testing::create_vk::<
+            Bn256, 
+            _, 
+            PlonkCsWidth4WithNextStepAndCustomGatesParams, 
+        >(circuit).unwrap();
+
+        let mut vk_file_for_bytes = std::fs::File::create(&vk_file_name_for_bytes).unwrap();
+        let mut vk_file_for_json = std::fs::File::create(&vk_file_name_for_json).unwrap();
+
+        vk.write(&mut vk_file_for_bytes).unwrap();
+        serde_json::to_writer(&mut vk_file_for_json, &vk).unwrap();
+    }
+
+    // for (idx, (el, input_value)) in flattened.into_iter().zip(flattened_inputs.into_iter()).enumerate() {
+    //     let descr = el.short_description();
+    //     println!("Doing {}: {}", idx, descr);
+    //     // if !matches!(&el, ZkSyncCircuit::ECRecover(..)) {
+    //     //     continue;
+    //     // }
+    //     // el.debug_witness();
+    //     use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
+    //     let (is_satisfied, public_input) = circuit_testing::check_if_satisfied::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(el).unwrap();
+    //     assert!(is_satisfied);
+    //     assert_eq!(public_input, input_value, "Public input diverged for circuit {} of type {}", idx, descr);
+    // }
+
+
+    for (idx, (el, input_value)) in basic_block_circuits.clone().into_flattened_set().into_iter().zip(basic_block_circuits_inputs.clone().into_flattened_set()).enumerate() {
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
-        // if !matches!(&el, ZkSyncCircuit::StorageApplication(..)) {
+        // if !matches!(&el, ZkSyncCircuit::ECRecover(..)) {
         //     continue;
         // }
         // el.debug_witness();
         use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
-        let (is_satisfied, public_input) = circuit_testing::check_if_satisfied::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(el).unwrap();
-        assert!(is_satisfied);
-        assert_eq!(public_input, input_value, "Public input diverged for circuit {} of type {}", idx, descr);
-        // if public_input != input_value {
-        //     println!("Public input diverged for circuit {} of type {}", idx, descr);
-        // }
 
-        // let vk_file_name = format!("vk_{}", idx);
+        let base_vk_name = basic_circuit_vk_name(el.numeric_circuit_type());
+        let base_proof_name = basic_circuit_proof_name(el.numeric_circuit_type(), idx);
 
-        // if std::path::Path::new(&format!("{}.key", &vk_file_name)).exists() {
-        //     continue;
-        // }
+        // let vk_file_name_for_bytes = format!("{}.key", &base_vk_name);
+        let vk_file_name_for_json = format!("{}.json", &base_vk_name);
 
-        // el.debug_witness();
+        let proof_file_name_for_bytes = format!("{}.key", &base_proof_name);
+        let proof_file_name_for_json = format!("{}.json", &base_proof_name);
 
-        // let (is_satisfied, public_input) = circuit_testing::check_if_satisfied::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(el).unwrap();
-        // assert!(is_satisfied);
+        if std::path::Path::new(&proof_file_name_for_bytes).exists() {
+            continue;
+        }
 
-        // let (proof, vk) = circuit_testing::prove_and_verify_circuit_for_params::<
-        //     Bn256, 
-        //     _, 
-        //     PlonkCsWidth4WithNextStepAndCustomGatesParams, 
-        //     RescueTranscriptForRecursion<'_>
-        // >(el, Some(transcript_params)).unwrap();
+        let mut vk_file_for_json = std::fs::File::open(&vk_file_name_for_json).unwrap();
+        let vk: VerificationKey<Bn256, _> = serde_json::from_reader(&mut vk_file_for_json).unwrap(); // type deduction is a savior for us
+            
+        let (proof, _vk) = circuit_testing::prove_only_circuit_for_params::<
+            Bn256, 
+            _, 
+            PlonkCsWidth4WithNextStepAndCustomGatesParams, 
+            RescueTranscriptForRecursion<'_>
+        >(el, Some(transcript_params), vk.clone()).unwrap();
 
-        // assert_eq!(proof.inputs[0], input_value, "Public input diverged for circuit {} of type {}", idx, descr);
+        assert_eq!(proof.inputs.len(), 1);
+        assert_eq!(proof.inputs[0], input_value, "Public input diverged for circuit {} of type {}", idx, descr);
 
-        // let vk_file_name = format!("vk_{}", idx);
-        // let proof_file_name = format!("proof_{}", idx);
+        let mut proof_file_for_bytes = std::fs::File::create(proof_file_name_for_bytes).unwrap();
+        let mut proof_file_for_json = std::fs::File::create(proof_file_name_for_json).unwrap();
 
-        // let mut vk_file_for_bytes = std::fs::File::create(format!("{}.key", &vk_file_name)).unwrap();
-        // let mut vk_file_for_json = std::fs::File::create(format!("{}.json", &vk_file_name)).unwrap();
-
-        // let mut proof_file_for_bytes = std::fs::File::create(format!("{}.key", &proof_file_name)).unwrap();
-        // let mut proof_file_for_json = std::fs::File::create(format!("{}.json", &proof_file_name)).unwrap();
-
-        // vk.write(&mut vk_file_for_bytes).unwrap();
-        // proof.write(&mut proof_file_for_bytes).unwrap();
-
-        // serde_json::to_writer(&mut vk_file_for_json, &vk).unwrap();
-        // serde_json::to_writer(&mut proof_file_for_json, &proof).unwrap();
+        proof.write(&mut proof_file_for_bytes).unwrap();
+        serde_json::to_writer(&mut proof_file_for_json, &proof).unwrap();
     }
 
     // recursion step. We decide on some arbitrary parameters
     let splitting_factor = 4; // we either split into N subqueues, or we do N leaf proofs per layer
+    let scheduler_upper_bound = 128;
+
+    // verification keys for aggregation circuits requires some padding proof and VK, that we generated right above
+    let mut all_vk_encodings = vec![];
+    let mut all_vk_committments = vec![];
+
+    let mut g2_points = None;
 
     use crate::encodings::recursion_request::*;
     let mut recursion_requests_queue_simulator = RecursionQueueSimulator::empty();
@@ -288,25 +339,35 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     use sync_vm::recursion::leaf_aggregation::*;
     use sync_vm::scheduler::*;
 
-    let mut vk_committments_set = vec![];
-    let mut vk_encodings = vec![];
+    let mut previous_type = None;
+    let flattened = basic_block_circuits.clone().into_flattened_set();
+    let mut padding_proof_file_names = vec![];
 
-    let mut previous: Option<VerificationKey<Bn256, ZkSyncParametricCircuit<Bn256>>> = None;
+    for (idx, el) in flattened.iter().enumerate(){
+        let descr = el.short_description();
+        println!("Doing {}: {}", idx, descr);
 
-    let mut g2_points = None;
+        let base_vk_name = basic_circuit_vk_name(el.numeric_circuit_type());
+        let base_proof_name = basic_circuit_proof_name(el.numeric_circuit_type(), idx);
 
-    for idx in 0..num_proofs {
-        let vk_file_name = format!("vk_{}", idx);
+        // let vk_file_name_for_bytes = format!("{}.key", &base_vk_name);
+        let vk_file_name_for_json = format!("{}.json", &base_vk_name);
 
-        let mut vk_file_for_json = std::fs::File::open(format!("{}.json", &vk_file_name)).unwrap();
+        // let proof_file_name_for_bytes = format!("{}.key", &base_proof_name);
+        let proof_file_name_for_json = format!("{}.json", &base_proof_name);
 
-        let vk: VerificationKey<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_reader(&mut vk_file_for_json).unwrap();
+        let mut vk_file_for_json = std::fs::File::open(&vk_file_name_for_json).unwrap();
+
+        let vk: VerificationKey<Bn256, _> = serde_json::from_reader(&mut vk_file_for_json).unwrap();
 
         if g2_points.is_none() {
             g2_points = Some(vk.g2_elements);
         }
-        if let Some(p) = previous.as_ref().cloned() {
-            if p.gate_selectors_commitments[0] == vk.gate_selectors_commitments[0] {
+        if padding_proof_file_names.len() < splitting_factor {
+            padding_proof_file_names.push(proof_file_name_for_json.clone());
+        }
+        if let Some(p) = previous_type.as_ref().cloned() {
+            if p == el.numeric_circuit_type() {
                 continue
             } else {
                 // add
@@ -318,10 +379,10 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
                 let committment = simulate_variable_length_hash(&encoding, &round_function);
                 dbg!(idx);
                 dbg!(&committment);
-                vk_encodings.push(encoding);
-                vk_committments_set.push(committment);
+                all_vk_encodings.push(encoding);
+                all_vk_committments.push(committment);
 
-                previous = Some(vk);
+                previous_type = Some(el.numeric_circuit_type());
             }
         } else {
             let vk_in_rns = VkInRns {
@@ -332,38 +393,235 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
             let committment = simulate_variable_length_hash(&encoding, &round_function);
             dbg!(idx);
             dbg!(&committment);
-            vk_encodings.push(encoding);
-            vk_committments_set.push(committment);
+            all_vk_encodings.push(encoding);
+            all_vk_committments.push(committment);
 
-            previous = Some(vk);
+            previous_type = Some(el.numeric_circuit_type());
         }
     }
-    
-    // special case of events and l1 messages sorter
-
-    let mut all_vk_encodings = vec![];
-    all_vk_encodings.extend_from_slice(&vk_encodings[..13]);
-    all_vk_encodings.extend_from_slice(&vk_encodings[12..]);
-
-    let mut all_vk_committments = vec![];
-    all_vk_committments.extend_from_slice(&vk_committments_set[..13]);
-    all_vk_committments.extend_from_slice(&vk_committments_set[12..]);
 
     dbg!(&all_vk_committments);
 
-    drop(vk_encodings);
-    drop(vk_committments_set);
-
     let all_circuit_types_committment_for_leaf_agg = simulate_variable_length_hash(&all_vk_committments, &round_function);
 
+    // we pick proof number 0 as a padding element for circuit. In general it can be any valid proof
     let padding_vk_committment = all_vk_committments[0]; 
     dbg!(&all_vk_encodings[0].len());
     let padding_vk_encoding: [_; sync_vm::recursion::node_aggregation::VK_ENCODING_LENGTH] = all_vk_encodings[0].to_vec().try_into().unwrap();
-    let padding_proof_public_input = basic_block_circuits_inputs.clone().into_flattened_set()[0];
-    let padding_proof: Proof<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_reader(std::fs::File::open("proof_0.json").unwrap()).unwrap();
+
+    let mut padding_public_inputs = vec![];
+    let mut padding_proofs = vec![];
+
+    for padding_proof_name in padding_proof_file_names.into_iter() {
+        let padding_proof: Proof<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_reader(std::fs::File::open(padding_proof_name).unwrap()).unwrap();
+        let padding_proof_public_input = padding_proof.inputs[0];
+
+        padding_public_inputs.push(padding_proof_public_input);
+        padding_proofs.push(padding_proof);
+    }
+
 
     dbg!(all_vk_committments.len());
 
+    // we need any points that have e(p1, g2)*e(p2, g2^x) == 0, so we basically can use two first elements
+    // of the trusted setup
+    let padding_aggregations = {
+        let crs_mons = circuit_testing::get_trusted_setup::<Bn256>(1<<26);
+        let mut p1 = crs_mons.g1_bases[1];
+        use sync_vm::franklin_crypto::bellman::CurveAffine;
+        p1.negate();
+        let mut p2 = crs_mons.g1_bases[0];
+
+        let mut all_aggregations = vec![];
+
+        use sync_vm::franklin_crypto::bellman::PrimeField;
+        let scalar = crate::bellman::bn256::Fr::from_str("1234567").unwrap(); // any factor that is > 4
+
+        for _ in 0..splitting_factor {
+            let (pair_with_generator_x, pair_with_generator_y) = p1.into_xy_unchecked();
+            let (pair_with_x_x, pair_with_x_y) = p2.into_xy_unchecked();
+    
+            let pair_with_generator_x = split_into_limbs(pair_with_generator_x, &rns_params).0.try_into().unwrap();
+            let pair_with_generator_y = split_into_limbs(pair_with_generator_y, &rns_params).0.try_into().unwrap();
+            let pair_with_x_x = split_into_limbs(pair_with_x_x, &rns_params).0.try_into().unwrap();
+            let pair_with_x_y = split_into_limbs(pair_with_x_y, &rns_params).0.try_into().unwrap();
+    
+            let tuple = (
+                pair_with_generator_x,
+                pair_with_generator_y,
+                pair_with_x_x,
+                pair_with_x_y,
+            );
+
+            all_aggregations.push(tuple);
+
+            use sync_vm::franklin_crypto::bellman::CurveProjective;
+
+            let tmp = p1.mul(scalar);
+            p1 = tmp.into_affine();
+
+            let tmp = p2.mul(scalar);
+            p2 = tmp.into_affine();
+        }
+
+        all_aggregations
+    };
+
+    // create VKs for leaf and node recursive circuits
+
+    let leaf_vk_file_name = format!("leaf_vk");
+    let node_vk_file_name = format!("node_vk");
+    let scheduler_vk_file_name = format!("scheduler_vk");
+
+    let mut leaf_vk_committment = None;
+    let mut node_vk_committment = None;
+
+    {
+        let leaf_vk_file_name_for_json = format!("{}.json", &leaf_vk_file_name);
+        let node_vk_file_name_for_json = format!("{}.json", &node_vk_file_name);
+        let scheduler_vk_file_name_for_json = format!("{}.json", &scheduler_vk_file_name);
+
+        // leaf
+        if !std::path::Path::new(&leaf_vk_file_name_for_json).exists() {
+            use crate::abstract_zksync_circuit::concrete_circuits::LeafAggregationCircuit;
+    
+            let circuit = LeafAggregationCircuit::new(
+                None,
+                (
+                    splitting_factor,
+                    rns_params.clone(),
+                    aggregation_params.clone(),
+                    padding_vk_committment,
+                    padding_vk_encoding.to_vec(),
+                    padding_public_inputs.clone(),
+                    padding_proofs.clone(),
+                    g2_points.clone(),
+                ),
+                round_function.clone()
+            );
+
+            let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::LeafAggregation(circuit);
+
+            let vk = circuit_testing::create_vk::<
+                Bn256, 
+                _, 
+                PlonkCsWidth4WithNextStepAndCustomGatesParams, 
+            >(circuit).unwrap();
+
+            let vk_file_name_for_bytes = format!("{}.key", &leaf_vk_file_name);
+            let vk_file_name_for_json = format!("{}.json", &leaf_vk_file_name);
+        
+            let mut vk_file_for_bytes = std::fs::File::create(&vk_file_name_for_bytes).unwrap();
+            let mut vk_file_for_json = std::fs::File::create(&vk_file_name_for_json).unwrap();
+
+            vk.write(&mut vk_file_for_bytes).unwrap();
+            serde_json::to_writer(&mut vk_file_for_json, &vk).unwrap();
+            drop(vk_file_for_json);
+        }
+
+        // load VK
+        // erase type
+        let mut vk_file_for_json = std::fs::File::open(&leaf_vk_file_name_for_json).unwrap();
+        let vk: VerificationKey<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_reader(&mut vk_file_for_json).unwrap();
+        let vk_in_rns = VkInRns {
+            vk: Some(vk.clone()),
+            rns_params: &rns_params
+        };
+        let encoding = vk_in_rns.encode().unwrap();
+        let committment = simulate_variable_length_hash(&encoding, &round_function);
+        leaf_vk_committment = Some(committment);
+
+        // Node
+
+        if !std::path::Path::new(&node_vk_file_name_for_json).exists() {
+            use crate::abstract_zksync_circuit::concrete_circuits::NodeAggregationCircuit;
+    
+            let circuit = NodeAggregationCircuit::new(
+                None,
+                (
+                    splitting_factor,
+                    splitting_factor,
+                    rns_params.clone(),
+                    aggregation_params.clone(),
+                    padding_vk_committment,
+                    padding_vk_encoding.to_vec(),
+                    padding_public_inputs.clone(),
+                    padding_proofs.clone(),
+                    padding_aggregations.clone(),
+                    g2_points.clone(),
+                ),
+                round_function.clone()
+            );
+
+            let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::NodeAggregation(circuit);
+
+            let vk = circuit_testing::create_vk::<
+                Bn256, 
+                _, 
+                PlonkCsWidth4WithNextStepAndCustomGatesParams, 
+            >(circuit).unwrap();
+
+            let vk_file_name_for_bytes = format!("{}.key", &node_vk_file_name);
+            let vk_file_name_for_json = format!("{}.json", &node_vk_file_name);
+        
+            let mut vk_file_for_bytes = std::fs::File::create(&vk_file_name_for_bytes).unwrap();
+            let mut vk_file_for_json = std::fs::File::create(&vk_file_name_for_json).unwrap();
+
+            vk.write(&mut vk_file_for_bytes).unwrap();
+            serde_json::to_writer(&mut vk_file_for_json, &vk).unwrap();
+
+            drop(vk_file_for_json);
+        }
+
+        // load VK
+        // erase type
+        let mut vk_file_for_json = std::fs::File::open(&node_vk_file_name_for_json).unwrap();
+        let vk: VerificationKey<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_reader(&mut vk_file_for_json).unwrap();
+        let vk_in_rns = VkInRns {
+            vk: Some(vk.clone()),
+            rns_params: &rns_params
+        };
+        let encoding = vk_in_rns.encode().unwrap();
+        let committment = simulate_variable_length_hash(&encoding, &round_function);
+        node_vk_committment = Some(committment);
+
+        // scheduler
+    
+        if !std::path::Path::new(&scheduler_vk_file_name_for_json).exists() {  
+            use crate::abstract_zksync_circuit::concrete_circuits::SchedulerCircuit;
+
+            let circuit = SchedulerCircuit::new(
+                None,
+                (
+                    scheduler_upper_bound,
+                    rns_params.clone(),
+                    aggregation_params.clone(),
+                    padding_vk_encoding.to_vec(),
+                    padding_proofs[0].clone(), // not important
+                    g2_points.clone(),
+                ),
+                round_function.clone()
+            );
+            let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::Scheduler(circuit);
+
+            let vk = circuit_testing::create_vk::<
+                Bn256, 
+                _, 
+                PlonkCsWidth4WithNextStepAndCustomGatesParams, 
+            >(circuit).unwrap();
+
+            let vk_file_name_for_bytes = format!("{}.key", &scheduler_vk_file_name);
+            let vk_file_name_for_json = format!("{}.json", &scheduler_vk_file_name);
+        
+            let mut vk_file_for_bytes = std::fs::File::create(vk_file_name_for_bytes).unwrap();
+            let mut vk_file_for_json = std::fs::File::create(vk_file_name_for_json).unwrap();
+
+            vk.write(&mut vk_file_for_bytes).unwrap();
+            serde_json::to_writer(&mut vk_file_for_json, &vk).unwrap();
+        }
+    }
+
+    // form a queue of recursive verification requests in the same manner as scheduler does it
     let mut all_requests = vec![];
 
     for (idx, (circuit, public_input)) in basic_block_circuits.into_flattened_set().into_iter().zip(basic_block_circuits_inputs.into_flattened_set().into_iter()).enumerate() {
@@ -371,10 +629,6 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
             circuit_type: circuit.numeric_circuit_type(),
             public_input,
         };
-
-        if circuit.numeric_circuit_type() == 16 {
-            dbg!(&public_input);
-        }
 
         let _ = recursion_requests_queue_simulator.push(req.clone(), &round_function);
 
@@ -384,33 +638,31 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     dbg!(&all_requests.len());
     dbg!(&recursion_requests_queue_simulator.tail);
 
-    // // we simulate the splitting
-    // // scheduler does 1 recursive proof
+    // now we basically simulate recursion by chunking everything starting from the basic circuit level
 
-    let leaf_layer: Vec<_> = all_requests.chunks(splitting_factor).map(|el| el.to_vec()).collect();
-
+    let leaf_layer_requests: Vec<_> = all_requests.chunks(splitting_factor).map(|el| el.to_vec()).collect();
     let mut leaf_layer_subqueues = vec![];
     let mut queue = recursion_requests_queue_simulator.clone();
-    for _ in 0..(leaf_layer.len() - 1) {
+    for _ in 0..(leaf_layer_requests.len() - 1) {
         let (chunk, rest) = queue.split(splitting_factor as u32);
         leaf_layer_subqueues.push(chunk);
         queue = rest;
     }
     leaf_layer_subqueues.push(queue);
 
+    let leaf_layer_flattened_set: Vec<_> = flattened.chunks(splitting_factor).map(|el| el.to_vec()).collect();
+
+    let mut absolute_proof_idx = 0;
+
     // LEAF LEVEL
 
-    let mut level = 0;
+    println!("Aggregating INVIDIVUAL PROOFS by LEAFS");
 
-    println!("LEVEL {}: aggregating INVIDIVUAL PROOFS by LEAFS", level);
-
-    for (idx, subset) in leaf_layer.into_iter().enumerate() {
-        // dbg!(&subset.len());
-        let vk_file_name = format!("rec_vk_{}_{}", level, idx);
-        let proof_file_name = format!("rec_proof_{}_{}", level, idx);
-        let output_file_name = format!("rec_output_{}_{}", level, idx);
+    for (idx, (subset, circuits)) in leaf_layer_requests.into_iter().zip(leaf_layer_flattened_set.into_iter()).enumerate() {
+        assert_eq!(subset.len(), circuits.len());
+        let proof_file_name = format!("leaf_proof_{}", idx);
+        let output_file_name = format!("leaf_output_{}", idx);
         
-        // dbg!(&subset);
         let queue_wit: Vec<_> = leaf_layer_subqueues[idx].witness.iter().map(|el| {
             let (enc, prev_tail, el) = el.clone();
             let w = RecursiveProofQueryWitness {
@@ -446,19 +698,18 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
 
         let this_aggregation_subqueue = &leaf_layer_subqueues[idx];
 
-        for (i, (req_idx, req)) in subset.into_iter().enumerate() {
-            let vk_file_name = format!("vk_{}", req_idx);
-            let proof_file_name = format!("proof_{}", req_idx);
+        for (i, ((req_idx, req), el)) in subset.into_iter().zip(circuits.into_iter()).enumerate() {
+            let circuit_vk_file_name = basic_circuit_vk_name(el.numeric_circuit_type());
+            let circuit_proof_file_name = basic_circuit_proof_name(el.numeric_circuit_type(), absolute_proof_idx);
 
-            println!("Aggregating over {}", &proof_file_name);
+            println!("Aggregating over {}", &circuit_proof_file_name);
 
-            let mut vk_file_for_json = std::fs::File::open(format!("{}.json", &vk_file_name)).unwrap();
-            let mut proof_file_for_json = std::fs::File::open(format!("{}.json", &proof_file_name)).unwrap();
+            let mut vk_file_for_json = std::fs::File::open(format!("{}.json", &circuit_vk_file_name)).unwrap();
+            let mut proof_file_for_json = std::fs::File::open(format!("{}.json", &circuit_proof_file_name)).unwrap();
 
+            // type erasure for easier life
             let vk: VerificationKey<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_reader(&mut vk_file_for_json).unwrap();
             let proof: Proof<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_reader(&mut proof_file_for_json).unwrap();
-
-            dbg!(&proof.inputs[0]);
 
             assert_eq!(proof.inputs[0], req.public_input, "failed for req_idx = {}, i = {}, aggregation_idx = {}", req_idx, i, idx);
             assert_eq!(proof.inputs[0], this_aggregation_subqueue.witness[i].2.public_input, "failed for req_idx = {}, i = {}, aggregation_idx = {}", req_idx, i, idx);
@@ -470,14 +721,17 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
             let encoding = vk_in_rns.encode().unwrap();
             wit.vk_encoding_witnesses.push(encoding);
             wit.proof_witnesses.push(proof);
+
+            absolute_proof_idx += 1;
         }
 
         drop(this_aggregation_subqueue);
 
-        if std::path::Path::new(&format!("{}.key", &proof_file_name)).exists() {
+        if std::path::Path::new(&format!("{}.json", &proof_file_name)).exists() {
             continue;
         }
 
+        // we use the circuit itself to output some witness
         let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
         let (aggregated_public_input, output_data) = aggregate_at_leaf_level_entry_point::<_, _, _, _, _, true>(
             &mut cs,
@@ -489,14 +743,11 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
                 aggregation_params.clone(),
                 padding_vk_committment,
                 padding_vk_encoding.clone(),
-                padding_proof_public_input,
-                padding_proof.clone(),
+                padding_public_inputs.clone(),
+                padding_proofs.clone(),
                 g2_points.clone(),
             ),
         ).unwrap();
-
-        // dbg!(&aggregated_public_input.get_value());
-        // dbg!(&output_data.create_witness());
 
         let public_input_value = aggregated_public_input.get_value().unwrap();
         let result_observable_output = output_data.create_witness().unwrap();
@@ -516,533 +767,274 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
                 aggregation_params.clone(),
                 padding_vk_committment,
                 padding_vk_encoding.to_vec(),
-                padding_proof_public_input,
-                padding_proof.clone(),
+                padding_public_inputs.clone(),
+                padding_proofs.clone(),
                 g2_points.clone(),
             ),
             round_function.clone()
         );
 
-        let (proof, vk) = if std::path::Path::new(&format!("rec_vk_{}_0.json", level)).exists() {
-            println!("REUSING VERIFICATION KEY");
-            let mut vk_file_for_json = std::fs::File::open(&format!("rec_vk_{}_0.json", level)).unwrap();
-            let vk: VerificationKey<Bn256, LeafAggregationCircuit<Bn256>> = serde_json::from_reader(&mut vk_file_for_json).unwrap();
-            
-            circuit_testing::prove_only_circuit_for_params::<
-                Bn256, 
-                _, 
-                PlonkCsWidth4WithNextStepAndCustomGatesParams, 
-                RescueTranscriptForRecursion<'_>
-            >(circuit, Some(transcript_params), vk.clone()).unwrap()
-        } else {
-            circuit_testing::prove_and_verify_circuit_for_params::<
-                Bn256, 
-                _, 
-                PlonkCsWidth4WithNextStepAndCustomGatesParams, 
-                RescueTranscriptForRecursion<'_>
-            >(circuit, Some(transcript_params)).unwrap()
-        };
+        let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::LeafAggregation(circuit);
 
-        let mut vk_file_for_bytes = std::fs::File::create(format!("{}.key", &vk_file_name)).unwrap();
-        let mut vk_file_for_json = std::fs::File::create(format!("{}.json", &vk_file_name)).unwrap();
-
-        let mut proof_file_for_bytes = std::fs::File::create(format!("{}.key", &proof_file_name)).unwrap();
-        let mut proof_file_for_json = std::fs::File::create(format!("{}.json", &proof_file_name)).unwrap();
-
-        vk.write(&mut vk_file_for_bytes).unwrap();
-        proof.write(&mut proof_file_for_bytes).unwrap();
-
-        serde_json::to_writer(&mut vk_file_for_json, &vk).unwrap();
-        serde_json::to_writer(&mut proof_file_for_json, &proof).unwrap();
-
-        assert_eq!(proof.inputs[0], public_input_value, "Public input diverged for circuit {}", idx);
-    }
-
-    level += 1;
-
-    // NODES THAT AGGREGATE LEAFS
-
-    println!("LEVEL {}: aggregating LEAFS by first layer of NODES", level);
-
-    use crate::bellman::pairing::ff::ScalarEngine;
-    use crate::bellman::pairing::ff::Field;
-
-    let leaf_vk_committment = {
-        let leaf_vk_file_name = "rec_vk_0_0.json";
-        let mut vk_file_for_json = std::fs::File::open(&leaf_vk_file_name).unwrap();
-
-        let vk: VerificationKey<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_reader(&mut vk_file_for_json).unwrap();
-
-        let vk_in_rns = VkInRns {
-            vk: Some(vk.clone()),
-            rns_params: &rns_params
-        };
-        let encoding = vk_in_rns.encode().unwrap();
-        let committment = simulate_variable_length_hash(&encoding, &round_function);
-
-        committment
-    };
-
-    dbg!(leaf_vk_committment);
-
-    let padding_aggregation = {
-        let mut output_file_for_json = std::fs::File::open("rec_output_0_0.json").unwrap();
-        let output: LeafAggregationOutputDataWitness<Bn256> = serde_json::from_reader(&mut output_file_for_json).unwrap();
-
-        (
-            output.pair_with_generator_x,
-            output.pair_with_generator_y,
-            output.pair_with_x_x,
-            output.pair_with_x_y,
-        )
-    };
-
-    let node_vk_file_name = "rec_vk_1_0.json";
-    if std::path::Path::new(&node_vk_file_name).exists() == false {
-        // generate setup
-
-        let circuit = NodeAggregationCircuit::new(
-            None,
-            (
-                level == 1,
-                splitting_factor,
-                rns_params.clone(),
-                aggregation_params.clone(),
-                padding_vk_committment,
-                padding_vk_encoding.to_vec(),
-                padding_proof_public_input,
-                padding_proof.clone(),
-                padding_aggregation,
-                g2_points.clone(),
-            ),
-            round_function.clone()
-        );
-
-        let vk = circuit_testing::create_vk::<
+        let vk_file_name_for_json = format!("{}.json", &leaf_vk_file_name);
+        let mut vk_file_for_json = std::fs::File::open(&vk_file_name_for_json).unwrap();
+        let vk: VerificationKey<Bn256, ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>> = serde_json::from_reader(&mut vk_file_for_json).unwrap();
+        
+        let (proof, _vk_) = circuit_testing::prove_only_circuit_for_params::<
             Bn256, 
             _, 
             PlonkCsWidth4WithNextStepAndCustomGatesParams, 
-        >(circuit).unwrap();
+            RescueTranscriptForRecursion<'_>
+        >(circuit, Some(transcript_params), vk.clone()).unwrap();
+        
+        let mut proof_file_for_bytes = std::fs::File::create(format!("{}.key", &proof_file_name)).unwrap();
+        let mut proof_file_for_json = std::fs::File::create(format!("{}.json", &proof_file_name)).unwrap();
 
-        let mut vk_file_for_json = std::fs::File::create(node_vk_file_name).unwrap();
-        serde_json::to_writer(&mut vk_file_for_json, &vk).unwrap();
+        proof.write(&mut proof_file_for_bytes).unwrap();
+        serde_json::to_writer(&mut proof_file_for_json, &proof).unwrap();
+
+        assert_eq!(proof.inputs[0], public_input_value, "Public input diverged for circuit {}", idx);
     }
 
-    let node_vk_committment = {
-        let mut vk_file_for_json = std::fs::File::open(&node_vk_file_name).unwrap();
-
-        let vk: VerificationKey<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_reader(&mut vk_file_for_json).unwrap();
-
-        let vk_in_rns = VkInRns {
-            vk: Some(vk.clone()),
-            rns_params: &rns_params
-        };
-        let encoding = vk_in_rns.encode().unwrap();
-        let committment = simulate_variable_length_hash(&encoding, &round_function);
-
-        committment
-    };
-
-    use sync_vm::recursion::node_aggregation::*;
-
-    
+    // nodes are much easier to make homogeniously generated
 
     let mut previous_sequence = leaf_layer_subqueues;
-    let num_previous_level_proofs = previous_sequence.len();
 
-    let mut merged = vec![];
-    for chunk in previous_sequence.chunks(splitting_factor) {
-        let mut first = chunk[0].clone();
-        for second in chunk[1..].iter().cloned() {
-            first = QueueSimulator::merge(first, second);
+    let leaf_vk_committment = leaf_vk_committment.unwrap();
+    let node_vk_committment = node_vk_committment.unwrap();
+
+    let mut final_level = 0;
+
+    for level in 0..128 {
+        if level == 0 {
+            println!("LEVEL {}: aggregating LEAFS by NODES", level);
+        } else {
+            println!("LEVEL {}: aggregating NODES by NODES", level);
         }
 
-        merged.push(first);
-    }
+        let num_previous_level_proofs = previous_sequence.len();
+        let mut merged = vec![];
+        for chunk in previous_sequence.chunks(splitting_factor) {
+            let mut first = chunk[0].clone();
+            for second in chunk[1..].iter().cloned() {
+                first = QueueSimulator::merge(first, second);
+            }
 
-    let mut leafs_index = 0;
+            merged.push(first);
+        }
 
-    for (idx, subset) in merged.iter().cloned().enumerate() {
-        // single case of leaf circuit VK
-        let vk_file_name = format!("rec_vk_{}_0", level - 1);
-        let mut vk_file_for_json = std::fs::File::open(format!("{}.json", &vk_file_name)).unwrap();
-        let previous_level_vk: VerificationKey<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_reader(&mut vk_file_for_json).unwrap();
-
-        let queue_wit: Vec<_> = subset.witness.iter().map(|el| {
-            let (enc, prev_tail, el) = el.clone();
-            let w = RecursiveProofQueryWitness {
-                cicruit_type: el.circuit_type,
-                closed_form_input_hash: el.public_input,
-                _marker: std::marker::PhantomData
-            };
-
-            (enc, w, prev_tail)
-        }).collect();
-
-        // dbg!(&subset);
-
-        let mut wit = NodeAggregationCircuitInstanceWitness::<Bn256> {
-            closed_form_input: NodeAggregationInputOutputWitness {
-                start_flag: true,
-                completion_flag: true,
-                hidden_fsm_input: (),
-                hidden_fsm_output: (),
-                observable_input: NodeAggregationInputDataWitness {
-                    initial_log_queue_state: take_queue_state_from_simulator(&subset),
-                    leaf_vk_committment: leaf_vk_committment,
-                    node_vk_committment: node_vk_committment,
-                    all_circuit_types_committment_for_leaf: all_circuit_types_committment_for_leaf_agg,
-                    _marker: std::marker::PhantomData,
-                },
-                observable_output: NodeAggregationOutputData::placeholder_witness(),
-                _marker_e: (),
-                _marker: std::marker::PhantomData,
-            },
-            initial_queue_witness: FixedWidthEncodingGenericQueueWitness {wit: queue_wit}, 
-            proof_witnesses: vec![],
-            vk_encoding_witnesses: vec![],
-            leaf_aggregation_results: vec![],
-            node_aggregation_results: vec![],
+        let previous_level_vk_file_name = if level == 0 {
+            leaf_vk_file_name.clone()
+        } else {
+            node_vk_file_name.clone()
         };
 
-        for _ in 0..splitting_factor {
-            if leafs_index >= num_previous_level_proofs {
-                break;
-            }
-            let proof_file_name = format!("rec_proof_{}_{}", level - 1, leafs_index);
-            let output_file_name = format!("rec_output_{}_{}", level - 1, leafs_index);
+        let previous_level_proof_base_file_name = if level == 0 {
+            format!("leaf_proof")
+        } else {
+            format!("node_proof_{}", level-1)
+        };
 
-            if std::path::Path::new(&format!("{}.json", &proof_file_name)).exists() == false {
-                break;
-            }
+        let previous_level_output_base_file_name = if level == 0 {
+            format!("leaf_output")
+        } else {
+            format!("node_output_{}", level-1)
+        };
 
-            println!("Aggregating over {}", &proof_file_name);
+        let new_level_proof_base_file_name = format!("node_proof_{}", level);
+        let new_level_output_base_file_name = format!("node_output_{}", level);
 
-            let mut proof_file_for_json = std::fs::File::open(format!("{}.json", &proof_file_name)).unwrap();
-            let mut output_file_for_json = std::fs::File::open(format!("{}.json", &output_file_name)).unwrap();
-            let proof: Proof<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_reader(&mut proof_file_for_json).unwrap();
-            let output: LeafAggregationOutputDataWitness<Bn256> = serde_json::from_reader(&mut output_file_for_json).unwrap();
-
-            dbg!(&proof.inputs[0]);
-
-            let vk_in_rns = VkInRns {
-                vk: Some(previous_level_vk.clone()),
-                rns_params: &rns_params
-            };
-            let encoding = vk_in_rns.encode().unwrap();
-            wit.vk_encoding_witnesses.push(encoding);
-            wit.proof_witnesses.push(proof);
-            wit.leaf_aggregation_results.push(output);
-
-            leafs_index += 1;
-        }
-
-        // make a new one
-
-        let vk_file_name = format!("rec_vk_{}_{}", level, idx);
-        let proof_file_name = format!("rec_proof_{}_{}", level, idx);
-        let output_file_name = format!("rec_output_{}_{}", level, idx);
-
-        dbg!(&proof_file_name);
-
-        if std::path::Path::new(&format!("{}.key", &proof_file_name)).exists() {
-            println!("Proof exists");
-            continue
-        }
-
-        let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
-        let (aggregated_public_input, leaf_aggregation_output_data, node_aggregation_output_data, output_data) = aggregate_at_node_level_entry_point::<_, _, _, _, _, true>(
-            &mut cs,
-            Some(wit.clone()),
-            &round_function,
-            (
-                level == 1,
-                splitting_factor,
-                rns_params.clone(),
-                aggregation_params.clone(),
-                padding_vk_committment,
-                padding_vk_encoding.clone(),
-                padding_proof_public_input,
-                padding_proof.clone(),
-                padding_aggregation,
-                g2_points.clone(),
-            ),
-        ).unwrap();
-
-        // dbg!(&aggregated_public_input.get_value());
-        dbg!(&output_data.create_witness());
-
-        let public_input_value = aggregated_public_input.get_value().unwrap();
-        let result_observable_output = output_data.create_witness().unwrap();
-
-        wit.closed_form_input.observable_output = result_observable_output.clone();
-
-        let mut output_file_for_json = std::fs::File::create(format!("{}.json", &output_file_name)).unwrap();
-        serde_json::to_writer(&mut output_file_for_json, &result_observable_output).unwrap();
+        let previous_level_vk_file_name_for_json = format!("{}.json", &previous_level_vk_file_name);
+        let mut previous_level_vk_file_for_json = std::fs::File::open(previous_level_vk_file_name_for_json).unwrap();
+        let previous_level_vk: VerificationKey<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_reader(&mut previous_level_vk_file_for_json).unwrap();
 
         use crate::abstract_zksync_circuit::concrete_circuits::NodeAggregationCircuit;
+        use sync_vm::recursion::node_aggregation::NodeAggregationCircuitInstanceWitness;
+        use sync_vm::recursion::node_aggregation::NodeAggregationInputOutputWitness;
+        use sync_vm::recursion::node_aggregation::NodeAggregationInputDataWitness;
+        use sync_vm::recursion::node_aggregation::NodeAggregationOutputData;
 
-        let circuit = NodeAggregationCircuit::new(
-            Some(wit),
-            (
-                level == 1,
-                splitting_factor,
-                rns_params.clone(),
-                aggregation_params.clone(),
-                padding_vk_committment,
-                padding_vk_encoding.to_vec(),
-                padding_proof_public_input,
-                padding_proof.clone(),
-                padding_aggregation,
-                g2_points.clone(),
-            ),
-            round_function.clone()
-        );
+        let mut circuit_to_aggregate_index = 0;
 
-        let (proof, vk) = if std::path::Path::new(&format!("rec_vk_{}_0.json", level)).exists() {
-            println!("REUSING VERIFICATION KEY");
-            let mut vk_file_for_json = std::fs::File::open(&format!("rec_vk_{}_0.json", level)).unwrap();
-            let vk: VerificationKey<Bn256, NodeAggregationCircuit<Bn256>> = serde_json::from_reader(&mut vk_file_for_json).unwrap();
-            
-            circuit_testing::prove_only_circuit_for_params::<
-                Bn256, 
-                _, 
-                PlonkCsWidth4WithNextStepAndCustomGatesParams, 
-                RescueTranscriptForRecursion<'_>
-            >(circuit, Some(transcript_params), vk.clone()).unwrap()
-        } else {
-            circuit_testing::prove_and_verify_circuit_for_params::<
-                Bn256, 
-                _, 
-                PlonkCsWidth4WithNextStepAndCustomGatesParams, 
-                RescueTranscriptForRecursion<'_>
-            >(circuit, Some(transcript_params)).unwrap()
-        };
+        for (idx, subset) in merged.iter().cloned().enumerate() {
 
-        dbg!(&proof.inputs[0]);
+            let queue_wit: Vec<_> = subset.witness.iter().map(|el| {
+                let (enc, prev_tail, el) = el.clone();
+                let w = RecursiveProofQueryWitness {
+                    cicruit_type: el.circuit_type,
+                    closed_form_input_hash: el.public_input,
+                    _marker: std::marker::PhantomData
+                };
+    
+                (enc, w, prev_tail)
+            }).collect();
 
-        let mut vk_file_for_bytes = std::fs::File::create(format!("{}.key", &vk_file_name)).unwrap();
-        let mut vk_file_for_json = std::fs::File::create(format!("{}.json", &vk_file_name)).unwrap();
+            dbg!(&subset.num_items);
 
-        let mut proof_file_for_bytes = std::fs::File::create(format!("{}.key", &proof_file_name)).unwrap();
-        let mut proof_file_for_json = std::fs::File::create(format!("{}.json", &proof_file_name)).unwrap();
-
-        vk.write(&mut vk_file_for_bytes).unwrap();
-        proof.write(&mut proof_file_for_bytes).unwrap();
-
-        serde_json::to_writer(&mut vk_file_for_json, &vk).unwrap();
-        serde_json::to_writer(&mut proof_file_for_json, &proof).unwrap();
-
-        assert_eq!(proof.inputs[0], public_input_value, "Public input diverged for circuit {}", idx);
-    }
-
-    level += 1;
-
-    // NODES OVER NODES
-
-    println!("LEVEL {}: aggregating NODES by NODES", level);
-
-    previous_sequence = merged;
-    let num_previous_level_proofs = previous_sequence.len();
-
-    let mut merged = vec![];
-    for chunk in previous_sequence.chunks(splitting_factor) {
-        let mut first = chunk[0].clone();
-        for second in chunk[1..].iter().cloned() {
-            first = QueueSimulator::merge(first, second);
-        }
-
-        merged.push(first);
-    }
-
-    let mut leafs_index = 0;
-
-    for (idx, subset) in merged.iter().cloned().enumerate() {
-        // single case of leaf circuit VK
-        let vk_file_name = format!("rec_vk_{}_0", level - 1);
-        let mut vk_file_for_json = std::fs::File::open(format!("{}.json", &vk_file_name)).unwrap();
-        let previous_level_vk: VerificationKey<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_reader(&mut vk_file_for_json).unwrap();
-
-        let queue_wit: Vec<_> = subset.witness.iter().map(|el| {
-            let (enc, prev_tail, el) = el.clone();
-            let w = RecursiveProofQueryWitness {
-                cicruit_type: el.circuit_type,
-                closed_form_input_hash: el.public_input,
-                _marker: std::marker::PhantomData
-            };
-
-            (enc, w, prev_tail)
-        }).collect();
-
-        let mut wit = NodeAggregationCircuitInstanceWitness::<Bn256> {
-            closed_form_input: NodeAggregationInputOutputWitness {
-                start_flag: true,
-                completion_flag: true,
-                hidden_fsm_input: (),
-                hidden_fsm_output: (),
-                observable_input: NodeAggregationInputDataWitness {
-                    initial_log_queue_state: take_queue_state_from_simulator(&subset),
-                    leaf_vk_committment: leaf_vk_committment,
-                    node_vk_committment: node_vk_committment,
-                    all_circuit_types_committment_for_leaf: all_circuit_types_committment_for_leaf_agg,
+            let mut wit = NodeAggregationCircuitInstanceWitness::<Bn256> {
+                closed_form_input: NodeAggregationInputOutputWitness {
+                    start_flag: true,
+                    completion_flag: true,
+                    hidden_fsm_input: (),
+                    hidden_fsm_output: (),
+                    observable_input: NodeAggregationInputDataWitness {
+                        initial_log_queue_state: take_queue_state_from_simulator(&subset),
+                        leaf_vk_committment: leaf_vk_committment,
+                        node_vk_committment: node_vk_committment,
+                        all_circuit_types_committment_for_leaf: all_circuit_types_committment_for_leaf_agg,
+                        _marker: std::marker::PhantomData,
+                    },
+                    observable_output: NodeAggregationOutputData::placeholder_witness(),
+                    _marker_e: (),
                     _marker: std::marker::PhantomData,
                 },
-                observable_output: NodeAggregationOutputData::placeholder_witness(),
-                _marker_e: (),
-                _marker: std::marker::PhantomData,
-            },
-            initial_queue_witness: FixedWidthEncodingGenericQueueWitness {wit: queue_wit}, 
-            proof_witnesses: vec![],
-            vk_encoding_witnesses: vec![],
-            leaf_aggregation_results: vec![],
-            node_aggregation_results: vec![],
-        };
-
-        for _ in 0..splitting_factor {
-            if leafs_index >= num_previous_level_proofs {
-                break;
-            }
-            let proof_file_name = format!("rec_proof_{}_{}", level - 1, leafs_index);
-            let output_file_name = format!("rec_output_{}_{}", level - 1, leafs_index);
-
-            if std::path::Path::new(&format!("{}.json", &proof_file_name)).exists() == false {
-                break;
-            }
-
-            println!("Aggregating over {}", &proof_file_name);
-
-            let mut proof_file_for_json = std::fs::File::open(format!("{}.json", &proof_file_name)).unwrap();
-            let mut output_file_for_json = std::fs::File::open(format!("{}.json", &output_file_name)).unwrap();
-            let proof: Proof<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_reader(&mut proof_file_for_json).unwrap();
-            let output: NodeAggregationOutputDataWitness<Bn256> = serde_json::from_reader(&mut output_file_for_json).unwrap();
-
-            dbg!(&proof.inputs[0]);
-
-            let vk_in_rns = VkInRns {
-                vk: Some(previous_level_vk.clone()),
-                rns_params: &rns_params
+                initial_queue_witness: FixedWidthEncodingGenericQueueWitness {wit: queue_wit}, 
+                proof_witnesses: vec![],
+                vk_encoding_witnesses: vec![],
+                leaf_aggregation_results: vec![],
+                node_aggregation_results: vec![],
+                depth: level,
             };
-            let encoding = vk_in_rns.encode().unwrap();
-            wit.vk_encoding_witnesses.push(encoding);
-            wit.proof_witnesses.push(proof);
-            wit.node_aggregation_results.push(output);
 
-            leafs_index += 1;
-        }
+            for _ in 0..splitting_factor {
+                if circuit_to_aggregate_index >= num_previous_level_proofs {
+                    break;
+                }
+                let proof_file_name = format!("{}_{}", &previous_level_proof_base_file_name, circuit_to_aggregate_index);
+                let output_file_name = format!("{}_{}", &previous_level_output_base_file_name, circuit_to_aggregate_index);
 
-        // make a new one
+                if std::path::Path::new(&format!("{}.json", &proof_file_name)).exists() == false {
+                    break;
+                }
 
-        let vk_file_name = format!("rec_vk_{}_{}", level, idx);
-        let proof_file_name = format!("rec_proof_{}_{}", level, idx);
-        let output_file_name = format!("rec_output_{}_{}", level, idx);
+                println!("Aggregating over {}", &proof_file_name);
 
-        let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
-        let (aggregated_public_input, leaf_aggregation_output_data, node_aggregation_output_data, output_data) = aggregate_at_node_level_entry_point::<_, _, _, _, _, true>(
-            &mut cs,
-            Some(wit.clone()),
-            &round_function,
-            (
-                level == 1,
-                splitting_factor,
-                rns_params.clone(),
-                aggregation_params.clone(),
-                padding_vk_committment,
-                padding_vk_encoding.clone(),
-                padding_proof_public_input,
-                padding_proof.clone(),
-                padding_aggregation,
-                g2_points.clone(),
-            ),
-        ).unwrap();
+                let mut proof_file_for_json = std::fs::File::open(format!("{}.json", &proof_file_name)).unwrap();
+                let mut output_file_for_json = std::fs::File::open(format!("{}.json", &output_file_name)).unwrap();
+                let proof: Proof<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_reader(&mut proof_file_for_json).unwrap();
+                if level == 0 {
+                    let output: LeafAggregationOutputDataWitness<Bn256> = serde_json::from_reader(&mut output_file_for_json).unwrap();
+                    wit.leaf_aggregation_results.push(output);
+                } else {
+                    use sync_vm::recursion::node_aggregation::NodeAggregationOutputDataWitness;
+                    let output: NodeAggregationOutputDataWitness<Bn256> = serde_json::from_reader(&mut output_file_for_json).unwrap();
+                    wit.node_aggregation_results.push(output);
+                }
 
-        // dbg!(&aggregated_public_input.get_value());
-        // dbg!(&output_data.create_witness());
+                dbg!(&proof.inputs[0]);
 
-        let public_input_value = aggregated_public_input.get_value().unwrap();
-        let result_observable_output = output_data.create_witness().unwrap();
+                let vk_in_rns = VkInRns {
+                    vk: Some(previous_level_vk.clone()),
+                    rns_params: &rns_params
+                };
+                let encoding = vk_in_rns.encode().unwrap();
+                wit.vk_encoding_witnesses.push(encoding);
+                wit.proof_witnesses.push(proof);
+                circuit_to_aggregate_index += 1;
+            }
 
-        wit.closed_form_input.observable_output = result_observable_output.clone();
+            let new_level_proof_file_name_for_bytes = format!("{}_{}.key", &new_level_proof_base_file_name, idx);
+            let new_level_proof_file_name_for_json = format!("{}_{}.json", &new_level_proof_base_file_name, idx);
 
-        dbg!(&wit);
-        dbg!(&public_input_value);
+            if std::path::Path::new(&new_level_proof_file_name_for_json).exists() {
+                println!("Proof is already created: {}", new_level_proof_file_name_for_json);
+                continue;
+            }
 
-        dbg!(&proof_file_name);
+            use sync_vm::recursion::node_aggregation::aggregate_at_node_level_entry_point;
 
-        if std::path::Path::new(&format!("{}.key", &proof_file_name)).exists() {
-            println!("Proof exists");
-            continue
-        }
+            let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+            println!("Simulating aggregation output");
+            let (aggregated_public_input, _leaf_aggregation_output_data, _node_aggregation_output_data, output_data) = aggregate_at_node_level_entry_point::<_, _, _, _, _, true>(
+                &mut cs,
+                Some(wit.clone()),
+                &round_function,
+                (
+                    splitting_factor,
+                    splitting_factor,
+                    rns_params.clone(),
+                    aggregation_params.clone(),
+                    padding_vk_committment,
+                    padding_vk_encoding.clone(),
+                    padding_public_inputs.clone(),
+                    padding_proofs.clone(),
+                    padding_aggregations.clone(),
+                    g2_points.clone(),
+                ),
+            ).unwrap();
 
-        let mut output_file_for_json = std::fs::File::create(format!("{}.json", &output_file_name)).unwrap();
-        serde_json::to_writer(&mut output_file_for_json, &result_observable_output).unwrap();
+            // dbg!(&aggregated_public_input.get_value());
+            // dbg!(&output_data.create_witness());
 
-        use crate::abstract_zksync_circuit::concrete_circuits::NodeAggregationCircuit;
+            let public_input_value = aggregated_public_input.get_value().unwrap();
+            let result_observable_output = output_data.create_witness().unwrap();
 
-        let circuit = NodeAggregationCircuit::new(
-            Some(wit),
-            (
-                level == 1,
-                splitting_factor,
-                rns_params.clone(),
-                aggregation_params.clone(),
-                padding_vk_committment,
-                padding_vk_encoding.to_vec(),
-                padding_proof_public_input,
-                padding_proof.clone(),
-                padding_aggregation,
-                g2_points.clone(),
-            ),
-            round_function.clone()
-        );
+            wit.closed_form_input.observable_output = result_observable_output.clone();
 
-        let (proof, vk) = if std::path::Path::new(&format!("rec_vk_{}_0.json", level)).exists() {
-            println!("REUSING VERIFICATION KEY");
-            let mut vk_file_for_json = std::fs::File::open(&format!("rec_vk_{}_0.json", level)).unwrap();
-            let vk: VerificationKey<Bn256, NodeAggregationCircuit<Bn256>> = serde_json::from_reader(&mut vk_file_for_json).unwrap();
+            let mut output_file_for_json = std::fs::File::create(format!("{}_{}.json", &new_level_output_base_file_name, idx)).unwrap();
+            serde_json::to_writer(&mut output_file_for_json, &result_observable_output).unwrap();
+
+            println!("Creating aggregation proof");
+
+            let circuit = NodeAggregationCircuit::new(
+                Some(wit),
+                (
+                    splitting_factor,
+                    splitting_factor,
+                    rns_params.clone(),
+                    aggregation_params.clone(),
+                    padding_vk_committment,
+                    padding_vk_encoding.to_vec(),
+                    padding_public_inputs.clone(),
+                    padding_proofs.clone(),
+                    padding_aggregations.clone(),
+                    g2_points.clone(),
+                ),
+                round_function.clone()
+            );
+
+            let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::NodeAggregation(circuit);
+
+            let vk_file_name_for_json = format!("{}.json", node_vk_file_name);
+            let mut vk_file_for_json = std::fs::File::open(&vk_file_name_for_json).unwrap();
+            let vk: VerificationKey<Bn256, ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>> = serde_json::from_reader(&mut vk_file_for_json).unwrap();
             
-            circuit_testing::prove_only_circuit_for_params::<
+            let (proof, _vk) = circuit_testing::prove_only_circuit_for_params::<
                 Bn256, 
                 _, 
                 PlonkCsWidth4WithNextStepAndCustomGatesParams, 
                 RescueTranscriptForRecursion<'_>
-            >(circuit, Some(transcript_params), vk.clone()).unwrap()
-        } else {
-            circuit_testing::prove_and_verify_circuit_for_params::<
-                Bn256, 
-                _, 
-                PlonkCsWidth4WithNextStepAndCustomGatesParams, 
-                RescueTranscriptForRecursion<'_>
-            >(circuit, Some(transcript_params)).unwrap()
-        };
+            >(circuit, Some(transcript_params), vk.clone()).unwrap();
 
-        let mut vk_file_for_bytes = std::fs::File::create(format!("{}.key", &vk_file_name)).unwrap();
-        let mut vk_file_for_json = std::fs::File::create(format!("{}.json", &vk_file_name)).unwrap();
+            let mut proof_file_for_bytes = std::fs::File::create(new_level_proof_file_name_for_bytes).unwrap();
+            let mut proof_file_for_json = std::fs::File::create(new_level_proof_file_name_for_json).unwrap();
 
-        let mut proof_file_for_bytes = std::fs::File::create(format!("{}.key", &proof_file_name)).unwrap();
-        let mut proof_file_for_json = std::fs::File::create(format!("{}.json", &proof_file_name)).unwrap();
+            proof.write(&mut proof_file_for_bytes).unwrap();
+            serde_json::to_writer(&mut proof_file_for_json, &proof).unwrap();
 
-        vk.write(&mut vk_file_for_bytes).unwrap();
-        proof.write(&mut proof_file_for_bytes).unwrap();
+            assert_eq!(proof.inputs[0], public_input_value, "Public input diverged for circuit {}", idx);
+        }
 
-        serde_json::to_writer(&mut vk_file_for_json, &vk).unwrap();
-        serde_json::to_writer(&mut proof_file_for_json, &proof).unwrap();
+        previous_sequence = merged;
+        final_level = level;
 
-        assert_eq!(proof.inputs[0], public_input_value, "Public input diverged for circuit {}", idx);
+        if previous_sequence.len() == 1 {
+            break;
+        }
     }
 
-    // now feed it into the scheduler
+    use sync_vm::recursion::node_aggregation::NodeAggregationOutputDataWitness;
 
-    let vk_file_name = format!("rec_vk_{}_{}", level, 0);
-    let proof_file_name = format!("rec_proof_{}_{}", level, 0);
-    let output_file_name = format!("rec_output_{}_{}", level, 0);
+    let final_proof_file_name = format!("node_proof_{}_0.json", final_level);
+    let final_output_file_name = format!("node_output_{}_0.json", final_level);
 
-    use crate::abstract_zksync_circuit::concrete_circuits::NodeAggregationCircuit;
-
-    let mut vk_file_for_json = std::fs::File::open(format!("{}.json", &vk_file_name)).unwrap();
-    let mut proof_file_for_json = std::fs::File::open(format!("{}.json", &proof_file_name)).unwrap();
-    let mut output_file_for_json = std::fs::File::open(format!("{}.json", &output_file_name)).unwrap();
+    let mut vk_file_for_json = std::fs::File::open(format!("{}.json", &node_vk_file_name)).unwrap();
+    let mut proof_file_for_json = std::fs::File::open(&final_proof_file_name).unwrap();
+    let mut output_file_for_json = std::fs::File::open(&final_output_file_name).unwrap();
+    let mut scheduler_vk_file_for_json = std::fs::File::open(format!("{}.json", &scheduler_vk_file_name)).unwrap();
 
     let vk: VerificationKey<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_reader(&mut vk_file_for_json).unwrap();
+    let scheduler_vk: VerificationKey<Bn256, ZkSyncCircuit<Bn256, VmWitnessOracle<Bn256>>> = serde_json::from_reader(&mut scheduler_vk_file_for_json).unwrap();
     let proof: Proof<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_reader(&mut proof_file_for_json).unwrap();
     let output: NodeAggregationOutputDataWitness<Bn256> = serde_json::from_reader(&mut output_file_for_json).unwrap();
 
@@ -1094,11 +1086,11 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         Some(scheduler_partial_input.clone()), 
         &round_function, 
         (
-            64,
+            scheduler_upper_bound,
             rns_params.clone(),
             aggregation_params.clone(),
             padding_vk_encoding,
-            padding_proof.clone(),
+            padding_proofs[0].clone(),
             g2_points.clone(),
         )
     );
@@ -1106,33 +1098,32 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     let circuit = SchedulerCircuit::new(
         Some(scheduler_partial_input),
         (
-            64,
+            scheduler_upper_bound,
             rns_params.clone(),
             aggregation_params.clone(),
             padding_vk_encoding.to_vec(),
-            padding_proof.clone(),
+            padding_proofs[0].clone(),
             g2_points.clone(),
         ),
         round_function.clone()
     );
 
-    let (proof, vk) = circuit_testing::prove_and_verify_circuit_for_params::<
+    let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::Scheduler(circuit);
+
+    use sync_vm::franklin_crypto::bellman::pairing::ff::ScalarEngine;
+
+    // last proof uses Keccak transcript
+    let (proof, _) = circuit_testing::prove_only_circuit_for_params::<
         Bn256, 
         _, 
         PlonkCsWidth4WithNextStepAndCustomGatesParams, 
         RollingKeccakTranscript<<Bn256 as ScalarEngine>::Fr>
-    >(circuit, None).unwrap(); 
-
-    let mut vk_file_for_bytes = std::fs::File::create("scheduler_vk.key").unwrap();
-    let mut vk_file_for_json = std::fs::File::create("scheduler_vk.json").unwrap();
+    >(circuit, None, scheduler_vk).unwrap(); 
 
     let mut proof_file_for_bytes = std::fs::File::create("scheduler_proof.key").unwrap();
     let mut proof_file_for_json = std::fs::File::create("scheduler_proof.json").unwrap();
 
-    vk.write(&mut vk_file_for_bytes).unwrap();
     proof.write(&mut proof_file_for_bytes).unwrap();
-
-    serde_json::to_writer(&mut vk_file_for_json, &vk).unwrap();
     serde_json::to_writer(&mut proof_file_for_json, &proof).unwrap();
 
     println!("Done");

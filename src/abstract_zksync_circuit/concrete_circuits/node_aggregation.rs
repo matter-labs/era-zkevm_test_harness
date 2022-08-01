@@ -18,15 +18,15 @@ use sync_vm::recursion::recursion_tree::NUM_LIMBS;
 impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for NodeAggregationInstanceSynthesisFunction {
     type Witness = NodeAggregationCircuitInstanceWitness<E>;
     type Config = (
-        bool,
+        usize,
         usize, 
         RnsParameters<E, E::Fq>, 
         AggregationParameters<E, GenericTranscriptGadget<E, RescueParams<E, 2, 3>, 2, 3>, RescueParams<E, 2, 3>, 2, 3>,
         E::Fr, 
         Vec<E::Fr>, 
-        E::Fr,
-        ZkSyncParametricProof<E>, 
-        ([E::Fr; NUM_LIMBS], [E::Fr; NUM_LIMBS], [E::Fr; NUM_LIMBS], [E::Fr; NUM_LIMBS]),
+        Vec<E::Fr>,
+        Vec<ZkSyncParametricProof<E>>, 
+        Vec<([E::Fr; NUM_LIMBS], [E::Fr; NUM_LIMBS], [E::Fr; NUM_LIMBS], [E::Fr; NUM_LIMBS])>,
         Option<[E::G2Affine; 2]>
     );
     type RoundFunction = GenericHasher<E, RescueParams<E, 2, 3>, 2, 3>;
@@ -45,21 +45,21 @@ fn node_aggregation_outer_function<E: Engine, CS: ConstraintSystem<E>, R: Circui
     witness: Option<NodeAggregationCircuitInstanceWitness<E>>,
     round_function: &R,
     params: (
-        bool,
         usize, 
+        usize,
         RnsParameters<E, E::Fq>, 
         AggregationParameters<E, GenericTranscriptGadget<E, RescueParams<E, 2, 3>, 2, 3>, RescueParams<E, 2, 3>, 2, 3>,
         E::Fr, 
         Vec<E::Fr>, 
-        E::Fr,
-        ZkSyncParametricProof<E>, 
-        ([E::Fr; NUM_LIMBS], [E::Fr; NUM_LIMBS], [E::Fr; NUM_LIMBS], [E::Fr; NUM_LIMBS]),
+        Vec<E::Fr>,
+        Vec<ZkSyncParametricProof<E>>, 
+        Vec<([E::Fr; NUM_LIMBS], [E::Fr; NUM_LIMBS], [E::Fr; NUM_LIMBS], [E::Fr; NUM_LIMBS])>,
         Option<[E::G2Affine; 2]>
     ),
 ) -> Result<AllocatedNum<E>, SynthesisError> {
     let (
-        should_aggregate_leafs,
         num_proofs_to_aggregate, 
+        num_proofs_aggregated_by_leaf,
         rns_params, 
         aggregation_params,
         padding_vk_committment,
@@ -73,8 +73,8 @@ fn node_aggregation_outer_function<E: Engine, CS: ConstraintSystem<E>, R: Circui
     let padding_vk_encoding_fixed: [E::Fr; sync_vm::recursion::node_aggregation::VK_ENCODING_LENGTH] = padding_vk_encoding.try_into().unwrap();
 
     let params = (
-        should_aggregate_leafs,
         num_proofs_to_aggregate, 
+        num_proofs_aggregated_by_leaf,
         rns_params, 
         aggregation_params,
         padding_vk_committment,

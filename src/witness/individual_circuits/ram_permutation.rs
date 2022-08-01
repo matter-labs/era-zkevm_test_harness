@@ -50,6 +50,8 @@ pub fn compute_ram_circuit_snapshots<
         artifacts.sorted_memory_queue_states.push(intermediate_info);
     }
 
+    // dbg!(&sorted_memory_queries_simulator.num_items);
+
     assert_eq!(sorted_memory_queries_simulator.num_items, artifacts.memory_queue_simulator.num_items);
 
     // now we should chunk it by circuits but briefly simulating their logic

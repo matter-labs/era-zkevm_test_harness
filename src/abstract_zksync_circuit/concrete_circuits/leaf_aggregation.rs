@@ -23,8 +23,8 @@ impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for LeafAggregationInstanceSyn
         AggregationParameters<E, GenericTranscriptGadget<E, RescueParams<E, 2, 3>, 2, 3>, RescueParams<E, 2, 3>, 2, 3>,
         E::Fr, 
         Vec<E::Fr>, 
-        E::Fr,
-        ZkSyncParametricProof<E>, 
+        Vec<E::Fr>,
+        Vec<ZkSyncParametricProof<E>>, 
         Option<[E::G2Affine; 2]>
     );
     type RoundFunction = GenericHasher<E, RescueParams<E, 2, 3>, 2, 3>;
@@ -48,8 +48,8 @@ fn leaf_aggregation_outer_function<E: Engine, CS: ConstraintSystem<E>, R: Circui
         AggregationParameters<E, GenericTranscriptGadget<E, RescueParams<E, 2, 3>, 2, 3>, RescueParams<E, 2, 3>, 2, 3>,
         E::Fr, 
         Vec<E::Fr>, 
-        E::Fr,
-        ZkSyncParametricProof<E>, 
+        Vec<E::Fr>,
+        Vec<ZkSyncParametricProof<E>>, 
         Option<[E::G2Affine; 2]>
     ),
 ) -> Result<AllocatedNum<E>, SynthesisError> {

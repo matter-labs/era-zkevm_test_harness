@@ -50,6 +50,7 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
 // ) -> FullBlockArtifacts<Bn256> {
 ) -> (BlockBasicCircuits<Bn256>, BlockBasicCircuitsPublicInputs<Bn256>, SchedulerCircuitInstanceWitness<Bn256>) {
     assert!(zk_porter_is_available == false);
+    assert_eq!(ram_verification_queries.len(), 0, "for now it's implemented such that we do not need it");
 
     assert!(block_number >= 1);
 
@@ -288,7 +289,7 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
         use sync_vm::traits::CSWitnessable;
         use sync_vm::recursion::node_aggregation::NodeAggregationOutputData;
 
-        let memory_verification_queries: [sync_vm::glue::code_unpacker_sha256::memory_query_updated::MemoryQueryWitness<Bn256>; NUM_MEMORY_QUERIES_TO_VERIFY] = memory_verification_queries.try_into().unwrap();
+        // let memory_verification_queries: [sync_vm::glue::code_unpacker_sha256::memory_query_updated::MemoryQueryWitness<Bn256>; NUM_MEMORY_QUERIES_TO_VERIFY] = memory_verification_queries.try_into().unwrap();
 
         let scheduler_circuit_witness = SchedulerCircuitInstanceWitness {
             prev_block_data: previous_block_passthrough,
@@ -308,7 +309,7 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
             l1messages_sorter_observable_output: basic_circuits.l1_messages_sorter_circuit.clone_witness().unwrap().closed_form_input.observable_output,
             l1messages_merklizer_observable_output: basic_circuits.l1_messages_merklizer_circuit.clone_witness().unwrap().closed_form_input.observable_output,
             storage_log_tail: basic_circuits.main_vm_circuits.first().unwrap().clone_witness().unwrap().closed_form_input.observable_input.rollback_queue_tail_for_block,
-            memory_queries_to_verify: memory_verification_queries,
+            // memory_queries_to_verify: memory_verification_queries,
             per_circuit_closed_form_inputs: per_circuit_inputs,
             bootloader_heap_memory_state: memory_state_after_bootloader_heap_writes,
             ram_sorted_queue_state: ram_permutation_sorted_state,

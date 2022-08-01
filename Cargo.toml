@@ -3,7 +3,7 @@ name = "zkevm_test_harness"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+resolver = "2"
 
 [dependencies]
 # zk_evm = {path = "../zk_evm"}
