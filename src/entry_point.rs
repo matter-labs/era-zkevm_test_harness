@@ -188,12 +188,10 @@ use zk_evm::block_properties::BlockProperties;
 pub fn create_out_of_circuit_global_context(
     zkporter_is_available: bool,
     default_aa_code_hash: U256,
-    ergs_per_pubdata_byte_limit_in_block: u32,
     ergs_per_code_decommittment_word: u16,
 ) -> BlockProperties {
     BlockProperties {
         default_aa_code_hash,
-        ergs_per_pubdata_byte_limit_in_block,
         zkporter_is_available,
         ergs_per_code_decommittment_word,
     }
@@ -202,11 +200,9 @@ pub fn create_out_of_circuit_global_context(
 pub fn create_in_circuit_global_context<E: Engine>(
     zkporter_is_available: bool,
     default_aa_code_hash: U256,
-    ergs_per_pubdata_byte_limit_in_block: u32,
     ergs_per_code_decommittment_word: u16,
 ) -> GlobalContext<E> {
     GlobalContext {
-        ergs_per_pubdata_byte_in_block: UInt32::from_uint(ergs_per_pubdata_byte_limit_in_block),
         ergs_per_code_decommittment_word: UInt16::from_uint(ergs_per_code_decommittment_word),
         zkporter_is_available: Boolean::constant(zkporter_is_available),
         default_aa_code_hash: UInt256::constant_from_biguint(u256_to_biguint(default_aa_code_hash)),

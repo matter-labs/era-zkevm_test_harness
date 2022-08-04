@@ -142,7 +142,6 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
     let block_properties = create_out_of_circuit_global_context(
         zk_porter_is_available, 
         default_aa_code_hash, 
-        ergs_per_pubdata_in_block, 
         ergs_per_code_word_decommittment,
     );
 
@@ -215,7 +214,6 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
     let (basic_circuits, basic_circuits_inputs, compact_form_witnesses) = create_leaf_level_circuits_and_scheduler_witness(
         zk_porter_is_available,
         default_aa_code_hash,
-        ergs_per_pubdata_in_block,
         ergs_per_code_word_decommittment,
         instance_oracles,
         artifacts,
@@ -256,7 +254,6 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
             bootloader_code_hash: u256_to_bytes32witness_be(entry_point_code_hash_as_u256),
             default_aa_code_hash: u256_to_bytes32witness_be(default_aa_code_hash),
             ergs_per_code_decommittment_word: ergs_per_code_word_decommittment,
-            ergs_per_pubdata_byte_in_block: ergs_per_pubdata_in_block,
             zkporter_is_available: zk_porter_is_available,
             timestamp: block_timestamp,
             _marker: std::marker::PhantomData
