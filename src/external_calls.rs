@@ -140,8 +140,6 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
     tools.witness_tracer.add_decommittment(0, entry_point_decommittment_query, entry_point_decommittment_query_witness.clone());
 
     let block_properties = create_out_of_circuit_global_context(
-        block_number, 
-        block_timestamp, 
         zk_porter_is_available, 
         default_aa_code_hash, 
         ergs_per_pubdata_in_block, 
@@ -171,7 +169,7 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
         out_of_circuit_vm.cycle(&mut tracer);
     }
 
-    assert_eq!(out_of_circuit_vm.local_state.callstack.current.pc, 0);
+    assert_eq!(out_of_circuit_vm.local_state.callstack.current.pc, 0, "root frame ended up with panic");
 
     let vm_local_state = out_of_circuit_vm.local_state;
 
@@ -215,8 +213,6 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
     use crate::witness::postprocessing::create_leaf_level_circuits_and_scheduler_witness;
 
     let (basic_circuits, basic_circuits_inputs, compact_form_witnesses) = create_leaf_level_circuits_and_scheduler_witness(
-        block_number,
-        block_timestamp,
         zk_porter_is_available,
         default_aa_code_hash,
         ergs_per_pubdata_in_block,

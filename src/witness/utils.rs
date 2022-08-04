@@ -170,7 +170,6 @@ pub fn vm_instance_witness_to_vm_formal_state<E: Engine>(
     hidden_fsm.tx_number_in_block = vm_state.tx_number_in_block;
     hidden_fsm.previous_super_pc = vm_state.previous_super_pc;
     hidden_fsm.did_call_or_ret_recently = vm_state.did_call_or_ret_recently;
-    hidden_fsm.tx_origin = u160_from_address(vm_state.tx_origin);
     hidden_fsm.ergs_per_pubdata_byte = vm_state.current_ergs_per_pubdata_byte;
 
     hidden_fsm.memory_queue_state = aux_params.memory_queue_state.tail;

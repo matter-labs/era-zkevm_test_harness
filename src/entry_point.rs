@@ -186,8 +186,6 @@ pub fn alloc_arithmetic_port<E: Engine, CS: ConstraintSystem<E>>(
 use zk_evm::block_properties::BlockProperties;
 
 pub fn create_out_of_circuit_global_context(
-    block_number: u64,
-    block_timestamp: u64,
     zkporter_is_available: bool,
     default_aa_code_hash: U256,
     ergs_per_pubdata_byte_limit_in_block: u32,
@@ -195,8 +193,6 @@ pub fn create_out_of_circuit_global_context(
 ) -> BlockProperties {
     BlockProperties {
         default_aa_code_hash,
-        block_number,
-        block_timestamp,
         ergs_per_pubdata_byte_limit_in_block,
         zkporter_is_available,
         ergs_per_code_decommittment_word,
@@ -204,16 +200,12 @@ pub fn create_out_of_circuit_global_context(
 }
 
 pub fn create_in_circuit_global_context<E: Engine>(
-    block_number: u64,
-    block_timestamp: u64,
     zkporter_is_available: bool,
     default_aa_code_hash: U256,
     ergs_per_pubdata_byte_limit_in_block: u32,
     ergs_per_code_decommittment_word: u16,
 ) -> GlobalContext<E> {
     GlobalContext {
-        block_number: UInt64::from_uint(block_number),
-        block_timestamp: UInt64::from_uint(block_timestamp),
         ergs_per_pubdata_byte_in_block: UInt32::from_uint(ergs_per_pubdata_byte_limit_in_block),
         ergs_per_code_decommittment_word: UInt16::from_uint(ergs_per_code_decommittment_word),
         zkporter_is_available: Boolean::constant(zkporter_is_available),
@@ -376,7 +368,6 @@ pub fn run_vm_instance<
     let tx_number_in_block = UInt16::allocate(cs, Some(initial_state.tx_number_in_block)).unwrap();
     let previous_super_pc = UInt16::allocate(cs, Some(initial_state.previous_super_pc)).unwrap();
     let did_call_or_ret_recently = Boolean::alloc(cs, Some(initial_state.did_call_or_ret_recently)).unwrap();
-    let tx_origin = UInt160::allocate(cs, Some(u160_from_address(initial_state.tx_origin))).unwrap();
     let ergs_per_pubdata_byte = UInt32::allocate(cs, Some(initial_state.current_ergs_per_pubdata_byte)).unwrap();
 
     let memory_queue_state =
@@ -399,7 +390,6 @@ pub fn run_vm_instance<
         tx_number_in_block,
         previous_super_pc,
         did_call_or_ret_recently,
-        tx_origin,
         ergs_per_pubdata_byte,
         callstack: initial_callstack,
         pending_sponges: PendingRoundFunctions::<E, 3>::empty(), // we guarantee that those are empty
@@ -530,8 +520,6 @@ pub fn assert_expected_final_state<E: Engine>(
     assert_eq!(out_of_circuit_state.current_ergs_per_pubdata_byte, wit.ergs_per_pubdata_byte);
     // tx number in block
     assert_eq!(out_of_circuit_state.tx_number_in_block, wit.tx_number_in_block);
-    // tx.origin
-    assert_eq!(out_of_circuit_state.tx_origin, address_from_u160(wit.tx_origin));
     // state and depth of the forward storage queue
     assert_eq!(auxilary_final_parameters.storage_log_queue_state.tail_state, wit.callstack.current_context.log_queue_forward_tail);
     assert_eq!(auxilary_final_parameters.storage_log_queue_state.num_items, wit.callstack.current_context.log_queue_forward_part_length);

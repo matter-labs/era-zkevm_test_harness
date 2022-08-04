@@ -16,8 +16,6 @@ use std::sync::Arc;
 use crossbeam::atomic::AtomicCell;
 
 pub fn create_leaf_level_circuits_and_scheduler_witness(
-    block_number: u64,
-    block_timestamp: u64,
     zkporter_is_available: bool,
     default_aa_code_hash: U256,
     ergs_per_pubdata_in_block: u32,
@@ -55,8 +53,6 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
 
     let in_circuit_global_context =
         create_in_circuit_global_context::<Bn256>(
-            block_number, 
-            block_timestamp, 
             zkporter_is_available, 
             default_aa_code_hash,
             ergs_per_pubdata_in_block, 
