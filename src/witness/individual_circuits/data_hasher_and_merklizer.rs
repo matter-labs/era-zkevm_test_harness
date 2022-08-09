@@ -112,7 +112,7 @@ pub fn compute_merklizer_witness<
     // may be merklize
     let elements = simulator.witness.iter().map(|el| &el.2);
     use crate::binary_merklize_set;
-    let root = binary_merklize_set::<SERIALIZATION_WIDTH, _, Keccak256>(
+    let root = binary_merklize_set::<SERIALIZATION_WIDTH, _, Keccak256, _>(
         elements,
         capacity,
     );
