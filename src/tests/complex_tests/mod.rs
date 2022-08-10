@@ -196,7 +196,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         vec![],
         vec![],
         cycle_limit,
-        round_function.clone(),
+        // round_function.clone(),
         geometry,
         storage_impl,
         &mut tree

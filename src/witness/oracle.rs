@@ -319,7 +319,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
     let mut unique_query_id_into_chain_positions: HashMap<u64, usize> = HashMap::with_capacity(num_forwards + num_rollbacks);
 
-    println!("Running storage log simulation");
+    tracing::debug!("Running storage log simulation");
 
     // for ((_, (query_marker, cycle, query)), was_applied) in
     for (extended_query, was_applied) in
@@ -626,7 +626,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
     // and now do trivial simulation
 
-    println!("Running callstack sumulation");
+    tracing::debug!("Running callstack sumulation");
 
     for (_idx, el) in callstack_with_aux_data.full_history.iter().cloned().enumerate() {
         let frame_index = el.frame_index;
@@ -826,7 +826,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
     artifacts.demuxed_sha256_precompile_queries = demuxed_sha256_precompile_queries;
     artifacts.demuxed_ecrecover_queries = demuxed_ecrecover_queries;
 
-    println!("Processing artifacts queue");
+    tracing::debug!("Processing artifacts queue");
 
     artifacts.process(round_function, geometry, tree, num_non_deterministic_heap_queries);
 
@@ -849,7 +849,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
     assert!(decommittment_queue_states_before_start.len() == 1);
 
-    println!("Processing VM snapshots queue");
+    tracing::debug!("Processing VM snapshots queue (total {:?})", vm_snapshots.windows(2).len());
 
     for (_circuit_idx, pair) in vm_snapshots.windows(2).enumerate() {
         let initial_state = &pair[0];
@@ -1112,7 +1112,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
             }
             let (_cycle, query) = self.memory_read_witness.drain(..1).next().unwrap();
 
-            // println!("Query value = 0x{:064x}", query.value);
+            // tracing::debug!("Query value = 0x{:064x}", query.value);
             if let Some(ts) = timestamp.get_value() {
                 let _roughly_a_cycle = (ts - zk_evm::zkevm_opcode_defs::STARTING_TIMESTAMP) / TIMESTAMPS_PER_CYCLE
                     + INITIAL_MONOTONIC_CYCLE_COUNTER;
@@ -1134,7 +1134,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
                 );
             }
 
-            // println!("memory word = 0x{:x}", query.value);
+            // tracing::debug!("memory word = 0x{:x}", query.value);
 
             Some(u256_to_biguint(query.value))
         } else {

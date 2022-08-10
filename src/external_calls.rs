@@ -16,10 +16,12 @@ use crate::franklin_crypto::plonk::circuit::allocated_num::Num;
 use crate::witness::tree::ZKSyncTestingTree;
 use crate::witness::full_block_artifact::BlockBasicCircuits;
 use blake2::Blake2s256;
+use sync_vm::testing::create_test_artifacts_with_optimized_gate;
 use crate::witness::tree::ZkSyncStorageLeaf;
 use crate::witness::tree::BinarySparseStorageTree;
 use crate::witness::full_block_artifact::BlockBasicCircuitsPublicInputs;
 use sync_vm::scheduler::block_header::*;
+use ::tracing;
 
 use sync_vm::circuit_structures::bytes32::Bytes32;
 use sync_vm::scheduler::{NUM_MEMORY_QUERIES_TO_VERIFY, SCHEDULER_TIMESTAMP};
@@ -27,7 +29,7 @@ use sync_vm::scheduler::{NUM_MEMORY_QUERIES_TO_VERIFY, SCHEDULER_TIMESTAMP};
 /// This is a testing interface that basically will
 /// setup the environment and will run out-of-circuit and then in-circuit
 /// and perform intermediate tests
-pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn256>>, S: Storage>(
+pub fn run<S: Storage>(
     previous_block_timestamp: u64,
     block_number: u64,
     block_timestamp: u64,
@@ -43,12 +45,15 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
     calldata: Vec<u8>, // for real block must be empty
     ram_verification_queries: Vec<(u32, U256)>, // we may need to check that after the bootloader's memory is filled
     cycle_limit: usize,
-    round_function: R, // used for all queues implementation
+    // round_function: R, // used for all queues implementation
     geometry: GeometryConfig,
     storage: S,
     tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
 // ) -> FullBlockArtifacts<Bn256> {
 ) -> (BlockBasicCircuits<Bn256>, BlockBasicCircuitsPublicInputs<Bn256>, SchedulerCircuitInstanceWitness<Bn256>) {
+    let (_, round_function, _) = create_test_artifacts_with_optimized_gate();
+
+
     assert!(zk_porter_is_available == false);
     assert_eq!(ram_verification_queries.len(), 0, "for now it's implemented such that we do not need it");
 
@@ -159,11 +164,11 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
 
     let mut early_breakpoint_after_snapshot = false;
     let mut tracer = GenericNoopTracer::<_>::new();
-    println!("Running out of circuit for {} cycles", cycle_limit);
+    tracing::debug!("Running out of circuit for {} cycles", cycle_limit);
     for _cycle in 0..cycle_limit {
         if out_of_circuit_vm.execution_has_ended() && !out_of_circuit_vm.is_any_pending() {
             if out_of_circuit_vm.witness_tracer.cycle_counter_in_this_snapshot  == 1 {
-                println!("Ran for {} cycles", _cycle + 1);
+                tracing::debug!("Ran for {} cycles", _cycle + 1);
                 early_breakpoint_after_snapshot = true;
                 break;
             }

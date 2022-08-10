@@ -43,27 +43,12 @@ pub trait BinarySparseStorageTree<
     H: BinaryHasher<HASH_OUTPUT_WIDTH>,
     L: EnumeratedBinaryLeaf<LEAF_DATA_WIDTH>,
 > {
-    fn empty() -> Self;
     fn next_enumeration_index(&self) -> u64;
-    fn set_next_enumeration_index(&mut self, value: u64);
     fn root(&self) -> [u8; HASH_OUTPUT_WIDTH];
-    fn get_leaf(&self, index: &[u8; INDEX_BYTES]) -> LeafQuery<DEPTH, INDEX_BYTES, LEAF_DATA_WIDTH, HASH_OUTPUT_WIDTH, L>;
+    fn get_leaf(&mut self, index: &[u8; INDEX_BYTES]) -> LeafQuery<DEPTH, INDEX_BYTES, LEAF_DATA_WIDTH, HASH_OUTPUT_WIDTH, L>;
     fn insert_leaf(&mut self, index: &[u8; INDEX_BYTES], leaf: L) -> LeafQuery<DEPTH, INDEX_BYTES, LEAF_DATA_WIDTH, HASH_OUTPUT_WIDTH, L>;
-    fn insert_many_leafs(&mut self, indexes: &[[u8; INDEX_BYTES]], leafs: Vec<L>) -> Vec<LeafQuery<DEPTH, INDEX_BYTES, LEAF_DATA_WIDTH, HASH_OUTPUT_WIDTH, L>> {
-        assert_eq!(indexes.len(), leafs.len());
-        // let mut uniqueness_checker = std::collections::HashSet::new();
-        let mut result = Vec::with_capacity(indexes.len());
-        for (idx, leaf) in indexes.iter().zip(leafs.into_iter()) {
-            // let is_unique = uniqueness_checker.insert(*idx);
-            // assert!(is_unique);
-            let query = self.insert_leaf(idx, leaf);
-            result.push(query);
-        }
-
-        result
-    }
     // fn filter_renumerate(&self, indexes: &[[u8; INDEX_BYTES]], leafs: &[L]) -> (u64, Vec<L>, Vec<L>);
-    fn filter_renumerate<'a>(&self, indexes: impl Iterator<Item = &'a [u8; INDEX_BYTES]>, leafs: impl Iterator<Item = L>) -> (u64, Vec<([u8; INDEX_BYTES], L)>, Vec<L>);
+    fn filter_renumerate<'a>(&self, indexes: impl Iterator<Item=&'a [u8; INDEX_BYTES]>, leafs: impl Iterator<Item=L>) -> (u64, Vec<([u8; INDEX_BYTES], L)>, Vec<L>);
     fn verify_inclusion(root: &[u8; 32], query: &LeafQuery<DEPTH, INDEX_BYTES, LEAF_DATA_WIDTH, HASH_OUTPUT_WIDTH, L>) -> bool;
     fn verify_inclusion_proxy(&self, root: &[u8; 32], query: &LeafQuery<DEPTH, INDEX_BYTES, LEAF_DATA_WIDTH, HASH_OUTPUT_WIDTH, L>) -> bool {
         Self::verify_inclusion(root, query)
@@ -155,6 +140,8 @@ impl<
             leafs: HashMap::new(),
         }
     }
+
+    pub fn empty() -> Self { Self::new() }
 
     fn insert_path_element(&mut self, level: usize, index: [u8; INDEX_BYTES], value: [u8; 32]) {
         // the only important thing is to cleanup the lowest bits for consistency
@@ -327,19 +314,13 @@ impl<
     H,
     L,
 > for InMemoryStorageTree<DEPTH, INDEX_BYTES, LEAF_METADATA_WIDTH, H, L> {
-    fn empty() -> Self {
-        Self::new()
-    }
     fn next_enumeration_index(&self) -> u64 {
         self.next_enumeration_index
-    }
-    fn set_next_enumeration_index(&mut self, value: u64) {
-        self.next_enumeration_index = value;
     }
     fn root(&self) -> [u8; 32] {
         self.root
     }
-    fn get_leaf(&self, index: &[u8; INDEX_BYTES]) -> LeafQuery<DEPTH, INDEX_BYTES, 32, 32, L> {
+    fn get_leaf(&mut self, index: &[u8; INDEX_BYTES]) -> LeafQuery<DEPTH, INDEX_BYTES, 32, 32, L> {
         Self::get_leaf(self, index)
     }
     fn insert_leaf(&mut self, index: &[u8; INDEX_BYTES], leaf: L) -> LeafQuery<DEPTH, INDEX_BYTES, 32, 32, L> {
