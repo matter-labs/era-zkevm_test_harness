@@ -29,7 +29,7 @@ use sync_vm::scheduler::{NUM_MEMORY_QUERIES_TO_VERIFY, SCHEDULER_TIMESTAMP};
 /// This is a testing interface that basically will
 /// setup the environment and will run out-of-circuit and then in-circuit
 /// and perform intermediate tests
-pub fn run<S: Storage>(
+pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn256>>, S: Storage>(
     previous_block_timestamp: u64,
     block_number: u64,
     block_timestamp: u64,
@@ -45,15 +45,12 @@ pub fn run<S: Storage>(
     calldata: Vec<u8>, // for real block must be empty
     ram_verification_queries: Vec<(u32, U256)>, // we may need to check that after the bootloader's memory is filled
     cycle_limit: usize,
-    // round_function: R, // used for all queues implementation
+    round_function: R, // used for all queues implementation
     geometry: GeometryConfig,
     storage: S,
     tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
 // ) -> FullBlockArtifacts<Bn256> {
 ) -> (BlockBasicCircuits<Bn256>, BlockBasicCircuitsPublicInputs<Bn256>, SchedulerCircuitInstanceWitness<Bn256>) {
-    let (_, round_function, _) = create_test_artifacts_with_optimized_gate();
-
-
     assert!(zk_porter_is_available == false);
     assert_eq!(ram_verification_queries.len(), 0, "for now it's implemented such that we do not need it");
 
@@ -342,3 +339,46 @@ pub fn run<S: Storage>(
     (basic_circuits, basic_circuits_inputs, scheduler_circuit_witness)
 }
 
+pub fn run_with_fixed_params<S: Storage>(
+    previous_block_timestamp: u64,
+    block_number: u64,
+    block_timestamp: u64,
+    caller: Address, // for real block must be zero
+    entry_point_address: Address, // for real block must be the bootloader
+    entry_point_code: Vec<[u8; 32]>, // for read lobkc must be a bootloader code
+    initial_heap_content: Vec<u8>, // bootloader starts with non-deterministic heap
+    zk_porter_is_available: bool,
+    default_aa_code_hash: U256,
+    ergs_per_pubdata_in_block: u32,
+    ergs_per_code_word_decommittment: u16,
+    used_bytecodes: std::collections::HashMap<U256, Vec<[u8; 32]>>, // auxilary information to avoid passing a full set of all used codes
+    calldata: Vec<u8>, // for real block must be empty
+    ram_verification_queries: Vec<(u32, U256)>, // we may need to check that after the bootloader's memory is filled
+    cycle_limit: usize,
+    geometry: GeometryConfig,
+    storage: S,
+    tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
+) -> (BlockBasicCircuits<Bn256>, BlockBasicCircuitsPublicInputs<Bn256>, SchedulerCircuitInstanceWitness<Bn256>) {
+    let (_, round_function, _) = create_test_artifacts_with_optimized_gate();
+    run(
+        previous_block_timestamp,
+        block_number,
+        block_timestamp,
+        caller,
+        entry_point_address,
+        entry_point_code,
+        initial_heap_content,
+        zk_porter_is_available,
+        default_aa_code_hash,
+        ergs_per_pubdata_in_block,
+        ergs_per_code_word_decommittment,
+        used_bytecodes,
+        calldata,
+        ram_verification_queries,
+        cycle_limit,
+        round_function,
+        geometry,
+        storage,
+        tree,
+    )
+}

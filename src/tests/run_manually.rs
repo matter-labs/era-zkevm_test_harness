@@ -257,7 +257,7 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
         vec![],
         vec![],
         cycle_limit,
-        // round_function,
+        round_function,
         geometry,
         storage_impl,
         &mut tree

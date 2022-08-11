@@ -111,11 +111,10 @@ pub fn decompose_into_storage_application_witnesses<
             if el.rw_flag {
                 // by convension we have read and write both
                 let read_query = tree.get_leaf(&key);
-                assert!(tree.verify_inclusion_proxy(&tree.root(), &read_query));
+                // assert!(tree.verify_inclusion_proxy(&tree.root(), &read_query));
                 let mut buffer = [0u8; 32];
                 el.read_value.to_big_endian(&mut buffer);
-                // TODO: verify if we need to pass merkle proof for read
-                // assert_eq!(&buffer, read_query.leaf.value(), "While writing: divergent leaf read value for index {}: expecting to read {}, got {}", hex::encode(&key), hex::encode(&buffer), hex::encode(&read_query.leaf.value()));
+                assert_eq!(&buffer, read_query.leaf.value(), "While writing: divergent leaf read value for index {}: expecting to read {}, got {}", hex::encode(&key), hex::encode(&buffer), hex::encode(&read_query.leaf.value()));
 
                 let leaf_index = read_query.leaf.current_index();
                 leaf_enumeration_index_for_read.push(leaf_index);
