@@ -13,6 +13,7 @@ use zk_evm::precompiles::sha256::Sha256RoundWitness;
 use zk_evm::vm_state::MAX_CALLSTACK_DEPTH;
 use zk_evm::zkevm_opcode_defs::decoding::EncodingModeProduction;
 use sync_vm::vm::vm_state::NUM_SPONGES_PER_CYCLE;
+use tracing;
 
 // cycle indicators below are not timestamps!
 
@@ -209,7 +210,7 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
                 at_cycle: self.current_cycle_counter
             };
             self.vm_snapshots.push(snapshot);
-            println!("Made snapshot at cycle {:?}", self.current_cycle_counter);
+            tracing::debug!("Made snapshot at cycle {:?}", self.current_cycle_counter);
         }
 
         if self.cycle_counter_in_this_snapshot >= self.cycles_to_use_per_snapshot {
@@ -225,7 +226,7 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
                     at_cycle: self.current_cycle_counter
                 };
                 self.vm_snapshots.push(snapshot);
-                println!("Made snapshot at cycle {:?}", self.current_cycle_counter);
+                tracing::debug!("Made snapshot at cycle {:?}", self.current_cycle_counter);
 
                 // we made a snapshot now, but the cycle itself will be the first one for the next snapshot 
                 self.cycle_counter_in_this_snapshot = 1;

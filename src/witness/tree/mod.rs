@@ -47,7 +47,7 @@ pub trait BinarySparseStorageTree<
     fn next_enumeration_index(&self) -> u64;
     fn set_next_enumeration_index(&mut self, value: u64);
     fn root(&self) -> [u8; HASH_OUTPUT_WIDTH];
-    fn get_leaf(&self, index: &[u8; INDEX_BYTES]) -> LeafQuery<DEPTH, INDEX_BYTES, LEAF_DATA_WIDTH, HASH_OUTPUT_WIDTH, L>;
+    fn get_leaf(&mut self, index: &[u8; INDEX_BYTES]) -> LeafQuery<DEPTH, INDEX_BYTES, LEAF_DATA_WIDTH, HASH_OUTPUT_WIDTH, L>;
     fn insert_leaf(&mut self, index: &[u8; INDEX_BYTES], leaf: L) -> LeafQuery<DEPTH, INDEX_BYTES, LEAF_DATA_WIDTH, HASH_OUTPUT_WIDTH, L>;
     fn insert_many_leafs(&mut self, indexes: &[[u8; INDEX_BYTES]], leafs: Vec<L>) -> Vec<LeafQuery<DEPTH, INDEX_BYTES, LEAF_DATA_WIDTH, HASH_OUTPUT_WIDTH, L>> {
         assert_eq!(indexes.len(), leafs.len());
@@ -63,7 +63,7 @@ pub trait BinarySparseStorageTree<
         result
     }
     // fn filter_renumerate(&self, indexes: &[[u8; INDEX_BYTES]], leafs: &[L]) -> (u64, Vec<L>, Vec<L>);
-    fn filter_renumerate<'a>(&self, indexes: impl Iterator<Item = &'a [u8; INDEX_BYTES]>, leafs: impl Iterator<Item = L>) -> (u64, Vec<([u8; INDEX_BYTES], L)>, Vec<L>);
+    fn filter_renumerate<'a>(&self, indexes: impl Iterator<Item=&'a [u8; INDEX_BYTES]>, leafs: impl Iterator<Item=L>) -> (u64, Vec<([u8; INDEX_BYTES], L)>, Vec<L>);
     fn verify_inclusion(root: &[u8; 32], query: &LeafQuery<DEPTH, INDEX_BYTES, LEAF_DATA_WIDTH, HASH_OUTPUT_WIDTH, L>) -> bool;
     fn verify_inclusion_proxy(&self, root: &[u8; 32], query: &LeafQuery<DEPTH, INDEX_BYTES, LEAF_DATA_WIDTH, HASH_OUTPUT_WIDTH, L>) -> bool {
         Self::verify_inclusion(root, query)
@@ -339,7 +339,7 @@ impl<
     fn root(&self) -> [u8; 32] {
         self.root
     }
-    fn get_leaf(&self, index: &[u8; INDEX_BYTES]) -> LeafQuery<DEPTH, INDEX_BYTES, 32, 32, L> {
+    fn get_leaf(&mut self, index: &[u8; INDEX_BYTES]) -> LeafQuery<DEPTH, INDEX_BYTES, 32, 32, L> {
         Self::get_leaf(self, index)
     }
     fn insert_leaf(&mut self, index: &[u8; INDEX_BYTES], leaf: L) -> LeafQuery<DEPTH, INDEX_BYTES, 32, 32, L> {

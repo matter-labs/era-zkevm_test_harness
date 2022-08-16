@@ -1,5 +1,8 @@
 #![allow(unused_imports)]
 
+pub use blake2::Blake2s256;
+pub use sync_vm::scheduler::SchedulerCircuitInstanceWitness;
+
 pub mod encodings;
 pub mod entry_point;
 pub mod utils;
