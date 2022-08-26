@@ -1,7 +1,7 @@
 use zk_evm::testing::event_sink::InMemoryEventSink;
 use zk_evm::precompiles::DefaultPrecompilesProcessor;
 use zk_evm::testing::decommitter::SimpleDecommitter;
-use zk_evm::testing::memory::SimpleMemory;
+use crate::memory::SimpleMemory;
 use crate::witness::tracer::WitnessTracer;
 use zk_evm::abstractions::Storage;
 
