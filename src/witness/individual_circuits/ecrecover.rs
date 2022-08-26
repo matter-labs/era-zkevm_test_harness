@@ -226,9 +226,7 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
             // make non-inclusize
             request_ranges.push(starting_request_idx..(request_idx+1));
             starting_request_idx = request_idx+1;
-
-            dbg!(&witness);
-
+            
             result.push(witness);
 
             log_queue_input_state = take_queue_state_from_simulator(&artifacts.demuxed_ecrecover_queue_simulator);
