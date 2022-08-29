@@ -1,5 +1,6 @@
 mod utils;
 mod serialize_utils;
+pub mod invididual_debugs;
 
 use std::collections::HashMap;
 
