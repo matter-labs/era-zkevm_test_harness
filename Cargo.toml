@@ -13,7 +13,7 @@ resolver = "2"
 
 zkevm-assembly = {git = "https://github.com/matter-labs/zkEVM-assembly.git", branch = "v1.1.1"}
 zk_evm = {git = "https://github.com/matter-labs/zk_evm.git", branch = "v1.1.1"}
-sync_vm = {git = "https://github.com/matter-labs/sync_vm.git", branch = "release", features = ["external_testing"]}
+sync_vm = {git = "https://github.com/matter-labs/sync_vm.git", branch = "v1.1.1", features = ["external_testing"]}
 circuit_testing = {git = "https://github.com/matter-labs/circuit_testing.git", branch = "main"}
 
 num-bigint = "0.4"
@@ -28,3 +28,4 @@ sha2 = "0.10"
 serde = {version = "1", features = ["derive"]}
 serde_json = "1.0"
 crossbeam = "0.8"
+bincode = "*"
