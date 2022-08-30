@@ -14,6 +14,7 @@ use sync_vm::glue::storage_application::input::{StorageApplicationCircuitInstanc
 use crate::witness::full_block_artifact::FullBlockArtifacts;
 use sync_vm::glue::storage_application::input::StorageApplicationFSM;
 use blake2::Blake2s256;
+use tracing;
 
 pub fn decompose_into_storage_application_witnesses<
     E: Engine,
@@ -78,8 +79,8 @@ pub fn decompose_into_storage_application_witnesses<
 
     let mut storage_application_simulator = artifacts.deduplicated_rollup_storage_queue_simulator.clone();
 
-    println!("Initial enumeration index = {}", tree.next_enumeration_index());
-    println!("Initial root = {}", hex::encode(&tree.root()));
+    tracing::debug!("Initial enumeration index = {}", tree.next_enumeration_index());
+    tracing::debug!("Initial root = {}", hex::encode(&tree.root()));
 
     for (idx, chunk) in chunks.into_iter().enumerate() {
         let is_last = idx == num_chunks - 1;
@@ -110,7 +111,7 @@ pub fn decompose_into_storage_application_witnesses<
             if el.rw_flag {
                 // by convension we have read and write both
                 let read_query = tree.get_leaf(&key);
-                assert!(tree.verify_inclusion_proxy(&tree.root(), &read_query));
+                // assert!(tree.verify_inclusion_proxy(&tree.root(), &read_query));
                 let mut buffer = [0u8; 32];
                 el.read_value.to_big_endian(&mut buffer);
                 assert_eq!(&buffer, read_query.leaf.value(), "While writing: divergent leaf read value for index {}: expecting to read {}, got {}", hex::encode(&key), hex::encode(&buffer), hex::encode(&read_query.leaf.value()));
@@ -222,8 +223,8 @@ pub fn decompose_into_storage_application_witnesses<
         result.push(input);
     }
 
-    println!("Final enumeration index = {}", tree.next_enumeration_index());
-    println!("Final root = {}", hex::encode(&tree.root()));
+    tracing::debug!("Final enumeration index = {}", tree.next_enumeration_index());
+    tracing::debug!("Final root = {}", hex::encode(&tree.root()));
 
     result
 }

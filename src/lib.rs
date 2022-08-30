@@ -1,5 +1,8 @@
 #![allow(unused_imports)]
 
+pub use blake2::Blake2s256;
+pub use sync_vm::scheduler::SchedulerCircuitInstanceWitness;
+
 pub mod encodings;
 pub mod entry_point;
 pub mod utils;
@@ -16,6 +19,7 @@ pub use zk_evm::ethereum_types;
 use self::utils::*;
 
 pub mod external_calls;
+pub mod memory;
 pub mod toolset;
 
 pub mod abstract_zksync_circuit;

@@ -119,8 +119,14 @@ pub fn bytes_to_u128_le<const N: usize, const M: usize>(bytes: &[u8; N]) -> [u12
 
 use crate::encodings::initial_storage_write::BytesSerializable;
 
-pub fn binary_merklize_set<'a, const N: usize, T: BytesSerializable<N> + 'a, H: BinaryHasher<32>>(
-    input: impl Iterator<Item = &'a T> + ExactSizeIterator,
+pub fn binary_merklize_set<
+    'a, 
+    const N: usize, 
+    T: BytesSerializable<N> + 'a, 
+    H: BinaryHasher<32>,
+    I: Iterator<Item = &'a T> + ExactSizeIterator
+>(
+    input: I,
     tree_size: usize,
 ) -> [u8; 32] {
     let input_len = input.len();

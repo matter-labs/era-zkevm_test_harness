@@ -36,6 +36,7 @@ use sync_vm::glue::sha256_round_function_circuit::input::Sha256RoundFunctionCirc
 use sync_vm::glue::ecrecover_circuit::input::EcrecoverCircuitInstanceWitness;
 use sync_vm::glue::merkleize_l1_messages::input::MessagesMerklizerInstanceWitness;
 use crate::encodings::initial_storage_write::CircuitEquivalentReflection;
+use tracing;
 
 #[derive(Derivative)]
 #[derivative(Clone, Default(bound = ""))]
@@ -170,7 +171,7 @@ impl<E: Engine> FullBlockArtifacts<E> {
     ) {
         // this is parallelizable internally by the factor of 3 in round function implementation later on
 
-        println!("Running memory queue simulation");
+        tracing::debug!("Running memory queue simulation");
 
         for (cycle, query) in self.vm_memory_queries_accumulated.iter() {
             self.all_memory_queries_accumulated.push(*query);
@@ -193,7 +194,7 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
         use crate::witness::individual_circuits::decommit_code::compute_decommitter_circuit_snapshots;
 
-        println!("Running code decommittments sorter and decommitter simulation");
+        tracing::debug!("Running code decommittments sorter and decommitter simulation");
 
         let (code_decommitter_circuits_data, decommittments_deduplicator_witness) = compute_decommitter_circuit_snapshots(
             self,
@@ -207,7 +208,7 @@ impl<E: Engine> FullBlockArtifacts<E> {
         // demux log queue
         use crate::witness::individual_circuits::log_demux::compute_logs_demux;
 
-        println!("Running log demux simulation");
+        tracing::debug!("Running log demux simulation");
 
         let log_demuxer_witness = compute_logs_demux(
             self,
@@ -220,7 +221,7 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
         use crate::witness::individual_circuits::keccak256_round_function::keccak256_decompose_into_per_circuit_witness;
 
-        println!("Running keccak simulation");
+        tracing::debug!("Running keccak simulation");
 
         let keccak256_circuits_data = keccak256_decompose_into_per_circuit_witness(
             self,
@@ -233,7 +234,7 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
         use crate::witness::individual_circuits::sha256_round_function::sha256_decompose_into_per_circuit_witness;
 
-        println!("Running sha256 simulation");
+        tracing::debug!("Running sha256 simulation");
 
         let sha256_circuits_data = sha256_decompose_into_per_circuit_witness(
             self,
@@ -246,7 +247,7 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
         use crate::witness::individual_circuits::ecrecover::ecrecover_decompose_into_per_circuit_witness;
 
-        println!("Running ecrecover simulation");
+        tracing::debug!("Running ecrecover simulation");
 
         let ecrecover_circuits_data = ecrecover_decompose_into_per_circuit_witness(
             self,
@@ -259,7 +260,7 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
         use crate::witness::individual_circuits::ram_permutation::compute_ram_circuit_snapshots;
 
-        println!("Running RAM permutation simulation");
+        tracing::debug!("Running RAM permutation simulation");
 
         let ram_permutation_circuits_data = compute_ram_circuit_snapshots(
             self,
@@ -274,7 +275,7 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
         use crate::witness::individual_circuits::storage_sort_dedup::compute_storage_dedup_and_sort;
 
-        println!("Running storage deduplication simulation");
+        tracing::debug!("Running storage deduplication simulation");
 
         let storage_deduplicator_circuit_data = compute_storage_dedup_and_sort(
             self,
@@ -284,7 +285,7 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
         use crate::witness::individual_circuits::events_sort_dedup::compute_events_dedup_and_sort;
 
-        println!("Running events deduplication simulation");
+        tracing::debug!("Running events deduplication simulation");
 
         let events_deduplicator_circuit_data = compute_events_dedup_and_sort(
             &self.demuxed_event_queries,
@@ -296,7 +297,7 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
         self.events_deduplicator_circuit_data = vec![events_deduplicator_circuit_data];
 
-        println!("Running L1 messages deduplication simulation");
+        tracing::debug!("Running L1 messages deduplication simulation");
 
         let l1_messages_deduplicator_circuit_data = compute_events_dedup_and_sort(
             &self.demuxed_to_l1_queries,
@@ -312,7 +313,7 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
         use crate::witness::individual_circuits::data_hasher_and_merklizer::compute_merklizer_witness;
 
-        println!("Running L1 messages merklization simulation");
+        tracing::debug!("Running L1 messages merklization simulation");
 
         let l1_messages_merklizer_data = compute_merklizer_witness(
             &self.deduplicated_to_l1_queue_simulator,
