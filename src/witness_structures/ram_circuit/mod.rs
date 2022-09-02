@@ -30,6 +30,7 @@ pub fn transform_raw_memory_query_witness<E: Engine>(
         rw_flag: witness.rw_flag, 
         value_residual,
         value: value_low,
+        value_is_ptr: witness.value_is_pointer,
         _marker: std::marker::PhantomData
     }
 }

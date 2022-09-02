@@ -3,7 +3,7 @@ use zk_evm::abstractions::PrecompileCyclesWitness;
 use zk_evm::aux_structures::LogQuery;
 use zk_evm::aux_structures::*;
 use zk_evm::ethereum_types::U256;
-use zk_evm::testing::event_sink::ApplicationData;
+use zk_evm::reference_impls::event_sink::ApplicationData;
 use zk_evm::vm_state::CallStackEntry;
 
 use zk_evm::precompiles::ecrecover::ECRecoverRoundWitness;
@@ -46,9 +46,8 @@ impl QueryMarker {
 pub struct WitnessTracer {
     pub cycles_to_use_per_snapshot: u32,
     pub current_cycle_counter: u32,
-    pub cycle_counter_in_this_snapshot: u32,
+    pub cycle_counter_of_last_snapshot: u32,
     pub memory_queries: Vec<(u32, MemoryQuery)>, // flattened memory queries, with cycle indicators
-    pub precompile_calls: Vec<()>,
     pub storage_read_queries: Vec<(u32, LogQuery)>, // storage read queries with cycle indicators
     pub decommittment_queries: Vec<(u32, DecommittmentQuery, Vec<U256>)>,
     pub keccak_round_function_witnesses: Vec<(u32, LogQuery, Vec<Keccak256RoundWitness>)>,
@@ -106,9 +105,8 @@ impl WitnessTracer {
         Self {
             cycles_to_use_per_snapshot: cycles_per_snapshot,
             current_cycle_counter: 0,
-            cycle_counter_in_this_snapshot: 0,
+            cycle_counter_of_last_snapshot: 0,
             memory_queries: vec![],
-            precompile_calls: vec![],
             storage_read_queries: vec![],
             decommittment_queries: vec![],
             keccak_round_function_witnesses: vec![],
@@ -210,12 +208,16 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
                 at_cycle: self.current_cycle_counter
             };
             self.vm_snapshots.push(snapshot);
-            tracing::debug!("Made snapshot at cycle {:?}", self.current_cycle_counter);
+            tracing::debug!("Made INITIAL snapshot at cycle {:?}", self.current_cycle_counter);
+            println!("Made INITIAL at cycle {:?}", self.current_cycle_counter);
+            self.cycle_counter_of_last_snapshot = current_state.monotonic_cycle_counter;
         }
 
-        if self.cycle_counter_in_this_snapshot >= self.cycles_to_use_per_snapshot {
+        assert_eq!(self.current_cycle_counter, current_state.monotonic_cycle_counter);
+
+        if self.current_cycle_counter >= self.cycle_counter_of_last_snapshot + self.cycles_to_use_per_snapshot {
             let is_pending = current_state.pending_port.is_any_pending();
-            if self.cycle_counter_in_this_snapshot > self.cycles_to_use_per_snapshot {
+            if self.current_cycle_counter > self.cycle_counter_of_last_snapshot + self.cycles_to_use_per_snapshot {
                 assert!(!is_pending);
             }
 
@@ -227,21 +229,19 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
                 };
                 self.vm_snapshots.push(snapshot);
                 tracing::debug!("Made snapshot at cycle {:?}", self.current_cycle_counter);
+                println!("Made snapshot at cycle {:?}", self.current_cycle_counter);
 
                 // we made a snapshot now, but the cycle itself will be the first one for the next snapshot 
-                self.cycle_counter_in_this_snapshot = 1;
+                self.cycle_counter_of_last_snapshot = current_state.monotonic_cycle_counter;
             } else {
                 // wait for 1 more cycle
-                self.cycle_counter_in_this_snapshot += 1;
             }
-        } else {
-            // just continue
-            self.cycle_counter_in_this_snapshot += 1;
         }
 
         // monotonic counter always increases
         self.current_cycle_counter += 1;
     }
+
     fn end_execution_cycle(&mut self, _current_state: &VmLocalState) {
         // dbg!(&self.sponge_busy_range);
         if !self.sponge_busy_range.is_empty() {

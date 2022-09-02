@@ -78,9 +78,6 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 6> for ExtendedCallstackEntr
 
         let val_0 = self.rollback_queue_head;
         let val_1 = self.rollback_queue_tail;
-        // let val_2 = address_to_fe::<E::Fr>(self.callstack_entry.this_address);
-        // let val_3 = address_to_fe::<E::Fr>(self.callstack_entry.msg_sender);
-        let val_4 = address_to_fe::<E::Fr>(self.callstack_entry.code_address);
 
         use crate::utils::*;
 
@@ -119,6 +116,18 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 6> for ExtendedCallstackEntr
         let mut lc = E::Fr::zero();
         let mut shift = 0;
 
+        scale_and_accumulate::<E, _>(&mut lc, u160_from_address(self.callstack_entry.code_address), &shifts, shift);
+        shift += 160;
+        scale_and_accumulate::<E, _>(&mut lc, self.callstack_entry.heap_bound, &shifts, shift);
+        shift += 32;
+        scale_and_accumulate::<E, _>(&mut lc, self.callstack_entry.aux_heap_bound, &shifts, shift);
+        shift += 32;
+        assert!(shift <= E::Fr::CAPACITY as usize);
+        let val_4 = lc;
+
+        let mut lc = E::Fr::zero();
+        let mut shift = 0;
+
         scale_and_accumulate::<E, _>(&mut lc, self.callstack_entry.code_page.0, &shifts, shift);
         shift += 32;
         scale_and_accumulate::<E, _>(
@@ -129,18 +138,11 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 6> for ExtendedCallstackEntr
         );
         shift += 32;
         // 64
-        scale_and_accumulate::<E, _>(
-            &mut lc,
-            self.callstack_entry.calldata_page.0,
-            &shifts,
-            shift,
-        );
-        shift += 32;
         scale_and_accumulate::<E, _>(&mut lc, self.rollback_queue_segment_length, &shifts, shift);
         shift += 32;
-        // 128
         scale_and_accumulate::<E, _>(&mut lc, self.callstack_entry.ergs_remaining, &shifts, shift);
         shift += 32;
+        // 128
         scale_and_accumulate::<E, _>(&mut lc, self.callstack_entry.sp, &shifts, shift);
         shift += 16;
         scale_and_accumulate::<E, _>(
@@ -150,7 +152,6 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 6> for ExtendedCallstackEntr
             shift,
         );
         shift += 16;
-        // 192
         scale_and_accumulate::<E, _>(&mut lc, self.callstack_entry.pc, &shifts, shift);
         shift += 16;
         scale_and_accumulate::<E, _>(&mut lc, self.callstack_entry.this_shard_id, &shifts, shift);
@@ -162,10 +163,8 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 6> for ExtendedCallstackEntr
             shift,
         );
         shift += 8;
-        // 224
         scale_and_accumulate::<E, _>(&mut lc, 0u16, &shifts, shift);
         shift += 16;
-        // 240
         scale_and_accumulate::<E, _>(&mut lc, self.callstack_entry.code_shard_id, &shifts, shift);
         shift += 8;
         scale_and_accumulate::<E, _>(&mut lc, self.callstack_entry.is_static, &shifts, shift);
@@ -177,7 +176,6 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 6> for ExtendedCallstackEntr
             shift,
         );
         shift += 1;
-        // 250
         use sync_vm::vm::vm_state::saved_contract_context::CONTEXT_EXTENSION_OFFSET;
         assert_eq!(CONTEXT_EXTENSION_OFFSET, shift);
 

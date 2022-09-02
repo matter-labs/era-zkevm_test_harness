@@ -17,7 +17,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::ops::RangeInclusive;
 use sync_vm::traits::CSWitnessable;
 use sync_vm::vm::vm_cycle::memory::MemoryLocation;
-use sync_vm::vm::vm_cycle::witness_oracle::{u256_to_biguint, WitnessOracle};
+use sync_vm::vm::vm_cycle::witness_oracle::{u256_to_biguint, WitnessOracle, MemoryWitness};
 use sync_vm::{
     circuit_structures::traits::CircuitArithmeticRoundFunction,
     franklin_crypto::bellman::pairing::Engine,
@@ -33,7 +33,7 @@ use zk_evm::precompiles::ecrecover::ECRecoverRoundWitness;
 use zk_evm::precompiles::keccak256::Keccak256RoundWitness;
 use zk_evm::precompiles::sha256::Sha256RoundWitness;
 use zk_evm::precompiles::KECCAK256_ROUND_FUNCTION_PRECOMPILE_ADDRESS;
-use zk_evm::testing::event_sink::ApplicationData;
+use zk_evm::reference_impls::event_sink::ApplicationData;
 use sync_vm::scheduler::queues::FixedWidthEncodingGenericQueueState;
 use sync_vm::scheduler::queues::FixedWidthEncodingGenericQueueStateWitness;
 use zk_evm::vm_state::{CallStackEntry, TIMESTAMPS_PER_CYCLE, VmLocalState};
@@ -1101,7 +1101,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
         timestamp: UInt32<E>,
         key: &MemoryLocation<E>,
         execute: &Boolean,
-    ) -> Option<num_bigint::BigUint> {
+    ) -> Option<MemoryWitness> {
         if execute.get_value().unwrap_or(false) {
             if self.memory_read_witness.is_empty() {
                 panic!(
@@ -1123,22 +1123,32 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
                 assert_eq!(
                     location.page,
                     query.location.page.0,
-                    "invalid memory access location at cycle {:?}",
-                    timestamp.get_value()
+                    "invalid memory access location at cycle {:?}: VM asks for page {}, witness has page {}",
+                    timestamp.get_value(),
+                    location.page,
+                    query.location.page.0,
                 );
                 assert_eq!(
                     location.index,
                     query.location.index.0,
-                    "invalid memory access location at cycle {:?}",
-                    timestamp.get_value()
+                    "invalid memory access location at cycle {:?}: VM asks for index {}, witness has index {}",
+                    timestamp.get_value(),
+                    location.index,
+                    query.location.index.0,
                 );
             }
 
             // tracing::debug!("memory word = 0x{:x}", query.value);
 
-            Some(u256_to_biguint(query.value))
+            Some(MemoryWitness {
+                value: u256_to_biguint(query.value),
+                is_ptr: query.value_is_pointer,
+            })
         } else {
-            Some(BigUint::from(0u64))
+            Some(MemoryWitness {
+                value: BigUint::from(0u64),
+                is_ptr: false,
+            })
         }
     }
 
@@ -1281,7 +1291,6 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
                     code_address: u160_from_address(entry.code_address),
                     code_page: entry.code_page.0,
                     base_page: entry.base_memory_page.0,
-                    calldata_page: entry.calldata_page.0,
                     reverted_queue_head: rollback_queue_head,
                     reverted_queue_tail: rollback_queue_tail,
                     reverted_queue_segment_len: rollback_queue_segment_length,
@@ -1296,6 +1305,8 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
                     caller_shard_id: entry.caller_shard_id,
                     code_shard_id: entry.code_shard_id,
                     context_u128_value_composite: [entry.context_u128_value as u64, (entry.context_u128_value >> 64) as u64],
+                    heap_upper_bound: entry.heap_bound,
+                    aux_heap_upper_bound: entry.aux_heap_bound,
                     _marker: std::marker::PhantomData,
                 },
                 extension: ExecutionContextRecordExtensionWitness {

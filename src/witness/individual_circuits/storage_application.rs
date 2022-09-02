@@ -25,6 +25,61 @@ pub fn decompose_into_storage_application_witnesses<
     round_function: &R,
     num_rounds_per_circuit: usize,
 ) -> Vec<StorageApplicationCircuitInstanceWitness<E>> {
+    use sync_vm::glue::storage_application::input::*;
+    use sync_vm::circuit_structures::bytes32::Bytes32Witness;
+    use crate::witness::tree::ZkSyncStorageLeaf;
+    use crate::witness::tree::EnumeratedBinaryLeaf;
+    use sync_vm::scheduler::queues::FixedWidthEncodingGenericQueueWitness;
+
+    if artifacts.deduplicated_rollup_storage_queries.is_empty() {
+        // return singe dummy witness
+
+        let initial_fsm_state = StorageApplicationFSM::<E>::placeholder_witness();
+
+        let mut passthrough_input = StorageApplicationInputData::placeholder_witness();
+        passthrough_input.initial_next_enumeration_counter = tree.next_enumeration_index();
+        let root_as_u128 = bytes_to_u128_le(&tree.root());
+        passthrough_input.initial_root = root_as_u128;
+        passthrough_input.storage_application_log_state = take_queue_state_from_simulator(&artifacts.deduplicated_rollup_storage_queue_simulator);
+
+
+        let mut final_fsm_state = StorageApplicationFSM::<E>::placeholder_witness();
+        let first_writes_simulator = InitialStorageWritesSimulator::<E>::empty();
+        let repeated_writes_simulator = RepeatedStorageWritesSimulator::<E>::empty();
+
+        let root_as_u128 = bytes_to_u128_le(&tree.root());
+        final_fsm_state.root_hash = root_as_u128;
+        final_fsm_state.next_enumeration_counter = tree.next_enumeration_index();
+        final_fsm_state.current_storage_application_log_state = take_queue_state_from_simulator(&&artifacts.deduplicated_rollup_storage_queue_simulator);
+        final_fsm_state.repeated_writes_pubdata_queue_state = take_queue_state_from_simulator(&repeated_writes_simulator);
+        final_fsm_state.initial_writes_pubdata_queue_state = take_queue_state_from_simulator(&first_writes_simulator);
+
+        let mut passthrough_output = StorageApplicationOutputData::placeholder_witness();
+        passthrough_output.final_next_enumeration_counter = tree.next_enumeration_index();
+        let root_as_u128 = bytes_to_u128_le(&tree.root());
+        passthrough_output.final_root = root_as_u128;
+        passthrough_output.repeated_writes_pubdata_queue_state = take_queue_state_from_simulator(&repeated_writes_simulator);
+        passthrough_output.initial_writes_pubdata_queue_state = take_queue_state_from_simulator(&first_writes_simulator);
+
+        let wit = StorageApplicationCircuitInstanceWitness {
+            closed_form_input: StorageApplicationCycleInputOutputWitness {
+                start_flag: true,
+                completion_flag: true,
+                observable_input: passthrough_input,
+                observable_output: passthrough_output,
+                hidden_fsm_input: initial_fsm_state.clone(),
+                hidden_fsm_output: final_fsm_state.clone(),
+                _marker_e: (),
+                _marker: std::marker::PhantomData
+            },
+            storage_queue_witness: FixedWidthEncodingGenericQueueWitness::default(),
+            leaf_indexes_for_reads: vec![],
+            merkle_paths: vec![]
+        };
+
+        return vec![wit];
+    }
+
     let mut result = vec![];
 
     // first split into chunks of work for every circuit
@@ -88,10 +143,6 @@ pub fn decompose_into_storage_application_witnesses<
         let mut merkle_paths = vec![];
         let mut leaf_enumeration_index_for_read = vec![];
 
-        use sync_vm::glue::storage_application::input::*;
-        use sync_vm::circuit_structures::bytes32::Bytes32Witness;
-        use crate::witness::tree::ZkSyncStorageLeaf;
-        use crate::witness::tree::EnumeratedBinaryLeaf;
 
         let mut passthrough_input = StorageApplicationInputData::placeholder_witness();
         if idx == 0 {

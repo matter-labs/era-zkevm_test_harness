@@ -9,6 +9,7 @@ use sync_vm::vm::vm_state::GlobalContext;
 use zk_evm::aux_structures::*;
 use zk_evm::ethereum_types::*;
 use zk_evm::vm_state::CallStackEntry;
+use zk_evm::vm_state::INITIAL_SP_ON_FAR_CALL;
 use zk_evm::vm_state::VmState;
 use zk_evm::zkevm_opcode_defs::*;
 
@@ -29,8 +30,7 @@ pub fn initial_out_of_circuit_context(
         code_address,
         base_memory_page: MemoryPage(zk_evm::zkevm_opcode_defs::BOOTLOADER_BASE_PAGE),
         code_page: MemoryPage(zk_evm::zkevm_opcode_defs::BOOTLOADER_CODE_PAGE),
-        calldata_page: MemoryPage(zk_evm::zkevm_opcode_defs::BOOTLOADER_CALLDATA_PAGE),
-        sp: 0u16,
+        sp: INITIAL_SP_ON_FAR_CALL as u16,
         pc: initial_pc,
         exception_handler_location: u16::MAX,
         ergs_remaining: initial_ergs,
@@ -40,6 +40,8 @@ pub fn initial_out_of_circuit_context(
         is_static: false,
         is_local_frame: false,
         context_u128_value: 0,
+        heap_bound: 0,
+        aux_heap_bound: 0,
     }
 }
 
@@ -60,10 +62,10 @@ pub fn initial_in_circuit_context<E: Engine>(
     let mut ctx = FullExecutionContext::uninitialized();
 
     ctx.saved_context.common_part.base_page = UInt32::from_uint(zk_evm::zkevm_opcode_defs::BOOTLOADER_BASE_PAGE);
-    ctx.saved_context.common_part.calldata_page = UInt32::from_uint(zk_evm::zkevm_opcode_defs::BOOTLOADER_CALLDATA_PAGE);
     ctx.saved_context.common_part.code_page = UInt32::from_uint(zk_evm::zkevm_opcode_defs::BOOTLOADER_CODE_PAGE);
 
     ctx.saved_context.common_part.pc = UInt16::from_uint(initial_pc);
+    ctx.saved_context.common_part.sp = UInt16::from_uint(INITIAL_SP_ON_FAR_CALL as u16);
     ctx.saved_context.common_part.exception_handler_loc = UInt16::from_uint(u16::MAX);
     ctx.saved_context.common_part.ergs_remaining = UInt32::from_uint(initial_ergs);
 
@@ -89,8 +91,6 @@ pub fn out_to_in_circuit_context_on_call<E: Engine, CS: ConstraintSystem<E>>(
 
     ctx.saved_context.common_part.base_page =
         UInt32::from_uint(out_of_circuit_context.base_memory_page.0);
-    ctx.saved_context.common_part.calldata_page =
-        UInt32::from_uint(out_of_circuit_context.calldata_page.0);
     ctx.saved_context.common_part.code_page = UInt32::from_uint(out_of_circuit_context.code_page.0);
 
     ctx.saved_context.common_part.pc = UInt16::from_uint(out_of_circuit_context.pc);
@@ -105,6 +105,9 @@ pub fn out_to_in_circuit_context_on_call<E: Engine, CS: ConstraintSystem<E>>(
         UInt160::from_uint(u160_from_address(out_of_circuit_context.this_address));
     ctx.saved_context.common_part.caller =
         UInt160::from_uint(u160_from_address(out_of_circuit_context.msg_sender));
+
+    ctx.saved_context.common_part.heap_upper_bound = UInt32::from_uint(out_of_circuit_context.heap_bound);
+    ctx.saved_context.common_part.aux_heap_upper_bound = UInt32::from_uint(out_of_circuit_context.aux_heap_bound);
 
     // circuit specific bit
     ctx.saved_context.common_part.reverted_queue_tail = Num::Constant(initial_rollback_queue_value);
@@ -127,11 +130,13 @@ pub fn alloc_execution_context<E: Engine, CS: ConstraintSystem<E>>(
     let base_page = project_ref!(out_of_circuit_context, base_memory_page).map(|el| el.0);
     ctx.saved_context.common_part.base_page =
         UInt32::allocate(cs, base_page)?;
-    let calldata_page = project_ref!(out_of_circuit_context, calldata_page).map(|el| el.0);
-    ctx.saved_context.common_part.calldata_page =
-        UInt32::allocate(cs, calldata_page)?;
     let code_page = project_ref!(out_of_circuit_context, code_page).map(|el| el.0);
     ctx.saved_context.common_part.code_page = UInt32::allocate(cs, code_page)?;
+
+    let heap_bound = project_ref!(out_of_circuit_context, heap_bound).cloned();
+    ctx.saved_context.common_part.heap_upper_bound = UInt32::allocate(cs, heap_bound)?;
+    let aux_heap_bound = project_ref!(out_of_circuit_context, aux_heap_bound).cloned();
+    ctx.saved_context.common_part.aux_heap_upper_bound = UInt32::allocate(cs, aux_heap_bound)?;
 
     ctx.saved_context.common_part.pc = UInt16::allocate(cs, project_ref!(out_of_circuit_context, pc).cloned())?;
     ctx.saved_context.common_part.sp = UInt16::allocate(cs, project_ref!(out_of_circuit_context, sp).cloned())?;
@@ -330,7 +335,6 @@ pub fn run_vm_instance<
     ).unwrap();
     // set forward and rollback queue properties
 
-    initial_context.returndata_page = UInt32::allocate(cs, Some(initial_state.callstack.returndata_page.0)).unwrap();
     initial_context.log_queue_forward_tail = Num::alloc(cs, Some(storage_log_queue_state.tail_state)).unwrap();
     initial_context.log_queue_forward_part_length = UInt32::allocate(cs, Some(storage_log_queue_state.num_items)).unwrap();
 
@@ -344,8 +348,8 @@ pub fn run_vm_instance<
 
     let mut regs = [Register::<E>::zero(); zk_evm::zkevm_opcode_defs::REGISTERS_COUNT];
     for (dst, src) in regs.iter_mut().zip(initial_state.registers.iter()) {
-        let low = (src.0[0] as u128) | (src.0[1] as u128);
-        let high = (src.0[2] as u128) | (src.0[3] as u128);
+        let low = (src.value.0[0] as u128) | (src.value.0[1] as u128);
+        let high = (src.value.0[2] as u128) | (src.value.0[3] as u128);
 
         let low = UInt128::allocate(cs, Some(low)).unwrap();
         let high = UInt128::allocate(cs, Some(high)).unwrap();
@@ -438,7 +442,7 @@ pub fn assert_expected_final_state<E: Engine>(
         .zip(out_of_circuit_state.registers.iter())
         .enumerate()
     {
-        compare_reg_values(reg_idx + 1, circuit.inner, *not_circuit);
+        compare_reg_values(reg_idx + 1, circuit.inner, not_circuit.value);
     }
 
     // compare flags
@@ -470,7 +474,6 @@ pub fn assert_expected_final_state<E: Engine>(
 
     // code pages
     assert_eq!(current_callstack_entry.base_memory_page.0, current_callstack_vm_witness.common_part.base_page);
-    assert_eq!(current_callstack_entry.calldata_page.0, current_callstack_vm_witness.common_part.calldata_page);
     assert_eq!(current_callstack_entry.code_page.0, current_callstack_vm_witness.common_part.code_page);
 
     // pc and sp related parts
@@ -510,8 +513,6 @@ pub fn assert_expected_final_state<E: Engine>(
     // jump marker
     assert_eq!(out_of_circuit_state.did_call_or_ret_recently, wit.did_call_or_ret_recently);
 
-    // returndata page
-    assert_eq!(out_of_circuit_state.callstack.returndata_page.0, wit.callstack.current_context.returndata_page);
     // ergs per pubdata byte
     assert_eq!(out_of_circuit_state.current_ergs_per_pubdata_byte, wit.ergs_per_pubdata_byte);
     // tx number in block

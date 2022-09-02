@@ -7,13 +7,13 @@ authors = ["Alex Vlasov <alex.m.vlasov@gmail.com>", "Konstantin Panarin <kp@matt
 resolver = "2"
 
 [dependencies]
-# zk_evm = {path = "../zk_evm"}
+zk_evm = {path = "../zk_evm"}
 sync_vm = {path = "../sync_vm", features = ["external_testing"]}
-# zkevm-assembly = {path = "../zkEVM-assembly"}
+zkevm-assembly = {path = "../zkEVM-assembly"}
 # circuit_testing = {path = "../circuit_testing"}
 
-zkevm-assembly = {git = "https://github.com/matter-labs/zkEVM-assembly.git", branch = "v1.1.2"}
-zk_evm = {git = "https://github.com/matter-labs/zk_evm.git", branch = "v1.1.2"}
+# zkevm-assembly = {git = "https://github.com/matter-labs/zkEVM-assembly.git", branch = "v1.1.2"}
+# zk_evm = {git = "https://github.com/matter-labs/zk_evm.git", branch = "v1.1.2"}
 # sync_vm = {git = "https://github.com/matter-labs/sync_vm.git", branch = "v1.1.2", features = ["external_testing"]}
 circuit_testing = {git = "https://github.com/matter-labs/circuit_testing.git", branch = "main"}
 
@@ -31,3 +31,5 @@ serde_json = "1.0"
 crossbeam = "0.8"
 tracing = { version= "0.1.26" }
 bincode = "*"
+test-log = "*"
+env_logger = "*"

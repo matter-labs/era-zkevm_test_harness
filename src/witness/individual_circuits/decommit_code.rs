@@ -90,6 +90,7 @@ pub fn compute_decommitter_circuit_snapshots<
                 rw_flag: true,
                 value: el,
                 is_pended: false,
+                value_is_pointer: false,
             }).collect();
 
             // fill up the memory queue
@@ -283,8 +284,9 @@ pub fn compute_decommitter_circuit_snapshots<
                     is_fresh,
                 } = wit.2;
 
-                let num_words = hash.0[3] >> 48;
+                let num_words = (hash.0[3] >> 32) as u16;
                 assert!(num_words & 1 == 1); // should be odd
+                let num_words = num_words as u64;
                 let num_rounds = (num_words + 1) / 2;
 
                 let mut hash_as_be = [0u8; 32];
@@ -320,6 +322,8 @@ pub fn compute_decommitter_circuit_snapshots<
                     if idx == 0 {
                         as_array[0] = 0;
                         as_array[1] = 0;
+                        as_array[2] = 0;
+                        as_array[3] = 0;
                     }
                     let word = u128::from_be_bytes(as_array);
                     fsm_internals.hash_to_compare_against[idx] = u128_to_fe(word);
@@ -362,7 +366,7 @@ pub fn compute_decommitter_circuit_snapshots<
 
                     if *num_rounds_left == 0 {
                         let raw_state = transmute_state(internal_state.clone());
-                        let word0 = raw_state[0] & ((1u32<<16) - 1);
+                        let word0 = 0u32; // 4 bytes are reserved
                         let mut word0 = word0 as u128;
                         word0 <<= 32;
                         word0 += raw_state[1] as u128;

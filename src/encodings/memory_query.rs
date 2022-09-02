@@ -81,6 +81,7 @@ impl<E: Engine> CircuitEquivalentReflection<E> for MemoryQuery {
             memory_index: self.location.index.0,
             rw_flag: self.rw_flag,
             value: u256_to_biguint(self.value),
+            value_is_ptr: self.value_is_pointer,
             _marker: std::marker::PhantomData
         }
     }

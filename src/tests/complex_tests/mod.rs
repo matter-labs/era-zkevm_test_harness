@@ -192,9 +192,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         false,
         U256::zero(), // no default AA for this test
         50,
-        2,
         used_bytecodes,
-        vec![],
         vec![],
         cycle_limit,
         round_function.clone(),

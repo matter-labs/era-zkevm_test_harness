@@ -1,7 +1,6 @@
-use zk_evm::testing::event_sink::InMemoryEventSink;
+use zk_evm::reference_impls::event_sink::InMemoryEventSink;
 use zk_evm::precompiles::DefaultPrecompilesProcessor;
-use zk_evm::testing::decommitter::SimpleDecommitter;
-use crate::memory::SimpleMemory;
+use zk_evm::reference_impls::decommitter::SimpleDecommitter;
 use crate::witness::tracer::WitnessTracer;
 use zk_evm::abstractions::Storage;
 
@@ -58,9 +57,10 @@ pub fn create_tools<S: Storage>(storage: S, config: &GeometryConfig) -> ProvingT
 
 use crate::ethereum_types::Address;
 use zk_evm::block_properties::BlockProperties;
-use zk_evm::vm_state::VmState;
+use zk_evm::vm_state::{VmState, PrimitiveValue};
 use crate::entry_point::initial_out_of_circuit_context;
 use zk_evm::zkevm_opcode_defs::*;
+use zk_evm::reference_impls::memory::SimpleMemory;
 
 /// We expect that storage/memory/decommitter were prefilled
 pub fn create_out_of_circuit_vm<'a, S: Storage>(
@@ -101,6 +101,12 @@ pub fn create_out_of_circuit_vm<'a, S: Storage>(
     vm.local_state.timestamp = STARTING_TIMESTAMP;
     vm.local_state.memory_page_counter = STARTING_BASE_PAGE;
     vm.local_state.monotonic_cycle_counter = crate::INITIAL_MONOTONIC_CYCLE_COUNTER;
+
+    // we also FORMALLY mark r1 as "pointer" type, even though we will NOT have any calldata
+    vm.local_state.registers[0] = PrimitiveValue {
+        value: ethereum_types::U256::zero(),
+        is_pointer: true,
+    };
 
     vm
 }

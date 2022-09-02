@@ -39,10 +39,8 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
     initial_heap_content: Vec<u8>, // bootloader starts with non-deterministic heap
     zk_porter_is_available: bool,
     default_aa_code_hash: U256,
-    ergs_per_pubdata_in_block: u32,
     ergs_per_code_word_decommittment: u16,
     used_bytecodes: std::collections::HashMap<U256, Vec<[u8; 32]>>, // auxilary information to avoid passing a full set of all used codes
-    calldata: Vec<u8>, // for real block must be empty
     ram_verification_queries: Vec<(u32, U256)>, // we may need to check that after the bootloader's memory is filled
     cycle_limit: usize,
     round_function: R, // used for all queues implementation
@@ -73,8 +71,6 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
     tools.decommittment_processor.populate(to_fill);
 
     let heap_writes = calldata_to_aligned_data(&initial_heap_content);
-    let calldata_len = calldata.len();
-    let calldata = calldata_to_aligned_data(&calldata);
     let num_non_deterministic_heap_queries = heap_writes.len();
 
     // first there exists non-deterministic writes into the heap of the bootloader's heap and calldata
@@ -86,20 +82,8 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
             location: MemoryLocation { memory_type: MemoryType::Heap, page: MemoryPage(zk_evm::zkevm_opcode_defs::BOOTLOADER_HEAP_PAGE), index: MemoryIndex(idx as u32) }, 
             rw_flag: true, 
             is_pended: false, 
-            value: el 
-        };
-        tools.witness_tracer.add_memory_query(0, query);
-        tools.memory.execute_partial_query(0, query);
-    }
-
-    // calldata
-    for (idx, el) in calldata.into_iter().enumerate() {
-        let query = MemoryQuery { 
-            timestamp: Timestamp(0), 
-            location: MemoryLocation { memory_type: MemoryType::Calldata, page: MemoryPage(zk_evm::zkevm_opcode_defs::BOOTLOADER_CALLDATA_PAGE), index: MemoryIndex(idx as u32) }, 
-            rw_flag: true, 
-            is_pended: false, 
-            value: el 
+            value: el,
+            value_is_pointer: false,
         };
         tools.witness_tracer.add_memory_query(0, query);
         tools.memory.execute_partial_query(0, query);
@@ -114,7 +98,8 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
             location: MemoryLocation { memory_type: MemoryType::Heap, page: MemoryPage(zk_evm::zkevm_opcode_defs::BOOTLOADER_HEAP_PAGE), index: MemoryIndex(idx as u32) }, 
             rw_flag: false, 
             is_pended: false, 
-            value: el 
+            value: el,
+            value_is_pointer: false,
         };
         tools.witness_tracer.add_memory_query(0, query);
         tools.memory.execute_partial_query(0, query);
@@ -158,19 +143,23 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
 
     let mut early_breakpoint_after_snapshot = false;
     let mut tracer = GenericNoopTracer::<_>::new();
-    tracing::debug!("Running out of circuit for {} cycles", cycle_limit);
+    // tracing::debug!("Running out of circuit for {} cycles", cycle_limit);
+    println!("Running out of circuit for {} cycles", cycle_limit);
     for _cycle in 0..cycle_limit {
-        if out_of_circuit_vm.execution_has_ended() && !out_of_circuit_vm.is_any_pending() {
-            if out_of_circuit_vm.witness_tracer.cycle_counter_in_this_snapshot  == 1 {
-                tracing::debug!("Ran for {} cycles", _cycle + 1);
-                early_breakpoint_after_snapshot = true;
-                break;
-            }
+        if out_of_circuit_vm.execution_has_ended() && out_of_circuit_vm.is_any_pending() == false {
+            // VM stoped execution after previous cycle, so we can break 
+            // if out_of_circuit_vm.witness_tracer.current_cycle_counter == out_of_circuit_vm.witness_tracer.cycle_counter_of_last_snapshot + 1 {
+            //     // tracing::debug!("Ran for {} cycles", _cycle + 1);
+            //     println!("Ran for {} cycles", _cycle + 1);
+            //     early_breakpoint_after_snapshot = true;
+            // }
+
+            break;
         }
         out_of_circuit_vm.cycle(&mut tracer);
     }
 
-    assert_eq!(out_of_circuit_vm.local_state.callstack.current.pc, 0, "root frame ended up with panic");
+    // assert_eq!(out_of_circuit_vm.local_state.callstack.current.pc, 0, "root frame ended up with panic");
 
     let vm_local_state = out_of_circuit_vm.local_state;
 
@@ -184,6 +173,8 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
         };
         tools.witness_tracer.vm_snapshots.push(snapshot);
     }
+
+    dbg!(tools.witness_tracer.vm_snapshots.len());
 
     let (instance_oracles, artifacts) =
         create_artifacts_from_tracer(
@@ -342,10 +333,8 @@ pub fn run_with_fixed_params<S: Storage>(
     initial_heap_content: Vec<u8>, // bootloader starts with non-deterministic heap
     zk_porter_is_available: bool,
     default_aa_code_hash: U256,
-    ergs_per_pubdata_in_block: u32,
     ergs_per_code_word_decommittment: u16,
     used_bytecodes: std::collections::HashMap<U256, Vec<[u8; 32]>>, // auxilary information to avoid passing a full set of all used codes
-    calldata: Vec<u8>, // for real block must be empty
     ram_verification_queries: Vec<(u32, U256)>, // we may need to check that after the bootloader's memory is filled
     cycle_limit: usize,
     geometry: GeometryConfig,
@@ -363,10 +352,8 @@ pub fn run_with_fixed_params<S: Storage>(
         initial_heap_content,
         zk_porter_is_available,
         default_aa_code_hash,
-        ergs_per_pubdata_in_block,
         ergs_per_code_word_decommittment,
         used_bytecodes,
-        calldata,
         ram_verification_queries,
         cycle_limit,
         round_function,

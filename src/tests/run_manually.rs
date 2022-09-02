@@ -154,7 +154,7 @@ pub fn assert_equal_state(
         .zip(out_of_circuit.registers.iter())
         .enumerate()
     {
-        compare_reg_values(reg_idx + 1, circuit.inner, *not_circuit);
+        compare_reg_values(reg_idx + 1, circuit.inner, not_circuit.value);
     }
 
     // compare flags
@@ -205,7 +205,7 @@ fn compare_reg_values(reg_idx: usize, in_circuit: [u128; 2], out_of_circuit: U25
     }
 }
 
-fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
+pub(crate) fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
     use zk_evm::precompiles::BOOTLOADER_FORMAL_ADDRESS;
 
     use crate::external_calls::run;
@@ -252,9 +252,7 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
         false,
         U256::zero(),
         50,
-        2,
         std::collections::HashMap::new(),
-        vec![],
         vec![],
         cycle_limit,
         round_function,
@@ -262,6 +260,8 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
         storage_impl,
         &mut tree
     );
+
+    println!("Simulation and witness creation as completed");
 
     // let flattened = basic_block_circuits.into_flattened_set();
     // for el in flattened.into_iter() {
@@ -282,10 +282,10 @@ fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
         use crate::abstract_zksync_circuit::concrete_circuits::ZkSyncCircuit;
-        // if !matches!(&el, ZkSyncCircuit::StorageApplication(..)) {
-        //     continue;
-        // }
-        // el.debug_witness();
+        if !matches!(&el, ZkSyncCircuit::MainVM(..)) {
+            continue;
+        }
+        el.debug_witness();
         use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
         let (is_satisfied, public_input) = circuit_testing::check_if_satisfied::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(el).unwrap();
         assert!(is_satisfied);

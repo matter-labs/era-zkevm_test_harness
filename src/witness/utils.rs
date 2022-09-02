@@ -107,7 +107,6 @@ pub fn vm_instance_witness_to_vm_formal_state<E: Engine>(
     // non-saved part
     hidden_fsm.callstack.current_context.log_queue_forward_part_length = aux_params.storage_log_queue_state.num_items;
     hidden_fsm.callstack.current_context.log_queue_forward_tail = aux_params.storage_log_queue_state.tail_state;
-    hidden_fsm.callstack.current_context.returndata_page = vm_state.callstack.returndata_page.0;
     // saved part
 
     let mut ctx = &mut hidden_fsm.callstack.current_context;
@@ -115,8 +114,11 @@ pub fn vm_instance_witness_to_vm_formal_state<E: Engine>(
 
     // memory pages
     ctx.saved_context.common_part.base_page = out_of_circuit_context.base_memory_page.0;
-    ctx.saved_context.common_part.calldata_page = out_of_circuit_context.calldata_page.0;
     ctx.saved_context.common_part.code_page = out_of_circuit_context.code_page.0;
+
+    // memory sizes
+    ctx.saved_context.common_part.heap_upper_bound = out_of_circuit_context.heap_bound;
+    ctx.saved_context.common_part.aux_heap_upper_bound = out_of_circuit_context.aux_heap_bound;
 
     // various counters
     ctx.saved_context.common_part.pc = out_of_circuit_context.pc;
@@ -152,10 +154,11 @@ pub fn vm_instance_witness_to_vm_formal_state<E: Engine>(
     // registers
     assert_eq!(hidden_fsm.registers.len(), vm_state.registers.len());
     for (dst, src) in hidden_fsm.registers.iter_mut().zip(vm_state.registers.iter()) {
-        let low = (src.0[0] as u128) + ((src.0[1] as u128) << 64);
-        let high = (src.0[2] as u128) + ((src.0[3] as u128) << 64);
+        let low = (src.value.0[0] as u128) + ((src.value.0[1] as u128) << 64);
+        let high = (src.value.0[2] as u128) + ((src.value.0[3] as u128) << 64);
         dst.inner[0] = low;
         dst.inner[1] = high;
+        dst.is_ptr = src.is_pointer;
     }
 
     for (i, dst) in hidden_fsm.previous_code_word.iter_mut().enumerate() {
@@ -171,6 +174,11 @@ pub fn vm_instance_witness_to_vm_formal_state<E: Engine>(
     hidden_fsm.previous_super_pc = vm_state.previous_super_pc;
     hidden_fsm.did_call_or_ret_recently = vm_state.did_call_or_ret_recently;
     hidden_fsm.ergs_per_pubdata_byte = vm_state.current_ergs_per_pubdata_byte;
+
+    hidden_fsm.context_composite_u128 = [
+        vm_state.context_u128_register as u64,
+        (vm_state.context_u128_register >> 64) as u64,
+    ];
 
     hidden_fsm.memory_queue_state = aux_params.memory_queue_state.tail;
     hidden_fsm.memory_queue_length = aux_params.memory_queue_state.length;
