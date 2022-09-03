@@ -102,7 +102,5 @@ pub fn create_out_of_circuit_vm<'a, S: Storage>(
     vm.local_state.memory_page_counter = STARTING_BASE_PAGE;
     vm.local_state.monotonic_cycle_counter = crate::INITIAL_MONOTONIC_CYCLE_COUNTER;
 
-    //todo: remove this line when current_ergs_per_pubdata_byte is set in bootloader
-    vm.local_state.current_ergs_per_pubdata_byte = block_properties.ergs_per_pubdata_byte_limit_in_block;
     vm
 }
