@@ -28,6 +28,10 @@ pub fn compute_ram_circuit_snapshots<
 ) -> Vec<RamPermutationCircuitInstanceWitness<E>> {
     assert!(artifacts.all_memory_queries_accumulated.len() > 0, "VM should have made some memory requests");
 
+    for (x, index) in artifacts.all_memory_queries_accumulated.iter().enumerate() {
+        println!("{:?}: {:?}", index, x);
+    }
+    
     // sort by memory location, and then by timestamp
     artifacts.sorted_memory_queries_accumulated = artifacts.all_memory_queries_accumulated.clone();
     artifacts.sorted_memory_queries_accumulated.par_sort_by(|a, b| {
