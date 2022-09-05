@@ -10,7 +10,7 @@ mod test {
     fn read_and_run() {
         // let circuit_file_name = "prover_input_26";
         // let circuit_file_name = "prover_input_11";
-        let circuit_file_name = "prover_input_1";
+        let circuit_file_name = "prover_input_120656";
 
         let mut content = std::fs::File::open(circuit_file_name).unwrap();
         let mut buffer = vec![];

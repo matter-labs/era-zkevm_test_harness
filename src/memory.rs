@@ -122,7 +122,7 @@ impl Memory for SimpleMemory {
             self.clear_page(old_stack_page.0)
         }
 
-        self.depth_index -= 1;
+        self.depth_index = self.depth_index.wrapping_sub(1);
     }
 }
 
