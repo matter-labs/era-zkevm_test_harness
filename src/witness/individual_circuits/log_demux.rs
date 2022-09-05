@@ -32,7 +32,7 @@ pub fn compute_logs_demux<
     round_function: &R,
 ) -> LogDemuxerCircuitInstanceWitness<E> {
     for x in artifacts.demuxed_rollup_storage_queries {
-        println!(x);
+        println!("{:?}", x);
     }
 
     // parallelizable 
