@@ -9,7 +9,8 @@ mod test {
     #[test]
     fn read_and_run() {
         // let circuit_file_name = "prover_input_26";
-        let circuit_file_name = "prover_input_32";
+        // let circuit_file_name = "prover_input_11";
+        let circuit_file_name = "prover_input_1";
 
         let mut content = std::fs::File::open(circuit_file_name).unwrap();
         let mut buffer = vec![];
@@ -32,6 +33,15 @@ mod test {
                 dbg!(&inner.closed_form_input.start_flag);
                 dbg!(&inner.closed_form_input.completion_flag);
                 dbg!(&inner.closed_form_input.hidden_fsm_input.internal_fsm.precompile_call_params);
+                dbg!(&inner);
+            },
+            ZkSyncCircuit::StorageApplication(inner) => {
+                let inner = inner.clone();
+                let inner = inner.witness.take().unwrap();
+                dbg!(&inner.closed_form_input.start_flag);
+                dbg!(&inner.merkle_paths.len());
+                dbg!(&inner.leaf_indexes_for_reads.len());
+                dbg!(&inner);
             },
             _ => unreachable!()
         }

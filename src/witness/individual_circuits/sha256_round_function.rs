@@ -73,7 +73,7 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
 
     if precompile_calls.len() == 0 {
         // we can not skip the circuit (at least for now), so we have to create a dummy on
-        let log_queue_input_state = take_queue_state_from_simulator(&artifacts.demuxed_ecrecover_queue_simulator);
+        let log_queue_input_state = take_queue_state_from_simulator(&artifacts.demuxed_sha256_precompile_queue_simulator);
         let memory_queue_input_state = take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
         let current_memory_queue_state = memory_queue_input_state.clone();
 
