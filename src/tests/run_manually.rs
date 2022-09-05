@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::*;
 use crate::entry_point::{create_out_of_circuit_global_context};
 
@@ -206,13 +208,23 @@ fn compare_reg_values(reg_idx: usize, in_circuit: [u128; 2], out_of_circuit: U25
 }
 
 pub(crate) fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
-    use zk_evm::precompiles::BOOTLOADER_FORMAL_ADDRESS;
-
-    use crate::external_calls::run;
-
     let mut assembly = Assembly::try_from(asm.to_owned()).unwrap();
     let bytecode = assembly.compile_to_bytecode().unwrap();
 
+    run_and_try_create_witness_for_extended_state(
+        bytecode,
+        vec![],
+        cycle_limit
+    )
+}
+
+pub(crate) fn run_and_try_create_witness_for_extended_state(
+    entry_point_bytecode: Vec<[u8; 32]>,
+    other_contracts: Vec<(H160, Vec<[u8; 32]>)>,
+    cycle_limit: usize
+) {
+    use zk_evm::precompiles::BOOTLOADER_FORMAL_ADDRESS;
+    use crate::external_calls::run;
     use sync_vm::testing::create_test_artifacts_with_optimized_gate;
     let (_, round_function, _) = create_test_artifacts_with_optimized_gate();
 
@@ -238,8 +250,24 @@ pub(crate) fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
     use crate::witness::tree::ZKSyncTestingTree;
     use crate::witness::tree::BinarySparseStorageTree;
 
-    let storage_impl = InMemoryStorage::new();
+    let mut used_bytecodes_and_hashes = HashMap::new();
+    used_bytecodes_and_hashes.extend(other_contracts.iter().cloned().map(|(_, code)| {
+        let code_hash = bytecode_to_code_hash(&code).unwrap();
+
+        (U256::from_big_endian(&code_hash), code)
+    }));
+
+    let mut storage_impl = InMemoryStorage::new();
     let mut tree = ZKSyncTestingTree::empty();
+
+    let mut known_contracts = HashMap::new();
+    known_contracts.extend(other_contracts.iter().cloned());
+
+    crate::tests::complex_tests::save_predeployed_contracts(
+        &mut storage_impl,
+        &mut tree,
+        &known_contracts
+    );
 
     let (basic_block_circuits, basic_block_circuits_inputs, scheduler_input) = run(
         0,
@@ -247,12 +275,12 @@ pub(crate) fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
         1,
         Address::zero(),
         *BOOTLOADER_FORMAL_ADDRESS,
-        bytecode,
+        entry_point_bytecode,
         vec![],
         false,
         U256::zero(),
         50,
-        std::collections::HashMap::new(),
+        used_bytecodes_and_hashes,
         vec![],
         cycle_limit,
         round_function,

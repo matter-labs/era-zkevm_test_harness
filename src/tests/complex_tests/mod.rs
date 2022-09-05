@@ -62,7 +62,7 @@ fn basic_circuit_proof_name(circuit_type_idx: u8, absolute_idx: usize) -> String
     format!("basic_circuit_proof_{}_{}", circuit_type_idx, absolute_idx)
 }
 
-fn save_predeployed_contracts(storage: &mut InMemoryStorage, tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>, contracts: &HashMap<Address, Vec<[u8; 32]>>) {
+pub(crate) fn save_predeployed_contracts(storage: &mut InMemoryStorage, tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>, contracts: &HashMap<Address, Vec<[u8; 32]>>) {
     let mut sorted_contracts = vec![];
     let mut keys: Vec<_> = contracts.keys().cloned().collect();
     keys.sort();
