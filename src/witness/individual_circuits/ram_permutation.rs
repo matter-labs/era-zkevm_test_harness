@@ -2,6 +2,7 @@ use sync_vm::glue::code_unpacker_sha256::memory_query_updated::RawMemoryQuery;
 use sync_vm::glue::memory_queries_validity::ram_permutation_inout::*;
 use sync_vm::inputs::ClosedFormInputWitness;
 use sync_vm::utils::u64_to_fe;
+use zk_evm::abstractions::MemoryType;
 
 use crate::encodings::memory_query::MemoryQueueSimulator;
 use crate::witness_structures::transform_sponge_like_queue_state;
@@ -16,6 +17,7 @@ use sync_vm::glue::ram_permutation::RamPermutationCircuitInstanceWitness;
 use zk_evm::zkevm_opcode_defs::BOOTLOADER_HEAP_PAGE;
 
 pub const RAM_PERMUTATION_CHUNK_SIZE: usize = 1 << 18;
+// pub const RAM_PERMUTATION_CHUNK_SIZE: usize = 1 << 10;
 
 pub fn compute_ram_circuit_snapshots<
     E: Engine,
@@ -133,17 +135,40 @@ pub fn compute_ram_circuit_snapshots<
 
     // elementwise products are done, now must fold
 
-    let lhs_intermediates: Vec<E::Fr> = lhs_grand_product_chain.par_chunks(RAM_PERMUTATION_CHUNK_SIZE).map(
+    let mut lhs_intermediates: Vec<E::Fr> = lhs_grand_product_chain.par_chunks(RAM_PERMUTATION_CHUNK_SIZE).map(
         |slice: &[E::Fr]| {
             *slice.last().unwrap()
         }
     ).collect();
 
-    let rhs_intermediates: Vec<E::Fr> = rhs_grand_product_chain.par_chunks(RAM_PERMUTATION_CHUNK_SIZE).map(
+    let mut rhs_intermediates: Vec<E::Fr> = rhs_grand_product_chain.par_chunks(RAM_PERMUTATION_CHUNK_SIZE).map(
         |slice: &[E::Fr]| {
             *slice.last().unwrap()
         }
     ).collect();
+
+    assert_eq!(lhs_intermediates.len(), lhs_grand_product_chain.chunks(RAM_PERMUTATION_CHUNK_SIZE).len());
+    assert_eq!(rhs_intermediates.len(), rhs_grand_product_chain.chunks(RAM_PERMUTATION_CHUNK_SIZE).len());
+
+    // accumulate intermediate products
+    // we should multiply element [1] by element [0],
+    // element [2] by [0] * [1],
+    // etc
+    let mut acc_lhs = E::Fr::one();
+    for el in lhs_intermediates.iter_mut() {
+        let tmp = *el;
+        el.mul_assign(&acc_lhs);
+        acc_lhs.mul_assign(&tmp);
+    }
+
+    let mut acc_rhs = E::Fr::one();
+    for el in rhs_intermediates.iter_mut() {
+        let tmp = *el;
+        el.mul_assign(&acc_rhs);
+        acc_rhs.mul_assign(&tmp);
+    }
+
+    assert_eq!(lhs_intermediates.last().unwrap(), rhs_intermediates.last().unwrap());
 
     lhs_grand_product_chain.par_chunks_mut(RAM_PERMUTATION_CHUNK_SIZE).skip(1).zip(lhs_intermediates.par_chunks(1)).for_each(
         |(dst, src)| {
@@ -330,4 +355,260 @@ pub fn compute_ram_circuit_snapshots<
     }
 
     results
+}
+
+#[test]
+fn test_parallelized_grand_product() {
+    // this is only proof of permutation, without extra login on what the permutation should be
+
+    use crate::ethereum_types::U256;
+    use zk_evm::aux_structures::*;
+    use sync_vm::testing::Bn256;
+    use sync_vm::testing::create_test_artifacts_with_optimized_gate;
+    use sync_vm::franklin_crypto::bellman::pairing::ff::ScalarEngine;
+    use sync_vm::traits::GenericHasher;
+
+    type E = Bn256;
+
+    let (_, round_function, _) = create_test_artifacts_with_optimized_gate();
+
+    // create dummy queries
+
+    let mut all_queries = vec![];
+
+    let write = MemoryQuery {
+        timestamp: Timestamp(0),
+        location: MemoryLocation {
+            page: MemoryPage(0),
+            index: MemoryIndex(0),
+            memory_type: MemoryType::Heap,
+        },
+        rw_flag: true,
+        value: U256::from(123u64),
+        is_pended: false,
+    };
+
+    all_queries.push(write);
+
+    for i in (1u32..(1u32<<12)).rev() {
+        let read = MemoryQuery {
+            timestamp: Timestamp(i),
+            location: MemoryLocation {
+                page: MemoryPage(0),
+                index: MemoryIndex(0),
+                memory_type: MemoryType::Heap,
+            },
+            rw_flag: false,
+            value: U256::from(123u64),
+            is_pended: false,
+        };
+
+        all_queries.push(read);
+    }
+
+    // sort by memory location, and then by timestamp
+    let mut sorted_memory_queries_accumulated = all_queries.clone();
+    sorted_memory_queries_accumulated.par_sort_by(|a, b| {
+        match a.location.cmp(&b.location) {
+            Ordering::Equal => a.timestamp.cmp(&b.timestamp),
+            a @ _ => a,
+        }
+    });
+
+    println!("Sorted");
+
+    // those two thins are parallelizable, and can be internally parallelized too
+
+    // now we can finish reconstruction of each sorted and unsorted memory queries
+
+    let mut unsorted_memory_queue_states = vec![];
+    let mut sorted_memory_queue_states = vec![];
+
+    let mut unsorted_memory_queries_simulator = MemoryQueueSimulator::<E>::empty();
+    for query in all_queries.iter() {
+        let (_old_tail, intermediate_info) =
+            unsorted_memory_queries_simulator.push_and_output_intermediate_data(*query, &round_function);
+
+            unsorted_memory_queue_states.push(intermediate_info);
+    }
+
+    println!("Original committed");
+
+    // reconstruct sorted one in full
+    let mut sorted_memory_queries_simulator = MemoryQueueSimulator::<E>::empty();
+    for query in sorted_memory_queries_accumulated.iter() {
+        let (_old_tail, intermediate_info) =
+            sorted_memory_queries_simulator.push_and_output_intermediate_data(*query, &round_function);
+
+        sorted_memory_queue_states.push(intermediate_info);
+    }
+
+    println!("Sorted committed");
+
+    // dbg!(&sorted_memory_queries_simulator.num_items);
+
+    assert_eq!(sorted_memory_queries_simulator.num_items, unsorted_memory_queries_simulator.num_items);
+
+    // now we should chunk it by circuits but briefly simulating their logic
+
+    let mut challenges = vec![];
+
+    let mut fs_input = vec![];
+    fs_input.extend_from_slice(&unsorted_memory_queries_simulator.tail);
+    fs_input.push(u64_to_fe(unsorted_memory_queries_simulator.num_items as u64));
+    fs_input.extend_from_slice(&sorted_memory_queries_simulator.tail);
+    fs_input.push(u64_to_fe(sorted_memory_queries_simulator.num_items as u64));
+
+    let sequence_of_states = round_function.simulate_absorb_multiple_rounds_into_empty_with_specialization(&fs_input);
+    let final_state = sequence_of_states.last().unwrap().1;
+    use sync_vm::rescue_poseidon::RescueParams;
+    let base_fs_challenge: <E as ScalarEngine>::Fr = GenericHasher::<Bn256, RescueParams<Bn256, 2, 3>, 2, 3>::simulate_state_into_commitment(final_state);
+
+    let mut current = base_fs_challenge;
+    challenges.push(current);
+    current.mul_assign(&base_fs_challenge);
+    challenges.push(current);
+    current.mul_assign(&base_fs_challenge);
+    challenges.push(current);
+
+    // since encodings of the elements provide all the information necessary to perform soring argument,
+    // we use them naively
+    
+    let lhs_contributions: Vec<_> = unsorted_memory_queries_simulator.witness.iter().map(|el| el.0).collect();
+    let rhs_contributions: Vec<_> = sorted_memory_queries_simulator.witness.iter().map(|el| el.0).collect();
+
+    assert_eq!(lhs_contributions.len(), rhs_contributions.len());
+
+    let mut lhs_grand_product_chain: Vec<_> = vec![<E as ScalarEngine>::Fr::zero(); lhs_contributions.len()];
+    let mut rhs_grand_product_chain: Vec<_> = vec![<E as ScalarEngine>::Fr::zero(); rhs_contributions.len()];
+
+    let challenges: [<E as ScalarEngine>::Fr; 3] = challenges.try_into().unwrap();
+
+    lhs_grand_product_chain.par_chunks_mut(RAM_PERMUTATION_CHUNK_SIZE).zip(lhs_contributions.par_chunks(RAM_PERMUTATION_CHUNK_SIZE)).for_each(
+        |(dst, src)| {
+            assert_eq!(dst.len(), src.len());
+            let mut grand_product = <E as ScalarEngine>::Fr::one();
+            for (dst, src) in dst.iter_mut().zip(src.iter()) {
+                let mut acc = challenges[2];
+
+                let mut tmp = src[0];
+                tmp.mul_assign(&challenges[0]);
+                acc.add_assign(&tmp);
+
+                let mut tmp = src[1];
+                tmp.mul_assign(&challenges[1]);
+                acc.add_assign(&tmp);
+
+                grand_product.mul_assign(&acc);
+    
+                *dst = grand_product;
+            }
+        }
+    );
+
+    rhs_grand_product_chain.par_chunks_mut(RAM_PERMUTATION_CHUNK_SIZE).zip(rhs_contributions.par_chunks(RAM_PERMUTATION_CHUNK_SIZE)).for_each(
+        |(dst, src)| {
+            assert_eq!(dst.len(), src.len());
+            let mut grand_product = <E as ScalarEngine>::Fr::one();
+            for (dst, src) in dst.iter_mut().zip(src.iter()) {
+                let mut acc = challenges[2];
+
+                let mut tmp = src[0];
+                tmp.mul_assign(&challenges[0]);
+                acc.add_assign(&tmp);
+
+                let mut tmp = src[1];
+                tmp.mul_assign(&challenges[1]);
+                acc.add_assign(&tmp);
+
+                grand_product.mul_assign(&acc);
+    
+                *dst = grand_product;
+            }
+        }
+    );
+    
+    let mut grand_product = <E as ScalarEngine>::Fr::one();
+    let mut naive_lhs = vec![];
+    for src in lhs_contributions.iter() {
+        let mut acc = challenges[2];
+
+        let mut tmp = src[0];
+        tmp.mul_assign(&challenges[0]);
+        acc.add_assign(&tmp);
+
+        let mut tmp = src[1];
+        tmp.mul_assign(&challenges[1]);
+        acc.add_assign(&tmp);
+
+        grand_product.mul_assign(&acc);
+
+        naive_lhs.push(grand_product);
+    }
+
+    assert_eq!(naive_lhs.len(), lhs_grand_product_chain.len());
+
+    // elementwise products are done, now must fold
+
+    let mut lhs_intermediates: Vec<<E as ScalarEngine>::Fr> = lhs_grand_product_chain.par_chunks(RAM_PERMUTATION_CHUNK_SIZE).map(
+        |slice: &[<E as ScalarEngine>::Fr]| {
+            *slice.last().unwrap()
+        }
+    ).collect();
+
+    let mut rhs_intermediates: Vec<<E as ScalarEngine>::Fr> = rhs_grand_product_chain.par_chunks(RAM_PERMUTATION_CHUNK_SIZE).map(
+        |slice: &[<E as ScalarEngine>::Fr]| {
+            *slice.last().unwrap()
+        }
+    ).collect();
+
+    assert_eq!(lhs_intermediates.len(), lhs_grand_product_chain.chunks(RAM_PERMUTATION_CHUNK_SIZE).len());
+    assert_eq!(rhs_intermediates.len(), rhs_grand_product_chain.chunks(RAM_PERMUTATION_CHUNK_SIZE).len());
+
+    // accumulate intermediate products
+    // we should multiply element [1] by element [0],
+    // element [2] by [0] * [1],
+    // etc
+    let mut acc_lhs = <E as ScalarEngine>::Fr::one();
+    for el in lhs_intermediates.iter_mut() {
+        let tmp = *el;
+        el.mul_assign(&acc_lhs);
+        acc_lhs.mul_assign(&tmp);
+    }
+
+    let mut acc_rhs = <E as ScalarEngine>::Fr::one();
+    for el in rhs_intermediates.iter_mut() {
+        let tmp = *el;
+        el.mul_assign(&acc_rhs);
+        acc_rhs.mul_assign(&tmp);
+    }
+
+    assert_eq!(lhs_intermediates.last().unwrap(), rhs_intermediates.last().unwrap());
+
+    // here we skip 1 because we do not have anything to pre-accumuate
+    lhs_grand_product_chain.par_chunks_mut(RAM_PERMUTATION_CHUNK_SIZE).skip(1).zip(lhs_intermediates.par_chunks(1)).for_each(
+        |(dst, src)| {
+            assert_eq!(src.len(), 1);
+            let src = src[0];
+            for dst in dst.iter_mut() {
+                dst.mul_assign(&src);
+            }
+        }
+    );
+
+    for (idx, (a, b)) in naive_lhs.iter().zip(lhs_grand_product_chain.iter()).enumerate() {
+        assert_eq!(a, b, "failed at index {}: a = {}, b = {}", idx, a, b);
+    }
+
+    rhs_grand_product_chain.par_chunks_mut(RAM_PERMUTATION_CHUNK_SIZE).skip(1).zip(rhs_intermediates.par_chunks(1)).for_each(
+        |(dst, src)| {
+            let src = src[0];
+            for dst in dst.iter_mut() {
+                dst.mul_assign(&src);
+            }
+        }
+    );
+
+    // sanity check
+    assert_eq!(lhs_grand_product_chain.last().unwrap(), rhs_grand_product_chain.last().unwrap());
 }
