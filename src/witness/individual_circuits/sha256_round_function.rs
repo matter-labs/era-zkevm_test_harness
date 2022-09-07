@@ -36,9 +36,6 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
     // split into aux witness, don't mix with the memory
     use zk_evm::precompiles::sha256::Sha256RoundWitness;
 
-    println!("look here");
-    println!("{:?}", artifacts.sha256_round_function_witnesses);
-
     for (_cycle, _query, witness) in artifacts.sha256_round_function_witnesses.iter() {
         for el in witness.iter() {
             let Sha256RoundWitness {

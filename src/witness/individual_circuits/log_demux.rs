@@ -31,10 +31,6 @@ pub fn compute_logs_demux<
     artifacts: &mut FullBlockArtifacts<E>,
     round_function: &R,
 ) -> LogDemuxerCircuitInstanceWitness<E> {
-    for x in artifacts.demuxed_rollup_storage_queries.iter() {
-        println!("{:?}", x);
-    }
-
     // parallelizable 
     
     // have to manually unroll, otherwise borrow checker will complain
