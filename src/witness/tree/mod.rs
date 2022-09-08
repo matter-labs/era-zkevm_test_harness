@@ -495,6 +495,54 @@ mod test {
         assert!(!included);
     }
 
+    #[test]
+    fn reference_params() {
+        const DEPTH: usize = 256;
+        const INDEX_BYTES: usize = 32;
+        // const DEPTH: usize = 8;
+        // const INDEX_BYTES: usize = 1;
+
+        let mut tree = InMemoryStorageTree::<DEPTH, INDEX_BYTES, 8, Blake2s256, ZkSyncStorageLeaf>::empty();
+
+        println!("Empty root = {}", hex::encode(&tree.root()));
+        println!("Next enumeration index for empty tree = {}", tree.next_enumeration_index());
+
+        // let's create a leaf
+
+        let dummy_leaf = ZkSyncStorageLeaf::from_value([1u8; 32]);
+        use zk_evm::aux_structures::LogQuery;
+        use crate::ethereum_types::{Address, U256};
+        let address = Address::from_low_u64_be(0x8002);
+        let key = U256::zero();
+        let index = LogQuery::derive_final_address_for_params(&address, &key);
+
+        println!("Equivalence of query with address = {:?} and key = {}", address, key);
+        println!("Will insert a leaf with value {} at index (hashed index) {}", hex::encode(&dummy_leaf.value()), hex::encode(&index));
+
+        let query = tree.insert_leaf(&index, dummy_leaf);
+
+        println!("New root = {}", hex::encode(&tree.root()));
+
+        let root = tree.root();
+        assert!(query.leaf.current_index() == 1);
+        assert!(tree.next_enumeration_index() == 2);
+
+        println!("New tree has next enumeration index = {}, and leaf got enumeration index = {}", tree.next_enumeration_index(), query.leaf.current_index());
+
+        let included = InMemoryStorageTree::<DEPTH, INDEX_BYTES, 8, Blake2s256, ZkSyncStorageLeaf>::verify_inclusion(&root, &query);
+        assert!(included);
+
+        println!("Merkle proof path elements starting from the leafs:");
+        for (level, el) in query.merkle_path.iter().take(4).enumerate() {
+            println!("{}", hex::encode(el));
+            if is_right_side_node(&query.index, level) {
+                println!("Merkle path element is on the LEFT side");
+            } else {
+                println!("Merkle path element is on the RIGHT side");
+            }
+        }
+    }
+
 }
 
 pub type ZKSyncTestingTree = InMemoryStorageTree::<256, 32, 8, Blake2s256, ZkSyncStorageLeaf>;

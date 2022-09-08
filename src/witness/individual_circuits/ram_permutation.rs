@@ -219,6 +219,7 @@ pub fn compute_ram_circuit_snapshots<
     let mut previous_sorting_key = E::Fr::zero();
     let mut previous_comparison_key = E::Fr::zero();
     let mut previous_value_pair = [E::Fr::zero(); 2];
+    let mut previous_is_ptr = false;
 
     let unsorted_global_final_state = artifacts.all_memory_queue_states.last().unwrap().clone();
     let sorted_global_final_state = artifacts.sorted_memory_queue_states.last().unwrap().clone();
@@ -268,6 +269,7 @@ pub fn compute_ram_circuit_snapshots<
         use crate::encodings::memory_query::*;
         let sorting_key = sorting_key::<E>(&last_sorted_query);
         let comparison_key = comparison_key::<E>(&last_sorted_query);
+        let is_ptr = last_sorted_query.value_is_pointer;
 
         let raw_query_witness = transform_raw_memory_query_witness::<E>(&last_sorted_query);
         let value_low = raw_query_witness.value;
@@ -322,6 +324,7 @@ pub fn compute_ram_circuit_snapshots<
                     previous_sorting_key: previous_sorting_key,
                     previous_full_key: previous_comparison_key,
                     previous_values_pair: previous_value_pair,
+                    previous_is_ptr: previous_is_ptr,
                     num_nondeterministic_writes: current_number_of_nondet_writes,
                     _marker: std::marker::PhantomData,
                 },
@@ -333,6 +336,7 @@ pub fn compute_ram_circuit_snapshots<
                     previous_sorting_key: sorting_key,
                     previous_full_key: comparison_key,
                     previous_values_pair: [value_low, value_high],
+                    previous_is_ptr: is_ptr,
                     num_nondeterministic_writes: new_num_nondet_writes,
                     _marker: std::marker::PhantomData,
                 },
@@ -348,6 +352,7 @@ pub fn compute_ram_circuit_snapshots<
         previous_sorting_key = sorting_key;
         previous_comparison_key = comparison_key;
         previous_value_pair = [value_low, value_high];
+        previous_is_ptr = is_ptr;
 
         current_number_of_nondet_writes = new_num_nondet_writes;
 
@@ -386,6 +391,7 @@ fn test_parallelized_grand_product() {
         rw_flag: true,
         value: U256::from(123u64),
         is_pended: false,
+        value_is_pointer: false,
     };
 
     all_queries.push(write);
@@ -401,6 +407,7 @@ fn test_parallelized_grand_product() {
             rw_flag: false,
             value: U256::from(123u64),
             is_pended: false,
+            value_is_pointer: false,
         };
 
         all_queries.push(read);
