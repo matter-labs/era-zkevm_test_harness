@@ -161,19 +161,23 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
 
     let mut early_breakpoint_after_snapshot = false;
     let mut tracer = GenericNoopTracer::<_>::new();
-    tracing::debug!("Running out of circuit for {} cycles", cycle_limit);
+    // tracing::debug!("Running out of circuit for {} cycles", cycle_limit);
+    println!("Running out of circuit for {} cycles", cycle_limit);
     for _cycle in 0..cycle_limit {
-        if out_of_circuit_vm.execution_has_ended() && !out_of_circuit_vm.is_any_pending() {
-            if out_of_circuit_vm.witness_tracer.cycle_counter_in_this_snapshot  == 1 {
-                tracing::debug!("Ran for {} cycles", _cycle + 1);
-                early_breakpoint_after_snapshot = true;
-                break;
-            }
+        if out_of_circuit_vm.execution_has_ended() && out_of_circuit_vm.is_any_pending() == false {
+            // VM stoped execution after previous cycle, so we can break 
+            // if out_of_circuit_vm.witness_tracer.current_cycle_counter == out_of_circuit_vm.witness_tracer.cycle_counter_of_last_snapshot + 1 {
+            //     // tracing::debug!("Ran for {} cycles", _cycle + 1);
+            //     println!("Ran for {} cycles", _cycle + 1);
+            //     early_breakpoint_after_snapshot = true;
+            // }
+
+            break;
         }
         out_of_circuit_vm.cycle(&mut tracer);
     }
 
-    assert_eq!(out_of_circuit_vm.local_state.callstack.current.pc, 0);
+    // assert_eq!(out_of_circuit_vm.local_state.callstack.current.pc, 0, "root frame ended up with panic");
 
     let vm_local_state = out_of_circuit_vm.local_state;
 
@@ -187,6 +191,8 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
         };
         tools.witness_tracer.vm_snapshots.push(snapshot);
     }
+
+    // dbg!(tools.witness_tracer.vm_snapshots.len());
 
     let (instance_oracles, artifacts) =
         create_artifacts_from_tracer(
