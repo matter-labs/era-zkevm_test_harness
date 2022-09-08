@@ -75,7 +75,7 @@ impl<E: Engine, S: ZkSyncUniformSynthesisFunction<E>> ZkSyncUniformCircuitCircui
 
     pub fn debug_witness(&self) {
         let wit = self.witness.take();
-        // dbg!(&wit);
+        dbg!(&wit);
         self.witness.store(wit);
     }
 
