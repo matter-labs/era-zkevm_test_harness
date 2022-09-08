@@ -342,7 +342,7 @@ impl CallstackWithAuxData {
                 assert!(!is_head);
                 QueueSegmentPointer::OtherFramesQuery{rw_flag, rollback, idx, is_head}
             },
-            a @ _ => unreachable!("encountered {:?}", a)
+            a @ _ => QueueSegmentPointer::Dangling
         };
 
         if let QueueSegmentPointer::Indirection(QueueSegmentIndirectablePointer::ForwardHeadAtFrameStart(f)) = current_frame_record.forward_tail_pointer {
@@ -383,7 +383,7 @@ impl CallstackWithAuxData {
                             QueueSegmentPointer::OtherFramesQuery{rw_flag, rollback, idx, is_head}
                         },
 
-                        _ => unreachable!()
+                        _ => QueueSegmentPointer::Dangling
                     }
                 },
                 _ => unreachable!(),
