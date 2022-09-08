@@ -277,6 +277,15 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     for (idx, (el, input_value)) in basic_block_circuits.clone().into_flattened_set().into_iter().zip(basic_block_circuits_inputs.clone().into_flattened_set()).enumerate() {
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
+
+        if matches!(&el, ZkSyncCircuit::MainVM(..)) {
+            use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
+            let el = el.clone();
+            let (is_satisfied, public_input) = circuit_testing::check_if_satisfied::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(el).unwrap();
+            assert!(is_satisfied);
+            assert_eq!(public_input, input_value, "Public input diverged for circuit {} of type {}", idx, descr);
+        }
+
         // if !matches!(&el, ZkSyncCircuit::ECRecover(..)) {
         //     continue;
         // }

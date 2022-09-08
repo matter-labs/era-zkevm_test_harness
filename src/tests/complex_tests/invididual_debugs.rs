@@ -10,7 +10,8 @@ mod test {
     fn read_and_run() {
         // let circuit_file_name = "prover_input_26";
         // let circuit_file_name = "prover_input_11";
-        let circuit_file_name = "prover_input_120656";
+        // let circuit_file_name = "prover_input_120656";
+        let circuit_file_name = "prover_input_187019";
 
         let mut content = std::fs::File::open(circuit_file_name).unwrap();
         let mut buffer = vec![];
@@ -42,6 +43,15 @@ mod test {
                 dbg!(&inner.merkle_paths.len());
                 dbg!(&inner.leaf_indexes_for_reads.len());
                 dbg!(&inner);
+            },
+            ZkSyncCircuit::MainVM(inner) => {
+                let inner = inner.clone();
+                let inner = inner.witness.take().unwrap();
+                let wits: Vec<_> = inner.witness_oracle.callstack_values_witnesses.iter().map(|(_idx, (_entry, previous_state))| {
+                    previous_state.clone()
+                }).collect();
+
+                dbg!(wits);
             },
             _ => unreachable!()
         }
