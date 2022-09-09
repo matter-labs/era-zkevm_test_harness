@@ -21,6 +21,10 @@ impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for MessagesMerklizerInstanceS
     type Config = (usize, bool);
     type RoundFunction = GenericHasher<E, RescueParams<E, 2, 3>, 2, 3>;
 
+    fn description() -> String {
+        "L1 messages merklizer".to_string()
+    }
+
     fn get_synthesis_function_dyn<
         'a,
         CS: ConstraintSystem<E> + 'a,

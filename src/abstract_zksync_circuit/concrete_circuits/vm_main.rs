@@ -20,6 +20,10 @@ impl<E: Engine, W: WitnessOracle<E>> ZkSyncUniformSynthesisFunction<E> for VmMai
     type Config = usize;
     type RoundFunction = GenericHasher<E, RescueParams<E, 2, 3>, 2, 3>;
 
+    fn description() -> String {
+        "VM main circuit".to_string()
+    }
+
     fn get_synthesis_function_dyn<
         'a,
         CS: ConstraintSystem<E> + 'a,

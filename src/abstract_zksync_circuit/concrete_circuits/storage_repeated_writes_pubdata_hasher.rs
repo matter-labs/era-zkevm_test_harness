@@ -19,6 +19,10 @@ impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for StorageRepeatedWritesRehas
     type Config = usize;
     type RoundFunction = GenericHasher<E, RescueParams<E, 2, 3>, 2, 3>;
 
+    fn description() -> String {
+        "Repeated writes pubdata hasher".to_string()
+    }
+
     fn get_synthesis_function_dyn<
         'a,
         CS: ConstraintSystem<E> + 'a,

@@ -18,6 +18,10 @@ impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for CodeDecommittmentsSorterSy
     type Config = usize;
     type RoundFunction = GenericHasher<E, RescueParams<E, 2, 3>, 2, 3>;
 
+    fn description() -> String {
+        "Decommittment requests sorter".to_string()
+    }
+
     fn get_synthesis_function_dyn<
         'a,
         CS: ConstraintSystem<E> + 'a,

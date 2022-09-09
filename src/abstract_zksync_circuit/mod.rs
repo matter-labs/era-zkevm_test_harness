@@ -22,6 +22,8 @@ pub trait ZkSyncUniformSynthesisFunction<E: Engine>: Clone {
     type Config: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned;
     type RoundFunction: CircuitArithmeticRoundFunction<E, 2, 3, StateElement = Num<E>>;
 
+    fn description() -> String;
+
     // fn get_synthesis_function<
     //     CS: ConstraintSystem<E>, 
     //     F: for<'r, 's> FnOnce(&'r mut CS, Option<Self::Witness>, &'s Self::RoundFunction, Self::Config) -> Result<AllocatedNum<E>, SynthesisError>

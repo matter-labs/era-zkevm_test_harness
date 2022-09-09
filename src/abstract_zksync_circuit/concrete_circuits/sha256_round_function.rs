@@ -17,6 +17,10 @@ impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for Sha256RoundFunctionInstanc
     type Config = usize;
     type RoundFunction = GenericHasher<E, RescueParams<E, 2, 3>, 2, 3>;
 
+    fn description() -> String {
+        "SHA256 round function".to_string()
+    }
+
     fn get_synthesis_function_dyn<
         'a,
         CS: ConstraintSystem<E> + 'a,
