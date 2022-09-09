@@ -688,7 +688,12 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
                     .push_and_output_intermediate_data(entry, round_function);
 
                 assert!(intermediate_info.is_push == true);
-                callstack_values_witnesses.push((end_cycle, (entry, intermediate_info)));
+                let cycle_to_use = end_cycle;
+                if let Some((prev_cycle, _)) = callstack_values_witnesses.last() {
+                    assert!(cycle_to_use != *prev_cycle, "trying to add callstack witness for cycle {}, but previous one is on cycle {}", cycle_to_use, prev_cycle);
+                }
+                // we do push the witness at the cycle numbered at when the element was pushed
+                callstack_values_witnesses.push((cycle_to_use, (entry, intermediate_info)));
 
                 // when we push a new one then we need to "finish" the previous range and start a new one
                 callstack_sponge_encoding_ranges.push((end_cycle, intermediate_info.new_state));
@@ -737,7 +742,12 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
                 // assert!(previous.is_none(), "duplicate for cycle {}: previous is {:?}, new is {:?}", beginning_cycle, previous.unwrap(), current_storage_log_state);
 
                 assert!(intermediate_info.is_push == false);
-                callstack_values_witnesses.push((beginning_cycle+1, (entry, intermediate_info)));
+                let cycle_to_use = beginning_cycle;
+                if let Some((prev_cycle, _)) = callstack_values_witnesses.last() {
+                    assert!(cycle_to_use != *prev_cycle, "trying to add callstack witness for cycle {}, but previous one is on cycle {}", cycle_to_use, prev_cycle);
+                }
+                // we place it at the cycle when it was actually popped, but not one when it becase "active"
+                callstack_values_witnesses.push((cycle_to_use, (entry, intermediate_info)));
 
                 // when we push a new one then we need to "finish" the previous range and start a new one
                 callstack_sponge_encoding_ranges.push((beginning_cycle, intermediate_info.new_state));
@@ -961,12 +971,13 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
             .cloned()
             .collect();
 
+        
         let callstack_values_witnesses = callstack_values_witnesses.iter()
             .skip_while(
-                |el| el.0 <= initial_state.at_cycle
+                |el| el.0 < initial_state.at_cycle
             )
             .take_while(
-                |el| el.0 <= final_state.at_cycle
+                |el| el.0 < final_state.at_cycle
             )
             .cloned()
             .collect();
@@ -1243,7 +1254,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
 
             assert!(
                 is_push,
-                "divergence at callstack push at cycle {}: pushing {:?} in circuit, but got POP of {:?} in oracle",
+                "divergence at callstack push at cycle {}:\n pushing {:?}\n in circuit, but got POP of \n{:?}\n in oracle",
                 _cycle_idx,
                 &witness,
                 &extended_entry,
@@ -1253,7 +1264,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
                 assert_eq!(
                     depth + 1,
                     witness_depth as u16,
-                    "depth diverged at callstack push at cycle {}: pushing {:?}, got {:?} in oracle",
+                    "depth diverged at callstack push at cycle {}:\n pushing {:?}\n, got \n{:?}\n in oracle",
                     _cycle_idx,
                     &witness,
                     &extended_entry,
