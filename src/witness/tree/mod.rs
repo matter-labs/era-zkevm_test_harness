@@ -70,6 +70,8 @@ pub trait BinarySparseStorageTree<
     }
 }
 
+pub type ZKSyncTestingTree = InMemoryStorageTree::<256, 32, 8, Blake2s256, ZkSyncStorageLeaf>;
+
 use std::{collections::HashMap};
 
 pub struct InMemoryStorageTree<
@@ -496,5 +498,3 @@ mod test {
     }
 
 }
-
-pub type ZKSyncTestingTree = InMemoryStorageTree::<256, 32, 8, Blake2s256, ZkSyncStorageLeaf>;
