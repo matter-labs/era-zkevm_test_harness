@@ -15,6 +15,8 @@ use crate::witness::oracle::create_artifacts_from_tracer;
 use crate::witness::oracle::VmWitnessOracle;
 use crate::witness_structures::take_queue_state_from_simulator;
 use num_integer::Integer;
+use sync_vm::franklin_crypto::bellman::plonk::better_better_cs::cs::Circuit;
+use sync_vm::franklin_crypto::bellman::plonk::better_better_cs::gates::selector_optimized_with_d_next::SelectorOptimizedWidth4MainGateWithDNext;
 use sync_vm::franklin_crypto::bellman::plonk::commitments::transcript::keccak_transcript::RollingKeccakTranscript;
 use sync_vm::franklin_crypto::plonk::circuit::bigint::split_into_limbs;
 use sync_vm::franklin_crypto::plonk::circuit::verifier_circuit::utils::verification_key_into_allocated_limb_witnesses;
@@ -23,6 +25,7 @@ use sync_vm::recursion::leaf_aggregation::LeafAggregationCircuitInstanceWitness;
 use sync_vm::recursion::recursion_tree::AggregationParameters;
 use sync_vm::recursion::{get_prefered_rns_params, get_base_placeholder_point_for_accumulators, get_prefered_committer};
 use sync_vm::rescue_poseidon::rescue::params::RescueParams;
+use sync_vm::testing::create_test_artifacts_with_optimized_gate;
 use sync_vm::traits::CSWitnessable;
 use sync_vm::utils::bn254_rescue_params;
 use sync_vm::vm::vm_cycle::cycle::vm_cycle;
@@ -275,6 +278,15 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     for (idx, (el, input_value)) in basic_block_circuits.clone().into_flattened_set().into_iter().zip(basic_block_circuits_inputs.clone().into_flattened_set()).enumerate() {
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
+
+        if matches!(&el, ZkSyncCircuit::MainVM(..)) {
+            use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
+            let el = el.clone();
+            let (is_satisfied, public_input) = circuit_testing::check_if_satisfied::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(el).unwrap();
+            assert!(is_satisfied);
+            assert_eq!(public_input, input_value, "Public input diverged for circuit {} of type {}", idx, descr);
+        }
+
         // if !matches!(&el, ZkSyncCircuit::ECRecover(..)) {
         //     continue;
         // }
@@ -1126,4 +1138,178 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     serde_json::to_writer(&mut proof_file_for_json, &proof).unwrap();
 
     println!("Done");
+}
+
+#[test]
+fn get_circuit_capacity() {
+    use crate::abstract_zksync_circuit::concrete_circuits::*;
+    use crate::bellman::plonk::better_better_cs::cs::*;
+    use crate::bellman::Engine;
+    use crate::abstract_zksync_circuit::*;
+
+    fn compute_inner<
+        SF: ZkSyncUniformSynthesisFunction<Bn256, RoundFunction = GenericHasher<Bn256, RescueParams<Bn256, 2, 3>, 2, 3>>,
+        F: Fn(usize) -> SF::Config
+    >(
+        config_fn: F,
+    ) -> usize {
+        let max = 1 << 26;
+
+        let typical_sizes = vec![16, 32];
+        let mut gates = vec![];
+
+        for size in typical_sizes.iter().cloned() {
+            let (_, round_function, _) = create_test_artifacts_with_optimized_gate();
+
+            let mut setup_assembly = SetupAssembly::<
+                _, 
+                PlonkCsWidth4WithNextStepAndCustomGatesParams, 
+                SelectorOptimizedWidth4MainGateWithDNext
+            >::new();
+
+            let config = config_fn(size);
+
+            let circuit = ZkSyncUniformCircuitCircuitInstance::<_, SF>::new(
+                None,
+                config,
+                round_function.clone(),
+            );
+            
+            circuit.synthesize(&mut setup_assembly).unwrap();
+
+            let n = setup_assembly.n();
+            gates.push(n);
+        }
+
+        // linear approximation
+
+        let mut per_round_gates = (gates[1] - gates[0]) / (typical_sizes[1] - typical_sizes[0]);
+
+        if (gates[1] - gates[0]) % (typical_sizes[1] - typical_sizes[0]) != 0 {
+            println!("non-linear!");
+            per_round_gates += 1;
+        }
+
+        println!("Single cycle takes {} gates", per_round_gates);
+
+        let additive = gates[1] - per_round_gates * typical_sizes[1];
+
+        println!("O(1) costs = {}", additive);
+
+        let cycles = (max - additive) / per_round_gates;
+
+        println!("Can fit {} cycles for circuit type {}", cycles, SF::description());
+
+        let (_, round_function, _) = create_test_artifacts_with_optimized_gate();
+
+        let mut setup_assembly = SetupAssembly::<
+            _, 
+            PlonkCsWidth4WithNextStepAndCustomGatesParams, 
+            SelectorOptimizedWidth4MainGateWithDNext
+        >::new();
+
+        let config = config_fn(cycles);
+
+        let circuit = ZkSyncUniformCircuitCircuitInstance::<_, SF>::new(
+            None,
+            config,
+            round_function.clone(),
+        );
+        
+        println!("Synthesising largest size");
+        circuit.synthesize(&mut setup_assembly).unwrap();
+        println!("Finaizing largest size");
+        setup_assembly.finalize();
+
+        cycles
+    } 
+
+    // let _vm_size = compute_inner::<VmMainInstanceSynthesisFunction<_, VmWitnessOracle<_>>, _>(
+    //     |x: usize| {
+    //         x
+    //     }
+    // );
+
+    // let _log_demux_size = compute_inner::<LogDemuxInstanceSynthesisFunction, _>(
+    //     |x: usize| {
+    //         x
+    //     }
+    // );
+
+    // let _keccak256 = compute_inner::<Keccak256RoundFunctionInstanceSynthesisFunction, _>(
+    //     |x: usize| {
+    //         x
+    //     }
+    // );
+
+    // let _sha256 = compute_inner::<Sha256RoundFunctionInstanceSynthesisFunction, _>(
+    //     |x: usize| {
+    //         x
+    //     }
+    // );
+
+    // let _ecrecover = compute_inner::<ECRecoverFunctionInstanceSynthesisFunction, _>(
+    //     |x: usize| {
+    //         x
+    //     }
+    // );
+
+    // let _storage_sort = compute_inner::<StorageSortAndDedupInstanceSynthesisFunction, _>(
+    //     |x: usize| {
+    //         x
+    //     }
+    // );
+
+    // let _code_sort = compute_inner::<CodeDecommittmentsSorterSynthesisFunction, _>(
+    //     |x: usize| {
+    //         x
+    //     }
+    // );
+
+    // let _code_decommit = compute_inner::<CodeDecommitterInstanceSynthesisFunction, _>(
+    //     |x: usize| {
+    //         x
+    //     }
+    // );
+
+    // let _events_sort = compute_inner::<EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction, _>(
+    //     |x: usize| {
+    //         x
+    //     }
+    // );
+
+    // let _ram_perm = compute_inner::<RAMPermutationInstanceSynthesisFunction, _>(
+    //     |x: usize| {
+    //         x
+    //     }
+    // );
+
+    // let _storage_apply = compute_inner::<StorageApplicationInstanceSynthesisFunction, _>(
+    //     |x: usize| {
+    //         use crate::witness::postprocessing::USE_BLAKE2S_EXTRA_TABLES;
+
+    //         (x, USE_BLAKE2S_EXTRA_TABLES)
+    //     }
+    // );
+
+    // let _initial_pubdata = compute_inner::<StorageInitialWritesRehasherInstanceSynthesisFunction, _>(
+    //     |x: usize| {
+    //         x
+    //     }
+    // );
+
+    // let _repeated_pubdata = compute_inner::<StorageRepeatedWritesRehasherInstanceSynthesisFunction, _>(
+    //     |x: usize| {
+    //         x
+    //     }
+    // );
+
+    let _l1_messages_merklization = compute_inner::<MessagesMerklizerInstanceSynthesisFunction, _>(
+        |x: usize| {
+            use crate::witness::postprocessing::L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH;
+            
+            (x, L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH)
+        }
+    );
+
 }

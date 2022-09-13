@@ -174,7 +174,7 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
         tools.witness_tracer.vm_snapshots.push(snapshot);
     }
 
-    dbg!(tools.witness_tracer.vm_snapshots.len());
+    // dbg!(tools.witness_tracer.vm_snapshots.len());
 
     let (instance_oracles, artifacts) =
         create_artifacts_from_tracer(

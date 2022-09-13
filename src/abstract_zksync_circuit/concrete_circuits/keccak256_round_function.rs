@@ -17,6 +17,10 @@ impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for Keccak256RoundFunctionInst
     type Config = usize;
     type RoundFunction = GenericHasher<E, RescueParams<E, 2, 3>, 2, 3>;
 
+    fn description() -> String {
+        "Keccak256 round function".to_string()
+    }
+
     fn get_synthesis_function_dyn<
         'a,
         CS: ConstraintSystem<E> + 'a,

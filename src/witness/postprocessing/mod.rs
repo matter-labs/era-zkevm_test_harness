@@ -15,6 +15,9 @@ use crate::abstract_zksync_circuit::concrete_circuits::*;
 use std::sync::Arc;
 use crossbeam::atomic::AtomicCell;
 
+pub const USE_BLAKE2S_EXTRA_TABLES: bool = true;
+pub const L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH: bool = true;
+
 pub fn create_leaf_level_circuits_and_scheduler_witness(
     zkporter_is_available: bool,
     default_aa_code_hash: U256,
@@ -342,7 +345,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
 
         let instance = StorageApplicationCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
-            config: Arc::new((geometry.cycles_per_storage_application as usize, true)),
+            config: Arc::new((geometry.cycles_per_storage_application as usize, USE_BLAKE2S_EXTRA_TABLES)),
             round_function: round_function.clone(),
         };
 
@@ -434,7 +437,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
 
     let l1_messages_merklizer_circuit = L1MessagesMerklizerCircuit {
         witness: AtomicCell::new(Some(circuit_input)),
-        config: Arc::new((geometry.limit_for_l1_messages_merklizer as usize, true)), // output linear hash too
+        config: Arc::new((geometry.limit_for_l1_messages_merklizer as usize, L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH)), // output linear hash too
         round_function: round_function.clone(),
     };
 

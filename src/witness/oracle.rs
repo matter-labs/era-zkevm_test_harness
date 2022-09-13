@@ -67,7 +67,7 @@ pub struct VmWitnessOracle<E: Engine> {
     pub decommittment_requests_witness: Vec<(u32, DecommittmentQuery)>,
     pub rollback_queue_initial_tails_for_new_frames: Vec<(u32, E::Fr)>,
     pub storage_read_queries: Vec<(u32, LogQuery)>,
-    pub callstack_values_for_returns:
+    pub callstack_values_witnesses:
         Vec<(u32, (ExtendedCallstackEntry<E>, CallstackSimulatorState<E>))>,
 }
 
@@ -537,7 +537,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
     use super::callstack_handler::CallstackAction;
     use crate::encodings::callstack_entry::CallstackSimulator;
     let mut callstack_argebraic_simulator = CallstackSimulator::<E>::empty();
-    let mut callstack_values_for_returns = vec![]; // index of cycle -> witness for callstack pop
+    let mut callstack_values_witnesses = vec![]; // index of cycle -> witness for callstack
     // let mut rollback_queue_initial_tails_for_new_frames = vec![];
     // we need to simultaneously follow the logic of pushes/joins of the storage queues,
     // and encoding of the current callstack state as the sponge state
@@ -644,7 +644,6 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
                 let end_cycle = el.end_cycle.expect("frame must end");
 
                 let range_of_interest = (begin_at_cycle+1)..=end_cycle; // begin_at_cycle is formally bound to the previous one
-                // let range_of_interest = begin_at_cycle..=end_cycle;
                 let frame_action_span = cycle_into_flat_sequence_index.range(range_of_interest);
                 for (cycle, (_forward_pointer, rollback_pointer)) in frame_action_span {
                     // always add to the forward
@@ -685,11 +684,19 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
                 // push the item to the stack
 
-                let states = callstack_argebraic_simulator
+                let intermediate_info = callstack_argebraic_simulator
                     .push_and_output_intermediate_data(entry, round_function);
 
+                assert!(intermediate_info.is_push == true);
+                let cycle_to_use = end_cycle;
+                if let Some((prev_cycle, _)) = callstack_values_witnesses.last() {
+                    assert!(cycle_to_use != *prev_cycle, "trying to add callstack witness for cycle {}, but previous one is on cycle {}", cycle_to_use, prev_cycle);
+                }
+                // we do push the witness at the cycle numbered at when the element was pushed
+                callstack_values_witnesses.push((cycle_to_use, (entry, intermediate_info)));
+
                 // when we push a new one then we need to "finish" the previous range and start a new one
-                callstack_sponge_encoding_ranges.push((end_cycle, states.new_state));
+                callstack_sponge_encoding_ranges.push((end_cycle, intermediate_info.new_state));
             },
             CallstackAction::PopFromStack { panic } => {
                 // an item that was in the stack becomes current
@@ -734,7 +741,13 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
                 // assert!(previous.is_none(), "duplicate for cycle {}: previous is {:?}, new is {:?}", beginning_cycle, previous.unwrap(), current_storage_log_state);
 
-                callstack_values_for_returns.push((beginning_cycle, (entry, intermediate_info)));
+                assert!(intermediate_info.is_push == false);
+                let cycle_to_use = beginning_cycle;
+                if let Some((prev_cycle, _)) = callstack_values_witnesses.last() {
+                    assert!(cycle_to_use != *prev_cycle, "trying to add callstack witness for cycle {}, but previous one is on cycle {}", cycle_to_use, prev_cycle);
+                }
+                // we place it at the cycle when it was actually popped, but not one when it becase "active"
+                callstack_values_witnesses.push((cycle_to_use, (entry, intermediate_info)));
 
                 // when we push a new one then we need to "finish" the previous range and start a new one
                 callstack_sponge_encoding_ranges.push((beginning_cycle, intermediate_info.new_state));
@@ -770,7 +783,6 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
                 let end_cycle = el.end_cycle.expect("frame must end");
 
                 let range_of_interest = (begin_at_cycle+1)..=end_cycle; // begin_at_cycle is formally bound to the previous one
-                // let range_of_interest = begin_at_cycle..=end_cycle;
                 let frame_action_span = cycle_into_flat_sequence_index.range(range_of_interest);
                 for (cycle, (_forward_pointer, rollback_pointer)) in frame_action_span {
                     // always add to the forward
@@ -959,15 +971,17 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
             .cloned()
             .collect();
 
-        let callstack_values_for_returns = callstack_values_for_returns.iter()
+        
+        let callstack_values_witnesses = callstack_values_witnesses.iter()
             .skip_while(
                 |el| el.0 < initial_state.at_cycle
             )
             .take_while(
-                |el| el.0 <= final_state.at_cycle
+                |el| el.0 < final_state.at_cycle
             )
             .cloned()
             .collect();
+
         let rollback_queue_head_segments = rollback_queue_head_segments.iter()
             .skip_while(
                 |el| el.0 < initial_state.at_cycle
@@ -986,7 +1000,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
             decommittment_requests_witness,
             rollback_queue_initial_tails_for_new_frames,
             storage_read_queries: per_isntance_storage_read_witnesses,
-            callstack_values_for_returns,
+            callstack_values_witnesses,
         };
 
         let range = history_of_storage_log_states.range(..initial_state.at_cycle);
@@ -1229,18 +1243,81 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
     fn push_callstack_witness(
         &mut self,
         current_record: &ExecutionContextRecord<E>,
+        current_depth: &UInt16<E>,
         execute: &Boolean,
     ) {
-        // if execute.get_value().unwrap_or(false) {
-        //     let wit = current_record.create_witness();
-        //     dbg!(wit.as_ref().map(|el| el.common_part.reverted_queue_head));
-        //     dbg!(wit.as_ref().map(|el| el.common_part.reverted_queue_tail));
-        //     dbg!(wit
-        //         .as_ref()
-        //         .map(|el| el.common_part.reverted_queue_segment_len));
-        // }
+        // we do not care, but we can do self-check
 
-        // we do not care
+        if execute.get_value().unwrap_or(false) {
+            let (_cycle_idx, (extended_entry, internediate_info)) =
+                self.callstack_values_witnesses.drain(..1).next().unwrap();
+
+            let CallstackSimulatorState {
+                is_push,
+                previous_state: _,
+                new_state: _,
+                depth: witness_depth,
+                round_function_execution_pairs: _,
+            } = internediate_info;
+            // compare
+            let witness = current_record.create_witness().unwrap();
+
+            assert!(
+                is_push,
+                "divergence at callstack push at cycle {}:\n pushing {:?}\n in circuit, but got POP of \n{:?}\n in oracle",
+                _cycle_idx,
+                &witness,
+                &extended_entry,
+            );
+            
+            if let Some(depth) = current_depth.get_value() {
+                assert_eq!(
+                    depth + 1,
+                    witness_depth as u16,
+                    "depth diverged at callstack push at cycle {}:\n pushing {:?}\n, got \n{:?}\n in oracle",
+                    _cycle_idx,
+                    &witness,
+                    &extended_entry,
+                );
+            }
+
+            let ExtendedCallstackEntry {
+                callstack_entry: entry,
+                rollback_queue_head,
+                rollback_queue_tail,
+                rollback_queue_segment_length,
+            } = extended_entry;
+
+            assert_eq!(u160_from_address(entry.this_address), witness.common_part.this);
+            assert_eq!(u160_from_address(entry.msg_sender), witness.common_part.caller);
+            assert_eq!(u160_from_address(entry.code_address), witness.common_part.code_address);
+
+
+            assert_eq!(entry.code_page.0, witness.common_part.code_page);
+            assert_eq!(entry.base_memory_page.0, witness.common_part.base_page);
+            assert_eq!(entry.calldata_page.0, witness.common_part.calldata_page);
+
+            assert_eq!(rollback_queue_head, witness.common_part.reverted_queue_head);
+            assert_eq!(rollback_queue_tail, witness.common_part.reverted_queue_tail);
+            assert_eq!(rollback_queue_segment_length, witness.common_part.reverted_queue_segment_len);
+
+            assert_eq!(entry.pc, witness.common_part.pc);
+            assert_eq!(entry.sp, witness.common_part.sp);
+
+            assert_eq!(entry.exception_handler_location, witness.common_part.exception_handler_loc);
+            assert_eq!(entry.ergs_remaining, witness.common_part.ergs_remaining);
+
+            assert_eq!(entry.is_static, witness.common_part.is_static_execution);
+            assert_eq!(entry.is_kernel_mode(), witness.common_part.is_kernel_mode);
+
+            assert_eq!(entry.this_shard_id, witness.common_part.this_shard_id);
+            assert_eq!(entry.caller_shard_id, witness.common_part.caller_shard_id);
+            assert_eq!(entry.code_shard_id, witness.common_part.code_shard_id);
+
+            assert_eq!([entry.context_u128_value as u64, (entry.context_u128_value >> 64) as u64], witness.common_part.context_u128_value_composite);
+
+            assert_eq!(entry.is_local_frame, witness.extension.is_local_call);
+        }
     }
 
     fn get_callstack_witness(
@@ -1253,7 +1330,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
     ) {
         if execute.get_value().unwrap_or(false) {
             let (_cycle_idx, (extended_entry, internediate_info)) =
-                self.callstack_values_for_returns.drain(..1).next().unwrap();
+                self.callstack_values_witnesses.drain(..1).next().unwrap();
             let CallstackSimulatorState {
                 is_push,
                 previous_state: _,
@@ -1270,7 +1347,11 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
                 );
             }
 
-            assert!(!is_push);
+            assert!(
+                !is_push,
+                "depth diverged at callstack pop: {:?}",
+                &extended_entry
+            );
 
             // dbg!(new_state);
 

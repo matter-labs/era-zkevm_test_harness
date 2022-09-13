@@ -227,7 +227,7 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
             request_ranges.push(starting_request_idx..(request_idx+1));
             starting_request_idx = request_idx+1;
 
-            dbg!(&witness);
+            // dbg!(&witness);
 
             result.push(witness);
 
