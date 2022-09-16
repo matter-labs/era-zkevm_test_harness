@@ -448,6 +448,11 @@ impl EnumeratedBinaryLeaf<32> for ZkSyncStorageLeaf {
 
 #[cfg(test)]
 mod test {
+    use sync_vm::{glue::storage_application::input::StorageApplicationCircuitInstanceWitness, testing::create_test_artifacts_with_optimized_gate, franklin_crypto::bellman::plonk::better_better_cs::cs::Circuit};
+    use zk_evm::aux_structures::STORAGE_AUX_BYTE;
+
+    use crate::witness::postprocessing::USE_BLAKE2S_EXTRA_TABLES;
+
     use super::*;
 
     #[test]
@@ -641,6 +646,155 @@ mod test {
                 println!("Merkle path element is on the RIGHT side");
             }
         }
+    }
+
+    #[test]
+    fn test_via_circuit() {
+        use sync_vm::testing::Bn256;
+        use sync_vm::traits::CSWitnessable;
+        use crate::bytes_to_u128_le;
+        use crate::witness_structures::take_queue_state_from_simulator;
+        use crate::encodings::*;
+        use crate::encodings::initial_storage_write::*;
+        use crate::encodings::repeated_storage_write::*;
+
+        const DEPTH: usize = 256;
+        const INDEX_BYTES: usize = 32;
+        // const DEPTH: usize = 8;
+        // const INDEX_BYTES: usize = 1;
+
+        let mut tree = InMemoryStorageTree::<DEPTH, INDEX_BYTES, 8, Blake2s256, ZkSyncStorageLeaf>::empty();
+
+        let initial_root = tree.root();
+        let initial_enumeration_counter = tree.next_enumeration_index();
+
+        // let's create a leaf
+
+        let dummy_leaf = ZkSyncStorageLeaf::from_value([1u8; 32]);
+        use zk_evm::aux_structures::LogQuery;
+        use crate::ethereum_types::{Address, U256};
+
+        let address = Address::from_low_u64_be(0xffffff);
+        let key = U256::from(1234u64);
+        let index = LogQuery::derive_final_address_for_params(&address, &key);
+        let read_query = tree.get_leaf(&index);
+
+        let address = Address::from_low_u64_be(0x8002);
+        let key = U256::zero();
+        let index = LogQuery::derive_final_address_for_params(&address, &key);
+        let write_query = tree.insert_leaf(&index, dummy_leaf);
+
+        let new_root = tree.root();
+        let new_enumeration_idnex = tree.next_enumeration_index();
+        
+        // form a witness
+
+        let (mut cs, round_function, _) = create_test_artifacts_with_optimized_gate();
+
+        let mut deduplicated_rollup_storage_queue_simulator = LogQueueSimulator::empty();
+
+        // manually form a log
+
+        use zk_evm::aux_structures::*;
+
+        let log_query = LogQuery {
+            timestamp: Timestamp(0),
+            tx_number_in_block: 0,
+            aux_byte: STORAGE_AUX_BYTE,
+            shard_id: 0,
+            address,
+            key,
+            read_value: U256::zero(),
+            written_value: U256::zero(),
+            rw_flag: false,
+            rollback: false,
+            is_service: false,
+        };
+
+        deduplicated_rollup_storage_queue_simulator.push_and_output_intermediate_data(log_query, &round_function);
+
+        let log_query = LogQuery {
+            timestamp: Timestamp(0),
+            tx_number_in_block: 0,
+            aux_byte: STORAGE_AUX_BYTE,
+            shard_id: 0,
+            address,
+            key,
+            read_value: U256::zero(),
+            written_value: U256::from_big_endian(dummy_leaf.value()),
+            rw_flag: true,
+            rollback: false,
+            is_service: false,
+        };
+
+        deduplicated_rollup_storage_queue_simulator.push_and_output_intermediate_data(log_query, &round_function);
+
+        use sync_vm::glue::storage_application::input::*;
+        use sync_vm::scheduler::queues::FixedWidthEncodingGenericQueueWitness;
+
+        let initial_fsm_state = StorageApplicationFSM::<Bn256>::placeholder_witness();
+
+        let mut passthrough_input = StorageApplicationInputData::placeholder_witness();
+        passthrough_input.initial_next_enumeration_counter = initial_enumeration_counter;
+        let root_as_u128 = bytes_to_u128_le(&initial_root);
+        passthrough_input.initial_root = root_as_u128;
+        passthrough_input.storage_application_log_state = take_queue_state_from_simulator(&deduplicated_rollup_storage_queue_simulator);
+
+        let mut final_fsm_state = StorageApplicationFSM::placeholder_witness();
+        let first_writes_simulator = InitialStorageWritesSimulator::empty();
+        let repeated_writes_simulator = RepeatedStorageWritesSimulator::empty();
+
+        let root_as_u128 = bytes_to_u128_le(&new_root);
+        final_fsm_state.root_hash = root_as_u128;
+        final_fsm_state.next_enumeration_counter = new_enumeration_idnex;
+        final_fsm_state.current_storage_application_log_state = take_queue_state_from_simulator(&deduplicated_rollup_storage_queue_simulator);
+        final_fsm_state.repeated_writes_pubdata_queue_state = take_queue_state_from_simulator(&repeated_writes_simulator);
+        final_fsm_state.initial_writes_pubdata_queue_state = take_queue_state_from_simulator(&first_writes_simulator);
+
+        let mut passthrough_output = StorageApplicationOutputData::placeholder_witness();
+        passthrough_output.final_next_enumeration_counter = new_enumeration_idnex;
+        let root_as_u128 = bytes_to_u128_le(&new_root);
+        passthrough_output.final_root = root_as_u128;
+        passthrough_output.repeated_writes_pubdata_queue_state = take_queue_state_from_simulator(&repeated_writes_simulator);
+        passthrough_output.initial_writes_pubdata_queue_state = take_queue_state_from_simulator(&first_writes_simulator);
+
+        use crate::witness_structures::transform_queue_witness;
+
+        let wit = transform_queue_witness(
+            deduplicated_rollup_storage_queue_simulator.witness.iter()
+        );
+
+        // transform merkle path
+
+        use crate::bytes_to_u32_le;
+        let path_read = (*read_query.merkle_path).into_iter().map(|el| bytes_to_u32_le(&el)).collect::<Vec<_>>();
+        let path_write = (*write_query.merkle_path).into_iter().map(|el| bytes_to_u32_le(&el)).collect::<Vec<_>>();
+
+        let wit = StorageApplicationCircuitInstanceWitness {
+            closed_form_input: StorageApplicationCycleInputOutputWitness {
+                start_flag: true,
+                completion_flag: true,
+                observable_input: passthrough_input,
+                observable_output: passthrough_output,
+                hidden_fsm_input: initial_fsm_state.clone(),
+                hidden_fsm_output: final_fsm_state.clone(),
+                _marker_e: (),
+                _marker: std::marker::PhantomData
+            },
+            storage_queue_witness: wit,
+            leaf_indexes_for_reads: vec![0, 0],
+            merkle_paths: vec![path_read, path_write]
+        };
+
+        use crate::abstract_zksync_circuit::concrete_circuits::StorageApplicationCircuit;
+
+        let circuit = StorageApplicationCircuit::new(
+            Some(wit),
+            (4, USE_BLAKE2S_EXTRA_TABLES),
+            round_function.clone()
+        );
+
+        circuit.synthesize(&mut cs).unwrap();
     }
 
 }

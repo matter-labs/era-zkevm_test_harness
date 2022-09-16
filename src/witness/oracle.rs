@@ -1243,82 +1243,88 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
     fn push_callstack_witness(
         &mut self,
         current_record: &ExecutionContextRecord<E>,
-        current_depth: &UInt16<E>,
         execute: &Boolean,
     ) {
-        // we do not care, but we can do self-check
-
-        if execute.get_value().unwrap_or(false) {
-            let (_cycle_idx, (extended_entry, internediate_info)) =
-                self.callstack_values_witnesses.drain(..1).next().unwrap();
-
-            let CallstackSimulatorState {
-                is_push,
-                previous_state: _,
-                new_state: _,
-                depth: witness_depth,
-                round_function_execution_pairs: _,
-            } = internediate_info;
-            // compare
-            let witness = current_record.create_witness().unwrap();
-
-            assert!(
-                is_push,
-                "divergence at callstack push at cycle {}:\n pushing {:?}\n in circuit, but got POP of \n{:?}\n in oracle",
-                _cycle_idx,
-                &witness,
-                &extended_entry,
-            );
-            
-            if let Some(depth) = current_depth.get_value() {
-                assert_eq!(
-                    depth + 1,
-                    witness_depth as u16,
-                    "depth diverged at callstack push at cycle {}:\n pushing {:?}\n, got \n{:?}\n in oracle",
-                    _cycle_idx,
-                    &witness,
-                    &extended_entry,
-                );
-            }
-
-            let ExtendedCallstackEntry {
-                callstack_entry: entry,
-                rollback_queue_head,
-                rollback_queue_tail,
-                rollback_queue_segment_length,
-            } = extended_entry;
-
-            assert_eq!(u160_from_address(entry.this_address), witness.common_part.this);
-            assert_eq!(u160_from_address(entry.msg_sender), witness.common_part.caller);
-            assert_eq!(u160_from_address(entry.code_address), witness.common_part.code_address);
-
-
-            assert_eq!(entry.code_page.0, witness.common_part.code_page);
-            assert_eq!(entry.base_memory_page.0, witness.common_part.base_page);
-            assert_eq!(entry.calldata_page.0, witness.common_part.calldata_page);
-
-            assert_eq!(rollback_queue_head, witness.common_part.reverted_queue_head);
-            assert_eq!(rollback_queue_tail, witness.common_part.reverted_queue_tail);
-            assert_eq!(rollback_queue_segment_length, witness.common_part.reverted_queue_segment_len);
-
-            assert_eq!(entry.pc, witness.common_part.pc);
-            assert_eq!(entry.sp, witness.common_part.sp);
-
-            assert_eq!(entry.exception_handler_location, witness.common_part.exception_handler_loc);
-            assert_eq!(entry.ergs_remaining, witness.common_part.ergs_remaining);
-
-            assert_eq!(entry.is_static, witness.common_part.is_static_execution);
-            assert_eq!(entry.is_kernel_mode(), witness.common_part.is_kernel_mode);
-
-            assert_eq!(entry.this_shard_id, witness.common_part.this_shard_id);
-            assert_eq!(entry.caller_shard_id, witness.common_part.caller_shard_id);
-            assert_eq!(entry.code_shard_id, witness.common_part.code_shard_id);
-
-            assert_eq!([entry.context_u128_value as u64, (entry.context_u128_value >> 64) as u64], witness.common_part.context_u128_value_composite);
-
-            assert_eq!(entry.is_local_frame, witness.extension.is_local_call);
-        }
     }
+
+
+    // fn push_callstack_witness(
+    //     &mut self,
+    //     current_record: &ExecutionContextRecord<E>,
+    //     current_depth: &UInt16<E>,
+    //     execute: &Boolean,
+    // ) {
+    //     // we do not care, but we can do self-check
+
+    //     if execute.get_value().unwrap_or(false) {
+    //         let (_cycle_idx, (extended_entry, internediate_info)) =
+    //             self.callstack_values_witnesses.drain(..1).next().unwrap();
+
+    //         let CallstackSimulatorState {
+    //             is_push,
+    //             previous_state: _,
+    //             new_state: _,
+    //             depth: witness_depth,
+    //             round_function_execution_pairs: _,
+    //         } = internediate_info;
+    //         // compare
+    //         let witness = current_record.create_witness().unwrap();
+
+    //         assert!(
+    //             is_push,
+    //             "divergence at callstack push at cycle {}:\n pushing {:?}\n in circuit, but got POP of \n{:?}\n in oracle",
+    //             _cycle_idx,
+    //             &witness,
+    //             &extended_entry,
+    //         );
+            
+    //         if let Some(depth) = current_depth.get_value() {
+    //             assert_eq!(
+    //                 depth + 1,
+    //                 witness_depth as u16,
+    //                 "depth diverged at callstack push at cycle {}:\n pushing {:?}\n, got \n{:?}\n in oracle",
+    //                 _cycle_idx,
+    //                 &witness,
+    //                 &extended_entry,
+    //             );
+    //         }
+
+    //         let ExtendedCallstackEntry {
+    //             callstack_entry: entry,
+    //             rollback_queue_head,
+    //             rollback_queue_tail,
+    //             rollback_queue_segment_length,
+    //         } = extended_entry;
+
+    //         assert_eq!(u160_from_address(entry.this_address), witness.common_part.this);
+    //         assert_eq!(u160_from_address(entry.msg_sender), witness.common_part.caller);
+    //         assert_eq!(u160_from_address(entry.code_address), witness.common_part.code_address);
+
+    //         assert_eq!(entry.code_page.0, witness.common_part.code_page);
+    //         assert_eq!(entry.base_memory_page.0, witness.common_part.base_page);
+
+    //         assert_eq!(rollback_queue_head, witness.common_part.reverted_queue_head);
+    //         assert_eq!(rollback_queue_tail, witness.common_part.reverted_queue_tail);
+    //         assert_eq!(rollback_queue_segment_length, witness.common_part.reverted_queue_segment_len);
+
+    //         assert_eq!(entry.pc, witness.common_part.pc);
+    //         assert_eq!(entry.sp, witness.common_part.sp);
+
+    //         assert_eq!(entry.exception_handler_location, witness.common_part.exception_handler_loc);
+    //         assert_eq!(entry.ergs_remaining, witness.common_part.ergs_remaining);
+
+    //         assert_eq!(entry.is_static, witness.common_part.is_static_execution);
+    //         assert_eq!(entry.is_kernel_mode(), witness.common_part.is_kernel_mode);
+
+    //         assert_eq!(entry.this_shard_id, witness.common_part.this_shard_id);
+    //         assert_eq!(entry.caller_shard_id, witness.common_part.caller_shard_id);
+    //         assert_eq!(entry.code_shard_id, witness.common_part.code_shard_id);
+
+    //         assert_eq!([entry.context_u128_value as u64, (entry.context_u128_value >> 64) as u64], witness.common_part.context_u128_value_composite);
+
+    //         assert_eq!(entry.is_local_frame, witness.extension.is_local_call);
+    //     }
+    // }
 
     fn get_callstack_witness(
         &mut self,

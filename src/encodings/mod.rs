@@ -17,6 +17,8 @@ pub mod initial_storage_write;
 pub mod repeated_storage_write;
 pub mod recursion_request;
 
+pub use self::log_query::*;
+
 #[derive(Derivative)]
 #[derivative(Debug, Clone(bound = ""), Copy(bound = ""))]
 pub struct QueueIntermediateStates<E: Engine, const SW: usize, const ROUNDS: usize> {
