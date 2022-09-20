@@ -285,6 +285,8 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
             let (is_satisfied, public_input) = circuit_testing::check_if_satisfied::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(el).unwrap();
             assert!(is_satisfied);
             assert_eq!(public_input, input_value, "Public input diverged for circuit {} of type {}", idx, descr);
+        } else {
+            continue;
         }
 
         // if !matches!(&el, ZkSyncCircuit::ECRecover(..)) {
@@ -325,6 +327,8 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         proof.write(&mut proof_file_for_bytes).unwrap();
         serde_json::to_writer(&mut proof_file_for_json, &proof).unwrap();
     }
+
+    panic!("Done");
 
     // recursion step. We decide on some arbitrary parameters
     let splitting_factor = 4; // we either split into N subqueues, or we do N leaf proofs per layer
