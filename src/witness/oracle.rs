@@ -863,9 +863,14 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
     tracing::debug!("Processing VM snapshots queue (total {:?})", vm_snapshots.windows(2).len());
 
+    dbg!(&artifacts.vm_memory_queue_states[16..64]);
+
     for (_circuit_idx, pair) in vm_snapshots.windows(2).enumerate() {
         let initial_state = &pair[0];
         let final_state = &pair[1];
+
+        dbg!(initial_state.at_cycle);
+        dbg!(final_state.at_cycle);
 
         // we need to get chunks of
         // - memory read witnesses
@@ -935,20 +940,20 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
         // initial state is kind of done, now
         // split the oracle witness
 
-        let per_isntance_memory_read_witnesses: Vec<_> = memory_read_witness.iter()
+        let per_instance_memory_read_witnesses: Vec<_> = memory_read_witness.iter()
             .skip_while(
                 |el| el.0 < initial_state.at_cycle
             )
             .take_while(
-                |el| el.0 <= final_state.at_cycle
+                |el| el.0 < final_state.at_cycle
             ).cloned().collect();
 
-        let per_isntance_storage_read_witnesses: Vec<_> = storage_read_queries.iter()
+        let per_instance_storage_read_witnesses: Vec<_> = storage_read_queries.iter()
             .skip_while(
                 |el| el.0 < initial_state.at_cycle
             )
             .take_while(
-                |el| el.0 <= final_state.at_cycle
+                |el| el.0 < final_state.at_cycle
             ).cloned().collect();
 
         let decommittment_requests_witness: Vec<_> = artifacts.all_decommittment_queries.iter()
@@ -956,7 +961,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
                 |el| el.0 < initial_state.at_cycle
             )
             .take_while(
-                |el| el.0 <= final_state.at_cycle
+                |el| el.0 < final_state.at_cycle
             )
             .map(|el| (el.0, el.1))
             .collect();
@@ -971,7 +976,6 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
             .cloned()
             .collect();
 
-        
         let callstack_values_witnesses = callstack_values_witnesses.iter()
             .skip_while(
                 |el| el.0 < initial_state.at_cycle
@@ -987,7 +991,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
                 |el| el.0 < initial_state.at_cycle
             )
             .take_while(
-                |el| el.0 <= final_state.at_cycle
+                |el| el.0 < final_state.at_cycle
             )
             .cloned()
             .collect();
@@ -995,11 +999,11 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
         // construct an oracle
         let witness_oracle = VmWitnessOracle::<E> {
-            memory_read_witness: per_isntance_memory_read_witnesses,
+            memory_read_witness: per_instance_memory_read_witnesses,
             rollback_queue_head_segments,
             decommittment_requests_witness,
             rollback_queue_initial_tails_for_new_frames,
-            storage_read_queries: per_isntance_storage_read_witnesses,
+            storage_read_queries: per_instance_storage_read_witnesses,
             callstack_values_witnesses,
         };
 
@@ -1243,88 +1247,80 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
     fn push_callstack_witness(
         &mut self,
         current_record: &ExecutionContextRecord<E>,
+        current_depth: &UInt16<E>,
         execute: &Boolean,
     ) {
-    }
+        // we do not care, but we can do self-check
 
+        if execute.get_value().unwrap_or(false) {
+            let (_cycle_idx, (extended_entry, internediate_info)) =
+                self.callstack_values_witnesses.drain(..1).next().unwrap();
 
-    // fn push_callstack_witness(
-    //     &mut self,
-    //     current_record: &ExecutionContextRecord<E>,
-    //     current_depth: &UInt16<E>,
-    //     execute: &Boolean,
-    // ) {
-    //     // we do not care, but we can do self-check
+            let CallstackSimulatorState {
+                is_push,
+                previous_state: _,
+                new_state: _,
+                depth: witness_depth,
+                round_function_execution_pairs: _,
+            } = internediate_info;
+            // compare
+            let witness = current_record.create_witness().unwrap();
 
-    //     if execute.get_value().unwrap_or(false) {
-    //         let (_cycle_idx, (extended_entry, internediate_info)) =
-    //             self.callstack_values_witnesses.drain(..1).next().unwrap();
-
-    //         let CallstackSimulatorState {
-    //             is_push,
-    //             previous_state: _,
-    //             new_state: _,
-    //             depth: witness_depth,
-    //             round_function_execution_pairs: _,
-    //         } = internediate_info;
-    //         // compare
-    //         let witness = current_record.create_witness().unwrap();
-
-    //         assert!(
-    //             is_push,
-    //             "divergence at callstack push at cycle {}:\n pushing {:?}\n in circuit, but got POP of \n{:?}\n in oracle",
-    //             _cycle_idx,
-    //             &witness,
-    //             &extended_entry,
-    //         );
+            assert!(
+                is_push,
+                "divergence at callstack push at cycle {}:\n pushing {:?}\n in circuit, but got POP of \n{:?}\n in oracle",
+                _cycle_idx,
+                &witness,
+                &extended_entry,
+            );
             
-    //         if let Some(depth) = current_depth.get_value() {
-    //             assert_eq!(
-    //                 depth + 1,
-    //                 witness_depth as u16,
-    //                 "depth diverged at callstack push at cycle {}:\n pushing {:?}\n, got \n{:?}\n in oracle",
-    //                 _cycle_idx,
-    //                 &witness,
-    //                 &extended_entry,
-    //             );
-    //         }
+            if let Some(depth) = current_depth.get_value() {
+                assert_eq!(
+                    depth + 1,
+                    witness_depth as u16,
+                    "depth diverged at callstack push at cycle {}:\n pushing {:?}\n, got \n{:?}\n in oracle",
+                    _cycle_idx,
+                    &witness,
+                    &extended_entry,
+                );
+            }
 
-    //         let ExtendedCallstackEntry {
-    //             callstack_entry: entry,
-    //             rollback_queue_head,
-    //             rollback_queue_tail,
-    //             rollback_queue_segment_length,
-    //         } = extended_entry;
+            let ExtendedCallstackEntry {
+                callstack_entry: entry,
+                rollback_queue_head,
+                rollback_queue_tail,
+                rollback_queue_segment_length,
+            } = extended_entry;
 
-    //         assert_eq!(u160_from_address(entry.this_address), witness.common_part.this);
-    //         assert_eq!(u160_from_address(entry.msg_sender), witness.common_part.caller);
-    //         assert_eq!(u160_from_address(entry.code_address), witness.common_part.code_address);
+            assert_eq!(u160_from_address(entry.this_address), witness.common_part.this);
+            assert_eq!(u160_from_address(entry.msg_sender), witness.common_part.caller);
+            assert_eq!(u160_from_address(entry.code_address), witness.common_part.code_address);
 
-    //         assert_eq!(entry.code_page.0, witness.common_part.code_page);
-    //         assert_eq!(entry.base_memory_page.0, witness.common_part.base_page);
+            assert_eq!(entry.code_page.0, witness.common_part.code_page);
+            assert_eq!(entry.base_memory_page.0, witness.common_part.base_page);
 
-    //         assert_eq!(rollback_queue_head, witness.common_part.reverted_queue_head);
-    //         assert_eq!(rollback_queue_tail, witness.common_part.reverted_queue_tail);
-    //         assert_eq!(rollback_queue_segment_length, witness.common_part.reverted_queue_segment_len);
+            assert_eq!(rollback_queue_head, witness.common_part.reverted_queue_head);
+            assert_eq!(rollback_queue_tail, witness.common_part.reverted_queue_tail);
+            assert_eq!(rollback_queue_segment_length, witness.common_part.reverted_queue_segment_len);
 
-    //         assert_eq!(entry.pc, witness.common_part.pc);
-    //         assert_eq!(entry.sp, witness.common_part.sp);
+            assert_eq!(entry.pc, witness.common_part.pc);
+            assert_eq!(entry.sp, witness.common_part.sp);
 
-    //         assert_eq!(entry.exception_handler_location, witness.common_part.exception_handler_loc);
-    //         assert_eq!(entry.ergs_remaining, witness.common_part.ergs_remaining);
+            assert_eq!(entry.exception_handler_location, witness.common_part.exception_handler_loc);
+            assert_eq!(entry.ergs_remaining, witness.common_part.ergs_remaining);
 
-    //         assert_eq!(entry.is_static, witness.common_part.is_static_execution);
-    //         assert_eq!(entry.is_kernel_mode(), witness.common_part.is_kernel_mode);
+            assert_eq!(entry.is_static, witness.common_part.is_static_execution);
+            assert_eq!(entry.is_kernel_mode(), witness.common_part.is_kernel_mode);
 
-    //         assert_eq!(entry.this_shard_id, witness.common_part.this_shard_id);
-    //         assert_eq!(entry.caller_shard_id, witness.common_part.caller_shard_id);
-    //         assert_eq!(entry.code_shard_id, witness.common_part.code_shard_id);
+            assert_eq!(entry.this_shard_id, witness.common_part.this_shard_id);
+            assert_eq!(entry.caller_shard_id, witness.common_part.caller_shard_id);
+            assert_eq!(entry.code_shard_id, witness.common_part.code_shard_id);
 
-    //         assert_eq!([entry.context_u128_value as u64, (entry.context_u128_value >> 64) as u64], witness.common_part.context_u128_value_composite);
+            assert_eq!([entry.context_u128_value as u64, (entry.context_u128_value >> 64) as u64], witness.common_part.context_u128_value_composite);
 
-    //         assert_eq!(entry.is_local_frame, witness.extension.is_local_call);
-    //     }
-    // }
+            assert_eq!(entry.is_local_frame, witness.extension.is_local_call);
+        }
+    }
 
     fn get_callstack_witness(
         &mut self,
@@ -1345,19 +1341,22 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
                 round_function_execution_pairs: _,
             } = internediate_info;
 
+            assert!(
+                !is_push,
+                "divergence at callstack pop at cycle {}: POP in circuit, but got PUSH of \n{:?}\n in oracle",
+                _cycle_idx,
+                &extended_entry,
+            );
+            
             if let Some(depth) = depth.get_value() {
                 assert_eq!(
                     depth - 1,
                     witness_depth as u16,
-                    "depth diverged at callstack pop"
+                    "depth diverged at callstack pop at cycle {}, got \n{:?}\n in oracle",
+                    _cycle_idx,
+                    &extended_entry,
                 );
             }
-
-            assert!(
-                !is_push,
-                "depth diverged at callstack pop: {:?}",
-                &extended_entry
-            );
 
             // dbg!(new_state);
 
@@ -1453,6 +1452,32 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
             Some(wit)
         } else {
             Some(DecommitQuery::placeholder_witness())
+        }
+    }
+
+    fn at_completion(self) {
+        if self.memory_read_witness.is_empty() == false {
+            panic!("Too many memory queries in witness: have left\n{:?}", self.memory_read_witness);
+        }
+
+        if self.storage_read_queries.is_empty() == false {
+            panic!("Too many storage queries in witness: have left\n{:?}", self.storage_read_queries);
+        }
+
+        if self.callstack_values_witnesses.is_empty() == false {
+            panic!("Too many callstack sponge witnesses: have left\n{:?}", self.callstack_values_witnesses);
+        }
+
+        if self.decommittment_requests_witness.is_empty() == false {
+            panic!("Too many decommittment request witnesses: have left\n{:?}", self.decommittment_requests_witness);
+        }
+
+        if self.rollback_queue_head_segments.is_empty() == false {
+            panic!("Too many rollback queue heads in witnesses: have left\n{:?}", self.rollback_queue_head_segments);
+        }
+
+        if self.rollback_queue_initial_tails_for_new_frames.is_empty() == false {
+            panic!("Too many rollback queue heads new stack frames in witnesses: have left\n{:?}", self.rollback_queue_initial_tails_for_new_frames);
         }
     }
 }

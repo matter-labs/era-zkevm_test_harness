@@ -57,6 +57,8 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 2> for MemoryQuery {
         shift += 32;
         scale_and_accumulate::<E, _>(&mut lc, self.rw_flag, &shifts, shift);
         shift += 1;
+        scale_and_accumulate::<E, _>(&mut lc, self.value_is_pointer, &shifts, shift);
+        shift += 1;
         assert!(shift <= E::Fr::CAPACITY as usize);
         let el1 = lc;
 

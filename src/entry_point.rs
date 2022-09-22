@@ -6,6 +6,7 @@ use sync_vm::vm::primitives::uint256::UInt256;
 use sync_vm::vm::vm_cycle::cycle::vm_process_pending;
 use sync_vm::vm::vm_cycle::witness_oracle::u256_to_biguint;
 use sync_vm::vm::vm_state::GlobalContext;
+use zk_evm::abstractions::MAX_MEMORY_BYTES;
 use zk_evm::aux_structures::*;
 use zk_evm::ethereum_types::*;
 use zk_evm::vm_state::CallStackEntry;
@@ -40,8 +41,8 @@ pub fn initial_out_of_circuit_context(
         is_static: false,
         is_local_frame: false,
         context_u128_value: 0,
-        heap_bound: 0,
-        aux_heap_bound: 0,
+        heap_bound: MAX_MEMORY_BYTES as u32, // so bootloader doesn't pay for resizes
+        aux_heap_bound: MAX_MEMORY_BYTES as u32, // so bootloader doesn't pay for resizes
     }
 }
 

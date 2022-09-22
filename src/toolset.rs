@@ -103,8 +103,15 @@ pub fn create_out_of_circuit_vm<'a, S: Storage>(
     vm.local_state.monotonic_cycle_counter = crate::INITIAL_MONOTONIC_CYCLE_COUNTER;
 
     // we also FORMALLY mark r1 as "pointer" type, even though we will NOT have any calldata
+    let formal_ptr = FatPointer {
+        offset: 0,
+        memory_page: zk_evm::zkevm_opcode_defs::BOOTLOADER_CALLDATA_PAGE,
+        start: 0,
+        length: 0
+    };
+    let formal_ptr_encoding = formal_ptr.to_u256();
     vm.local_state.registers[0] = PrimitiveValue {
-        value: ethereum_types::U256::zero(),
+        value: formal_ptr_encoding,
         is_pointer: true,
     };
 

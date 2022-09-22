@@ -52,6 +52,7 @@ const ACCOUNT_CODE_STORAGE_ADDRESS: Address = H160([
 fn basic_test() {
     let test_artifact = read_test_artifact("basic_test");
     run_and_try_create_witness_inner(test_artifact, 20000);
+    // run_and_try_create_witness_inner(test_artifact, 16);
 }
 
 use blake2::Blake2s256;
@@ -81,7 +82,7 @@ pub(crate) fn save_predeployed_contracts(storage: &mut InMemoryStorage, tree: &m
         .map(|(address, bytecode)| {
             let hash = bytecode_to_code_hash(&bytecode).unwrap();
 
-            println!("Have address {:?} with code hash {}", address, U256::from(hash));
+            println!("Have address {:?} with code hash {:x}", address, U256::from(hash));
 
             (0, ACCOUNT_CODE_STORAGE_ADDRESS, U256::from_big_endian(address.as_bytes()), U256::from(hash))
         })
@@ -114,7 +115,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     use crate::toolset::GeometryConfig;
 
     let geometry = GeometryConfig {
-        cycles_per_vm_snapshot: 1024,
+        cycles_per_vm_snapshot: 16, // 24, 26
         cycles_per_ram_permutation: 1024,
         cycles_per_code_decommitter: 256,
         cycles_per_storage_application: 2,
@@ -282,9 +283,11 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         if matches!(&el, ZkSyncCircuit::MainVM(..)) {
             use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
             let el = el.clone();
+            el.debug_witness();
             let (is_satisfied, public_input) = circuit_testing::check_if_satisfied::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(el).unwrap();
             assert!(is_satisfied);
             assert_eq!(public_input, input_value, "Public input diverged for circuit {} of type {}", idx, descr);
+            continue;
         } else {
             continue;
         }
@@ -1308,12 +1311,346 @@ fn get_circuit_capacity() {
     //     }
     // );
 
-    let _l1_messages_merklization = compute_inner::<MessagesMerklizerInstanceSynthesisFunction, _>(
-        |x: usize| {
-            use crate::witness::postprocessing::L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH;
+    // let _l1_messages_merklization = compute_inner::<MessagesMerklizerInstanceSynthesisFunction, _>(
+    //     |x: usize| {
+    //         use crate::witness::postprocessing::L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH;
             
-            (x, L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH)
+    //         (x, L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH)
+    //     }
+    // );
+
+    // for recursive aggregation we have to unroll manually
+
+    let sponge_params = bn254_rescue_params();
+    let rns_params = get_prefered_rns_params();
+
+    use sync_vm::recursion::get_prefered_hash_params;
+    use sync_vm::recursion::transcript::GenericTranscriptGadget;
+    use sync_vm::recursion::node_aggregation::ZkSyncParametricCircuit;
+    use sync_vm::recursion::aggregation::VkInRns;
+    use sync_vm::glue::optimizable_queue::simulate_variable_length_hash;
+    use sync_vm::traits::ArithmeticEncodable;
+
+    let aggregation_params = AggregationParameters::<_, GenericTranscriptGadget<_, _, 2, 3>, _, 2, 3> {
+        base_placeholder_point: get_base_placeholder_point_for_accumulators(),
+        hash_params: sponge_params.clone(),
+        transcript_params: sponge_params.clone(),
+    };
+
+    let max = 1 << 26;
+
+    let typical_sizes = vec![8, 16];
+    let mut gates = vec![];
+
+    for size in typical_sizes.iter().cloned() {
+        let (_, round_function, _) = create_test_artifacts_with_optimized_gate();
+
+        let mut setup_assembly = SetupAssembly::<
+            _, 
+            PlonkCsWidth4WithNextStepAndCustomGatesParams, 
+            SelectorOptimizedWidth4MainGateWithDNext
+        >::new();
+
+        let splitting_factor = size;
+
+        let mut vk_file_for_json = std::fs::File::open(&"basic_circuit_vk_17.json").unwrap();
+        let vk: VerificationKey<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_reader(&mut vk_file_for_json).unwrap();
+        let vk_in_rns = VkInRns {
+            vk: Some(vk.clone()),
+            rns_params: &rns_params
+        };
+        let padding_vk_encoding = vk_in_rns.encode().unwrap();
+        let padding_vk_committment = simulate_variable_length_hash(&padding_vk_encoding, &round_function);
+
+        let mut padding_public_inputs = vec![];
+        let mut padding_proofs = vec![];
+
+        for _ in 0..splitting_factor {
+            use crate::bellman::plonk::better_better_cs::proof::Proof;
+            let padding_proof: Proof<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_reader(std::fs::File::open("basic_circuit_proof_17_76.json").unwrap()).unwrap();
+            let padding_proof_public_input = padding_proof.inputs[0];
+    
+            padding_public_inputs.push(padding_proof_public_input);
+            padding_proofs.push(padding_proof);
         }
+
+        let config = (
+            splitting_factor,
+            rns_params.clone(),
+            aggregation_params.clone(),
+            padding_vk_committment,
+            padding_vk_encoding.clone(),
+            padding_public_inputs.clone(),
+            padding_proofs.clone(),
+            None,
+        );
+
+        let circuit = ZkSyncUniformCircuitCircuitInstance::<_, LeafAggregationInstanceSynthesisFunction>::new(
+            None,
+            config,
+            round_function.clone(),
+        );
+        
+        circuit.synthesize(&mut setup_assembly).unwrap();
+
+        let n = setup_assembly.n();
+        gates.push(n);
+    }
+
+    // linear approximation
+
+    let mut per_round_gates = (gates[1] - gates[0]) / (typical_sizes[1] - typical_sizes[0]);
+
+    if (gates[1] - gates[0]) % (typical_sizes[1] - typical_sizes[0]) != 0 {
+        println!("non-linear!");
+        per_round_gates += 1;
+    }
+
+    println!("Single cycle takes {} gates", per_round_gates);
+
+    let additive = gates[1] - per_round_gates * typical_sizes[1];
+
+    println!("O(1) costs = {}", additive);
+
+    let cycles = (max - additive) / per_round_gates;
+
+    println!("Can fit {} cycles for circuit type {}", cycles, <LeafAggregationInstanceSynthesisFunction as ZkSyncUniformSynthesisFunction<Bn256>>::description());
+
+    let (_, round_function, _) = create_test_artifacts_with_optimized_gate();
+
+    let mut setup_assembly = SetupAssembly::<
+        _, 
+        PlonkCsWidth4WithNextStepAndCustomGatesParams, 
+        SelectorOptimizedWidth4MainGateWithDNext
+    >::new();
+
+    let splitting_factor = cycles;
+
+    let mut vk_file_for_json = std::fs::File::open(&"basic_circuit_vk_17.json").unwrap();
+    let vk: VerificationKey<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_reader(&mut vk_file_for_json).unwrap();
+    let vk_in_rns = VkInRns {
+        vk: Some(vk.clone()),
+        rns_params: &rns_params
+    };
+    let padding_vk_encoding = vk_in_rns.encode().unwrap();
+    let padding_vk_committment = simulate_variable_length_hash(&padding_vk_encoding, &round_function);
+
+    let mut padding_public_inputs = vec![];
+    let mut padding_proofs = vec![];
+
+    for _ in 0..splitting_factor {
+        use crate::bellman::plonk::better_better_cs::proof::Proof;
+        let padding_proof: Proof<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_reader(std::fs::File::open("basic_circuit_proof_17_76.json").unwrap()).unwrap();
+        let padding_proof_public_input = padding_proof.inputs[0];
+
+        padding_public_inputs.push(padding_proof_public_input);
+        padding_proofs.push(padding_proof);
+    }
+
+    let config = (
+        splitting_factor,
+        rns_params.clone(),
+        aggregation_params.clone(),
+        padding_vk_committment,
+        padding_vk_encoding.clone(),
+        padding_public_inputs.clone(),
+        padding_proofs.clone(),
+        None,
     );
+
+    let circuit = ZkSyncUniformCircuitCircuitInstance::<_, LeafAggregationInstanceSynthesisFunction>::new(
+        None,
+        config,
+        round_function.clone(),
+    );
+        
+    println!("Synthesising largest size");
+    circuit.synthesize(&mut setup_assembly).unwrap();
+    println!("Finaizing largest size");
+    setup_assembly.finalize();
+
+    // NOTE level
+
+    // -------------------------------------------
+
+    let aggregated_by_leaf = 50;
+
+    // we need any points that have e(p1, g2)*e(p2, g2^x) == 0, so we basically can use two first elements
+    // of the trusted setup
+    let padding_aggregations = {
+        let crs_mons = circuit_testing::get_trusted_setup::<Bn256>(1<<26);
+        let mut p1 = crs_mons.g1_bases[1];
+        use sync_vm::franklin_crypto::bellman::CurveAffine;
+        p1.negate();
+        let mut p2 = crs_mons.g1_bases[0];
+
+        let mut all_aggregations = vec![];
+
+        use sync_vm::franklin_crypto::bellman::PrimeField;
+        let scalar = crate::bellman::bn256::Fr::from_str("1234567").unwrap(); // any factor that is > 4
+
+        for _ in 0..splitting_factor {
+            let (pair_with_generator_x, pair_with_generator_y) = p1.into_xy_unchecked();
+            let (pair_with_x_x, pair_with_x_y) = p2.into_xy_unchecked();
+    
+            let pair_with_generator_x = split_into_limbs(pair_with_generator_x, &rns_params).0.try_into().unwrap();
+            let pair_with_generator_y = split_into_limbs(pair_with_generator_y, &rns_params).0.try_into().unwrap();
+            let pair_with_x_x = split_into_limbs(pair_with_x_x, &rns_params).0.try_into().unwrap();
+            let pair_with_x_y = split_into_limbs(pair_with_x_y, &rns_params).0.try_into().unwrap();
+    
+            let tuple = (
+                pair_with_generator_x,
+                pair_with_generator_y,
+                pair_with_x_x,
+                pair_with_x_y,
+            );
+
+            all_aggregations.push(tuple);
+
+            use sync_vm::franklin_crypto::bellman::CurveProjective;
+
+            let tmp = p1.mul(scalar);
+            p1 = tmp.into_affine();
+
+            let tmp = p2.mul(scalar);
+            p2 = tmp.into_affine();
+        }
+
+        all_aggregations
+    };
+
+    let typical_sizes = vec![8, 16];
+    let mut gates = vec![];
+
+    for size in typical_sizes.iter().cloned() {
+        let (_, round_function, _) = create_test_artifacts_with_optimized_gate();
+
+        let mut setup_assembly = SetupAssembly::<
+            _, 
+            PlonkCsWidth4WithNextStepAndCustomGatesParams, 
+            SelectorOptimizedWidth4MainGateWithDNext
+        >::new();
+
+        let splitting_factor = size;
+
+        let mut vk_file_for_json = std::fs::File::open(&"basic_circuit_vk_17.json").unwrap();
+        let vk: VerificationKey<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_reader(&mut vk_file_for_json).unwrap();
+        let vk_in_rns = VkInRns {
+            vk: Some(vk.clone()),
+            rns_params: &rns_params
+        };
+        let padding_vk_encoding = vk_in_rns.encode().unwrap();
+        let padding_vk_committment = simulate_variable_length_hash(&padding_vk_encoding, &round_function);
+
+        let mut padding_public_inputs = vec![];
+        let mut padding_proofs = vec![];
+
+        for _ in 0..splitting_factor {
+            use crate::bellman::plonk::better_better_cs::proof::Proof;
+            let padding_proof: Proof<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_reader(std::fs::File::open("basic_circuit_proof_17_76.json").unwrap()).unwrap();
+            let padding_proof_public_input = padding_proof.inputs[0];
+    
+            padding_public_inputs.push(padding_proof_public_input);
+            padding_proofs.push(padding_proof);
+        }
+
+        let config = (
+            splitting_factor,
+            aggregated_by_leaf,
+            rns_params.clone(),
+            aggregation_params.clone(),
+            padding_vk_committment,
+            padding_vk_encoding.clone(),
+            padding_public_inputs.clone(),
+            padding_proofs.clone(),
+            padding_aggregations.clone(),
+            None,
+        );
+
+        let circuit = ZkSyncUniformCircuitCircuitInstance::<_, NodeAggregationInstanceSynthesisFunction>::new(
+            None,
+            config,
+            round_function.clone(),
+        );
+        
+        circuit.synthesize(&mut setup_assembly).unwrap();
+
+        let n = setup_assembly.n();
+        gates.push(n);
+    }
+
+    // linear approximation
+
+    let mut per_round_gates = (gates[1] - gates[0]) / (typical_sizes[1] - typical_sizes[0]);
+
+    if (gates[1] - gates[0]) % (typical_sizes[1] - typical_sizes[0]) != 0 {
+        println!("non-linear!");
+        per_round_gates += 1;
+    }
+
+    println!("Single cycle takes {} gates", per_round_gates);
+
+    let additive = gates[1] - per_round_gates * typical_sizes[1];
+
+    println!("O(1) costs = {}", additive);
+
+    let cycles = (max - additive) / per_round_gates;
+
+    println!("Can fit {} cycles for circuit type {}", cycles, <NodeAggregationInstanceSynthesisFunction as ZkSyncUniformSynthesisFunction<Bn256>>::description());
+
+    let (_, round_function, _) = create_test_artifacts_with_optimized_gate();
+
+    let mut setup_assembly = SetupAssembly::<
+        _, 
+        PlonkCsWidth4WithNextStepAndCustomGatesParams, 
+        SelectorOptimizedWidth4MainGateWithDNext
+    >::new();
+
+    let splitting_factor = cycles;
+
+    let mut vk_file_for_json = std::fs::File::open(&"basic_circuit_vk_17.json").unwrap();
+    let vk: VerificationKey<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_reader(&mut vk_file_for_json).unwrap();
+    let vk_in_rns = VkInRns {
+        vk: Some(vk.clone()),
+        rns_params: &rns_params
+    };
+    let padding_vk_encoding = vk_in_rns.encode().unwrap();
+    let padding_vk_committment = simulate_variable_length_hash(&padding_vk_encoding, &round_function);
+
+    let mut padding_public_inputs = vec![];
+    let mut padding_proofs = vec![];
+
+    for _ in 0..splitting_factor {
+        use crate::bellman::plonk::better_better_cs::proof::Proof;
+        let padding_proof: Proof<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_reader(std::fs::File::open("basic_circuit_proof_17_76.json").unwrap()).unwrap();
+        let padding_proof_public_input = padding_proof.inputs[0];
+
+        padding_public_inputs.push(padding_proof_public_input);
+        padding_proofs.push(padding_proof);
+    }
+
+    let config = (
+        splitting_factor,
+        aggregated_by_leaf,
+        rns_params.clone(),
+        aggregation_params.clone(),
+        padding_vk_committment,
+        padding_vk_encoding.clone(),
+        padding_public_inputs.clone(),
+        padding_proofs.clone(),
+        padding_aggregations.clone(),
+        None,
+    );
+
+    let circuit = ZkSyncUniformCircuitCircuitInstance::<_, NodeAggregationInstanceSynthesisFunction>::new(
+        None,
+        config,
+        round_function.clone(),
+    );
+        
+    println!("Synthesising largest size");
+    circuit.synthesize(&mut setup_assembly).unwrap();
+    println!("Finaizing largest size");
+    setup_assembly.finalize();
 
 }

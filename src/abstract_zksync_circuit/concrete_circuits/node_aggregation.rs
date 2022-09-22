@@ -18,8 +18,8 @@ use sync_vm::recursion::recursion_tree::NUM_LIMBS;
 impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for NodeAggregationInstanceSynthesisFunction {
     type Witness = NodeAggregationCircuitInstanceWitness<E>;
     type Config = (
-        usize,
-        usize, 
+        usize, // num proofs this circuit aggregates
+        usize, // num proofs that each leaf aggregates
         RnsParameters<E, E::Fq>, 
         AggregationParameters<E, GenericTranscriptGadget<E, RescueParams<E, 2, 3>, 2, 3>, RescueParams<E, 2, 3>, 2, 3>,
         E::Fr, 
