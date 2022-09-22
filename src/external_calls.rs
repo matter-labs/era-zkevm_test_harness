@@ -73,42 +73,6 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
     let heap_writes = calldata_to_aligned_data(&initial_heap_content);
     let num_non_deterministic_heap_queries = heap_writes.len();
 
-    // first there exists non-deterministic writes into the heap of the bootloader's heap and calldata
-    // heap
-
-    for (idx, el) in heap_writes.into_iter().enumerate() {
-        let query = MemoryQuery { 
-            timestamp: Timestamp(0), 
-            location: MemoryLocation { memory_type: MemoryType::Heap, page: MemoryPage(zk_evm::zkevm_opcode_defs::BOOTLOADER_HEAP_PAGE), index: MemoryIndex(idx as u32) }, 
-            rw_flag: true, 
-            is_pended: false, 
-            value: el,
-            value_is_pointer: false,
-        };
-        tools.witness_tracer.add_memory_query(0, query);
-        tools.memory.execute_partial_query(0, query);
-    }
-
-    let mut memory_verification_queries: Vec<sync_vm::glue::code_unpacker_sha256::memory_query_updated::MemoryQueryWitness<Bn256>> = vec![];
-
-    // heap content verification queries
-    for (idx, el) in ram_verification_queries.into_iter() {
-        let query = MemoryQuery { 
-            timestamp: Timestamp(SCHEDULER_TIMESTAMP), 
-            location: MemoryLocation { memory_type: MemoryType::Heap, page: MemoryPage(zk_evm::zkevm_opcode_defs::BOOTLOADER_HEAP_PAGE), index: MemoryIndex(idx as u32) }, 
-            rw_flag: false, 
-            is_pended: false, 
-            value: el,
-            value_is_pointer: false,
-        };
-        tools.witness_tracer.add_memory_query(0, query);
-        tools.memory.execute_partial_query(0, query);
-
-        use crate::encodings::initial_storage_write::CircuitEquivalentReflection;
-        let as_vm_query = query.reflect();
-        memory_verification_queries.push(as_vm_query);
-    }
-
     // bootloader decommit query
     let entry_point_decommittment_query = DecommittmentQuery {
         hash: entry_point_code_hash_as_u256,
@@ -140,6 +104,43 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
         caller,
         entry_point_address,
     );
+
+
+    // first there exists non-deterministic writes into the heap of the bootloader's heap and calldata
+    // heap
+
+    for (idx, el) in heap_writes.into_iter().enumerate() {
+        let query = MemoryQuery { 
+            timestamp: Timestamp(0), 
+            location: MemoryLocation { memory_type: MemoryType::Heap, page: MemoryPage(zk_evm::zkevm_opcode_defs::BOOTLOADER_HEAP_PAGE), index: MemoryIndex(idx as u32) }, 
+            rw_flag: true, 
+            is_pended: false, 
+            value: el,
+            value_is_pointer: false,
+        };
+        out_of_circuit_vm.witness_tracer.add_memory_query(0, query);
+        out_of_circuit_vm.memory.execute_partial_query(0, query);
+    }
+
+    let mut memory_verification_queries: Vec<sync_vm::glue::code_unpacker_sha256::memory_query_updated::MemoryQueryWitness<Bn256>> = vec![];
+
+    // heap content verification queries
+    for (idx, el) in ram_verification_queries.into_iter() {
+        let query = MemoryQuery { 
+            timestamp: Timestamp(SCHEDULER_TIMESTAMP), 
+            location: MemoryLocation { memory_type: MemoryType::Heap, page: MemoryPage(zk_evm::zkevm_opcode_defs::BOOTLOADER_HEAP_PAGE), index: MemoryIndex(idx as u32) }, 
+            rw_flag: false, 
+            is_pended: false, 
+            value: el,
+            value_is_pointer: false,
+        };
+        out_of_circuit_vm.witness_tracer.add_memory_query(0, query);
+        out_of_circuit_vm.memory.execute_partial_query(0, query);
+
+        use crate::encodings::initial_storage_write::CircuitEquivalentReflection;
+        let as_vm_query = query.reflect();
+        memory_verification_queries.push(as_vm_query);
+    }
 
     let mut early_breakpoint_after_snapshot = false;
     let mut tracer = GenericNoopTracer::<_>::new();
