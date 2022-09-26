@@ -7,7 +7,7 @@ pub use sha3::*;
 use crate::encodings::initial_storage_write::CircuitEquivalentReflection;
 use sync_vm::glue::traits::*;
 use sync_vm::glue::pubdata_hasher::storage_write_data::ByteSerializable;
-
+use super::*;
 use sync_vm::glue::pubdata_hasher::input::PubdataHasherInstanceWitness;
 
 pub fn compute_pubdata_hasher_witness<
@@ -35,7 +35,6 @@ pub fn compute_pubdata_hasher_witness<
     let pubdata_hash: [u8; 32] = Keccak256::digest(&full_bytestring).as_slice().try_into().unwrap();
 
     // in general we have everything ready, just form the witness
-    use crate::witness_structures::take_queue_state_from_simulator;
     use sync_vm::circuit_structures::bytes32::Bytes32Witness;
     use sync_vm::glue::pubdata_hasher::input::*;
 
@@ -118,7 +117,6 @@ pub fn compute_merklizer_witness<
     );
 
     // in general we have everything ready, just form the witness
-    use crate::witness_structures::take_queue_state_from_simulator;
     use sync_vm::circuit_structures::bytes32::Bytes32Witness;
     use sync_vm::glue::merkleize_l1_messages::input::*;
 

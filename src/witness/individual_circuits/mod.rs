@@ -1,5 +1,6 @@
 use super::*;
 use super::oracle::*;
+use crate::witness::utils::*;
 
 pub mod ram_permutation;
 pub mod decommit_code;

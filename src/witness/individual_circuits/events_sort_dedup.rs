@@ -10,7 +10,6 @@ use crate::ethereum_types::U256;
 use crate::encodings::log_query::LogQueueSimulator;
 use crate::encodings::memory_query::MemoryQueueSimulator;
 use crate::utils::biguint_from_u256;
-use crate::witness_structures::transform_sponge_like_queue_state;
 use std::cmp::Ordering;
 use crate::bellman::Engine;
 use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
@@ -23,6 +22,7 @@ use sync_vm::glue::log_sorter::input::EventsDeduplicatorInstanceWitness;
 use crate::encodings::log_query::log_query_into_storage_record_witness;
 use crate::encodings::log_query::*;
 use sync_vm::glue::log_sorter::input::*;
+use super::*;
 
 pub fn compute_events_dedup_and_sort<
     E: Engine,
@@ -141,7 +141,6 @@ pub fn compute_events_dedup_and_sort<
 
     // in general we have everything ready, just form the witness
     use sync_vm::traits::CSWitnessable;
-    use crate::witness_structures::take_queue_state_from_simulator;
 
     let mut input_passthrough_data = EventsDeduplicatorInputData::placeholder_witness();
     // we only need the state of demuxed rollup storage queue

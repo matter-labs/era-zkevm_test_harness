@@ -6,11 +6,10 @@ use sync_vm::inputs::ClosedFormInputWitness;
 use sync_vm::scheduler::queues::DecommitQueryWitness;
 use sync_vm::utils::u64_to_fe;
 use zk_evm::aux_structures::*;
-
+use super::*;
 use crate::encodings::log_query::LogQueueSimulator;
 use crate::encodings::memory_query::MemoryQueueSimulator;
 use crate::utils::biguint_from_u256;
-use crate::witness_structures::transform_sponge_like_queue_state;
 use std::cmp::Ordering;
 use crate::bellman::Engine;
 use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
@@ -77,7 +76,6 @@ pub fn compute_storage_dedup_and_sort<
     // in general we have everything ready, just form the witness
     use sync_vm::glue::storage_validity_by_grand_product::input::*;
     use sync_vm::traits::CSWitnessable;
-    use crate::witness_structures::take_queue_state_from_simulator;
 
     let mut input_passthrough_data = StorageDeduplicatorInputData::placeholder_witness();
     // we only need the state of demuxed rollup storage queue

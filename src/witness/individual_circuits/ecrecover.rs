@@ -5,7 +5,6 @@ use derivative::Derivative;
 use num_bigint::BigUint;
 use sync_vm::franklin_crypto::plonk::circuit::utils::u64_to_fe;
 use crate::biguint_from_u256;
-use crate::witness_structures::*;
 use crate::witness::full_block_artifact::FullBlockArtifacts;
 use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
 use sync_vm::glue::ecrecover_circuit::input::*;

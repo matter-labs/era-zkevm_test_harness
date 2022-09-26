@@ -6,7 +6,7 @@ use sync_vm::vm::vm_state::GlobalContext;
 use sync_vm::vm::vm_state::VmGlobalStateWitness;
 use sync_vm::vm::vm_state::VmLocalState;
 use zk_evm::aux_structures::LogQuery;
-
+use crate::witness::utils::initial_storage_write::CircuitEquivalentReflection;
 use crate::encodings::log_query::LogQueueState;
 
 use crate::bellman::Engine;
@@ -24,6 +24,125 @@ pub fn log_queries_into_states<
     }
 
     result
+}
+
+use super::*;
+
+use crate::encodings::{QueueIntermediateStates, SpongeLikeQueueIntermediateStates};
+use sync_vm::scheduler::queues::{
+    FixedWidthEncodingGenericQueueStateWitness, FullSpongeLikeQueueStateWitness,
+};
+
+pub fn transform_queue_state<E: Engine, const N: usize, const M: usize>(
+    witness_state: QueueIntermediateStates<E, N, M>,
+) -> FixedWidthEncodingGenericQueueStateWitness<E> {
+    let result = FixedWidthEncodingGenericQueueStateWitness::<E> {
+        num_items: witness_state.num_items,
+        head_state: witness_state.head,
+        tail_state: witness_state.tail,
+        _marker: std::marker::PhantomData,
+    };
+
+    result
+}
+
+pub fn transform_sponge_like_queue_state<E: Engine, const M: usize>(
+    witness_state: SpongeLikeQueueIntermediateStates<E, 3, M>,
+) -> FullSpongeLikeQueueStateWitness<E> {
+    let result = FullSpongeLikeQueueStateWitness::<E> {
+        length: witness_state.num_items,
+        head: witness_state.head,
+        tail: witness_state.tail,
+        _marker: std::marker::PhantomData,
+    };
+
+    result
+}
+
+use crate::encodings::*;
+
+pub fn take_queue_state_from_simulator<
+    E: Engine, 
+    I: OutOfCircuitFixedLengthEncodable<E, N>,
+    const N: usize,
+    const ROUNDS: usize
+>(
+    simulator: &QueueSimulator<E, I, N, ROUNDS>
+) -> FixedWidthEncodingGenericQueueStateWitness<E> {
+    let result = FixedWidthEncodingGenericQueueStateWitness::<E> {
+        num_items: simulator.num_items,
+        head_state: simulator.head,
+        tail_state: simulator.tail,
+        _marker: std::marker::PhantomData,
+    };
+
+    result
+}
+
+pub fn take_sponge_like_queue_state_from_simulator<
+    E: Engine, 
+    I: OutOfCircuitFixedLengthEncodable<E, N>,
+    const N: usize,
+    const ROUNDS: usize
+>(
+    simulator: &SpongeLikeQueueSimulator<E, I, N, 3, ROUNDS>
+) -> FullSpongeLikeQueueStateWitness<E> {
+    let result = FullSpongeLikeQueueStateWitness::<E> {
+        length: simulator.num_items,
+        head: simulator.head,
+        tail: simulator.tail,
+        _marker: std::marker::PhantomData,
+    };
+
+    result
+}
+
+use sync_vm::scheduler::queues::FixedWidthEncodingGenericQueueWitness;
+use sync_vm::glue::traits::*;
+
+pub fn transform_queue_witness<
+    'a, 
+    E: Engine, 
+    I: OutOfCircuitFixedLengthEncodable<E, N> + 'a + CircuitEquivalentReflection<E, Destination = D>,
+    const N: usize,
+    D: CircuitFixedLengthEncodableExt<E, N> + CircuitFixedLengthDecodableExt<E, N>
+>(
+    witness_iter: impl Iterator<Item = &'a ([E::Fr; N], E::Fr, I)>,
+) -> FixedWidthEncodingGenericQueueWitness<E, D, N> {
+    let wit: Vec<_> = witness_iter.map(|(enc, old_tail, el)| {
+        (*enc, el.reflect(), *old_tail)
+    }).collect();
+
+    FixedWidthEncodingGenericQueueWitness {wit}
+}
+
+use sync_vm::franklin_crypto::plonk::circuit::bigint::biguint_to_fe;
+use sync_vm::glue::code_unpacker_sha256::memory_query_updated::RawMemoryQueryWitness;
+use sync_vm::glue::memory_queries_validity::ram_permutation_inout::RamPermutationCycleInputOutputWitness;
+use sync_vm::scheduler::queues::FixedWidthEncodingSpongeLikeQueueWitness;
+use sync_vm::glue::code_unpacker_sha256::memory_query_updated::RawMemoryQuery;
+
+use zk_evm::aux_structures::MemoryQuery;
+use num_bigint::BigUint;
+
+pub fn transform_raw_memory_query_witness<E: Engine>(
+    witness: &MemoryQuery
+) -> RawMemoryQueryWitness<E> {
+    let value_residual = witness.value.0[3];
+    let value = biguint_from_u256(witness.value);
+    let value_low = value.clone() % (BigUint::from(1u64) << 192);
+    let value_low = biguint_to_fe::<E::Fr>(value_low);
+
+    RawMemoryQueryWitness { 
+        timestamp: witness.timestamp.0, 
+        memory_page: witness.location.page.0, 
+        memory_index: witness.location.index.0, 
+        rw_flag: witness.rw_flag, 
+        value_residual,
+        value: value_low,
+        value_is_ptr: witness.value_is_pointer,
+        _marker: std::marker::PhantomData
+    }
 }
 
 use crate::ff::ScalarEngine;

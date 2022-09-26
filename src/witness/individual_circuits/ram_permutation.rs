@@ -3,9 +3,8 @@ use sync_vm::glue::memory_queries_validity::ram_permutation_inout::*;
 use sync_vm::inputs::ClosedFormInputWitness;
 use sync_vm::utils::u64_to_fe;
 use zk_evm::abstractions::MemoryType;
-
+use super::*;
 use crate::encodings::memory_query::MemoryQueueSimulator;
-use crate::witness_structures::transform_sponge_like_queue_state;
 use std::cmp::Ordering;
 use crate::bellman::Engine;
 use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
@@ -229,7 +228,6 @@ pub fn compute_ram_circuit_snapshots<
     for (idx, (((((unsorted_sponge_states, sorted_sponge_states), lhs_grand_product), rhs_grand_product), unsorted_states), sorted_states)) in it.enumerate() {
         // we need witnesses to pop elements from the front of the queue
         use sync_vm::scheduler::queues::FixedWidthEncodingSpongeLikeQueueWitness;
-        use crate::witness_structures::ram_circuit::transform_raw_memory_query_witness;
 
         let unsorted_witness = FixedWidthEncodingSpongeLikeQueueWitness::<E, RawMemoryQuery<E>, 2, 3> {
             wit: unsorted_states.iter().map(|el| {

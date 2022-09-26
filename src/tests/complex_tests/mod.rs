@@ -13,7 +13,7 @@ use crate::ethereum_types::*;
 use crate::pairing::bn256::Bn256;
 use crate::witness::oracle::create_artifacts_from_tracer;
 use crate::witness::oracle::VmWitnessOracle;
-use crate::witness_structures::take_queue_state_from_simulator;
+use crate::witness::utils::*;
 use num_integer::Integer;
 use sync_vm::franklin_crypto::bellman::plonk::better_better_cs::cs::Circuit;
 use sync_vm::franklin_crypto::bellman::plonk::better_better_cs::gates::selector_optimized_with_d_next::SelectorOptimizedWidth4MainGateWithDNext;

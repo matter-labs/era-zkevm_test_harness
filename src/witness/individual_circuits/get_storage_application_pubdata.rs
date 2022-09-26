@@ -7,7 +7,6 @@ use sync_vm::franklin_crypto::plonk::circuit::utils::u64_to_fe;
 use sync_vm::glue::keccak256_round_function_circuit::*;
 use zk_evm::precompiles::keccak256::BUFFER_SIZE;
 use crate::biguint_from_u256;
-use crate::witness_structures::*;
 use crate::witness::tree::{ZKSyncTestingTree, BinarySparseStorageTree};
 use crate::witness::full_block_artifact::FullBlockArtifacts;
 use crate::witness::tree::ZkSyncStorageLeaf;

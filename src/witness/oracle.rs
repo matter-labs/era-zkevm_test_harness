@@ -41,6 +41,7 @@ use sync_vm::scheduler::queues::FullSpongeLikeQueueStateWitness;
 use super::callstack_handler::*;
 use sync_vm::vm::vm_cycle::memory_view::write_query::MemoryWriteQuery;
 use smallvec::SmallVec;
+use super::utils::*;
 
 #[derive(Derivative)]
 #[derivative(Clone(bound = ""), Copy(bound = ""), Debug, Default)]
@@ -857,8 +858,6 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
     // just read from the corresponding states
 
     let mut all_instances_witnesses = vec![];
-
-    use crate::witness_structures::transform_sponge_like_queue_state;
 
     let initial_cycle = vm_snapshots[0].at_cycle;
 

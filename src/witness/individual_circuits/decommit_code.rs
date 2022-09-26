@@ -4,10 +4,9 @@ use sync_vm::glue::code_unpacker_sha256::input::*;
 use sync_vm::inputs::ClosedFormInputWitness;
 use sync_vm::scheduler::queues::DecommitQueryWitness;
 use sync_vm::utils::u64_to_fe;
-
+use super::*;
 use crate::encodings::memory_query::MemoryQueueSimulator;
 use crate::utils::biguint_from_u256;
-use crate::witness_structures::transform_sponge_like_queue_state;
 use std::cmp::Ordering;
 use std::sync::Arc;
 use crate::bellman::Engine;
@@ -35,7 +34,6 @@ pub fn compute_decommitter_circuit_snapshots<
 
     let mut results: Vec<CodeDecommitterCircuitInstanceWitness<E>> = vec![];
 
-    use crate::witness_structures::take_sponge_like_queue_state_from_simulator;
     let initial_memory_queue_state = take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
 
     // we produce witness for two circuits at once
