@@ -39,6 +39,8 @@ use sync_vm::scheduler::queues::FixedWidthEncodingGenericQueueStateWitness;
 use zk_evm::vm_state::{CallStackEntry, TIMESTAMPS_PER_CYCLE, VmLocalState};
 use sync_vm::scheduler::queues::FullSpongeLikeQueueStateWitness;
 use super::callstack_handler::*;
+use sync_vm::vm::vm_cycle::memory_view::write_query::MemoryWriteQuery;
+use smallvec::SmallVec;
 
 #[derive(Derivative)]
 #[derivative(Clone(bound = ""), Copy(bound = ""), Debug, Default)]
@@ -63,6 +65,7 @@ pub struct RollbackQueueStateWitness<E: Engine> {
 #[serde(bound = "")]
 pub struct VmWitnessOracle<E: Engine> {
     pub memory_read_witness: Vec<(u32, MemoryQuery)>,
+    pub memory_write_witness: Option<Vec<(u32, MemoryQuery)>>,
     pub rollback_queue_head_segments: Vec<(u32, E::Fr)>,
     pub decommittment_requests_witness: Vec<(u32, DecommittmentQuery)>,
     pub rollback_queue_initial_tails_for_new_frames: Vec<(u32, E::Fr)>,
@@ -204,11 +207,27 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
     assert!(vm_snapshots.len() >= 2); // we need at least entry point and the last save (after exit)
 
-    let memory_read_witness: Vec<_> = memory_queries
-        .iter()
-        .filter(|el| !el.1.rw_flag)
-        .cloned()
-        .collect();
+    // there can be multiple per cycle, so we need BTreeMap over vectors. For other witnesses it's easier
+    let mut memory_read_witness: BTreeMap<u32, SmallVec<[MemoryQuery; 4]>> = BTreeMap::new();
+    let mut memory_write_witness: BTreeMap<u32, SmallVec<[MemoryQuery; 4]>> = BTreeMap::new();
+    for el in memory_queries.iter() {
+        if el.1.rw_flag == false {
+            // read
+            if let Some(existing) = memory_read_witness.get_mut(&el.0) {
+                existing.push(el.1);
+            } else {
+                memory_read_witness.insert(el.0, smallvec::smallvec![el.1]);
+            }
+        } else {
+            // write
+            if let Some(existing) = memory_write_witness.get_mut(&el.0) {
+                existing.push(el.1);
+            } else {
+                memory_write_witness.insert(el.0, smallvec::smallvec![el.1]);
+            }
+        }
+    }
+    
     let vm_memory_queries_accumulated = memory_queries;
 
     // segmentation of the log queue
@@ -529,8 +548,6 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
         }
     }
 
-    // dbg!(&chain_of_states[..16]);
-
     // let full_log_length = chain_of_states.len();
     // assert_eq!(full_log_length, num_forwards + num_rollbacks);
     
@@ -595,8 +612,6 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
         let frame_beginning_cycle = global_beginnings_of_frames[&frame_index];
         rollback_queue_initial_tails_for_new_frames.push((frame_beginning_cycle, tail));
     }
-
-    // dbg!(&frame_rollback_tails);
 
     // we know for every cycle a pointer to the positions of item's forward and rollback action into 
     // the flattened queue
@@ -863,14 +878,11 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
     tracing::debug!("Processing VM snapshots queue (total {:?})", vm_snapshots.windows(2).len());
 
-    dbg!(&artifacts.vm_memory_queue_states[16..64]);
-
     for (_circuit_idx, pair) in vm_snapshots.windows(2).enumerate() {
         let initial_state = &pair[0];
         let final_state = &pair[1];
 
-        dbg!(initial_state.at_cycle);
-        dbg!(final_state.at_cycle);
+        println!("Operating over range {:?}", initial_state.at_cycle..final_state.at_cycle);
 
         // we need to get chunks of
         // - memory read witnesses
@@ -940,13 +952,18 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
         // initial state is kind of done, now
         // split the oracle witness
 
-        let per_instance_memory_read_witnesses: Vec<_> = memory_read_witness.iter()
-            .skip_while(
-                |el| el.0 < initial_state.at_cycle
-            )
-            .take_while(
-                |el| el.0 < final_state.at_cycle
-            ).cloned().collect();
+        let mut per_instance_memory_read_witnesses = Vec::with_capacity(1 << 16);
+        let mut per_instance_memory_write_witnesses = Vec::with_capacity(1 << 16);
+        for (k, v) in memory_read_witness.range(initial_state.at_cycle..final_state.at_cycle) {
+            for el in v.iter().cloned() {
+                per_instance_memory_read_witnesses.push((*k, el));
+            }
+        }
+        for (k, v) in memory_write_witness.range(initial_state.at_cycle..final_state.at_cycle) {
+            for el in v.iter().cloned() {
+                per_instance_memory_write_witnesses.push((*k, el));
+            }
+        }
 
         let per_instance_storage_read_witnesses: Vec<_> = storage_read_queries.iter()
             .skip_while(
@@ -1000,6 +1017,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
         // construct an oracle
         let witness_oracle = VmWitnessOracle::<E> {
             memory_read_witness: per_instance_memory_read_witnesses,
+            memory_write_witness: Some(per_instance_memory_write_witnesses),
             rollback_queue_head_segments,
             decommittment_requests_witness,
             rollback_queue_initial_tails_for_new_frames,
@@ -1039,7 +1057,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
             },
             cycles_range: initial_state.at_cycle..final_state.at_cycle,
             final_state: final_state.local_state.clone(),
-            auxilary_final_parameters: VmInCircuitAuxilaryParameters::default(), // TODO
+            auxilary_final_parameters: VmInCircuitAuxilaryParameters::default(), // we will use next circuit's initial as final here!
         };
 
         all_instances_witnesses.push(instance_witness);
@@ -1132,8 +1150,17 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
 
             // tracing::debug!("Query value = 0x{:064x}", query.value);
             if let Some(ts) = timestamp.get_value() {
-                let _roughly_a_cycle = (ts - zk_evm::zkevm_opcode_defs::STARTING_TIMESTAMP) / TIMESTAMPS_PER_CYCLE
-                    + INITIAL_MONOTONIC_CYCLE_COUNTER;
+                assert_eq!(
+                    ts,
+                    query.timestamp.0,
+                    "invalid memory access location at cycle {:?}: VM asks at timestamp {}, witness has timestamp {}",
+                    _cycle,
+                    ts,
+                    query.timestamp.0,
+                );
+
+                // let _roughly_a_cycle = (ts - zk_evm::zkevm_opcode_defs::STARTING_TIMESTAMP) / TIMESTAMPS_PER_CYCLE
+                //     + INITIAL_MONOTONIC_CYCLE_COUNTER;
                 // assert_eq!(_cycle, _roughly_a_cycle);
             }
 
@@ -1141,7 +1168,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
                 assert_eq!(
                     location.page,
                     query.location.page.0,
-                    "invalid memory access location at cycle {:?}: VM asks for page {}, witness has page {}",
+                    "invalid memory access location at timestamp {:?}: VM asks for page {}, witness has page {}",
                     timestamp.get_value(),
                     location.page,
                     query.location.page.0,
@@ -1149,7 +1176,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
                 assert_eq!(
                     location.index,
                     query.location.index.0,
-                    "invalid memory access location at cycle {:?}: VM asks for index {}, witness has index {}",
+                    "invalid memory access location at timestamp {:?}: VM asks for index {}, witness has index {}",
                     timestamp.get_value(),
                     location.index,
                     query.location.index.0,
@@ -1170,10 +1197,74 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
         }
     }
 
-    fn push_memory_witness(&mut self, _memory_query: &RawMemoryQuery<E>, _execute: &Boolean) {
-        // if _execute.get_value().unwrap_or(false) {
-        //     dbg!(_memory_query.create_witness());
-        // }
+    fn push_memory_witness(&mut self, memory_query: &MemoryWriteQuery<E>, execute: &Boolean) {
+        if let Some(write_witness) = self.memory_write_witness.as_mut() {
+            if execute.get_value().unwrap_or(false) {
+                let wit = memory_query.create_witness().unwrap();
+
+                if write_witness.is_empty() {
+                    panic!(
+                        "should have a self-check witness to write at timestamp {}, page {}, index {}",
+                        wit.timestamp,
+                        wit.memory_page,
+                        wit.memory_index,
+                    );
+                }
+                let (_cycle, query) = write_witness.drain(..1).next().unwrap();
+
+                assert_eq!(
+                    wit.timestamp,
+                    query.timestamp.0,
+                    "invalid memory access location at timestamp {:?}: VM writes into timestamp {}, witness has timestamp {}",
+                    wit.timestamp,
+                    wit.timestamp,
+                    query.timestamp.0,
+                );
+
+                assert_eq!(
+                    wit.memory_page,
+                    query.location.page.0,
+                    "invalid memory access location at timestamp {:?}: VM writes into page {}, witness has page {}",
+                    wit.timestamp,
+                    wit.memory_page,
+                    query.location.page.0,
+                );
+
+                assert_eq!(
+                    wit.memory_index,
+                    query.location.index.0,
+                    "invalid memory access location at timestamp {:?}: VM writes into index {}, witness has index {}",
+                    wit.timestamp,
+                    wit.memory_index,
+                    query.location.index.0,
+                );
+
+                // compare values
+
+                let mut wit_value = U256::from(wit.lowest_128);
+                wit_value.0[2] = wit.u64_word_2;
+                wit_value.0[3] = wit.u64_word_3;
+
+                assert_eq!(
+                    wit_value,
+                    query.value,
+                    "invalid memory access location at timestamp {:?}: VM writes value {}, witness has value {}",
+                    wit.timestamp,
+                    wit_value,
+                    query.value,
+                );
+
+                assert_eq!(
+                    wit.value_is_ptr,
+                    query.value_is_pointer,
+                    "invalid memory access location at timestamp {:?}: VM writes pointer {}, witness has pointer {}",
+                    wit.timestamp,
+                    wit.value_is_ptr,
+                    query.value_is_pointer,
+                );
+            }
+        }
+
         // we do not care
     }
 
@@ -1458,6 +1549,12 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
     fn at_completion(self) {
         if self.memory_read_witness.is_empty() == false {
             panic!("Too many memory queries in witness: have left\n{:?}", self.memory_read_witness);
+        }
+
+        if let Some(memory_write_witness) = self.memory_write_witness {
+            if memory_write_witness.is_empty() == false {
+                panic!("Too many memory write queries in witness: have left\n{:?}", memory_write_witness);
+            }
         }
 
         if self.storage_read_queries.is_empty() == false {

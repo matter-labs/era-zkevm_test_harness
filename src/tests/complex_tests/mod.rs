@@ -142,7 +142,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
 
     let used_bytecodes = HashMap::from_iter(test_artifact.predeployed_contracts.iter().map(|(_,bytecode)| (bytecode_to_code_hash(&bytecode).unwrap().into(), bytecode.clone())));
     for (k, _) in used_bytecodes.iter() {
-        println!("Have bytecode hash {}", k);
+        println!("Have bytecode hash 0x{:x}", k);
     }
     use sha3::{Digest, Keccak256};
 
