@@ -33,3 +33,4 @@ tracing = { version= "0.1.26" }
 bincode = "*"
 test-log = "*"
 env_logger = "*"
+smallvec = "*"
