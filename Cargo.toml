@@ -34,3 +34,9 @@ bincode = "*"
 test-log = "*"
 env_logger = "*"
 smallvec = "*"
+
+# [profile.release]
+# debug = true
+
+# [profile.bench]
+# debug = true

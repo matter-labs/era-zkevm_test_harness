@@ -205,6 +205,8 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         &mut tree
     );
 
+    return;
+
     use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
     use sync_vm::recursion::transcript::GenericTranscriptGadget;
 

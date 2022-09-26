@@ -10,6 +10,7 @@ use crate::witness::full_block_artifact::FullBlockArtifacts;
 use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
 use sync_vm::glue::ecrecover_circuit::input::*;
 use sync_vm::scheduler::queues::FixedWidthEncodingGenericQueueWitness;
+use sync_vm::precompiles::*;
 
 // we want to simulate splitting of data into many separate instances of the same circuit.
 // So we basically need to reconstruct the FSM state on input/output, and passthrough data.
@@ -66,12 +67,12 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
         let memory_queue_input_state = take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
         let current_memory_queue_state = memory_queue_input_state.clone();
 
-        let mut observable_input_data = EcrecoverCircuitInputData::placeholder_witness();
-        observable_input_data.memory_queue_initial_state = memory_queue_input_state.clone();
-        observable_input_data.sorted_requests_queue_initial_state = log_queue_input_state.clone();
+        let mut observable_input_data = PrecompileFunctionInputData::placeholder_witness();
+        observable_input_data.initial_memory_state = memory_queue_input_state.clone();
+        observable_input_data.initial_log_queue_state = log_queue_input_state.clone();
 
-        let mut observable_output_data = EcrecoverCircuitOutputData::placeholder_witness();
-        observable_output_data.memory_queue_final_state = current_memory_queue_state.clone();
+        let mut observable_output_data = PrecompileFunctionOutputData::placeholder_witness();
+        observable_output_data.final_memory_state = current_memory_queue_state.clone();
 
         let witness = EcrecoverCircuitInstanceWitness::<E> {
             closed_form_input: EcrecoverCircuitInputOutputWitness::<E> {
@@ -189,15 +190,15 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
             let mut current_witness = std::mem::replace(&mut memory_read_witnesses, vec![]);
             current_witness.push(current_reads);
 
-            let mut observable_input_data = EcrecoverCircuitInputData::placeholder_witness();
+            let mut observable_input_data = PrecompileFunctionInputData::placeholder_witness();
             if result.len() == 0 {
-                observable_input_data.memory_queue_initial_state = memory_queue_input_state.clone();
-                observable_input_data.sorted_requests_queue_initial_state = log_queue_input_state.clone();
+                observable_input_data.initial_memory_state = memory_queue_input_state.clone();
+                observable_input_data.initial_log_queue_state = log_queue_input_state.clone();
             }
 
-            let mut observable_output_data = EcrecoverCircuitOutputData::placeholder_witness();
+            let mut observable_output_data = PrecompileFunctionOutputData::placeholder_witness();
             if finished {
-                observable_output_data.memory_queue_final_state = current_memory_queue_state.clone();
+                observable_output_data.final_memory_state = current_memory_queue_state.clone();
             }
 
             let witness = EcrecoverCircuitInstanceWitness::<E> {

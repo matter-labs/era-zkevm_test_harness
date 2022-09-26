@@ -12,7 +12,7 @@ use crate::witness::full_block_artifact::FullBlockArtifacts;
 use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
 use sync_vm::glue::keccak256_round_function_circuit::input::*;
 use sync_vm::scheduler::queues::FixedWidthEncodingGenericQueueWitness;
-
+use sync_vm::precompiles::*;
 use sync_vm::glue::keccak256_round_function_circuit::input::Keccak256RoundFunctionInstanceWitness;
 
 #[derive(Derivative)]
@@ -84,11 +84,11 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
         let memory_queue_input_state = take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
         let current_memory_queue_state = memory_queue_input_state.clone();
 
-        let mut observable_input_data = Keccak256RoundFunctionInputData::placeholder_witness();
-        observable_input_data.memory_queue_initial_state = memory_queue_input_state.clone();
+        let mut observable_input_data = PrecompileFunctionInputData::placeholder_witness();
+        observable_input_data.initial_memory_state = memory_queue_input_state.clone();
         observable_input_data.initial_log_queue_state = log_queue_input_state.clone();
 
-        let mut observable_output_data = Keccak256RoundFunctionOutputData::placeholder_witness();
+        let mut observable_output_data = PrecompileFunctionOutputData::placeholder_witness();
         observable_output_data.final_memory_state = current_memory_queue_state.clone();
 
         let mut hidden_fsm_input_state = KeccakPrecompileState::<E>::placeholder_witness();
@@ -345,13 +345,13 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
                 let mut current_witness = std::mem::replace(&mut memory_read_witnesses, vec![]);
                 current_witness.push(current_reads);
 
-                let mut observable_input_data = Keccak256RoundFunctionInputData::placeholder_witness();
+                let mut observable_input_data = PrecompileFunctionInputData::placeholder_witness();
                 if result.len() == 0 {
                     observable_input_data.initial_log_queue_state = log_queue_input_state.clone();
-                    observable_input_data.memory_queue_initial_state = memory_queue_input_state.clone();
+                    observable_input_data.initial_memory_state = memory_queue_input_state.clone();
                 }
 
-                let mut observable_output_data = Keccak256RoundFunctionOutputData::placeholder_witness();
+                let mut observable_output_data = PrecompileFunctionOutputData::placeholder_witness();
                 if finished {
                     observable_output_data.final_memory_state = current_memory_queue_state.clone();
                 }

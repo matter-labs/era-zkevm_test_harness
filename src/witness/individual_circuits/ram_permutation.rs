@@ -68,14 +68,12 @@ pub fn compute_ram_circuit_snapshots<
 
     let sequence_of_states = round_function.simulate_absorb_multiple_rounds_into_empty_with_specialization(&fs_input);
     let final_state = sequence_of_states.last().unwrap().1;
-    let base_fs_challenge = R::simulate_state_into_commitment(final_state);
 
-    let mut current = base_fs_challenge;
-    challenges.push(current);
-    current.mul_assign(&base_fs_challenge);
-    challenges.push(current);
-    current.mul_assign(&base_fs_challenge);
-    challenges.push(current);
+    // manually unroll to get irreducible over every challenge
+    challenges.push(final_state[0]);
+    challenges.push(final_state[1]);
+    let final_state = round_function.simulate_round_function(final_state);
+    challenges.push(final_state[0]);
 
     // since encodings of the elements provide all the information necessary to perform soring argument,
     // we use them naively
