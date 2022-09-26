@@ -46,6 +46,9 @@ pub fn compute_storage_application_pubdata_queues<
     
     let (_next_enumeration_index, first_writes, updates) = tree.filter_renumerate(actual_keys.iter(), leafs);
 
+    assert!(first_writes.len() <= first_writes_capacity, "too many initial writes to hash by single circuit");
+    assert!(updates.len() <= repeated_writes_capacity, "too many updating writes to hash by single circuit");
+
     let mut first_writes_simulator = InitialStorageWritesSimulator::<E>::empty();
     let mut repeated_writes_simulator = RepeatedStorageWritesSimulator::<E>::empty();
 

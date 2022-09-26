@@ -579,12 +579,6 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
     let mut rollback_queue_initial_tails_for_new_frames = vec![];
     let max_frame_idx = callstack_with_aux_data.monotonic_frame_counter;
 
-    // dbg!(&callstack_with_aux_data.frame_segments_data);
-
-    // dbg!(chain_of_states.len());
-    // dbg!(&chain_of_states[..10]);
-    // dbg!(&chain_of_states[(chain_of_states.len() - 4)..]);
-
     for frame_index in 0..max_frame_idx {
         if frame_index == 0 {
             let tail = global_end_of_storage_log;

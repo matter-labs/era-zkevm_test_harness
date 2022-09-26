@@ -210,6 +210,8 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
         tracing::debug!("Running log demux simulation");
 
+        assert!(self.original_log_queue_states.len() <= geometry.limit_for_log_demuxer as usize, "too many storage accesses to sort by single circuit");
+
         let log_demuxer_witness = compute_logs_demux(
             self,
             round_function
@@ -277,6 +279,8 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
         tracing::debug!("Running storage deduplication simulation");
 
+        assert!(self.demuxed_rollup_storage_queries.len() <= geometry.limit_for_storage_sorter as usize, "too many storage accesses to sort by single circuit");
+
         let storage_deduplicator_circuit_data = compute_storage_dedup_and_sort(
             self,
             round_function
@@ -286,6 +290,8 @@ impl<E: Engine> FullBlockArtifacts<E> {
         use crate::witness::individual_circuits::events_sort_dedup::compute_events_dedup_and_sort;
 
         tracing::debug!("Running events deduplication simulation");
+
+        assert!(self.demuxed_event_queries.len() <= geometry.limit_for_events_or_l1_messages_sorter as usize, "too many events to sort by single circuit");
 
         let events_deduplicator_circuit_data = compute_events_dedup_and_sort(
             &self.demuxed_event_queries,
@@ -298,6 +304,8 @@ impl<E: Engine> FullBlockArtifacts<E> {
         self.events_deduplicator_circuit_data = vec![events_deduplicator_circuit_data];
 
         tracing::debug!("Running L1 messages deduplication simulation");
+
+        assert!(self.demuxed_to_l1_queries.len() <= geometry.limit_for_events_or_l1_messages_sorter as usize, "too many L1 messages to sort by single circuit");
 
         let l1_messages_deduplicator_circuit_data = compute_events_dedup_and_sort(
             &self.demuxed_to_l1_queries,
@@ -314,6 +322,8 @@ impl<E: Engine> FullBlockArtifacts<E> {
         use crate::witness::individual_circuits::data_hasher_and_merklizer::compute_merklizer_witness;
 
         tracing::debug!("Running L1 messages merklization simulation");
+
+        assert!(self.deduplicated_to_l1_queue_simulator.num_items <= geometry.limit_for_l1_messages_merklizer, "too many L1 messages to merklize by single circuit");
 
         let l1_messages_merklizer_data = compute_merklizer_witness(
             &self.deduplicated_to_l1_queue_simulator,
