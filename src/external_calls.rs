@@ -30,9 +30,6 @@ use sync_vm::scheduler::{NUM_MEMORY_QUERIES_TO_VERIFY, SCHEDULER_TIMESTAMP};
 /// setup the environment and will run out-of-circuit and then in-circuit
 /// and perform intermediate tests
 pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn256>>, S: Storage>(
-    previous_block_timestamp: u64,
-    block_number: u64,
-    block_timestamp: u64,
     caller: Address, // for real block must be zero
     entry_point_address: Address, // for real block must be the bootloader
     entry_point_code: Vec<[u8; 32]>, // for read lobkc must be a bootloader code
@@ -51,8 +48,6 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
 ) -> (BlockBasicCircuits<Bn256>, BlockBasicCircuitsPublicInputs<Bn256>, SchedulerCircuitInstanceWitness<Bn256>) {
     assert!(zk_porter_is_available == false);
     assert_eq!(ram_verification_queries.len(), 0, "for now it's implemented such that we do not need it");
-
-    assert!(block_number >= 1);
 
     let initial_rollup_root = tree.root();
     let initial_rollup_enumeration_counter = tree.next_enumeration_index();
@@ -236,8 +231,6 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
         };
 
         let previous_block_passthrough = BlockPassthroughDataWitness { 
-            block_number: block_number - 1,
-            timestamp: previous_block_timestamp,
             per_shard_states: [prev_rollup_state, prev_porter_state],
             _marker: std::marker::PhantomData
         };
@@ -249,7 +242,6 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
             default_aa_code_hash: u256_to_bytes32witness_be(default_aa_code_hash),
             ergs_per_code_decommittment_word: ergs_per_code_word_decommittment,
             zkporter_is_available: zk_porter_is_available,
-            timestamp: block_timestamp,
             _marker: std::marker::PhantomData
         };
 
@@ -325,9 +317,6 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
 }
 
 pub fn run_with_fixed_params<S: Storage>(
-    previous_block_timestamp: u64,
-    block_number: u64,
-    block_timestamp: u64,
     caller: Address, // for real block must be zero
     entry_point_address: Address, // for real block must be the bootloader
     entry_point_code: Vec<[u8; 32]>, // for read lobkc must be a bootloader code
@@ -344,9 +333,6 @@ pub fn run_with_fixed_params<S: Storage>(
 ) -> (BlockBasicCircuits<Bn256>, BlockBasicCircuitsPublicInputs<Bn256>, SchedulerCircuitInstanceWitness<Bn256>) {
     let (_, round_function, _) = create_test_artifacts_with_optimized_gate();
     run(
-        previous_block_timestamp,
-        block_number,
-        block_timestamp,
         caller,
         entry_point_address,
         entry_point_code,

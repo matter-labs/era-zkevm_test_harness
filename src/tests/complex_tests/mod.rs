@@ -186,9 +186,6 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     // ];
 
     let (basic_block_circuits, basic_block_circuits_inputs, mut scheduler_partial_input) = run(
-        previous_block_number,
-        BLOCK_NUMBER,
-        BLOCK_TIMESTAMP,
         Address::zero(),
         test_artifact.entry_point_address,
         test_artifact.entry_point_code,

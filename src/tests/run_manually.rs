@@ -270,9 +270,6 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
     );
 
     let (basic_block_circuits, basic_block_circuits_inputs, scheduler_input) = run(
-        0,
-        1,
-        1,
         Address::zero(),
         *BOOTLOADER_FORMAL_ADDRESS,
         entry_point_bytecode,
