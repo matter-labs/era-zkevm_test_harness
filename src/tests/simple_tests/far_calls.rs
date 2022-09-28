@@ -270,7 +270,8 @@ fn test_far_call_pay_for_memory_growth() {
         far_call r1, r2, @catch_all
         context.ergs_left r9
         add r9, r0, stack[0]
-        ret.ok r0
+        shl.s 96, r1, r1
+        ret.ok r1
     catch_all:
         ret.panic r0
     "#;
@@ -287,7 +288,9 @@ fn test_far_call_pay_for_memory_growth() {
     .main:
         context.ergs_left r9
         add r9, r0, stack[0]
-        ret.ok r0
+        add 64, r0, r1
+        shl.s 96, r1, r1
+        ret.ok r1
     "#;
 
     let entry_bytecode = Assembly::try_from(asm.to_owned()).unwrap().compile_to_bytecode().unwrap();

@@ -38,7 +38,7 @@ pub struct GeometryConfig {
 }
 
 pub fn create_tools<S: Storage>(storage: S, config: &GeometryConfig) -> ProvingToolset<S> {
-    let memory = SimpleMemory::new();
+    let memory = SimpleMemory::new_without_preallocations();
     let event_sink = InMemoryEventSink::new();
     let precompiles_processor = DefaultPrecompilesProcessor::<true>;
     let decommittment_processor = SimpleDecommitter::<true>::new();
