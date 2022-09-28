@@ -1390,6 +1390,9 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
             assert_eq!(entry.pc, witness.common_part.pc);
             assert_eq!(entry.sp, witness.common_part.sp);
 
+            assert_eq!(entry.heap_bound, witness.common_part.heap_upper_bound);
+            assert_eq!(entry.aux_heap_bound, witness.common_part.aux_heap_upper_bound);
+
             assert_eq!(entry.exception_handler_location, witness.common_part.exception_handler_loc);
             assert_eq!(entry.ergs_remaining, witness.common_part.ergs_remaining);
 

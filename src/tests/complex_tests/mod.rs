@@ -146,19 +146,11 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     }
     use sha3::{Digest, Keccak256};
 
-    const BLOCK_NUMBER: u64 = 1;
-    const BLOCK_TIMESTAMP: u64 = 1;
-
     let previous_enumeration_index = tree.next_enumeration_index();
     let previous_root = tree.root();
-    let previous_block_number = BLOCK_NUMBER - 1;
-    let previous_block_number_bytes = previous_block_number.to_be_bytes();
-    let previous_block_timestamp_bytes = 0u64.to_be_bytes();
     // simualate content hash
 
     let mut hasher = Keccak256::new();
-    hasher.update(&previous_block_number_bytes);
-    hasher.update(&previous_block_timestamp_bytes);
     hasher.update(&previous_enumeration_index.to_be_bytes());
     hasher.update(&previous_root);
     hasher.update(&0u64.to_be_bytes()); // porter shart

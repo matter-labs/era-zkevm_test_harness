@@ -11,12 +11,15 @@ mod test {
         // let circuit_file_name = "prover_input_26";
         // let circuit_file_name = "prover_input_11";
         // let circuit_file_name = "prover_input_120656";
-        let circuit_file_name = "prover_input_187019";
+        let circuit_file_name = "prover_input_18";
 
         let mut content = std::fs::File::open(circuit_file_name).unwrap();
         let mut buffer = vec![];
         content.read_to_end(&mut buffer).unwrap();
         let circuit: ZkSyncCircuit<Bn256, VmWitnessOracle<Bn256>> = bincode::deserialize(&buffer).unwrap();
+
+        use sync_vm::franklin_crypto::bellman::Field;
+        let mut expected_input = sync_vm::testing::Fr::zero();
 
         match &circuit {
             ZkSyncCircuit::KeccakRoundFunction(inner) => {
@@ -47,14 +50,15 @@ mod test {
             ZkSyncCircuit::MainVM(inner) => {
                 let inner = inner.clone();
                 let inner = inner.witness.take().unwrap();
-                let wits: Vec<_> = inner.witness_oracle.callstack_values_witnesses.iter().map(|(_idx, (_entry, previous_state))| {
-                    previous_state.clone()
-                }).collect();
 
-                dbg!(wits);
+                let (public_input_committment, _) = simulate_public_input_value_from_witness(inner.closed_form_input);
+
+                expected_input = public_input_committment;
             },
             _ => unreachable!()
         }
+
+        dbg!(expected_input);
 
         let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
 

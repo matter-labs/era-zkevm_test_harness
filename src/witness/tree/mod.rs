@@ -1,4 +1,5 @@
-
+use crate::witness::utils::take_queue_state_from_simulator;
+use crate::witness::utils::transform_queue_witness;
 pub trait EnumeratedBinaryLeaf<const LEAF_DATA_WIDTH: usize>: Clone + std::hash::Hash {
     fn empty() -> Self;
     fn empty_index() -> u64 {
@@ -653,7 +654,6 @@ mod test {
         use sync_vm::testing::Bn256;
         use sync_vm::traits::CSWitnessable;
         use crate::bytes_to_u128_le;
-        use crate::witness_structures::take_queue_state_from_simulator;
         use crate::encodings::*;
         use crate::encodings::initial_storage_write::*;
         use crate::encodings::repeated_storage_write::*;
@@ -757,8 +757,6 @@ mod test {
         passthrough_output.final_root = root_as_u128;
         passthrough_output.repeated_writes_pubdata_queue_state = take_queue_state_from_simulator(&repeated_writes_simulator);
         passthrough_output.initial_writes_pubdata_queue_state = take_queue_state_from_simulator(&first_writes_simulator);
-
-        use crate::witness_structures::transform_queue_witness;
 
         let wit = transform_queue_witness(
             deduplicated_rollup_storage_queue_simulator.witness.iter()

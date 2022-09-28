@@ -1,5 +1,7 @@
 use super::*;
 
+// todo: move calls to another contract, so upper bound is not max value
+
 #[test_log::test]
 fn test_memory_growth() {
     let asm = r#"

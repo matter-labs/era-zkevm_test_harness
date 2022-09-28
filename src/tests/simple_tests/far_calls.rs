@@ -215,3 +215,96 @@ fn test_far_call_and_panic_on_return_large_data() {
         50
     );
 }
+
+#[test_log::test]
+fn test_far_call_pay_for_memory_growth() {
+    // perform far call with limited ergs
+    let asm = r#"
+        .text
+        .file	"Test_26"
+        .rodata.cst32
+        .p2align	5
+    CPI0_0:
+	    .cell 30272441630670900764332283662402067049651745785153368133042924362431065855
+        .cell 30272434434303437454318367229716471635614919446304865000139367529706422272
+    CPI0_1:
+	    .cell 65536
+        .text
+        .globl	__entry
+    __entry:
+    .main:
+        add 1000, r0, r1
+        shl.s 192, r1, r1
+        add @CPI0_1[0], r0, r2
+        context.ergs_left r9
+        add r9, r0, stack[0]
+        far_call r1, r2, @catch_all
+        context.ergs_left r9
+        add r9, r0, stack[0]
+        ret.ok r0
+    catch_all:
+        ret.panic r0
+    "#;
+
+    // far call using 256 bytes of data and pass 100 ergs
+    let other_asm = r#"
+        .text
+        .file	"Test_26"
+        .rodata.cst32
+        .p2align	5
+    CPI0_0:
+	    .cell 65537
+        .text
+        .globl	__entry
+    __entry:
+    .main:
+        add 100, r0, r1
+        shl.s 96, r1, r1
+        add 256, r1, r1
+        shl.s 32, r1, r1
+        add 128, r1, r1
+        shl.s 64, r1, r1
+        context.ergs_left r9
+        add r9, r0, stack[0]
+        add @CPI0_0[0], r0, r2
+        far_call r1, r2, @catch_all
+        context.ergs_left r9
+        add r9, r0, stack[0]
+        ret.ok r0
+    catch_all:
+        ret.panic r0
+    "#;
+
+    // just return
+    let other_asm_1 = r#"
+        .text
+        .file	"Test_26"
+        .rodata.cst32
+        .p2align	5
+        .text
+        .globl	__entry
+    __entry:
+    .main:
+        context.ergs_left r9
+        add r9, r0, stack[0]
+        ret.ok r0
+    "#;
+
+    let entry_bytecode = Assembly::try_from(asm.to_owned()).unwrap().compile_to_bytecode().unwrap();
+    use crate::ethereum_types::Address;
+    let other_address = Address::from_low_u64_be(1u64 << 16);
+    let other_bytecode = Assembly::try_from(other_asm.to_owned()).unwrap().compile_to_bytecode().unwrap();
+
+    let other_address_1 = Address::from_low_u64_be((1u64 << 16) + 1);
+    // let other_address_1 = Address::from_low_u64_be(1u64 << 16 + 1);
+    let other_bytecode_1 = Assembly::try_from(other_asm_1.to_owned()).unwrap().compile_to_bytecode().unwrap();
+
+    run_and_try_create_witness_for_extended_state(
+        entry_bytecode, 
+        vec![
+            (other_address, other_bytecode),
+            (other_address_1, other_bytecode_1)
+        ],
+        50
+    );
+}
