@@ -43,8 +43,9 @@ impl<E: Engine, const SW: usize, const ROUNDS: usize> QueueIntermediateStates<E,
     }
 }
 
-#[derive(Derivative)]
+#[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone(bound = ""), Default(bound = ""), Debug)]
+#[serde(bound = "")]
 pub struct QueueSimulator<
     E: Engine,
     I: OutOfCircuitFixedLengthEncodable<E, N>,
@@ -54,6 +55,8 @@ pub struct QueueSimulator<
     pub head: E::Fr,
     pub tail: E::Fr,
     pub num_items: u32,
+    #[serde(bound(serialize = "[E::Fr; N]: serde::Serialize, I: serde::Serialize"))]
+    #[serde(bound(deserialize = "[E::Fr; N]: serde::de::DeserializeOwned, I: serde::de::DeserializeOwned"))]
     pub witness: Vec<([E::Fr; N], E::Fr, I)>,
 }
 

@@ -4,8 +4,9 @@ use sync_vm::franklin_crypto::plonk::circuit::bigint::biguint_to_fe;
 use sync_vm::utils::compute_shifts;
 use sync_vm::vm::vm_state::saved_contract_context::scale_and_accumulate;
 
-#[derive(Derivative)]
+#[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone, Copy, Debug)]
+#[serde(bound = "")]
 pub struct RecursionRequest<E: Engine> {
     pub circuit_type: u8,
     pub public_input: E::Fr,
@@ -23,8 +24,6 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 2> for RecursionRequest<E> {
         let el0 = lc;
 
         let el1 = self.public_input;
-
-        // dbg!([el0, el1]);
 
         [el0, el1]
     }
