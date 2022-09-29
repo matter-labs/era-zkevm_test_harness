@@ -9,7 +9,7 @@ use crate::bellman::plonk::better_better_cs::proof::Proof;
 use crate::bellman::plonk::better_better_cs::setup::VerificationKey;
 use crate::witness::oracle::VmWitnessOracle;
 use sync_vm::circuit_structures::utils::bn254_rescue_params;
-use sync_vm::recursion::get_prefered_rns_params;
+use sync_vm::recursion::{get_prefered_rns_params, get_prefered_committer};
 use sync_vm::recursion::transcript::GenericTranscriptGadget;
 use sync_vm::recursion::recursion_tree::AggregationParameters;
 use sync_vm::recursion::get_base_placeholder_point_for_accumulators;
@@ -73,6 +73,42 @@ pub fn padding_aggregations(
 
 use sync_vm::recursion::node_aggregation::ZkSyncParametricCircuit;
 
+// helper function. Erases type internally
+pub fn compute_vk_encoding_and_committment(
+    vk: VerificationKey<Bn256, ZkSyncParametricCircuit<Bn256>>,
+) -> (Vec<sync_vm::testing::Fr>, sync_vm::testing::Fr) {
+    let rns_params = get_prefered_rns_params();
+    use sync_vm::recursion::aggregation::VkInRns;
+
+    use sync_vm::glue::optimizable_queue::simulate_variable_length_hash;
+    use sync_vm::traits::ArithmeticEncodable;
+    use sync_vm::recursion::get_prefered_committer;
+
+    let round_function = get_prefered_committer();
+
+    let vk_in_rns = VkInRns {
+        vk: Some(vk),
+        rns_params: &rns_params
+    };
+    let encoding = vk_in_rns.encode().unwrap();
+    let committment = simulate_variable_length_hash(&encoding, &round_function);
+
+    (encoding, committment)
+}
+
+// helper function. Erases type internally
+pub fn erase_vk_type(
+    vk: VerificationKey<Bn256, ZkSyncCircuit<Bn256, VmWitnessOracle<Bn256>>>,
+) -> VerificationKey<Bn256, ZkSyncParametricCircuit<Bn256>> {
+    unsafe {std::mem::transmute(vk)} // only transmute marker
+}
+
+// helper function. Erases type internally
+pub fn erase_proof_type(
+    proof: Proof<Bn256, ZkSyncCircuit<Bn256, VmWitnessOracle<Bn256>>>,
+) -> Proof<Bn256, ZkSyncParametricCircuit<Bn256>> {
+    unsafe {std::mem::transmute(proof)} // only transmute marker
+}
 
 // sets up basic parameters for leaf aggregation circuit by committing to
 // all verification keys of basic circuits. it MUST be in the order of
@@ -305,7 +341,7 @@ pub fn prepare_leaf_aggregations(
         // we use the circuit itself to output some witness
         use sync_vm::testing::create_test_artifacts_with_optimized_gate;
         let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
-        let (aggregated_public_input, output_data) = aggregate_at_leaf_level_entry_point::<_, _, _, _, _, true>(
+        let (_aggregated_public_input, output_data) = aggregate_at_leaf_level_entry_point::<_, _, _, _, _, true>(
             &mut cs,
             Some(wit.clone()),
             &round_function,
@@ -321,7 +357,6 @@ pub fn prepare_leaf_aggregations(
             ),
         ).unwrap();
 
-        let public_input_value = aggregated_public_input.get_value().unwrap();
         let result_observable_output = output_data.create_witness().unwrap();
 
         wit.closed_form_input.observable_output = result_observable_output.clone();
@@ -358,4 +393,231 @@ pub fn prepare_leaf_aggregations(
     // circuits themselves
 
     (leaf_layer_subqueues, aggregation_outputs, leaf_circuits)
+}
+
+use sync_vm::recursion::leaf_aggregation::LeafAggregationOutputDataWitness;
+use sync_vm::recursion::node_aggregation::NodeAggregationOutputDataWitness;
+
+// create individual circuits to prove as leaf aggregations,
+// and some artifacts to prepare for node aggregation
+pub fn prepare_node_aggregations(
+    previous_level_proofs: Vec<Proof<Bn256, ZkSyncCircuit<Bn256, VmWitnessOracle<Bn256>>>>, // proofs of previous level of aggregations
+    previous_level_vk: VerificationKey<Bn256, ZkSyncCircuit<Bn256, VmWitnessOracle<Bn256>>>, // only 1 verification key needed
+    previous_level_are_leafs: bool,
+    depth: u32,
+    previous_level_leafs_aggregations: Vec<LeafAggregationOutputDataWitness<Bn256>>, // must be non-empty if we aggregate over leafs
+    previous_level_node_aggregations: Vec<NodeAggregationOutputDataWitness<Bn256>>, // must be non-empty if we aggregate over nodes
+    previous_sequence: Vec<crate::encodings::QueueSimulator<sync_vm::testing::Bn256, crate::encodings::recursion_request::RecursionRequest<sync_vm::testing::Bn256>, 2, 2>>,
+    splitting_factor_for_leafs: usize,
+    splitting_factor_for_nodes: usize,
+    padding_vk: VerificationKey<Bn256, ZkSyncParametricCircuit<Bn256>>, // vk that we use for padding. In general can be for any valid circuit of our geometry (gates, lookups)
+    padding_proof: Proof<Bn256, ZkSyncParametricCircuit<Bn256>>, // proof to use for paddings
+    padding_aggregations: Vec<([Fr; NUM_LIMBS], [Fr; NUM_LIMBS], [Fr; NUM_LIMBS], [Fr; NUM_LIMBS])>,
+    leaf_vks_committment: Fr, // committment to the full set of VKs
+    node_aggregation_vk_committment: Fr,
+    leaf_aggregation_vk_committment: Fr,
+    g2_points: [bellman::pairing::bn256::G2Affine; 2], // G2 points for self-verification
+) -> (
+    Vec<crate::encodings::QueueSimulator<sync_vm::testing::Bn256, crate::encodings::recursion_request::RecursionRequest<sync_vm::testing::Bn256>, 2, 2>>, 
+    Vec<NodeAggregationOutputDataWitness<sync_vm::testing::Bn256>>, 
+    Vec<crate::abstract_zksync_circuit::concrete_circuits::ZkSyncCircuit<sync_vm::testing::Bn256, VmWitnessOracle<sync_vm::testing::Bn256>>>
+) {
+    if depth == 0 {
+        assert!(previous_level_are_leafs);
+    } else {
+        assert!(!previous_level_are_leafs);
+    }
+
+    let padding_public_inputs = vec![padding_proof.inputs[0]; splitting_factor_for_nodes];
+    let padding_proofs = vec![padding_proof.clone(); splitting_factor_for_nodes];
+
+    let rns_params = get_prefered_rns_params();
+    use sync_vm::recursion::aggregation::VkInRns;
+    use sync_vm::recursion::get_prefered_hash_params;
+    use crate::encodings::QueueSimulator;
+    use sync_vm::scheduler::RecursiveProofQueryWitness;
+    use crate::witness::utils::take_queue_state_from_simulator;
+    use sync_vm::traits::CSWitnessable;
+    use sync_vm::scheduler::queues::FixedWidthEncodingGenericQueueWitness;
+    use sync_vm::recursion::leaf_aggregation::LeafAggregationOutputDataWitness;
+
+    let mut aggregation_outputs = vec![];
+    let mut node_circuits = vec![];
+
+    let round_function = get_prefered_committer();
+    let sponge_params = bn254_rescue_params();
+
+    // we pick proof number 0 as a padding element for circuit. In general it can be any valid proof
+    let padding_vk_encoding: [_; sync_vm::recursion::node_aggregation::VK_ENCODING_LENGTH] = {
+        // add
+        let vk_in_rns = VkInRns {
+            vk: Some(padding_vk.clone()),
+            rns_params: &rns_params
+        };
+        use sync_vm::traits::ArithmeticEncodable;
+        let encoding = vk_in_rns.encode().unwrap();
+
+        encoding.try_into().unwrap()
+    };
+
+    use sync_vm::glue::optimizable_queue::simulate_variable_length_hash;
+    let padding_vk_committment = simulate_variable_length_hash(&padding_vk_encoding, &round_function);
+
+    let aggregation_params = AggregationParameters::<_, GenericTranscriptGadget<_, _, 2, 3>, _, 2, 3> {
+        base_placeholder_point: get_base_placeholder_point_for_accumulators(),
+        // hash_params: get_prefered_hash_params(),
+        hash_params: sponge_params.clone(),
+        transcript_params: sponge_params.clone(),
+    };
+
+    use sync_vm::recursion::RescueTranscriptForRecursion;
+
+    // the procedure is largely recursive - we join subrequests and output a circuit
+
+    let num_previous_level_proofs = previous_sequence.len();
+
+    assert_eq!(num_previous_level_proofs, previous_level_proofs.len());
+
+    let mut merged = vec![];
+    for chunk in previous_sequence.chunks(splitting_factor_for_nodes) {
+        let mut first = chunk[0].clone();
+        for second in chunk[1..].iter().cloned() {
+            first = QueueSimulator::merge(first, second);
+        }
+
+        merged.push(first);
+    }
+
+    let mut proofs_it = previous_level_proofs.into_iter();
+    let mut previous_level_leafs_aggregations_it = previous_level_leafs_aggregations.into_iter();
+    let mut previous_level_node_aggregations_it = previous_level_node_aggregations.into_iter();
+
+    use crate::abstract_zksync_circuit::concrete_circuits::NodeAggregationCircuit;
+    use sync_vm::recursion::node_aggregation::NodeAggregationCircuitInstanceWitness;
+    use sync_vm::recursion::node_aggregation::NodeAggregationInputOutputWitness;
+    use sync_vm::recursion::node_aggregation::NodeAggregationInputDataWitness;
+    use sync_vm::recursion::node_aggregation::NodeAggregationOutputData;
+
+    let previous_level_vk = erase_vk_type(previous_level_vk);
+
+    let mut circuit_to_aggregate_index = 0;
+
+    for (_idx, subset) in merged.iter().cloned().enumerate() {
+        let queue_wit: Vec<_> = subset.witness.iter().map(|el| {
+            let (enc, prev_tail, el) = el.clone();
+            let w = RecursiveProofQueryWitness {
+                cicruit_type: el.circuit_type,
+                closed_form_input_hash: el.public_input,
+                _marker: std::marker::PhantomData
+            };
+
+            (enc, w, prev_tail)
+        }).collect();
+
+        let mut wit = NodeAggregationCircuitInstanceWitness::<Bn256> {
+            closed_form_input: NodeAggregationInputOutputWitness {
+                start_flag: true,
+                completion_flag: true,
+                hidden_fsm_input: (),
+                hidden_fsm_output: (),
+                observable_input: NodeAggregationInputDataWitness {
+                    initial_log_queue_state: take_queue_state_from_simulator(&subset),
+                    leaf_vk_committment: leaf_aggregation_vk_committment,
+                    node_vk_committment: node_aggregation_vk_committment,
+                    all_circuit_types_committment_for_leaf: leaf_vks_committment,
+                    _marker: std::marker::PhantomData,
+                },
+                observable_output: NodeAggregationOutputData::placeholder_witness(),
+                _marker_e: (),
+                _marker: std::marker::PhantomData,
+            },
+            initial_queue_witness: FixedWidthEncodingGenericQueueWitness {wit: queue_wit}, 
+            proof_witnesses: vec![],
+            vk_encoding_witnesses: vec![],
+            leaf_aggregation_results: vec![],
+            node_aggregation_results: vec![],
+            depth: depth,
+        };
+
+        for _ in 0..splitting_factor_for_nodes {
+            if circuit_to_aggregate_index >= num_previous_level_proofs {
+                break;
+            }
+
+            let proof = proofs_it.next().unwrap();
+            let proof = erase_proof_type(proof);
+
+            if depth == 0 {
+                let output: LeafAggregationOutputDataWitness<Bn256> = previous_level_leafs_aggregations_it.next().unwrap();
+                wit.leaf_aggregation_results.push(output);
+            } else {
+                use sync_vm::recursion::node_aggregation::NodeAggregationOutputDataWitness;
+                let output: NodeAggregationOutputDataWitness<Bn256> = previous_level_node_aggregations_it.next().unwrap();
+                wit.node_aggregation_results.push(output);
+            }
+
+            let vk_in_rns = VkInRns {
+                vk: Some(previous_level_vk.clone()),
+                rns_params: &rns_params
+            };
+            use sync_vm::traits::ArithmeticEncodable;
+            let encoding = vk_in_rns.encode().unwrap();
+            wit.vk_encoding_witnesses.push(encoding);
+            wit.proof_witnesses.push(proof);
+            circuit_to_aggregate_index += 1;
+        }
+
+        use sync_vm::recursion::node_aggregation::aggregate_at_node_level_entry_point;
+        use sync_vm::testing::create_test_artifacts_with_optimized_gate;
+
+        let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+        let (_aggregated_public_input, _leaf_aggregation_output_data, _node_aggregation_output_data, output_data) = aggregate_at_node_level_entry_point::<_, _, _, _, _, true>(
+            &mut cs,
+            Some(wit.clone()),
+            &round_function,
+            (
+                splitting_factor_for_nodes,
+                splitting_factor_for_leafs,
+                rns_params.clone(),
+                aggregation_params.clone(),
+                padding_vk_committment,
+                padding_vk_encoding.clone(),
+                padding_public_inputs.clone(),
+                padding_proofs.clone(),
+                padding_aggregations.clone(),
+                Some(g2_points.clone()),
+            ),
+        ).unwrap();
+
+        let result_observable_output = output_data.create_witness().unwrap();
+
+        wit.closed_form_input.observable_output = result_observable_output.clone();
+
+        aggregation_outputs.push(result_observable_output);
+
+        let circuit = NodeAggregationCircuit::new(
+            Some(wit),
+            (
+                splitting_factor_for_nodes,
+                splitting_factor_for_leafs,
+                rns_params.clone(),
+                aggregation_params.clone(),
+                padding_vk_committment,
+                padding_vk_encoding.to_vec(),
+                padding_public_inputs.clone(),
+                padding_proofs.clone(),
+                padding_aggregations.clone(),
+                Some(g2_points.clone()),
+            ),
+            round_function.clone()
+        );
+
+        let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::NodeAggregation(circuit);
+
+        node_circuits.push(circuit);
+    }
+
+    assert!(proofs_it.next().is_none());
+
+    (merged, aggregation_outputs, node_circuits)
 }
