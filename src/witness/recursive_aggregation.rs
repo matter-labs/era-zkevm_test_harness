@@ -133,14 +133,13 @@ pub fn erase_proof_type(
 // The number of vks is checked
 pub fn form_base_circuits_committment(
     vks: Vec<VerificationKey<Bn256, ZkSyncCircuit<Bn256, VmWitnessOracle<Bn256>>>>,
-) -> (Vec<Vec<sync_vm::testing::Fr>>, Vec<sync_vm::testing::Fr>, [bellman::pairing::bn256::G2Affine; 2]) {
+) -> (Vec<sync_vm::testing::Fr>, sync_vm::testing::Fr, [bellman::pairing::bn256::G2Affine; 2]) {
     // walk over keys, ensure sorting, uniqueness and that it's only basic circuits
     let mut checker = std::collections::HashSet::new();
 
     assert_eq!(vks.len(), sync_vm::scheduler::NUM_CIRCUIT_TYPES_TO_SCHEDULE);
 
     let mut g2_points = None;
-    let mut all_vk_encodings = vec![];
     let mut all_vk_committments = vec![];
 
     let rns_params = get_prefered_rns_params();
@@ -166,14 +165,15 @@ pub fn form_base_circuits_committment(
         };
         let encoding = vk_in_rns.encode().unwrap();
         let committment = simulate_variable_length_hash(&encoding, &round_function);
-        all_vk_encodings.push(encoding);
         all_vk_committments.push(committment);
 
         let is_unique = checker.insert(committment);
         assert!(is_unique);
     }
 
-    (all_vk_encodings, all_vk_committments, g2_points.unwrap())
+    let set_committment = simulate_variable_length_hash(&all_vk_committments, &round_function);
+
+    (all_vk_committments, set_committment, g2_points.unwrap())
 }
 
 
