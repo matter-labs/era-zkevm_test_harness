@@ -240,11 +240,8 @@ pub fn prepare_leaf_aggregations(
     let padding_vk_committment = simulate_variable_length_hash(&padding_vk_encoding, &round_function);
     let sponge_params = bn254_rescue_params();
 
-    use sync_vm::recursion::get_prefered_hash_params;
-
     let aggregation_params = AggregationParameters::<_, GenericTranscriptGadget<_, _, 2, 3>, _, 2, 3> {
         base_placeholder_point: get_base_placeholder_point_for_accumulators(),
-        // hash_params: get_prefered_hash_params(),
         hash_params: sponge_params.clone(),
         transcript_params: sponge_params.clone(),
     };
@@ -433,7 +430,6 @@ pub fn prepare_node_aggregations(
 
     let rns_params = get_prefered_rns_params();
     use sync_vm::recursion::aggregation::VkInRns;
-    use sync_vm::recursion::get_prefered_hash_params;
     use crate::encodings::QueueSimulator;
     use sync_vm::scheduler::RecursiveProofQueryWitness;
     use crate::witness::utils::take_queue_state_from_simulator;
@@ -465,7 +461,6 @@ pub fn prepare_node_aggregations(
 
     let aggregation_params = AggregationParameters::<_, GenericTranscriptGadget<_, _, 2, 3>, _, 2, 3> {
         base_placeholder_point: get_base_placeholder_point_for_accumulators(),
-        // hash_params: get_prefered_hash_params(),
         hash_params: sponge_params.clone(),
         transcript_params: sponge_params.clone(),
     };
