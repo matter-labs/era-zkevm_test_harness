@@ -239,6 +239,10 @@ pub fn vm_instance_witness_to_vm_formal_state<E: Engine>(
     ctx.saved_context.common_part.heap_upper_bound = out_of_circuit_context.heap_bound;
     ctx.saved_context.common_part.aux_heap_upper_bound = out_of_circuit_context.aux_heap_bound;
 
+    // context composite
+    ctx.saved_context.common_part.context_u128_value_composite[0] = out_of_circuit_context.context_u128_value as u64;
+    ctx.saved_context.common_part.context_u128_value_composite[1] = (out_of_circuit_context.context_u128_value >> 64) as u64;
+
     // various counters
     ctx.saved_context.common_part.pc = out_of_circuit_context.pc;
     ctx.saved_context.common_part.sp = out_of_circuit_context.sp;

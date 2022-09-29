@@ -11,7 +11,7 @@ mod test {
         // let circuit_file_name = "prover_input_26";
         // let circuit_file_name = "prover_input_11";
         // let circuit_file_name = "prover_input_120656";
-        let circuit_file_name = "prover_input_98";
+        let circuit_file_name = "prover_input_3563";
         // let circuit_file_name = "input_151";
 
         let mut content = std::fs::File::open(circuit_file_name).unwrap();
@@ -51,7 +51,7 @@ mod test {
             ZkSyncCircuit::MainVM(inner) => {
                 let inner = inner.clone();
                 let inner = inner.witness.take().unwrap();
-
+                dbg!(&inner);
                 let (public_input_committment, _) = simulate_public_input_value_from_witness(inner.closed_form_input);
 
                 expected_input = public_input_committment;

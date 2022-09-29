@@ -75,7 +75,26 @@ use sync_vm::recursion::node_aggregation::ZkSyncParametricCircuit;
 
 
 // sets up basic parameters for leaf aggregation circuit by committing to
-// all verification keys of basic circuits
+// all verification keys of basic circuits. it MUST be in the order of
+// let sequence_of_circuit_types = [
+//     CircuitType::VM,
+//     CircuitType::DecommitmentsFilter,
+//     CircuitType::Decommiter,
+//     CircuitType::LogDemultiplexer,
+//     CircuitType::KeccakPrecompile,
+//     CircuitType::Sha256Precompile,
+//     CircuitType::EcrecoverPrecompile,
+//     CircuitType::RamValidation,
+//     CircuitType::StorageFilter,
+//     CircuitType::StorageApplicator,
+//     CircuitType::StorageFreshWritesHasher,
+//     CircuitType::StorageRepeatedWritesHasher,
+//     CircuitType::EventsRevertsFilter,
+//     CircuitType::L1MessagesRevertsFilter,
+//     CircuitType::L1MessagesMerkelization,
+// ];
+// where CircuitType::EventsRevertsFilter and CircuitType::L1MessagesRevertsFilter are the same circuit
+// The number of vks is checked
 pub fn form_base_circuits_committment(
     vks: Vec<VerificationKey<Bn256, ZkSyncCircuit<Bn256, VmWitnessOracle<Bn256>>>>,
 ) -> (Vec<Vec<sync_vm::testing::Fr>>, Vec<sync_vm::testing::Fr>, [bellman::pairing::bn256::G2Affine; 2]) {
@@ -183,11 +202,7 @@ pub fn prepare_leaf_aggregations(
 
     use sync_vm::glue::optimizable_queue::simulate_variable_length_hash;
     let padding_vk_committment = simulate_variable_length_hash(&padding_vk_encoding, &round_function);
-
-    let padding_proof_public_input = padding_proof.inputs[0];
-
     let sponge_params = bn254_rescue_params();
-    let transcript_params = (&sponge_params, &rns_params);
 
     use sync_vm::recursion::get_prefered_hash_params;
 
@@ -261,8 +276,6 @@ pub fn prepare_leaf_aggregations(
             proof_witnesses: vec![],
             vk_encoding_witnesses: vec![],
         };
-
-        // dbg!(&wit.closed_form_input.observable_input.initial_log_queue_state);
 
         let this_aggregation_subqueue = &leaf_layer_subqueues[idx];
 
