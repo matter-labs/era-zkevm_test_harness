@@ -75,7 +75,13 @@ fn scheduler_outer_function<E: Engine, CS: ConstraintSystem<E>, R: CircuitArithm
         g2_elements
     );
 
-    let input = scheduler_function(cs, witness, round_function, params)?;
+    let input = scheduler_function(
+        cs, 
+        witness, 
+        None,
+        round_function,
+        params
+    )?;
 
     Ok(input)
 }

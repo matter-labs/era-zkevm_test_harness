@@ -1093,6 +1093,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     let _ = scheduler_function(
         &mut cs, 
         Some(scheduler_partial_input.clone()), 
+        None,
         &round_function, 
         (
             scheduler_upper_bound,

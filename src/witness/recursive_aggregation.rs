@@ -421,8 +421,12 @@ pub fn prepare_node_aggregations(
 ) {
     if depth == 0 {
         assert!(previous_level_are_leafs);
+        assert!(previous_level_leafs_aggregations.is_empty() == false);
+        assert!(previous_level_node_aggregations.is_empty() == true);
     } else {
         assert!(!previous_level_are_leafs);
+        assert!(previous_level_leafs_aggregations.is_empty() == true);
+        assert!(previous_level_node_aggregations.is_empty() == false);
     }
 
     let padding_public_inputs = vec![padding_proof.inputs[0]; splitting_factor_for_nodes];
@@ -615,4 +619,140 @@ pub fn prepare_node_aggregations(
     assert!(proofs_it.next().is_none());
 
     (merged, aggregation_outputs, node_circuits)
+}
+
+// outputs final scheduler circuit (to be proven using Keccak256 transcript as it will be verified in Ethereum),
+// as well as final aggregation result as 32 bytes for every cordinate as [pair_with_generator_x, pair_with_generator_y, pair_with_x_x, pair_with_x_y]
+pub fn prepare_scheduler_circuit(
+    incomplete_scheduler_witness: SchedulerCircuitInstanceWitness<Bn256>,
+    node_final_proof_level_proofs: Proof<Bn256, ZkSyncCircuit<Bn256, VmWitnessOracle<Bn256>>>, // proofs of final level of aggregations
+    node_aggregation_vk: VerificationKey<Bn256, ZkSyncCircuit<Bn256, VmWitnessOracle<Bn256>>>, // only 1 verification key needed
+    final_node_aggregations: NodeAggregationOutputDataWitness<Bn256>,
+    leaf_vks_committment: Fr, // committment to the full set of VKs
+    node_aggregation_vk_committment: Fr,
+    leaf_aggregation_vk_committment: Fr,
+    previous_aux_hash: [u8; 32],
+    previous_meta_hash: [u8; 32],
+    padding_vk: VerificationKey<Bn256, ZkSyncParametricCircuit<Bn256>>, // even though we do NOT use it in fact, but it affects the synthesis as we reuse a function that can do the padding
+    padding_proof: Proof<Bn256, ZkSyncParametricCircuit<Bn256>>, // same for proof
+    scheduler_upper_bound: u32, // is a maximum number of circuits to scheduler. Should be in a form of splitting_per_leafs * splitting_per_node^K
+    g2_points: [bellman::pairing::bn256::G2Affine; 2], // G2 points for self-verification
+) -> (
+    crate::abstract_zksync_circuit::concrete_circuits::ZkSyncCircuit<sync_vm::testing::Bn256, VmWitnessOracle<sync_vm::testing::Bn256>>,
+    [[u8; 32]; 4],
+) {
+    let rns_params = get_prefered_rns_params();
+    use sync_vm::recursion::aggregation::VkInRns;
+    use crate::encodings::QueueSimulator;
+    use sync_vm::scheduler::RecursiveProofQueryWitness;
+    use crate::witness::utils::take_queue_state_from_simulator;
+    use sync_vm::traits::CSWitnessable;
+    use sync_vm::scheduler::queues::FixedWidthEncodingGenericQueueWitness;
+    use sync_vm::recursion::leaf_aggregation::LeafAggregationOutputDataWitness;
+
+    let mut scheduler_witness = incomplete_scheduler_witness;
+
+    let node_final_proof_level_proofs = erase_proof_type(node_final_proof_level_proofs);
+    let node_aggregation_vk = erase_vk_type(node_aggregation_vk);
+
+    scheduler_witness.aggregation_result = final_node_aggregations;
+    scheduler_witness.proof_witnesses = vec![node_final_proof_level_proofs];
+    let vk_in_rns = VkInRns {
+        vk: Some(node_aggregation_vk.clone()),
+        rns_params: &rns_params
+    };
+    use sync_vm::traits::ArithmeticEncodable;
+    let encoding = vk_in_rns.encode().unwrap();
+    scheduler_witness.vk_encoding_witnesses = vec![encoding];
+
+    scheduler_witness.previous_block_aux_hash = Bytes32Witness::from_bytes_array(&previous_aux_hash);
+    scheduler_witness.previous_block_meta_hash = Bytes32Witness::from_bytes_array(&previous_meta_hash);
+
+    // now also all the key sets
+    use crate::bellman::{PrimeField, PrimeFieldRepr};
+    use sync_vm::circuit_structures::bytes32::Bytes32Witness;
+
+    let mut buffer = vec![];
+    leaf_vks_committment.into_repr().write_be(&mut buffer).unwrap();
+    assert_eq!(buffer.len(), 32);
+    let all_keys: [u8; 32] = buffer.try_into().unwrap();
+    scheduler_witness.all_different_circuits_keys_hash = Bytes32Witness::from_bytes_array(&all_keys);
+
+    let mut buffer = vec![];
+    leaf_aggregation_vk_committment.into_repr().write_be(&mut buffer).unwrap();
+    assert_eq!(buffer.len(), 32);
+    let all_keys: [u8; 32] = buffer.try_into().unwrap();
+    scheduler_witness.recursion_leaf_verification_key_hash = Bytes32Witness::from_bytes_array(&all_keys);
+
+    let mut buffer = vec![];
+    node_aggregation_vk_committment.into_repr().write_be(&mut buffer).unwrap();
+    assert_eq!(buffer.len(), 32);
+    let all_keys: [u8; 32] = buffer.try_into().unwrap();
+    scheduler_witness.recursion_node_verification_key_hash = Bytes32Witness::from_bytes_array(&all_keys);
+
+    use crate::abstract_zksync_circuit::concrete_circuits::SchedulerCircuit;
+    use sync_vm::testing::create_test_artifacts_with_optimized_gate;
+    use sync_vm::scheduler::scheduler_function;
+    let round_function = get_prefered_committer();
+    let sponge_params = bn254_rescue_params();
+
+    let aggregation_params = AggregationParameters::<_, GenericTranscriptGadget<_, _, 2, 3>, _, 2, 3> {
+        base_placeholder_point: get_base_placeholder_point_for_accumulators(),
+        hash_params: sponge_params.clone(),
+        transcript_params: sponge_params.clone(),
+    };
+
+    let padding_vk_encoding: [_; sync_vm::recursion::node_aggregation::VK_ENCODING_LENGTH] = {
+        // add
+        let vk_in_rns = VkInRns {
+            vk: Some(padding_vk.clone()),
+            rns_params: &rns_params
+        };
+        use sync_vm::traits::ArithmeticEncodable;
+        let encoding = vk_in_rns.encode().unwrap();
+
+        encoding.try_into().unwrap()
+    };
+
+    let aggregation_coords_bytes = std::sync::Arc::new(std::sync::Mutex::new(vec![]));
+    let clone_to_send = std::sync::Arc::clone(&aggregation_coords_bytes);
+    let reporting_function = Box::new(move |result: Vec<[u8; 32]>| {
+        *clone_to_send.lock().unwrap() = result;
+    }) as Box<dyn FnOnce(Vec<[u8; 32]>) -> ()>;
+
+    let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+    let _ = scheduler_function(
+        &mut cs, 
+        Some(scheduler_witness.clone()), 
+        Some(reporting_function),
+        &round_function, 
+        (
+            scheduler_upper_bound,
+            rns_params.clone(),
+            aggregation_params.clone(),
+            padding_vk_encoding,
+            padding_proof.clone(),
+            Some(g2_points.clone()),
+        )
+    );
+
+    // now we can unwrap and get the values we want
+    let final_aggregation_result = aggregation_coords_bytes.lock().unwrap().clone();
+
+    let circuit = SchedulerCircuit::new(
+        Some(scheduler_witness),
+        (
+            scheduler_upper_bound,
+            rns_params.clone(),
+            aggregation_params.clone(),
+            padding_vk_encoding.to_vec(),
+            padding_proof.clone(),
+            Some(g2_points.clone()),
+        ),
+        round_function.clone()
+    );
+
+    let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::Scheduler(circuit);
+
+    (circuit, final_aggregation_result.try_into().unwrap())
 }
