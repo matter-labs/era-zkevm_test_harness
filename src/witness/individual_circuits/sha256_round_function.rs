@@ -90,7 +90,24 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
         let mut hidden_fsm_output_state = Sha256RoundFunctionFSM::<E>::placeholder_witness();
         hidden_fsm_output_state.completed = true;
         use crate::franklin_crypto::plonk::circuit::hashes_with_tables::sha256::gadgets::Sha256Gadget;
-        hidden_fsm_output_state.sha256_inner_state = Sha256Gadget::<E>::iv(); // Placeholder witness derives to [Fr(0); 8], while we reset to non-trivial IV
+
+        use zk_evm::precompiles::sha256::Sha256;
+        // internal state is a bit more tricky, it'll be a round over empty input
+        let mut internal_state_over_empty_buffer = Sha256::default();
+        let empty_block = [0u8; 64];
+        use zk_evm::precompiles::sha256::Digest;
+        internal_state_over_empty_buffer.update(&empty_block);
+        let sha256_internal_state_over_empty_buffer =
+            zk_evm::precompiles::sha256::transmute_state(internal_state_over_empty_buffer.clone());
+
+        let circuit_hash_internal_state: [E::Fr; 8] = sha256_internal_state_over_empty_buffer
+            .into_iter()
+            .map(|el| u64_to_fe::<E::Fr>(el as u64))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+            
+        hidden_fsm_output_state.sha256_inner_state = circuit_hash_internal_state;
 
         let witness = Sha256RoundFunctionCircuitInstanceWitness::<E> {
             closed_form_input: Sha256RoundFunctionCircuitInputOutputWitness::<E> {
@@ -229,6 +246,7 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
             round_counter += 1;
 
             if round_counter == num_rounds_per_circuit || (is_last_request && is_last_round) {
+                let early_termination = round_counter != num_rounds_per_circuit;
                 round_counter = 0;
 
                 let finished = is_last_request && is_last_round;
@@ -239,7 +257,7 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
                 let state_inner =
                     zk_evm::precompiles::sha256::transmute_state(internal_state.clone());
 
-                let circuit_hash_internal_state: [E::Fr; 8] = state_inner
+                let mut circuit_hash_internal_state: [E::Fr; 8] = state_inner
                     .into_iter()
                     .map(|el| u64_to_fe::<E::Fr>(el as u64))
                     .collect::<Vec<_>>()
@@ -248,13 +266,32 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
 
                 let input_is_empty = is_last_request;
                 let nothing_left = is_last_round && input_is_empty;
-                // let process_next = is_last_round && !input_is_empty;
 
                 assert_eq!(nothing_left, finished);
 
-                // let read_precompile_call = process_next;
-                // let completed = nothing_left;
-                // let read_unaligned_words_for_round = !(read_precompile_call || completed);
+                if early_termination {
+                    assert_eq!(precompile_state, Sha256PrecompileState::Finished);
+                    // we finished all the requests, but didn't reset the state as circuit would do
+
+                    // Even though any work of the circuit after requests are done is NOT observable
+                    // and doesn't affect the correctness, we have a strict check that simulated input + output
+                    // matches to what output circuit produced by itself based on the common input only
+
+                    // internal state is a bit more tricky, it'll be a round over empty input
+                    let mut internal_state_over_empty_buffer = Sha256::default();
+                    let empty_block = [0u8; 64];
+                    use zk_evm::precompiles::sha256::Digest;
+                    internal_state_over_empty_buffer.update(&empty_block);
+                    let sha256_internal_state_over_empty_buffer =
+                        zk_evm::precompiles::sha256::transmute_state(internal_state_over_empty_buffer.clone());
+    
+                    circuit_hash_internal_state = sha256_internal_state_over_empty_buffer
+                        .into_iter()
+                        .map(|el| u64_to_fe::<E::Fr>(el as u64))
+                        .collect::<Vec<_>>()
+                        .try_into()
+                        .unwrap();
+                }
 
                 let completed = precompile_state == Sha256PrecompileState::Finished;
                 let read_words_for_round =

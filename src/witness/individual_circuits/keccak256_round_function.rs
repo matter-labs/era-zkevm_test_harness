@@ -96,6 +96,32 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
         let mut hidden_fsm_output_state = KeccakPrecompileState::<E>::placeholder_witness();
         hidden_fsm_output_state.completed = true;
 
+        // internal state is a bit more tricky, it'll be a round over empty input
+        use zk_evm::precompiles::keccak256::Keccak256;
+        let mut internal_state_over_empty_buffer = Keccak256::default();
+        use zk_evm::precompiles::keccak256::KECCAK_RATE_IN_U64_WORDS;
+        let empty_block = [0u8; KECCAK_RATE_IN_U64_WORDS * 8];
+        use zk_evm::precompiles::keccak256::Digest;
+        internal_state_over_empty_buffer.update(&empty_block);
+        let empty_state_inner =
+            zk_evm::precompiles::keccak256::transmute_state(internal_state_over_empty_buffer.clone());
+        let mut keccak_internal_state_over_empty_buffer = vec![];
+        for i in 0..5 {
+            for j in 0..5 {
+                let el = empty_state_inner[i + 5*j]; // circuit and non-circuit impls have different order
+                keccak_internal_state_over_empty_buffer.push(el);
+            }
+        }
+
+        let keccak_internal_state: [E::Fr; 25] = keccak_internal_state_over_empty_buffer
+            .into_iter()
+            .map(|el| u64_to_fe::<E::Fr>(el))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+
+        hidden_fsm_output_state.keccak_internal_state = keccak_internal_state;
+
         let witness = Keccak256RoundFunctionInstanceWitness::<E> {
             closed_form_input: Keccak256RoundFunctionInputOutputWitness::<E> {
                 start_flag: true,
@@ -261,6 +287,7 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
             round_counter += 1;
 
             if round_counter == num_rounds_per_circuit || (is_last_request && is_last_round) {
+                let early_termination = round_counter != num_rounds_per_circuit;
                 round_counter = 0;
 
                 let finished = is_last_request && is_last_round;
@@ -283,19 +310,48 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
                     }
                 }
 
-                let keccak_internal_state: [E::Fr; 25] = keccak_internal_state
+                let mut keccak_internal_state: [E::Fr; 25] = keccak_internal_state
                     .into_iter()
                     .map(|el| u64_to_fe::<E::Fr>(el))
                     .collect::<Vec<_>>()
                     .try_into()
                     .unwrap();
 
-                // let keccak_internal_state: [E::Fr; 25] = state_inner
-                //     .into_iter()
-                //     .map(|el| u64_to_fe::<E::Fr>(el))
-                //     .collect::<Vec<_>>()
-                //     .try_into()
-                //     .unwrap();
+                if early_termination {
+                    assert_eq!(precompile_state, Keccak256PrecompileState::Finished);
+                    // we finished all the requests, but didn't reset the state as circuit would do
+
+                    // Even though any work of the circuit after requests are done is NOT observable
+                    // and doesn't affect the correctness, we have a strict check that simulated input + output
+                    // matches to what output circuit produced by itself based on the common input only
+                    for el in u64_words_buffer_markers.iter_mut () {
+                        *el = false;
+                    }
+                    for el in input_buffer.words.iter_mut() {
+                        *el = 0u64;
+                    }
+                    // internal state is a bit more tricky, it'll be a round over empty input
+                    let mut internal_state_over_empty_buffer = Keccak256::default();
+                    let empty_block = [0u8; KECCAK_RATE_IN_U64_WORDS * 8];
+                    use zk_evm::precompiles::keccak256::Digest;
+                    internal_state_over_empty_buffer.update(&empty_block);
+                    let empty_state_inner =
+                        zk_evm::precompiles::keccak256::transmute_state(internal_state_over_empty_buffer.clone());
+                    let mut keccak_internal_state_over_empty_buffer = vec![];
+                    for i in 0..5 {
+                        for j in 0..5 {
+                            let el = empty_state_inner[i + 5*j]; // circuit and non-circuit impls have different order
+                            keccak_internal_state_over_empty_buffer.push(el);
+                        }
+                    }
+    
+                    keccak_internal_state = keccak_internal_state_over_empty_buffer
+                        .into_iter()
+                        .map(|el| u64_to_fe::<E::Fr>(el))
+                        .collect::<Vec<_>>()
+                        .try_into()
+                        .unwrap();
+                }
 
                 let input_is_empty = is_last_request;
                 let nothing_left = is_last_round && input_is_empty;

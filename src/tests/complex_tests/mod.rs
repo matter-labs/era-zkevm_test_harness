@@ -119,8 +119,8 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         cycles_per_ram_permutation: 1024,
         cycles_per_code_decommitter: 256,
         cycles_per_storage_application: 2,
-        cycles_per_keccak256_circuit: 1,
-        cycles_per_sha256_circuit: 1,
+        cycles_per_keccak256_circuit: 7,
+        cycles_per_sha256_circuit: 7,
         cycles_per_ecrecover_circuit: 2,
 
         limit_for_code_decommitter_sorter: 512,
@@ -254,7 +254,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     for (idx, (el, input_value)) in basic_block_circuits.clone().into_flattened_set().into_iter().zip(basic_block_circuits_inputs.clone().into_flattened_set().into_iter()).enumerate() {
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
-        if idx < 598 {
+        if idx < 604 {
             continue;
         }
         // if !matches!(&el, ZkSyncCircuit::ECRecover(..)) {
