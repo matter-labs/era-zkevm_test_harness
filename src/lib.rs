@@ -2,6 +2,9 @@
 
 pub use blake2::Blake2s256;
 pub use sync_vm::scheduler::SchedulerCircuitInstanceWitness;
+pub use sync_vm::recursion::leaf_aggregation::LeafAggregationOutputDataWitness;
+pub use sync_vm::recursion::node_aggregation::NodeAggregationOutputDataWitness;
+pub use sync_vm::recursion::node_aggregation::ZkSyncParametricCircuit;
 
 pub mod encodings;
 pub mod entry_point;
