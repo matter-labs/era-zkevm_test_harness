@@ -506,7 +506,8 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
                     padding_proofs.clone(),
                     g2_points.clone(),
                 ),
-                round_function.clone()
+                round_function.clone(),
+                None,
             );
 
             let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::LeafAggregation(circuit);
@@ -559,7 +560,8 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
                     padding_aggregations.clone(),
                     g2_points.clone(),
                 ),
-                round_function.clone()
+                round_function.clone(),
+                None,
             );
 
             let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::NodeAggregation(circuit);
@@ -609,7 +611,8 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
                     padding_proofs[0].clone(), // not important
                     g2_points.clone(),
                 ),
-                round_function.clone()
+                round_function.clone(),
+                None,
             );
             let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::Scheduler(circuit);
 
@@ -780,7 +783,8 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
                 padding_proofs.clone(),
                 g2_points.clone(),
             ),
-            round_function.clone()
+            round_function.clone(),
+            None,
         );
 
         let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::LeafAggregation(circuit);
@@ -999,7 +1003,8 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
                     padding_aggregations.clone(),
                     g2_points.clone(),
                 ),
-                round_function.clone()
+                round_function.clone(),
+                None,
             );
 
             let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::NodeAggregation(circuit);
@@ -1115,7 +1120,8 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
             padding_proofs[0].clone(),
             g2_points.clone(),
         ),
-        round_function.clone()
+        round_function.clone(),
+        None,
     );
 
     let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::Scheduler(circuit);
@@ -1172,6 +1178,7 @@ fn get_circuit_capacity() {
                 None,
                 config,
                 round_function.clone(),
+                None,
             );
             
             circuit.synthesize(&mut setup_assembly).unwrap();
@@ -1213,6 +1220,7 @@ fn get_circuit_capacity() {
             None,
             config,
             round_function.clone(),
+            None,
         );
         
         println!("Synthesising largest size");
@@ -1381,6 +1389,7 @@ fn get_circuit_capacity() {
             None,
             config,
             round_function.clone(),
+            None,
         );
         
         circuit.synthesize(&mut setup_assembly).unwrap();
@@ -1454,6 +1463,7 @@ fn get_circuit_capacity() {
         None,
         config,
         round_function.clone(),
+        None,
     );
         
     println!("Synthesising largest size");
@@ -1563,6 +1573,7 @@ fn get_circuit_capacity() {
             None,
             config,
             round_function.clone(),
+            None,
         );
         
         circuit.synthesize(&mut setup_assembly).unwrap();
@@ -1638,6 +1649,7 @@ fn get_circuit_capacity() {
         None,
         config,
         round_function.clone(),
+        None,
     );
         
     println!("Synthesising largest size");

@@ -95,6 +95,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
             witness: AtomicCell::new(Some(circuit_input)),
             config: Arc::new(geometry.cycles_per_vm_snapshot as usize),
             round_function: round_function.clone(),
+            expected_public_input: Some(proof_system_input),
         };
 
         main_vm_circuits.push(instance);
@@ -115,6 +116,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         witness: AtomicCell::new(Some(circuit_input)),
         config: Arc::new(geometry.limit_for_code_decommitter_sorter as usize),
         round_function: round_function.clone(),
+        expected_public_input: Some(proof_system_input),
     };
 
     let code_decommittments_sorter_circuit_input = proof_system_input;
@@ -146,6 +148,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
             witness: AtomicCell::new(Some(circuit_input)),
             config: Arc::new(geometry.cycles_per_code_decommitter as usize),
             round_function: round_function.clone(),
+            expected_public_input: Some(proof_system_input),
         };
 
         code_decommitter_circuits.push(instance);
@@ -166,6 +169,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         witness: AtomicCell::new(Some(circuit_input)),
         config: Arc::new(geometry.limit_for_log_demuxer as usize),
         round_function: round_function.clone(),
+        expected_public_input: Some(proof_system_input),
     };
     let log_demux_circuit_input = proof_system_input;
     let log_demux_circuit_compact_form_witness = compact_form_witness;
@@ -196,6 +200,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
             witness: AtomicCell::new(Some(circuit_input)),
             config: Arc::new(geometry.cycles_per_keccak256_circuit as usize),
             round_function: round_function.clone(),
+            expected_public_input: Some(proof_system_input),
         };
 
         keccak_precompile_circuits.push(instance);
@@ -229,6 +234,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
             witness: AtomicCell::new(Some(circuit_input)),
             config: Arc::new(geometry.cycles_per_sha256_circuit as usize),
             round_function: round_function.clone(),
+            expected_public_input: Some(proof_system_input),
         };
 
         sha256_precompile_circuits.push(instance);
@@ -264,6 +270,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
             witness: AtomicCell::new(Some(circuit_input)),
             config: Arc::new(geometry.cycles_per_ecrecover_circuit as usize),
             round_function: round_function.clone(),
+            expected_public_input: Some(proof_system_input),
         };
 
         ecrecover_precompile_circuits.push(instance);
@@ -297,6 +304,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
             witness: AtomicCell::new(Some(circuit_input)),
             config: Arc::new(geometry.cycles_per_ram_permutation as usize),
             round_function: round_function.clone(),
+            expected_public_input: Some(proof_system_input),
         };
 
         ram_permutation_circuits.push(instance);
@@ -317,6 +325,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         witness: AtomicCell::new(Some(circuit_input)),
         config: Arc::new(geometry.limit_for_storage_sorter as usize),
         round_function: round_function.clone(),
+        expected_public_input: Some(proof_system_input),
     };
     let storage_sorter_circuit_input = proof_system_input;
     let storage_sorter_circuit_compact_form_witness = compact_form_witness;
@@ -347,6 +356,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
             witness: AtomicCell::new(Some(circuit_input)),
             config: Arc::new((geometry.cycles_per_storage_application as usize, USE_BLAKE2S_EXTRA_TABLES)),
             round_function: round_function.clone(),
+            expected_public_input: Some(proof_system_input),
         };
 
         storage_application_circuits.push(instance);
@@ -367,6 +377,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         witness: AtomicCell::new(Some(circuit_input)),
         config: Arc::new(geometry.limit_for_initial_writes_pubdata_hasher as usize),
         round_function: round_function.clone(),
+        expected_public_input: Some(proof_system_input),
     };
 
     let initial_writes_hasher_circuit_input = proof_system_input;
@@ -385,6 +396,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         witness: AtomicCell::new(Some(circuit_input)),
         config: Arc::new(geometry.limit_for_repeated_writes_pubdata_hasher as usize),
         round_function: round_function.clone(),
+        expected_public_input: Some(proof_system_input),
     };
 
     let repeated_writes_hasher_circuit_input = proof_system_input;
@@ -403,6 +415,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         witness: AtomicCell::new(Some(circuit_input)),
         config: Arc::new(geometry.limit_for_events_or_l1_messages_sorter as usize),
         round_function: round_function.clone(),
+        expected_public_input: Some(proof_system_input),
     };
 
     let events_sorter_circuit_input = proof_system_input;
@@ -421,6 +434,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         witness: AtomicCell::new(Some(circuit_input)),
         config: Arc::new(geometry.limit_for_events_or_l1_messages_sorter as usize),
         round_function: round_function.clone(),
+        expected_public_input: Some(proof_system_input),
     };
 
     let l1_messages_sorter_circuit_input = proof_system_input;
@@ -439,6 +453,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         witness: AtomicCell::new(Some(circuit_input)),
         config: Arc::new((geometry.limit_for_l1_messages_merklizer as usize, L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH)), // output linear hash too
         round_function: round_function.clone(),
+        expected_public_input: Some(proof_system_input),
     };
 
     let l1_messages_merklizer_circuit_input = proof_system_input;

@@ -24,11 +24,6 @@ pub trait ZkSyncUniformSynthesisFunction<E: Engine>: Clone {
 
     fn description() -> String;
 
-    // fn get_synthesis_function<
-    //     CS: ConstraintSystem<E>, 
-    //     F: for<'r, 's> FnOnce(&'r mut CS, Option<Self::Witness>, &'s Self::RoundFunction, Self::Config) -> Result<AllocatedNum<E>, SynthesisError>
-    // >() -> F;
-
     fn get_setup_function_dyn<
         'a, 
         CS: ConstraintSystem<E> + 'a,
@@ -36,13 +31,6 @@ pub trait ZkSyncUniformSynthesisFunction<E: Engine>: Clone {
         Box::new(|_| {
             Ok(())
         })
-
-        // Box::new(|cs| {
-        //     inscribe_default_range_table_for_bit_width_over_first_three_columns(cs, 16)?;
-        //     add_all_tables(cs)?;
-
-        //     Ok(())
-        // })
     }
 
     fn get_synthesis_function_dyn<
@@ -68,11 +56,13 @@ pub struct ZkSyncUniformCircuitCircuitInstance<
     #[serde(bound(serialize = "S::RoundFunction: serde::Serialize"))]
     #[serde(bound(deserialize = "S::RoundFunction: serde::de::DeserializeOwned"))]
     pub round_function: std::sync::Arc<S::RoundFunction>,
+
+    pub expected_public_input: Option<E::Fr>,
 }
 
 impl<E: Engine, S: ZkSyncUniformSynthesisFunction<E>> ZkSyncUniformCircuitCircuitInstance<E, S> {
-    pub fn new(witness: Option<S::Witness>, config: S::Config, round_function: S::RoundFunction) -> Self {
-        Self { witness: AtomicCell::new(witness), config: std::sync::Arc::new(config), round_function: std::sync::Arc::new(round_function) }
+    pub fn new(witness: Option<S::Witness>, config: S::Config, round_function: S::RoundFunction, expected_public_input: Option<E::Fr>) -> Self {
+        Self { witness: AtomicCell::new(witness), config: std::sync::Arc::new(config), round_function: std::sync::Arc::new(round_function), expected_public_input }
     }
 
     pub fn debug_witness(&self) {
@@ -132,7 +122,8 @@ impl<
         Self {
             witness: AtomicCell::new(ww),
             config: std::sync::Arc::clone(&self.config),
-            round_function: std::sync::Arc::clone(&self.round_function)
+            round_function: std::sync::Arc::clone(&self.round_function),
+            expected_public_input: self.expected_public_input.clone(),
         }
     }
 }
@@ -162,7 +153,13 @@ impl<
         let synthesis_fn = S::get_synthesis_function_dyn();
         // let synthesis_fn = S::get_synthesis_function();
         setup_fn(cs)?;
-        let _public_input_var = synthesis_fn(cs, ww, round_function, config)?;
+        let public_input_var = synthesis_fn(cs, ww, round_function, config)?;
+
+        if let Some(expected_input) = self.expected_public_input.as_ref() {
+            if let Some(wit_value) = public_input_var.get_value() {
+                assert_eq!(*expected_input, wit_value, "we expected public input to be {}, but circuit returned {}", expected_input, wit_value);
+            }
+        }
 
         Ok(())
     }

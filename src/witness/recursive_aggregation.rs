@@ -378,7 +378,8 @@ pub fn prepare_leaf_aggregations(
                 padding_proofs.clone(),
                 Some(g2_points.clone()),
             ),
-            round_function.clone()
+            round_function.clone(),
+            None,
         );
 
         let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::LeafAggregation(circuit);
@@ -612,7 +613,8 @@ pub fn prepare_node_aggregations(
                 padding_aggregations.clone(),
                 Some(g2_points.clone()),
             ),
-            round_function.clone()
+            round_function.clone(),
+            None,
         );
 
         let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::NodeAggregation(circuit);
@@ -753,7 +755,8 @@ pub fn prepare_scheduler_circuit(
             padding_proof.clone(),
             Some(g2_points.clone()),
         ),
-        round_function.clone()
+        round_function.clone(),
+        None,
     );
 
     let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::Scheduler(circuit);
