@@ -137,29 +137,33 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
         memory_verification_queries.push(as_vm_query);
     }
 
-    let mut early_breakpoint_after_snapshot = false;
     let mut tracer = GenericNoopTracer::<_>::new();
     // tracing::debug!("Running out of circuit for {} cycles", cycle_limit);
     println!("Running out of circuit for {} cycles", cycle_limit);
+    let mut next_snapshot_will_capture_end_of_execution = false;
+    let mut snapshots_len = None;
     for _cycle in 0..cycle_limit {
         if out_of_circuit_vm.execution_has_ended() && out_of_circuit_vm.is_any_pending() == false {
-            // VM stoped execution after previous cycle, so we can break 
-            // if out_of_circuit_vm.witness_tracer.current_cycle_counter == out_of_circuit_vm.witness_tracer.cycle_counter_of_last_snapshot + 1 {
-            //     // tracing::debug!("Ran for {} cycles", _cycle + 1);
-            //     println!("Ran for {} cycles", _cycle + 1);
-            //     early_breakpoint_after_snapshot = true;
-            // }
-
-            break;
+            // we formally have to let VM run as it resets some of the state in a process
+            if next_snapshot_will_capture_end_of_execution == false {
+                next_snapshot_will_capture_end_of_execution = true;
+                snapshots_len = Some(out_of_circuit_vm.witness_tracer.vm_snapshots.len());
+            } else {
+                if snapshots_len.unwrap() != out_of_circuit_vm.witness_tracer.vm_snapshots.len() {
+                    // snapshot has captured the final state
+                    break;
+                }
+            }
         }
         out_of_circuit_vm.cycle(&mut tracer);
     }
 
-    // assert_eq!(out_of_circuit_vm.local_state.callstack.current.pc, 0, "root frame ended up with panic");
+    assert_eq!(out_of_circuit_vm.local_state.callstack.current.pc, 0, "root frame ended up with panic");
+    assert!(out_of_circuit_vm.execution_has_ended());
 
     let vm_local_state = out_of_circuit_vm.local_state;
 
-    if !early_breakpoint_after_snapshot {
+    if !next_snapshot_will_capture_end_of_execution {
         // perform the final snapshot
         let current_cycle_counter = tools.witness_tracer.current_cycle_counter;
         use crate::witness::vm_snapshot::VmSnapshot;
@@ -288,13 +292,9 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
             l1messages_sorter_observable_output: basic_circuits.l1_messages_sorter_circuit.clone_witness().unwrap().closed_form_input.observable_output,
             l1messages_merklizer_observable_output: basic_circuits.l1_messages_merklizer_circuit.clone_witness().unwrap().closed_form_input.observable_output,
             storage_log_tail: basic_circuits.main_vm_circuits.first().unwrap().clone_witness().unwrap().closed_form_input.observable_input.rollback_queue_tail_for_block,
-            // memory_queries_to_verify: memory_verification_queries,
             per_circuit_closed_form_inputs: per_circuit_inputs,
             bootloader_heap_memory_state: memory_state_after_bootloader_heap_writes,
             ram_sorted_queue_state: ram_permutation_sorted_state,
-            // storage_sorted_queue_state: basic_circuits.storage_sorter_circuit.clone_witness().unwrap().intermediate_sorted_queue_state,
-            // events_sorted_queue_state: basic_circuits.events_sorter_circuit.clone_witness().unwrap().closed_form_input.observable_input.sorted_queue_state,
-            // l1messages_sorted_queue_state: basic_circuits.l1_messages_sorter_circuit.clone_witness().unwrap().closed_form_input.observable_input.sorted_queue_state,
             rollup_initital_writes_pubdata_hash: basic_circuits.initial_writes_hasher_circuit.clone_witness().unwrap().closed_form_input.observable_output.pubdata_hash,
             rollup_repeated_writes_pubdata_hash: basic_circuits.repeated_writes_hasher_circuit.clone_witness().unwrap().closed_form_input.observable_output.pubdata_hash,
 

@@ -351,13 +351,13 @@ pub fn compute_decommitter_circuit_snapshots<
                         word1.to_big_endian(&mut block[32..64]);
 
                         memory_queue_state_offset += 1;
+                        fsm_internals.current_index += 1;
                     } else {
-                        // pad
+                        // pad and do not increment index
                         block[32] = 0x80;
                         let length_in_bits_be = fsm_internals.length_in_bits.to_be_bytes();
                         block[60..64].copy_from_slice(&length_in_bits_be);
                     }
-                    fsm_internals.current_index += 1;
 
                     // absorb
                     internal_state.update(&block);

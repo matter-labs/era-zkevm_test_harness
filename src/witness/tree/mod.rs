@@ -789,7 +789,8 @@ mod test {
         let circuit = StorageApplicationCircuit::new(
             Some(wit),
             (4, USE_BLAKE2S_EXTRA_TABLES),
-            round_function.clone()
+            round_function.clone(),
+            None,
         );
 
         circuit.synthesize(&mut cs).unwrap();

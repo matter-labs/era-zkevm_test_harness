@@ -297,8 +297,7 @@ pub fn compute_ram_circuit_snapshots<
 
         assert_eq!(final_unsorted_state.length, final_sorted_state.length);
 
-
-        let instance_witness = RamPermutationCircuitInstanceWitness {
+        let mut instance_witness = RamPermutationCircuitInstanceWitness {
             closed_form_input: ClosedFormInputWitness {
                 _marker_e: (),
                 start_flag: if_first,
@@ -339,6 +338,14 @@ pub fn compute_ram_circuit_snapshots<
             unsorted_queue_witness: unsorted_witness,
             sorted_queue_witness: sorted_witness,
         };
+
+        if sorted_states.len() % per_circuit_capacity != 0 {
+            // RAM circuit does padding, so all previous values must be reset
+            instance_witness.closed_form_input.hidden_fsm_output.previous_sorting_key = E::Fr::zero();
+            instance_witness.closed_form_input.hidden_fsm_output.previous_full_key = E::Fr::zero();
+            instance_witness.closed_form_input.hidden_fsm_output.previous_values_pair = [E::Fr::zero(); 2];
+            instance_witness.closed_form_input.hidden_fsm_output.previous_is_ptr = false;
+        }
 
         current_lhs_product = accumulated_lhs;
         current_rhs_product = accumulated_rhs;

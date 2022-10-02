@@ -89,6 +89,8 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
 
         let mut hidden_fsm_output_state = Sha256RoundFunctionFSM::<E>::placeholder_witness();
         hidden_fsm_output_state.completed = true;
+        use crate::franklin_crypto::plonk::circuit::hashes_with_tables::sha256::gadgets::Sha256Gadget;
+        hidden_fsm_output_state.sha256_inner_state = Sha256Gadget::<E>::iv(); // Placeholder witness derives to [Fr(0); 8], while we reset to non-trivial IV
 
         let witness = Sha256RoundFunctionCircuitInstanceWitness::<E> {
             closed_form_input: Sha256RoundFunctionCircuitInputOutputWitness::<E> {
