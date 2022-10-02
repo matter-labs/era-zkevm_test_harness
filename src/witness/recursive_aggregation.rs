@@ -151,7 +151,7 @@ pub fn form_base_circuits_committment(
 
     let round_function = get_prefered_committer();
 
-    for vk in vks.iter().cloned() {
+    for (idx, vk) in vks.iter().cloned().enumerate() {
         if g2_points.is_none() {
             g2_points = Some(vk.g2_elements);
         }
@@ -168,7 +168,11 @@ pub fn form_base_circuits_committment(
         all_vk_committments.push(committment);
 
         let is_unique = checker.insert(committment);
-        assert!(is_unique);
+        if idx != 13 {
+            // events and L1 messages sorts are the same thing
+            assert!(is_unique);
+        }
+
     }
 
     let set_committment = simulate_variable_length_hash(&all_vk_committments, &round_function);
