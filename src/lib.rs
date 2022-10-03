@@ -15,6 +15,7 @@ pub use self::bellman::pairing;
 pub use self::franklin_crypto::bellman;
 pub use self::pairing::ff;
 pub use sync_vm::franklin_crypto;
+pub use sync_vm;
 
 pub use zk_evm::ethereum_types;
 
