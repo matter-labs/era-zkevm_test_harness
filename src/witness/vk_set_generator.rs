@@ -70,31 +70,11 @@ pub fn circuits_for_vk_generation(
     let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::Scheduler(circuit);
     result.push(circuit);
 
-    // leaf aggregation
     let padding_public_inputs = vec![padding_proof.inputs[0]; splitting_factor_for_leafs];
     let padding_proofs = vec![padding_proof.clone(); splitting_factor_for_leafs];
 
     use sync_vm::glue::optimizable_queue::simulate_variable_length_hash;
     let padding_vk_committment = simulate_variable_length_hash(&padding_vk_encoding, &round_function);
-
-    let circuit = LeafAggregationCircuit::new(
-        None,
-        (
-            splitting_factor_for_leafs,
-            rns_params.clone(),
-            aggregation_params.clone(),
-            padding_vk_committment,
-            padding_vk_encoding.to_vec(),
-            padding_public_inputs.clone(),
-            padding_proofs.clone(),
-            None,
-        ),
-        round_function.clone(),
-        None,
-    );
-
-    let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::LeafAggregation(circuit);
-    result.push(circuit);
 
     // node aggregation
     let circuit = NodeAggregationCircuit::new(
@@ -116,6 +96,26 @@ pub fn circuits_for_vk_generation(
     );
 
     let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::NodeAggregation(circuit);
+    result.push(circuit);
+
+    // leaf aggregation
+    let circuit = LeafAggregationCircuit::new(
+        None,
+        (
+            splitting_factor_for_leafs,
+            rns_params.clone(),
+            aggregation_params.clone(),
+            padding_vk_committment,
+            padding_vk_encoding.to_vec(),
+            padding_public_inputs.clone(),
+            padding_proofs.clone(),
+            None,
+        ),
+        round_function.clone(),
+        None,
+    );
+
+    let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::LeafAggregation(circuit);
     result.push(circuit);
 
     // VM
