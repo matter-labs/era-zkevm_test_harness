@@ -1,3 +1,5 @@
+use sync_vm::testing::Bn256;
+
 use crate::witness::oracle::VmWitnessOracle;
 
 use super::*;
@@ -308,6 +310,29 @@ impl<E: Engine> ZkSyncProof<E> {
             ZkSyncProof::RepeatedWritesPubdataHasher(inner) => inner,
         }
     }
+
+    pub fn as_proof(&self) -> &Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>> {
+        match self {
+            ZkSyncProof::Scheduler(inner) => inner,
+            ZkSyncProof::LeafAggregation(inner) => inner,
+            ZkSyncProof::NodeAggregation(inner) => inner,
+            ZkSyncProof::MainVM(inner) => inner,
+            ZkSyncProof::CodeDecommittmentsSorter(inner) => inner,
+            ZkSyncProof::CodeDecommitter(inner) => inner,
+            ZkSyncProof::LogDemuxer(inner) => inner,
+            ZkSyncProof::KeccakRoundFunction(inner) => inner,
+            ZkSyncProof::Sha256RoundFunction(inner) => inner,
+            ZkSyncProof::ECRecover(inner) => inner,
+            ZkSyncProof::RAMPermutation(inner) => inner,
+            ZkSyncProof::StorageSorter(inner) => inner,
+            ZkSyncProof::StorageApplication(inner) => inner,
+            ZkSyncProof::EventsSorter(inner) => inner,
+            ZkSyncProof::L1MessagesSorter(inner) => inner,
+            ZkSyncProof::L1MessagesMerklier(inner) => inner,
+            ZkSyncProof::InitialWritesPubdataHasher(inner) => inner,
+            ZkSyncProof::RepeatedWritesPubdataHasher(inner) => inner,
+        }
+    }
 }
 
 use crate::bellman::plonk::better_better_cs::setup::VerificationKey;
@@ -408,6 +433,95 @@ impl<E: Engine> ZkSyncVerificationKey<E> {
             ZkSyncVerificationKey::L1MessagesMerklier(inner) => inner,
             ZkSyncVerificationKey::InitialWritesPubdataHasher(inner) => inner,
             ZkSyncVerificationKey::RepeatedWritesPubdataHasher(inner) => inner,
+        }
+    }
+
+    pub fn as_verification_key(&self) -> &VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>> {
+        match self {
+            ZkSyncVerificationKey::Scheduler(inner) => inner,
+            ZkSyncVerificationKey::LeafAggregation(inner) => inner,
+            ZkSyncVerificationKey::NodeAggregation(inner) => inner,
+            ZkSyncVerificationKey::MainVM(inner) => inner,
+            ZkSyncVerificationKey::CodeDecommittmentsSorter(inner) => inner,
+            ZkSyncVerificationKey::CodeDecommitter(inner) => inner,
+            ZkSyncVerificationKey::LogDemuxer(inner) => inner,
+            ZkSyncVerificationKey::KeccakRoundFunction(inner) => inner,
+            ZkSyncVerificationKey::Sha256RoundFunction(inner) => inner,
+            ZkSyncVerificationKey::ECRecover(inner) => inner,
+            ZkSyncVerificationKey::RAMPermutation(inner) => inner,
+            ZkSyncVerificationKey::StorageSorter(inner) => inner,
+            ZkSyncVerificationKey::StorageApplication(inner) => inner,
+            ZkSyncVerificationKey::EventsSorter(inner) => inner,
+            ZkSyncVerificationKey::L1MessagesSorter(inner) => inner,
+            ZkSyncVerificationKey::L1MessagesMerklier(inner) => inner,
+            ZkSyncVerificationKey::InitialWritesPubdataHasher(inner) => inner,
+            ZkSyncVerificationKey::RepeatedWritesPubdataHasher(inner) => inner,
+        }
+    }
+}
+
+impl ZkSyncVerificationKey<Bn256> {
+    pub fn verify_proof(&self, proof: &ZkSyncProof<Bn256>) -> bool {
+        assert_eq!(self.numeric_circuit_type(), proof.numeric_circuit_type(), "mismatching IDs, VK is for {}, proof is for {}", self.numeric_circuit_type(), proof.numeric_circuit_type());
+        match &self {
+            a @ ZkSyncVerificationKey::Scheduler(..) => {
+                // use Keccak transcript
+                use crate::bellman::plonk::commitments::transcript::keccak_transcript::RollingKeccakTranscript;
+
+                let vk = a.as_verification_key();
+                let proof = proof.as_proof();
+                let is_valid = crate::bellman::plonk::better_better_cs::verifier::verify::<
+                    Bn256, 
+                    _, 
+                    RollingKeccakTranscript<sync_vm::testing::Fr>
+                >(
+                    vk, 
+                    proof, 
+                    None,
+                ).expect("must try to verify a proof");
+
+                is_valid
+            },
+            a @ ZkSyncVerificationKey::LeafAggregation(..) | 
+            a @ ZkSyncVerificationKey::NodeAggregation(..) |
+            a @ ZkSyncVerificationKey::MainVM(..) |
+            a @ ZkSyncVerificationKey::CodeDecommittmentsSorter(..) |
+            a @ ZkSyncVerificationKey::CodeDecommitter(..) |
+            a @ ZkSyncVerificationKey::LogDemuxer(..) |
+            a @ ZkSyncVerificationKey::KeccakRoundFunction(..) |
+            a @ ZkSyncVerificationKey::Sha256RoundFunction(..) |
+            a @ ZkSyncVerificationKey::ECRecover(..) |
+            a @ ZkSyncVerificationKey::RAMPermutation(..) |
+            a @ ZkSyncVerificationKey::StorageSorter(..) |
+            a @ ZkSyncVerificationKey::StorageApplication(..) |
+            a @ ZkSyncVerificationKey::EventsSorter(..) |
+            a @ ZkSyncVerificationKey::L1MessagesSorter(..) |
+            a @ ZkSyncVerificationKey::L1MessagesMerklier(..) |
+            a @ ZkSyncVerificationKey::InitialWritesPubdataHasher(..) |
+            a @ ZkSyncVerificationKey::RepeatedWritesPubdataHasher(..) => {
+                // Use algebraic transcript
+                use sync_vm::recursion::RescueTranscriptForRecursion;
+                use sync_vm::circuit_structures::utils::bn254_rescue_params;
+                use sync_vm::recursion::get_prefered_rns_params;
+
+                let sponge_params = bn254_rescue_params();
+                let rns_params = get_prefered_rns_params();
+                let transcript_params = (&sponge_params, &rns_params);
+
+                let vk = a.as_verification_key();
+                let proof = proof.as_proof();
+                let is_valid = crate::bellman::plonk::better_better_cs::verifier::verify::<
+                    Bn256, 
+                    _, 
+                    RescueTranscriptForRecursion<'_>
+                >(
+                    vk, 
+                    proof, 
+                    Some(transcript_params)
+                ).expect("must try to verify a proof");
+
+                is_valid
+            }
         }
     }
 }
