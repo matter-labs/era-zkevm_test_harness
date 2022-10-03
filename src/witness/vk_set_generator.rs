@@ -70,8 +70,8 @@ pub fn circuits_for_vk_generation(
     let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::Scheduler(circuit);
     result.push(circuit);
 
-    let padding_public_inputs = vec![padding_proof.inputs[0]; splitting_factor_for_leafs];
-    let padding_proofs = vec![padding_proof.clone(); splitting_factor_for_leafs];
+    let padding_public_inputs = vec![padding_proof.inputs[0]; splitting_factor_for_nodes];
+    let padding_proofs = vec![padding_proof.clone(); splitting_factor_for_nodes];
 
     use sync_vm::glue::optimizable_queue::simulate_variable_length_hash;
     let padding_vk_committment = simulate_variable_length_hash(&padding_vk_encoding, &round_function);
@@ -97,6 +97,9 @@ pub fn circuits_for_vk_generation(
 
     let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::NodeAggregation(circuit);
     result.push(circuit);
+
+    let padding_public_inputs = vec![padding_proof.inputs[0]; splitting_factor_for_leafs];
+    let padding_proofs = vec![padding_proof.clone(); splitting_factor_for_leafs];
 
     // leaf aggregation
     let circuit = LeafAggregationCircuit::new(
