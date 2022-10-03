@@ -264,8 +264,6 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
             circuit_input.closed_form_input.clone(),
         );
 
-        // dbg!(&compact_form_witness);
-
         let instance = ECRecoverFunctionCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
             config: Arc::new(geometry.cycles_per_ecrecover_circuit as usize),
