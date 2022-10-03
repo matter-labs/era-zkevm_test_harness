@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use super::*;
 use super::full_block_artifact::{BlockBasicCircuits, BlockBasicCircuitsPublicInputs};
 use crate::bellman::Engine;
@@ -199,6 +201,41 @@ pub fn prepare_leaf_aggregations(
     Vec<sync_vm::recursion::leaf_aggregation::LeafAggregationOutputDataWitness<sync_vm::testing::Bn256>>, 
     Vec<crate::abstract_zksync_circuit::concrete_circuits::ZkSyncCircuit<sync_vm::testing::Bn256, VmWitnessOracle<sync_vm::testing::Bn256>>>
 ) {
+    // basic sanity tests
+    let flattened_expected_inputs = basic_block_circuits_inputs.into_flattened_set();
+    assert_eq!(individual_proofs.len(), verification_keys.len());
+    assert_eq!(individual_proofs.len(), flattened_expected_inputs.len());
+
+    let mut mismatched_inputs = HashSet::new();
+    let mut invalid_proofs = HashSet::new();
+
+    // transcript that should be used for recursive proving
+    let sponge_params = bn254_rescue_params();
+    let rns_params = get_prefered_rns_params();
+    let transcript_params = (&sponge_params, &rns_params);
+
+    for (idx, ((proof, vk), expected_public_input)) in individual_proofs.iter().zip(verification_keys.iter()).zip(flattened_expected_inputs.iter()).enumerate() {
+        if proof.inputs[0] != *expected_public_input {
+            mismatched_inputs.insert(idx);
+        }
+
+        let is_valid = crate::bellman::plonk::better_better_cs::verifier::verify::<
+            Bn256, 
+            _, 
+            RescueTranscriptForRecursion<'_>
+        >(
+            vk, 
+            proof, 
+            Some(transcript_params)
+        ).expect("must try to verify a proof");
+        if is_valid == false {
+            invalid_proofs.insert(idx);
+        }
+    }
+
+    assert!(invalid_proofs.is_empty(), "proof are invalid for indexes {:?}", invalid_proofs);
+    assert!(mismatched_inputs.is_empty(), "proof have mismatching inputs for indexes {:?}", mismatched_inputs);
+
     // first we simulate the queue that we expect from scheduler
     use sync_vm::recursion::get_prefered_committer;
     let round_function = get_prefered_committer();
@@ -213,7 +250,7 @@ pub fn prepare_leaf_aggregations(
     // form a queue of recursive verification requests in the same manner as scheduler does it
     let mut all_requests = vec![];
 
-    for (idx, (circuit, public_input)) in basic_block_circuits.into_flattened_set().into_iter().zip(basic_block_circuits_inputs.into_flattened_set().into_iter()).enumerate() {
+    for (idx, (circuit, public_input)) in basic_block_circuits.into_flattened_set().into_iter().zip(flattened_expected_inputs.into_iter()).enumerate() {
         let req = RecursionRequest {
             circuit_type: circuit.numeric_circuit_type(),
             public_input,

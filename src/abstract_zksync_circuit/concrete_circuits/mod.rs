@@ -1,3 +1,5 @@
+use crate::witness::oracle::VmWitnessOracle;
+
 use super::*;
 
 // should follow in the same sequence as we will logically process sequences
@@ -74,8 +76,8 @@ pub type SchedulerCircuit<E> = ZkSyncUniformCircuitCircuitInstance<E, SchedulerI
 #[serde(bound = "")]
 pub enum ZkSyncCircuit<E: Engine, W: WitnessOracle<E>> {
     Scheduler(SchedulerCircuit<E>),
-    LeafAggregation(LeafAggregationCircuit<E>),
     NodeAggregation(NodeAggregationCircuit<E>),
+    LeafAggregation(LeafAggregationCircuit<E>),
     MainVM(VMMainCircuit<E, W>),
     CodeDecommittmentsSorter(CodeDecommittsSorterCircuit<E>),
     CodeDecommitter(CodeDecommitterCircuit<E>),
@@ -183,9 +185,9 @@ impl<E: Engine, W: WitnessOracle<E>> ZkSyncCircuit<E, W> {
         use sync_vm::scheduler::CircuitType;
 
         match &self {
-            ZkSyncCircuit::Scheduler(..) => unreachable!(),
-            ZkSyncCircuit::LeafAggregation(..) => unreachable!(),
-            ZkSyncCircuit::NodeAggregation(..) => unreachable!(),
+            ZkSyncCircuit::Scheduler(..) => CircuitType::Scheduler as u8,
+            ZkSyncCircuit::LeafAggregation(..) => CircuitType::Leaf as u8,
+            ZkSyncCircuit::NodeAggregation(..) => CircuitType::IntermidiateNode as u8,
             ZkSyncCircuit::MainVM(..) => CircuitType::VM as u8,
             ZkSyncCircuit::CodeDecommittmentsSorter(..) => CircuitType::DecommitmentsFilter as u8,
             ZkSyncCircuit::CodeDecommitter(..) => CircuitType::Decommiter as u8,
@@ -201,6 +203,165 @@ impl<E: Engine, W: WitnessOracle<E>> ZkSyncCircuit<E, W> {
             ZkSyncCircuit::L1MessagesMerklier(..) => CircuitType::L1MessagesMerkelization as u8,
             ZkSyncCircuit::InitialWritesPubdataHasher(..) => CircuitType::StorageFreshWritesHasher as u8,
             ZkSyncCircuit::RepeatedWritesPubdataHasher(..) => CircuitType::StorageRepeatedWritesHasher as u8,
+        }
+    }
+}
+
+use crate::bellman::plonk::better_better_cs::proof::Proof;
+
+/// Wrapper around proof for easier indexing
+#[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
+#[derivative(Clone(bound = ""))]
+#[serde(bound = "")]
+pub enum ZkSyncProof<E: Engine> {
+    Scheduler(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    LeafAggregation(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    NodeAggregation(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    MainVM(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    CodeDecommittmentsSorter(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    CodeDecommitter(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    LogDemuxer(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    KeccakRoundFunction(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    Sha256RoundFunction(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    ECRecover(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    RAMPermutation(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    StorageSorter(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    StorageApplication(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    EventsSorter(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    L1MessagesSorter(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    L1MessagesMerklier(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    InitialWritesPubdataHasher(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    RepeatedWritesPubdataHasher(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+}
+
+impl<E: Engine> ZkSyncProof<E> {
+
+    pub fn numeric_circuit_type(&self) -> u8 {
+        use sync_vm::scheduler::CircuitType;
+
+        match &self {
+            ZkSyncProof::Scheduler(..) => CircuitType::Scheduler as u8,
+            ZkSyncProof::LeafAggregation(..) => CircuitType::Leaf as u8,
+            ZkSyncProof::NodeAggregation(..) => CircuitType::IntermidiateNode as u8,
+            ZkSyncProof::MainVM(..) => CircuitType::VM as u8,
+            ZkSyncProof::CodeDecommittmentsSorter(..) => CircuitType::DecommitmentsFilter as u8,
+            ZkSyncProof::CodeDecommitter(..) => CircuitType::Decommiter as u8,
+            ZkSyncProof::LogDemuxer(..) => CircuitType::LogDemultiplexer as u8,
+            ZkSyncProof::KeccakRoundFunction(..) => CircuitType::KeccakPrecompile as u8,
+            ZkSyncProof::Sha256RoundFunction(..) => CircuitType::Sha256Precompile as u8,
+            ZkSyncProof::ECRecover(..) => CircuitType::EcrecoverPrecompile as u8,
+            ZkSyncProof::RAMPermutation(..) => CircuitType::RamValidation as u8,
+            ZkSyncProof::StorageSorter(..) => CircuitType::StorageFilter as u8,
+            ZkSyncProof::StorageApplication(..) => CircuitType::StorageApplicator as u8,
+            ZkSyncProof::EventsSorter(..) => CircuitType::EventsRevertsFilter as u8,
+            ZkSyncProof::L1MessagesSorter(..) => CircuitType::L1MessagesRevertsFilter as u8,
+            ZkSyncProof::L1MessagesMerklier(..) => CircuitType::L1MessagesMerkelization as u8,
+            ZkSyncProof::InitialWritesPubdataHasher(..) => CircuitType::StorageFreshWritesHasher as u8,
+            ZkSyncProof::RepeatedWritesPubdataHasher(..) => CircuitType::StorageRepeatedWritesHasher as u8,
+        }
+    }
+
+    pub fn from_proof_and_numeric_type(numeric_type: u8, proof: Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>) -> Self {
+        use sync_vm::scheduler::CircuitType;
+
+        match numeric_type {
+            a if a == CircuitType::Scheduler as u8 => ZkSyncProof::Scheduler(proof),
+            a if a == CircuitType::Leaf as u8 => ZkSyncProof::LeafAggregation(proof),
+            a if a == CircuitType::IntermidiateNode as u8 => ZkSyncProof::NodeAggregation(proof),
+            a if a == CircuitType::VM as u8 => ZkSyncProof::MainVM(proof),
+            a if a == CircuitType::DecommitmentsFilter as u8 => ZkSyncProof::CodeDecommittmentsSorter(proof),
+            a if a == CircuitType::Decommiter as u8 => ZkSyncProof::CodeDecommitter(proof),
+            a if a == CircuitType::LogDemultiplexer as u8 => ZkSyncProof::LogDemuxer(proof),
+            a if a == CircuitType::KeccakPrecompile as u8 => ZkSyncProof::KeccakRoundFunction(proof),
+            a if a == CircuitType::Sha256Precompile as u8 => ZkSyncProof::Sha256RoundFunction(proof),
+            a if a == CircuitType::EcrecoverPrecompile as u8 => ZkSyncProof::ECRecover(proof),
+            a if a == CircuitType::StorageFilter as u8 => ZkSyncProof::StorageSorter(proof),
+            a if a == CircuitType::StorageApplicator as u8 => ZkSyncProof::StorageApplication(proof),
+            a if a == CircuitType::EventsRevertsFilter as u8 => ZkSyncProof::EventsSorter(proof),
+            a if a == CircuitType::L1MessagesRevertsFilter as u8 => ZkSyncProof::L1MessagesSorter(proof),
+            a if a == CircuitType::L1MessagesMerkelization as u8 => ZkSyncProof::L1MessagesMerklier(proof),
+            a if a == CircuitType::StorageFreshWritesHasher as u8 => ZkSyncProof::InitialWritesPubdataHasher(proof),
+            a if a == CircuitType::StorageRepeatedWritesHasher as u8 => ZkSyncProof::RepeatedWritesPubdataHasher(proof),
+            a @ _ => panic!("unknown numeric type {}", a)
+        }
+    }
+}
+
+use crate::bellman::plonk::better_better_cs::setup::VerificationKey;
+
+/// Wrapper around verification key for easier indexing
+#[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
+#[derivative(Clone(bound = ""))]
+#[serde(bound = "")]
+pub enum ZkSyncVerificationKey<E: Engine> {
+    Scheduler(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    LeafAggregation(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    NodeAggregation(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    MainVM(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    CodeDecommittmentsSorter(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    CodeDecommitter(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    LogDemuxer(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    KeccakRoundFunction(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    Sha256RoundFunction(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    ECRecover(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    RAMPermutation(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    StorageSorter(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    StorageApplication(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    EventsSorter(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    L1MessagesSorter(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    L1MessagesMerklier(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    InitialWritesPubdataHasher(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    RepeatedWritesPubdataHasher(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+}
+
+impl<E: Engine> ZkSyncVerificationKey<E> {
+    pub fn numeric_circuit_type(&self) -> u8 {
+        use sync_vm::scheduler::CircuitType;
+
+        match &self {
+            ZkSyncVerificationKey::Scheduler(..) => CircuitType::Scheduler as u8,
+            ZkSyncVerificationKey::LeafAggregation(..) => CircuitType::Leaf as u8,
+            ZkSyncVerificationKey::NodeAggregation(..) => CircuitType::IntermidiateNode as u8,
+            ZkSyncVerificationKey::MainVM(..) => CircuitType::VM as u8,
+            ZkSyncVerificationKey::CodeDecommittmentsSorter(..) => CircuitType::DecommitmentsFilter as u8,
+            ZkSyncVerificationKey::CodeDecommitter(..) => CircuitType::Decommiter as u8,
+            ZkSyncVerificationKey::LogDemuxer(..) => CircuitType::LogDemultiplexer as u8,
+            ZkSyncVerificationKey::KeccakRoundFunction(..) => CircuitType::KeccakPrecompile as u8,
+            ZkSyncVerificationKey::Sha256RoundFunction(..) => CircuitType::Sha256Precompile as u8,
+            ZkSyncVerificationKey::ECRecover(..) => CircuitType::EcrecoverPrecompile as u8,
+            ZkSyncVerificationKey::RAMPermutation(..) => CircuitType::RamValidation as u8,
+            ZkSyncVerificationKey::StorageSorter(..) => CircuitType::StorageFilter as u8,
+            ZkSyncVerificationKey::StorageApplication(..) => CircuitType::StorageApplicator as u8,
+            ZkSyncVerificationKey::EventsSorter(..) => CircuitType::EventsRevertsFilter as u8,
+            ZkSyncVerificationKey::L1MessagesSorter(..) => CircuitType::L1MessagesRevertsFilter as u8,
+            ZkSyncVerificationKey::L1MessagesMerklier(..) => CircuitType::L1MessagesMerkelization as u8,
+            ZkSyncVerificationKey::InitialWritesPubdataHasher(..) => CircuitType::StorageFreshWritesHasher as u8,
+            ZkSyncVerificationKey::RepeatedWritesPubdataHasher(..) => CircuitType::StorageRepeatedWritesHasher as u8,
+        }
+    }
+
+    pub fn from_proof_and_numeric_type(numeric_type: u8, vk: VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>) -> Self {
+        use sync_vm::scheduler::CircuitType;
+
+        match numeric_type {
+            a if a == CircuitType::Scheduler as u8 => ZkSyncVerificationKey::Scheduler(vk),
+            a if a == CircuitType::Leaf as u8 => ZkSyncVerificationKey::LeafAggregation(vk),
+            a if a == CircuitType::IntermidiateNode as u8 => ZkSyncVerificationKey::NodeAggregation(vk),
+            a if a == CircuitType::VM as u8 => ZkSyncVerificationKey::MainVM(vk),
+            a if a == CircuitType::DecommitmentsFilter as u8 => ZkSyncVerificationKey::CodeDecommittmentsSorter(vk),
+            a if a == CircuitType::Decommiter as u8 => ZkSyncVerificationKey::CodeDecommitter(vk),
+            a if a == CircuitType::LogDemultiplexer as u8 => ZkSyncVerificationKey::LogDemuxer(vk),
+            a if a == CircuitType::KeccakPrecompile as u8 => ZkSyncVerificationKey::KeccakRoundFunction(vk),
+            a if a == CircuitType::Sha256Precompile as u8 => ZkSyncVerificationKey::Sha256RoundFunction(vk),
+            a if a == CircuitType::EcrecoverPrecompile as u8 => ZkSyncVerificationKey::ECRecover(vk),
+            a if a == CircuitType::StorageFilter as u8 => ZkSyncVerificationKey::StorageSorter(vk),
+            a if a == CircuitType::StorageApplicator as u8 => ZkSyncVerificationKey::StorageApplication(vk),
+            a if a == CircuitType::EventsRevertsFilter as u8 => ZkSyncVerificationKey::EventsSorter(vk),
+            a if a == CircuitType::L1MessagesRevertsFilter as u8 => ZkSyncVerificationKey::L1MessagesSorter(vk),
+            a if a == CircuitType::L1MessagesMerkelization as u8 => ZkSyncVerificationKey::L1MessagesMerklier(vk),
+            a if a == CircuitType::StorageFreshWritesHasher as u8 => ZkSyncVerificationKey::InitialWritesPubdataHasher(vk),
+            a if a == CircuitType::StorageRepeatedWritesHasher as u8 => ZkSyncVerificationKey::RepeatedWritesPubdataHasher(vk),
+            a @ _ => panic!("unknown numeric type {}", a)
         }
     }
 }
