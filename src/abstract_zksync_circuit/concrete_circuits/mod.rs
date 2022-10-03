@@ -388,7 +388,7 @@ impl<E: Engine> ZkSyncVerificationKey<E> {
         }
     }
 
-    pub fn from_proof_and_numeric_type(numeric_type: u8, vk: VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>) -> Self {
+    pub fn from_verification_key_and_numeric_type(numeric_type: u8, vk: VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>) -> Self {
         use sync_vm::scheduler::CircuitType;
 
         match numeric_type {

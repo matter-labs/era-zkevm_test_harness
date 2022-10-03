@@ -219,6 +219,26 @@ pub fn circuits_for_vk_generation(
     let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::StorageApplication(circuit);
     result.push(circuit);
 
+    // initial writes rehasher
+    let circuit = InitialStorageWritesPubdataHasherCircuit::new(
+        None,
+        geometry.limit_for_initial_writes_pubdata_hasher as usize,
+        round_function.clone(),
+        None,
+    );
+    let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::InitialWritesPubdataHasher(circuit);
+    result.push(circuit);
+
+    // repeated writes rehasher
+    let circuit = RepeatedStorageWritesPubdataHasherCircuit::new(
+        None,
+        geometry.limit_for_repeated_writes_pubdata_hasher as usize,
+        round_function.clone(),
+        None,
+    );
+    let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::RepeatedWritesPubdataHasher(circuit);
+    result.push(circuit);
+
     // events sorter
     let circuit = EventsSorterCircuit::new(
         None,
@@ -249,32 +269,12 @@ pub fn circuits_for_vk_generation(
     );
     let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::L1MessagesMerklier(circuit);
     result.push(circuit);
-
-    // initial writes rehasher
-    let circuit = InitialStorageWritesPubdataHasherCircuit::new(
-        None,
-        geometry.limit_for_initial_writes_pubdata_hasher as usize,
-        round_function.clone(),
-        None,
-    );
-    let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::InitialWritesPubdataHasher(circuit);
-    result.push(circuit);
-
-    // repeated writes rehasher
-    let circuit = RepeatedStorageWritesPubdataHasherCircuit::new(
-        None,
-        geometry.limit_for_repeated_writes_pubdata_hasher as usize,
-        round_function.clone(),
-        None,
-    );
-    let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::RepeatedWritesPubdataHasher(circuit);
-    result.push(circuit);
     
     // check ordering
     let mut idx = -1;
     for el in result.iter() {
         let i = el.numeric_circuit_type();
-        assert!(i as isize > idx);
+        assert!(i as isize > idx, "previous idx is {}, but got {}", idx, i);
         idx = i as isize;
     }
 
