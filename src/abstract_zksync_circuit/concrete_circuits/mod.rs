@@ -285,6 +285,29 @@ impl<E: Engine> ZkSyncProof<E> {
             a @ _ => panic!("unknown numeric type {}", a)
         }
     }
+
+    pub fn into_proof(self) -> Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>> {
+        match self {
+            ZkSyncProof::Scheduler(inner) => inner,
+            ZkSyncProof::LeafAggregation(inner) => inner,
+            ZkSyncProof::NodeAggregation(inner) => inner,
+            ZkSyncProof::MainVM(inner) => inner,
+            ZkSyncProof::CodeDecommittmentsSorter(inner) => inner,
+            ZkSyncProof::CodeDecommitter(inner) => inner,
+            ZkSyncProof::LogDemuxer(inner) => inner,
+            ZkSyncProof::KeccakRoundFunction(inner) => inner,
+            ZkSyncProof::Sha256RoundFunction(inner) => inner,
+            ZkSyncProof::ECRecover(inner) => inner,
+            ZkSyncProof::RAMPermutation(inner) => inner,
+            ZkSyncProof::StorageSorter(inner) => inner,
+            ZkSyncProof::StorageApplication(inner) => inner,
+            ZkSyncProof::EventsSorter(inner) => inner,
+            ZkSyncProof::L1MessagesSorter(inner) => inner,
+            ZkSyncProof::L1MessagesMerklier(inner) => inner,
+            ZkSyncProof::InitialWritesPubdataHasher(inner) => inner,
+            ZkSyncProof::RepeatedWritesPubdataHasher(inner) => inner,
+        }
+    }
 }
 
 use crate::bellman::plonk::better_better_cs::setup::VerificationKey;
@@ -362,6 +385,29 @@ impl<E: Engine> ZkSyncVerificationKey<E> {
             a if a == CircuitType::StorageFreshWritesHasher as u8 => ZkSyncVerificationKey::InitialWritesPubdataHasher(vk),
             a if a == CircuitType::StorageRepeatedWritesHasher as u8 => ZkSyncVerificationKey::RepeatedWritesPubdataHasher(vk),
             a @ _ => panic!("unknown numeric type {}", a)
+        }
+    }
+
+    pub fn into_verification_key(self) -> VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>> {
+        match self {
+            ZkSyncVerificationKey::Scheduler(inner) => inner,
+            ZkSyncVerificationKey::LeafAggregation(inner) => inner,
+            ZkSyncVerificationKey::NodeAggregation(inner) => inner,
+            ZkSyncVerificationKey::MainVM(inner) => inner,
+            ZkSyncVerificationKey::CodeDecommittmentsSorter(inner) => inner,
+            ZkSyncVerificationKey::CodeDecommitter(inner) => inner,
+            ZkSyncVerificationKey::LogDemuxer(inner) => inner,
+            ZkSyncVerificationKey::KeccakRoundFunction(inner) => inner,
+            ZkSyncVerificationKey::Sha256RoundFunction(inner) => inner,
+            ZkSyncVerificationKey::ECRecover(inner) => inner,
+            ZkSyncVerificationKey::RAMPermutation(inner) => inner,
+            ZkSyncVerificationKey::StorageSorter(inner) => inner,
+            ZkSyncVerificationKey::StorageApplication(inner) => inner,
+            ZkSyncVerificationKey::EventsSorter(inner) => inner,
+            ZkSyncVerificationKey::L1MessagesSorter(inner) => inner,
+            ZkSyncVerificationKey::L1MessagesMerklier(inner) => inner,
+            ZkSyncVerificationKey::InitialWritesPubdataHasher(inner) => inner,
+            ZkSyncVerificationKey::RepeatedWritesPubdataHasher(inner) => inner,
         }
     }
 }
