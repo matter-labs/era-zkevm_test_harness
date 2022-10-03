@@ -197,7 +197,6 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
     } = tracer;
 
     let callstack_with_aux_data = callstack_with_aux_data;
-    // callstack_with_aux_data.finish_merge_queue();
 
     // we should have an initial query somewhat before the time
     assert!(decommittment_queries.len() >= 1);
@@ -273,12 +272,10 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
                 _ => unreachable!(),
             }
         ).collect();
+
     let mut original_log_queue_states = vec![];
-
     let mut chain_of_states = vec![];
-
     let mut original_log_queue_simulator = None;
-
     let mut marker_into_queue_position_renumeration_index: HashMap<QueryMarker, usize> = HashMap::new();
 
     // we want to have some hashmap that will indicate
@@ -548,9 +545,6 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
             }
         }
     }
-
-    // let full_log_length = chain_of_states.len();
-    // assert_eq!(full_log_length, num_forwards + num_rollbacks);
     
     use super::callstack_handler::CallstackAction;
     use crate::encodings::callstack_entry::CallstackSimulator;
@@ -824,8 +818,6 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
         }
     }
 
-    // dbg!(&history_of_storage_log_states);
-
     // we simulate a series of actions on the stack starting from the outermost frame
     // each history record contains an information on what was the stack state between points
     // when it potentially came into and out of scope
@@ -894,30 +886,6 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
             .last()
             .map(|el| transform_sponge_like_queue_state(el.2))
             .unwrap_or(FullSpongeLikeQueueState::<E>::placeholder_witness());
-        
-        // if _circuit_idx == 0 {
-        //     let start_ptr = artifacts.vm_memory_queue_states.iter()
-        //     .take_while(
-        //         |el| el.0 < initial_state.at_cycle
-        //     ).count();
-        //     let end_ptr = artifacts.vm_memory_queue_states.iter()
-        //     .take_while(
-        //         |el| el.0 <= final_state.at_cycle
-        //     ).count();
-
-        //     let it = artifacts.vm_memory_queue_states.iter()
-        //     .skip_while(
-        //         |el| el.0 < initial_state.at_cycle
-        //     )
-        //     .take_while(
-        //         |el| el.0 <= final_state.at_cycle
-        //     )
-        //     .map(|el| transform_sponge_like_queue_state(el.2))
-        //     .collect::<Vec<_>>();
-        //     dbg!(&it);
-
-        //     // dbg!(&artifacts.all_memory_queries_accumulated[start_ptr..=end_ptr]);
-        // }
 
         let decommittment_queue_state_for_entry = artifacts.all_decommittment_queue_states.iter()
             .take_while(
@@ -928,8 +896,6 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
             .unwrap_or(FullSpongeLikeQueueState::<E>::placeholder_witness());
 
         // and finally we need the callstack current state
-
-        // dbg!(&callstack_sponge_encoding_ranges);
 
         let callstack_state_for_entry = callstack_sponge_encoding_ranges.iter()
             // .skip_while(
@@ -1263,7 +1229,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
 
     fn get_storage_read_witness(
         &mut self,
-        key: &StorageLogRecord<E>,
+        record: &StorageLogRecord<E>,
         needs_read_witness: &Boolean,
         execute: &Boolean,
     ) -> Option<num_bigint::BigUint> {
@@ -1271,17 +1237,27 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
             if self.storage_read_queries.is_empty() {
                 panic!(
                     "should have a witness for storage read at {:?}",
-                    key.create_witness()
+                    record.create_witness()
                 );
             }
             let (_cycle, query) = self.storage_read_queries.drain(..1).next().unwrap();
 
-            if let Some(location) = key.create_witness() {
-                assert_eq!(location.address, u160_from_address(query.address));
-                assert_eq!(location.key, u256_to_biguint(query.key));
+            if let Some(record) = record.create_witness() {
+                assert_eq!(record.aux_byte, query.aux_byte);
+                assert_eq!(record.address, u160_from_address(query.address));
+                assert_eq!(record.key, u256_to_biguint(query.key));
+                assert_eq!(record.r_w_flag, query.rw_flag);
+                if record.r_w_flag == true {
+                    // check written value
+                    assert_eq!(record.written_value, u256_to_biguint(query.written_value));
+                }
+                assert_eq!(record.rollback, false);
+                assert_eq!(record.rollback, query.rollback);
+                assert_eq!(record.is_service, query.is_service);
+                assert_eq!(record.shard_id, query.shard_id);
+                assert_eq!(record.tx_number_in_block, query.tx_number_in_block);
+                assert_eq!(record.timestamp, query.timestamp.0);
             }
-
-            // dbg!(&query.read_value);
 
             Some(u256_to_biguint(query.read_value))
         } else {
@@ -1289,8 +1265,8 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
         }
     }
 
-    fn push_storage_witness(&mut self, _key: &StorageLogRecord<E>, _execute: &Boolean) {
-        // we do not care
+    fn push_storage_witness(&mut self, _record: &StorageLogRecord<E>, _execute: &Boolean) {
+        // logic is captured in "read"
     }
 
     // may be should also track key for debug purposes

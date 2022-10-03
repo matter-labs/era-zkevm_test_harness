@@ -271,8 +271,6 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
     }
 
     fn add_memory_query(&mut self, monotonic_cycle_counter: u32, memory_query: MemoryQuery) {
-        // dbg!(&monotonic_cycle_counter);
-        // dbg!(&memory_query);
         self.memory_queries
             .push((monotonic_cycle_counter, memory_query));
     }
