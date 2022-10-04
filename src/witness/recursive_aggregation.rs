@@ -6,7 +6,7 @@ use crate::bellman::Engine;
 use sync_vm::testing::{Bn256, Fr};
 use crate::franklin_crypto::plonk::circuit::allocated_num::Num;
 use sync_vm::{recursion::recursion_tree::NUM_LIMBS, circuit_structures::traits::CircuitArithmeticRoundFunction};
-use crate::abstract_zksync_circuit::concrete_circuits::ZkSyncCircuit;
+use crate::abstract_zksync_circuit::concrete_circuits::{ZkSyncCircuit, ZkSyncVerificationKey};
 use crate::bellman::plonk::better_better_cs::proof::Proof;
 use crate::bellman::plonk::better_better_cs::setup::VerificationKey;
 use crate::witness::oracle::VmWitnessOracle;
@@ -22,6 +22,48 @@ pub struct AggregationResult<E: Engine> {
     pub pairing_with_gen_y_limbs: [E::Fr; NUM_LIMBS],
     pub pairing_with_x_x_limbs: [E::Fr; NUM_LIMBS],
     pub pairing_with_x_y_limbs: [E::Fr; NUM_LIMBS],
+}
+
+// we need two unequal proofs and verification keys for internal procedure
+pub fn get_paddings() -> (VerificationKey<Bn256, ZkSyncParametricCircuit<Bn256>>, [Proof<Bn256, ZkSyncParametricCircuit<Bn256>>; 2]) {
+    let padding_vk_1 = include_bytes!("../padding_proofs/padding_vk.json");
+    let padding_vk_1: VerificationKey<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_slice(padding_vk_1).unwrap();
+
+    let padding_proof_1 = include_bytes!("../padding_proofs/padding_proof_1.json");
+    let padding_proof_1: Proof<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_slice(padding_proof_1).unwrap();
+
+    let padding_proof_2 = include_bytes!("../padding_proofs/padding_proof_2.json");
+    let padding_proof_2: Proof<Bn256, ZkSyncParametricCircuit<Bn256>> = serde_json::from_slice(padding_proof_2).unwrap();
+
+    assert!(padding_proof_1.opening_proof_at_z != padding_proof_2.opening_proof_at_z);
+    assert!(padding_proof_1.opening_proof_at_z_omega != padding_proof_2.opening_proof_at_z_omega);
+
+    (padding_vk_1, [padding_proof_1, padding_proof_2])
+}
+
+pub fn get_filled_paddings(
+    splitting_factor: usize, 
+    reference_proofs: &[Proof<Bn256, ZkSyncParametricCircuit<Bn256>>]
+) -> (
+    Vec<Proof<Bn256, ZkSyncParametricCircuit<Bn256>>>, 
+    Vec<Fr>
+) {
+    let mut padding_public_inputs = vec![];
+    let mut padding_proofs = vec![];
+
+    let mut proofs_if = reference_proofs.iter().cycle();
+
+    for _ in 0..splitting_factor {
+        let proof = proofs_if.next().cloned().unwrap();
+
+        padding_public_inputs.push(proof.inputs[0]);
+        padding_proofs.push(proof);
+    }
+
+    (
+        padding_proofs,
+        padding_public_inputs
+    )
 }
 
 // we need any points that have e(p1, g2)*e(p2, g2^x) == 0, so we basically can use two first elements
@@ -191,8 +233,6 @@ pub fn prepare_leaf_aggregations(
     individual_proofs: Vec<Proof<Bn256, ZkSyncCircuit<Bn256, VmWitnessOracle<Bn256>>>>, // proofs of those basic circuits
     verification_keys: Vec<VerificationKey<Bn256, ZkSyncCircuit<Bn256, VmWitnessOracle<Bn256>>>>, // corresponding verification keys
     splitting_factor: usize, // how many proofs go into each aggregation
-    padding_vk: VerificationKey<Bn256, ZkSyncParametricCircuit<Bn256>>, // vk that we use for padding. In general can be for any valid circuit of our geometry (gates, lookups)
-    padding_proof: Proof<Bn256, ZkSyncParametricCircuit<Bn256>>, // proof to use for paddings
     leaf_vks_committments_set: Vec<Fr>, // committments to individual VKs, use `form_base_circuits_committment` to get
     leaf_vks_committment: Fr, // committment to the full set of VKs
     g2_points: [bellman::pairing::bn256::G2Affine; 2], // G2 points for self-verification
@@ -236,12 +276,26 @@ pub fn prepare_leaf_aggregations(
     assert!(invalid_proofs.is_empty(), "proof are invalid for indexes {:?}", invalid_proofs);
     assert!(mismatched_inputs.is_empty(), "proof have mismatching inputs for indexes {:?}", mismatched_inputs);
 
+    let (padding_vk, padding_proofs) = get_paddings();
+
+    for proof in padding_proofs.iter() {
+        let is_valid = crate::bellman::plonk::better_better_cs::verifier::verify::<
+            Bn256, 
+            _, 
+            RescueTranscriptForRecursion<'_>
+        >(
+            &padding_vk, 
+            proof, 
+            Some(transcript_params)
+        ).expect("must try to verify a proof");
+        assert!(is_valid, "padding proof and VK must be valid");
+    }
+
     // first we simulate the queue that we expect from scheduler
     use sync_vm::recursion::get_prefered_committer;
     let round_function = get_prefered_committer();
 
-    let padding_public_inputs = vec![padding_proof.inputs[0]; splitting_factor];
-    let padding_proofs = vec![padding_proof.clone(); splitting_factor];
+    let (padding_proofs, padding_public_inputs) = get_filled_paddings(splitting_factor, &padding_proofs);
 
     let flattened = basic_block_circuits.clone().into_flattened_set();
 
@@ -263,7 +317,6 @@ pub fn prepare_leaf_aggregations(
 
     let rns_params = get_prefered_rns_params();
     use sync_vm::recursion::aggregation::VkInRns;
-
     // we pick proof number 0 as a padding element for circuit. In general it can be any valid proof
     let padding_vk_encoding: [_; sync_vm::recursion::node_aggregation::VK_ENCODING_LENGTH] = {
         // add
@@ -449,8 +502,6 @@ pub fn prepare_node_aggregations(
     previous_sequence: Vec<crate::encodings::QueueSimulator<sync_vm::testing::Bn256, crate::encodings::recursion_request::RecursionRequest<sync_vm::testing::Bn256>, 2, 2>>,
     splitting_factor_for_leafs: usize,
     splitting_factor_for_nodes: usize,
-    padding_vk: VerificationKey<Bn256, ZkSyncParametricCircuit<Bn256>>, // vk that we use for padding. In general can be for any valid circuit of our geometry (gates, lookups)
-    padding_proof: Proof<Bn256, ZkSyncParametricCircuit<Bn256>>, // proof to use for paddings
     padding_aggregations: Vec<([Fr; NUM_LIMBS], [Fr; NUM_LIMBS], [Fr; NUM_LIMBS], [Fr; NUM_LIMBS])>,
     leaf_vks_committment: Fr, // committment to the full set of VKs
     node_aggregation_vk_committment: Fr,
@@ -465,16 +516,16 @@ pub fn prepare_node_aggregations(
         assert!(previous_level_are_leafs);
         assert!(previous_level_leafs_aggregations.is_empty() == false);
         assert!(previous_level_node_aggregations.is_empty() == true);
+        assert_eq!(previous_level_proofs.len(), previous_level_leafs_aggregations.len());
     } else {
         assert!(!previous_level_are_leafs);
         assert!(previous_level_leafs_aggregations.is_empty() == true);
         assert!(previous_level_node_aggregations.is_empty() == false);
+        assert_eq!(previous_level_proofs.len(), previous_level_node_aggregations.len());
     }
 
-    let padding_public_inputs = vec![padding_proof.inputs[0]; splitting_factor_for_nodes];
-    let padding_proofs = vec![padding_proof.clone(); splitting_factor_for_nodes];
+    assert_eq!(padding_aggregations.len(), splitting_factor_for_nodes);
 
-    let rns_params = get_prefered_rns_params();
     use sync_vm::recursion::aggregation::VkInRns;
     use crate::encodings::QueueSimulator;
     use sync_vm::scheduler::RecursiveProofQueryWitness;
@@ -482,12 +533,49 @@ pub fn prepare_node_aggregations(
     use sync_vm::traits::CSWitnessable;
     use sync_vm::scheduler::queues::FixedWidthEncodingGenericQueueWitness;
     use sync_vm::recursion::leaf_aggregation::LeafAggregationOutputDataWitness;
+    let sponge_params = bn254_rescue_params();
+    let rns_params = get_prefered_rns_params();
+
+    let transcript_params = (&sponge_params, &rns_params);
+
+    let mut invalid_proofs = HashSet::new();
+
+    for (idx, proof) in previous_level_proofs.iter().enumerate() {
+        let is_valid = crate::bellman::plonk::better_better_cs::verifier::verify::<
+            Bn256, 
+            _, 
+            RescueTranscriptForRecursion<'_>
+        >(
+            &previous_level_vk, 
+            proof, 
+            Some(transcript_params)
+        ).expect("must try to verify a proof");
+        if is_valid == false {
+            invalid_proofs.insert(idx);
+        }
+    }
+
+    assert!(invalid_proofs.is_empty(), "proof are invalid for indexes {:?}", invalid_proofs);
+
+    let (padding_vk, padding_proofs) = get_paddings();
+
+    for proof in padding_proofs.iter() {
+        let is_valid = crate::bellman::plonk::better_better_cs::verifier::verify::<
+            Bn256, 
+            _, 
+            RescueTranscriptForRecursion<'_>
+        >(
+            &padding_vk, 
+            proof, 
+            Some(transcript_params)
+        ).expect("must try to verify a proof");
+        assert!(is_valid, "padding proof and VK must be valid");
+    }
 
     let mut aggregation_outputs = vec![];
     let mut node_circuits = vec![];
 
     let round_function = get_prefered_committer();
-    let sponge_params = bn254_rescue_params();
 
     // we pick proof number 0 as a padding element for circuit. In general it can be any valid proof
     let padding_vk_encoding: [_; sync_vm::recursion::node_aggregation::VK_ENCODING_LENGTH] = {
@@ -512,6 +600,8 @@ pub fn prepare_node_aggregations(
     };
 
     use sync_vm::recursion::RescueTranscriptForRecursion;
+
+    let (padding_proofs, padding_public_inputs) = get_filled_paddings(splitting_factor_for_nodes, &padding_proofs);
 
     // the procedure is largely recursive - we join subrequests and output a circuit
 
@@ -676,8 +766,6 @@ pub fn prepare_scheduler_circuit(
     leaf_aggregation_vk_committment: Fr,
     previous_aux_hash: [u8; 32],
     previous_meta_hash: [u8; 32],
-    padding_vk: VerificationKey<Bn256, ZkSyncParametricCircuit<Bn256>>, // even though we do NOT use it in fact, but it affects the synthesis as we reuse a function that can do the padding
-    padding_proof: Proof<Bn256, ZkSyncParametricCircuit<Bn256>>, // same for proof
     scheduler_upper_bound: u32, // is a maximum number of circuits to scheduler. Should be in a form of splitting_per_leafs * splitting_per_node^K
     g2_points: [bellman::pairing::bn256::G2Affine; 2], // G2 points for self-verification
 ) -> (
@@ -745,6 +833,25 @@ pub fn prepare_scheduler_circuit(
         transcript_params: sponge_params.clone(),
     };
 
+    let (padding_vk, padding_proofs) = get_paddings();
+
+    let transcript_params = (&sponge_params, &rns_params);
+
+    for proof in padding_proofs.iter() {
+        use sync_vm::recursion::RescueTranscriptForRecursion;
+
+        let is_valid = crate::bellman::plonk::better_better_cs::verifier::verify::<
+            Bn256, 
+            _, 
+            RescueTranscriptForRecursion<'_>
+        >(
+            &padding_vk, 
+            proof, 
+            Some(transcript_params)
+        ).expect("must try to verify a proof");
+        assert!(is_valid, "padding proof and VK must be valid");
+    }
+
     let padding_vk_encoding: [_; sync_vm::recursion::node_aggregation::VK_ENCODING_LENGTH] = {
         // add
         let vk_in_rns = VkInRns {
@@ -774,7 +881,7 @@ pub fn prepare_scheduler_circuit(
             rns_params.clone(),
             aggregation_params.clone(),
             padding_vk_encoding,
-            padding_proof.clone(),
+            padding_proofs[0].clone(),
             Some(g2_points.clone()),
         )
     );
@@ -789,7 +896,7 @@ pub fn prepare_scheduler_circuit(
             rns_params.clone(),
             aggregation_params.clone(),
             padding_vk_encoding.to_vec(),
-            padding_proof.clone(),
+            padding_proofs[0].clone(),
             Some(g2_points.clone()),
         ),
         round_function.clone(),
@@ -799,4 +906,47 @@ pub fn prepare_scheduler_circuit(
     let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::Scheduler(circuit);
 
     (circuit, final_aggregation_result.try_into().unwrap())
+}
+
+
+#[test]
+fn test_leaf_aggregation() {
+
+    fn read_from_file<T: serde::de::DeserializeOwned>(path: &str) -> T {
+        let file = std::fs::File::open(path).unwrap();
+        bincode::deserialize_from(file).unwrap()
+    }
+
+    // let file = std::fs::File::open("src/test_vectors/vk_4.json").unwrap();
+    // let vk: ZkSyncVerificationKey<Bn256> = serde_json::from_reader(file).unwrap();
+    // dbg!(&vk);
+
+    let basic_block_circuits = read_from_file("src/test_vectors/input_basic_circuits.bincode");
+    let basic_block_circuits_inputs = read_from_file("src/test_vectors/input_basic_circuits_inputs.bincode");
+    let individual_proofs = read_from_file("src/test_vectors/input_basic_circuits_proofs.bincode");
+    let verification_keys = read_from_file("src/test_vectors/input_verification_keys.bincode");
+    // let padding_vk = read_from_file("src/test_vectors/input_padding_vk.bincode");
+    // let padding_proof = read_from_file("src/test_vectors/input_padding_proof.bincode");
+    let leaf_vks_committments_set = read_from_file("src/test_vectors/input_leaf_vks_committments_set.bincode");
+    let leaf_vks_committment = read_from_file("src/test_vectors/input_leaf_vks_commitment.bincode");
+    let g2_points = read_from_file("src/test_vectors/input_g2_points.bincode");
+
+    // let file = std::fs::File::open("src/padding_proofs/padding_vk.json").unwrap();
+    // let padding_vk = serde_json::from_reader(file).unwrap();
+
+    // let file = std::fs::File::open("src/padding_proofs/padding_proof.json").unwrap();
+    // let padding_proof= serde_json::from_reader(file).unwrap();
+
+    println!("Running aggregations");
+
+    let _ = prepare_leaf_aggregations(
+        basic_block_circuits, 
+        basic_block_circuits_inputs, 
+        individual_proofs, 
+        verification_keys, 
+        50, 
+        leaf_vks_committments_set, 
+        leaf_vks_committment, 
+        g2_points
+    );
 }

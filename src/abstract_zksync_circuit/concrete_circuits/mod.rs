@@ -340,7 +340,7 @@ use crate::bellman::plonk::better_better_cs::setup::VerificationKey;
 
 /// Wrapper around verification key for easier indexing
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
-#[derivative(Clone(bound = ""))]
+#[derivative(Debug, Clone(bound = ""))]
 #[serde(bound = "")]
 pub enum ZkSyncVerificationKey<E: Engine> {
     Scheduler(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),

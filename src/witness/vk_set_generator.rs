@@ -16,8 +16,6 @@ pub fn circuits_for_vk_generation(
     splitting_factor_for_leafs: usize,
     splitting_factor_for_nodes: usize,
     scheduler_upper_bound: u32,
-    padding_vk: VerificationKey<Bn256, ZkSyncParametricCircuit<Bn256>>,
-    padding_proof: Proof<Bn256, ZkSyncParametricCircuit<Bn256>>, // must be using Rescue transcript!
     padding_aggregations: Vec<([Fr; NUM_LIMBS], [Fr; NUM_LIMBS], [Fr; NUM_LIMBS], [Fr; NUM_LIMBS])>,
 ) -> Vec<ZkSyncCircuit<Bn256, VmWitnessOracle<Bn256>>> {
     // scheduler
@@ -41,6 +39,25 @@ pub fn circuits_for_vk_generation(
         transcript_params: sponge_params.clone(),
     };
 
+    let (padding_vk, padding_proofs) = get_paddings();
+
+    let transcript_params = (&sponge_params, &rns_params);
+
+    use sync_vm::recursion::RescueTranscriptForRecursion;
+
+    for proof in padding_proofs.iter() {
+        let is_valid = crate::bellman::plonk::better_better_cs::verifier::verify::<
+            Bn256, 
+            _, 
+            RescueTranscriptForRecursion<'_>
+        >(
+            &padding_vk, 
+            proof, 
+            Some(transcript_params)
+        ).expect("must try to verify a proof");
+        assert!(is_valid, "padding proof and VK must be valid");
+    }
+
     let padding_vk_encoding: [_; sync_vm::recursion::node_aggregation::VK_ENCODING_LENGTH] = {
         // add
         let vk_in_rns = VkInRns {
@@ -60,7 +77,7 @@ pub fn circuits_for_vk_generation(
             rns_params.clone(),
             aggregation_params.clone(),
             padding_vk_encoding.to_vec(),
-            padding_proof.clone(),
+            padding_proofs[0].clone(),
             None,
         ),
         round_function.clone(),
@@ -70,8 +87,7 @@ pub fn circuits_for_vk_generation(
     let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::Scheduler(circuit);
     result.push(circuit);
 
-    let padding_public_inputs = vec![padding_proof.inputs[0]; splitting_factor_for_nodes];
-    let padding_proofs = vec![padding_proof.clone(); splitting_factor_for_nodes];
+    let (padding_proofs, padding_public_inputs) = get_filled_paddings(splitting_factor_for_nodes, &padding_proofs);
 
     use sync_vm::glue::optimizable_queue::simulate_variable_length_hash;
     let padding_vk_committment = simulate_variable_length_hash(&padding_vk_encoding, &round_function);
@@ -98,8 +114,7 @@ pub fn circuits_for_vk_generation(
     let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::NodeAggregation(circuit);
     result.push(circuit);
 
-    let padding_public_inputs = vec![padding_proof.inputs[0]; splitting_factor_for_leafs];
-    let padding_proofs = vec![padding_proof.clone(); splitting_factor_for_leafs];
+    let (padding_proofs, padding_public_inputs) = get_filled_paddings(splitting_factor_for_leafs, &padding_proofs);
 
     // leaf aggregation
     let circuit = LeafAggregationCircuit::new(
