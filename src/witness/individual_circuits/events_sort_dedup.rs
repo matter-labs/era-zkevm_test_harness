@@ -55,9 +55,6 @@ pub fn compute_events_dedup_and_sort<
         }
     });
 
-    // dbg!(&sorted_storage_queries_with_extra_timestamp);
-
-
     let mut sorted_simulator = LogQueueSimulator::empty();
     for el in sorted_queries.iter() {
         let _ = sorted_simulator.push(*el, round_function);
@@ -86,14 +83,6 @@ pub fn compute_events_dedup_and_sort<
             el.timestamp == candidate.timestamp
         });
 
-        // let tmp: Vec<_> = it.clone().take_while(|el| {
-        //     el.raw_query.shard_id == candidate.raw_query.shard_id &&
-        //     el.raw_query.address == candidate.raw_query.address &&
-        //     el.raw_query.key == candidate.raw_query.key
-        // }).collect();
-
-        // dbg!(&tmp);
-
         for (idx, el) in subit.enumerate() {
             let _ = it.next().unwrap();
             assert!(el.rw_flag);
@@ -117,6 +106,7 @@ pub fn compute_events_dedup_and_sort<
         assert!(stack.len() == 1);
         let final_value = stack.pop().unwrap();
         assert_eq!(final_value.written_value, candidate.written_value);
+        assert_eq!(final_value.is_service, candidate.is_service);
 
         // flags are conventions
         let sorted_log_query = LogQuery {
@@ -130,7 +120,7 @@ pub fn compute_events_dedup_and_sort<
             written_value: candidate.written_value,
             rw_flag: false,
             rollback: false,
-            is_service: false,
+            is_service: candidate.is_service,
         };
 
         result_queue_simulator.push(sorted_log_query, round_function);
