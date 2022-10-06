@@ -312,7 +312,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
             _, 
             PlonkCsWidth4WithNextStepAndCustomGatesParams, 
             RescueTranscriptForRecursion<'_>
-        >(el, Some(transcript_params), vk.clone()).unwrap();
+        >(el, Some(transcript_params), vk.clone(), None).unwrap();
 
         assert_eq!(proof.inputs.len(), 1);
         assert_eq!(proof.inputs[0], input_value, "Public input diverged for circuit {} of type {}", idx, descr);
@@ -800,7 +800,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
             _, 
             PlonkCsWidth4WithNextStepAndCustomGatesParams, 
             RescueTranscriptForRecursion<'_>
-        >(circuit, Some(transcript_params), vk.clone()).unwrap();
+        >(circuit, Some(transcript_params), vk.clone(), None).unwrap();
         
         let mut proof_file_for_bytes = std::fs::File::create(format!("{}.key", &proof_file_name)).unwrap();
         let mut proof_file_for_json = std::fs::File::create(format!("{}.json", &proof_file_name)).unwrap();
@@ -1020,7 +1020,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
                 _, 
                 PlonkCsWidth4WithNextStepAndCustomGatesParams, 
                 RescueTranscriptForRecursion<'_>
-            >(circuit, Some(transcript_params), vk.clone()).unwrap();
+            >(circuit, Some(transcript_params), vk.clone(), None).unwrap();
 
             let mut proof_file_for_bytes = std::fs::File::create(new_level_proof_file_name_for_bytes).unwrap();
             let mut proof_file_for_json = std::fs::File::create(new_level_proof_file_name_for_json).unwrap();
@@ -1136,7 +1136,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         _, 
         PlonkCsWidth4WithNextStepAndCustomGatesParams, 
         RollingKeccakTranscript<<Bn256 as ScalarEngine>::Fr>
-    >(circuit, None, scheduler_vk).unwrap(); 
+    >(circuit, None, scheduler_vk, None).unwrap(); 
 
     let mut proof_file_for_bytes = std::fs::File::create("scheduler_proof.key").unwrap();
     let mut proof_file_for_json = std::fs::File::create("scheduler_proof.json").unwrap();
