@@ -276,7 +276,6 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         vec![],
         false,
         U256::zero(),
-        50,
         used_bytecodes_and_hashes,
         vec![],
         cycle_limit,

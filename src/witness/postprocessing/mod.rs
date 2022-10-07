@@ -21,7 +21,6 @@ pub const L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH: bool = true;
 pub fn create_leaf_level_circuits_and_scheduler_witness(
     zkporter_is_available: bool,
     default_aa_code_hash: U256,
-    ergs_per_word_decommittment: u16,
     vm_instances_witness: Vec<VmInstanceWitness<Bn256, VmWitnessOracle<Bn256>>>, 
     artifacts: FullBlockArtifacts<Bn256>,
     geometry: GeometryConfig,
@@ -57,7 +56,6 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         create_in_circuit_global_context::<Bn256>(
             zkporter_is_available, 
             default_aa_code_hash,
-            ergs_per_word_decommittment,
         );
 
     use crate::witness::utils::simulate_public_input_value_from_witness;

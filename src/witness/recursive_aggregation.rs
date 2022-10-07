@@ -15,6 +15,7 @@ use sync_vm::recursion::{get_prefered_rns_params, get_prefered_committer};
 use sync_vm::recursion::transcript::GenericTranscriptGadget;
 use sync_vm::recursion::recursion_tree::AggregationParameters;
 use sync_vm::recursion::get_base_placeholder_point_for_accumulators;
+use sync_vm::scheduler::BlockApplicationWitness;
 
 #[derive(Clone, Debug)]
 pub struct AggregationResult<E: Engine> {
@@ -770,7 +771,7 @@ pub fn prepare_scheduler_circuit(
     g2_points: [bellman::pairing::bn256::G2Affine; 2], // G2 points for self-verification
 ) -> (
     crate::abstract_zksync_circuit::concrete_circuits::ZkSyncCircuit<sync_vm::testing::Bn256, VmWitnessOracle<sync_vm::testing::Bn256>>,
-    [[u8; 32]; 4],
+    BlockApplicationWitness<Bn256>,
 ) {
     let rns_params = get_prefered_rns_params();
     use sync_vm::recursion::aggregation::VkInRns;
@@ -864,11 +865,11 @@ pub fn prepare_scheduler_circuit(
         encoding.try_into().unwrap()
     };
 
-    let aggregation_coords_bytes = std::sync::Arc::new(std::sync::Mutex::new(vec![]));
-    let clone_to_send = std::sync::Arc::clone(&aggregation_coords_bytes);
-    let reporting_function = Box::new(move |result: Vec<[u8; 32]>| {
-        *clone_to_send.lock().unwrap() = result;
-    }) as Box<dyn FnOnce(Vec<[u8; 32]>) -> ()>;
+    let report = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let clone_to_send = std::sync::Arc::clone(&report);
+    let reporting_function = Box::new(move |result: BlockApplicationWitness<Bn256>| {
+        *clone_to_send.lock().unwrap() = Some(result);
+    }) as Box<dyn FnOnce(BlockApplicationWitness<Bn256>) -> ()>;
 
     let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
     let _ = scheduler_function(
@@ -887,7 +888,7 @@ pub fn prepare_scheduler_circuit(
     );
 
     // now we can unwrap and get the values we want
-    let final_aggregation_result = aggregation_coords_bytes.lock().unwrap().clone();
+    let final_aggregation_result = report.lock().unwrap().take().unwrap();
 
     let circuit = SchedulerCircuit::new(
         Some(scheduler_witness),
@@ -905,7 +906,7 @@ pub fn prepare_scheduler_circuit(
 
     let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::Scheduler(circuit);
 
-    (circuit, final_aggregation_result.try_into().unwrap())
+    (circuit, final_aggregation_result)
 }
 
 

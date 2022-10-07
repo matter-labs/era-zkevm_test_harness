@@ -36,7 +36,6 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
     initial_heap_content: Vec<u8>, // bootloader starts with non-deterministic heap
     zk_porter_is_available: bool,
     default_aa_code_hash: U256,
-    ergs_per_code_word_decommittment: u16,
     used_bytecodes: std::collections::HashMap<U256, Vec<[u8; 32]>>, // auxilary information to avoid passing a full set of all used codes
     ram_verification_queries: Vec<(u32, U256)>, // we may need to check that after the bootloader's memory is filled
     cycle_limit: usize,
@@ -88,7 +87,6 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
     let block_properties = create_out_of_circuit_global_context(
         zk_porter_is_available, 
         default_aa_code_hash, 
-        ergs_per_code_word_decommittment,
     );
 
     use crate::toolset::create_out_of_circuit_vm;
@@ -207,7 +205,6 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
     let (basic_circuits, basic_circuits_inputs, compact_form_witnesses) = create_leaf_level_circuits_and_scheduler_witness(
         zk_porter_is_available,
         default_aa_code_hash,
-        ergs_per_code_word_decommittment,
         instance_oracles,
         artifacts,
         geometry
@@ -244,7 +241,6 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
         let block_meta_parameters = BlockMetaParametersWitness {
             bootloader_code_hash: u256_to_bytes32witness_be(entry_point_code_hash_as_u256),
             default_aa_code_hash: u256_to_bytes32witness_be(default_aa_code_hash),
-            ergs_per_code_decommittment_word: ergs_per_code_word_decommittment,
             zkporter_is_available: zk_porter_is_available,
             _marker: std::marker::PhantomData
         };
@@ -323,7 +319,6 @@ pub fn run_with_fixed_params<S: Storage>(
     initial_heap_content: Vec<u8>, // bootloader starts with non-deterministic heap
     zk_porter_is_available: bool,
     default_aa_code_hash: U256,
-    ergs_per_code_word_decommittment: u16,
     used_bytecodes: std::collections::HashMap<U256, Vec<[u8; 32]>>, // auxilary information to avoid passing a full set of all used codes
     ram_verification_queries: Vec<(u32, U256)>, // we may need to check that after the bootloader's memory is filled
     cycle_limit: usize,
@@ -339,7 +334,6 @@ pub fn run_with_fixed_params<S: Storage>(
         initial_heap_content,
         zk_porter_is_available,
         default_aa_code_hash,
-        ergs_per_code_word_decommittment,
         used_bytecodes,
         ram_verification_queries,
         cycle_limit,
