@@ -867,7 +867,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
         let initial_state = &pair[0];
         let final_state = &pair[1];
 
-        println!("Operating over range {:?}", initial_state.at_cycle..final_state.at_cycle);
+        // println!("Operating over range {:?}", initial_state.at_cycle..final_state.at_cycle);
 
         // we need to get chunks of
         // - memory read witnesses

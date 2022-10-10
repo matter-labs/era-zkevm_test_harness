@@ -210,7 +210,7 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
         tracing::debug!("Running log demux simulation");
 
-        assert!(self.original_log_queue_states.len() <= geometry.limit_for_log_demuxer as usize, "too many storage accesses to sort by single circuit");
+        assert!(self.original_log_queue_states.len() <= geometry.limit_for_log_demuxer as usize, "too many IO-like accesses (storage R/W, events, L1 messages, precompiles) to demux by single circuit");
 
         let log_demuxer_witness = compute_logs_demux(
             self,

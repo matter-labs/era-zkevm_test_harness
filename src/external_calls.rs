@@ -156,8 +156,9 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
         out_of_circuit_vm.cycle(&mut tracer);
     }
 
+    assert!(out_of_circuit_vm.execution_has_ended(), "VM execution didn't finish");
+    assert!(out_of_circuit_vm.is_any_pending() == false, "VM execution didn't process pending operations");
     assert_eq!(out_of_circuit_vm.local_state.callstack.current.pc, 0, "root frame ended up with panic");
-    assert!(out_of_circuit_vm.execution_has_ended());
 
     let vm_local_state = out_of_circuit_vm.local_state;
 

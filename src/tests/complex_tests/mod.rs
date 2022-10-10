@@ -253,9 +253,9 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     for (idx, (el, input_value)) in basic_block_circuits.clone().into_flattened_set().into_iter().zip(basic_block_circuits_inputs.clone().into_flattened_set().into_iter()).enumerate() {
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
-        if idx < 604 {
-            continue;
-        }
+        // if idx < 604 {
+        //     continue;
+        // }
         // if !matches!(&el, ZkSyncCircuit::ECRecover(..)) {
         //     continue;
         // }
