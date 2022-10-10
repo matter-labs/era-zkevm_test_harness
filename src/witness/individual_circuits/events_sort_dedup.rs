@@ -1,9 +1,11 @@
+use smallvec::SmallVec;
 use sync_vm::franklin_crypto::plonk::circuit::utils::u128_to_fe;
 use sync_vm::glue::code_unpacker_sha256::memory_query_updated::RawMemoryQuery;
 use sync_vm::glue::code_unpacker_sha256::input::*;
 use sync_vm::glue::optimizable_queue::FixedWidthEncodingGenericQueueWitness;
 use sync_vm::inputs::ClosedFormInputWitness;
 use sync_vm::scheduler::queues::DecommitQueryWitness;
+use sync_vm::testing::Bn256;
 use sync_vm::utils::u64_to_fe;
 use zk_evm::aux_structures::*;
 use crate::ethereum_types::U256;
@@ -166,4 +168,106 @@ pub fn compute_events_dedup_and_sort<
     };
 
     witness
+}
+
+// For server side use convenience
+pub fn simulate_events_log_for_commitment(history: Vec<LogQuery>) -> (Vec<LogQuery>, (u32, sync_vm::testing::Fr)) {
+    use sync_vm::recursion::get_prefered_committer;
+
+    let round_function = get_prefered_committer();
+
+    let mut sorted_history = history;
+    sorted_history.sort_by(|a, b| {
+        match a.timestamp.0.cmp(&b.timestamp.0) {
+            Ordering::Equal => {
+                if b.rollback {
+                    Ordering::Less
+                } else {
+                    Ordering::Greater
+                }
+            }
+            r @ _ => r
+        }
+    });
+
+    let mut stack = SmallVec::<[LogQuery; 2]>::new();
+
+    let mut net_history = vec![];
+
+    for el in sorted_history.into_iter() {
+        assert_eq!(el.shard_id, 0, "only rollup shard is supported");
+        if stack.is_empty() {
+            assert!(el.rollback == false);
+            stack.push(el);
+        } else {
+            // we can always pop as it's either one to add to queue, or discard
+            let previous = stack.pop().unwrap();
+            if previous.timestamp == el.timestamp {
+                assert!(previous.rollback == false);
+                assert!(el.rollback == true);
+                assert!(previous.rw_flag == true);
+                assert!(el.rw_flag == true);
+                assert_eq!(previous.tx_number_in_block, el.tx_number_in_block);
+                assert_eq!(previous.shard_id, el.shard_id);
+                assert_eq!(previous.address, el.address);
+                assert_eq!(previous.key, el.key);
+                assert_eq!(previous.written_value, el.written_value);
+                assert_eq!(previous.is_service, el.is_service);
+                // do nothing, it's rolled back
+                
+                continue
+            } else {
+                assert!(el.rollback == false);
+                stack.push(el);
+
+                // cleanup some fields
+                // flags are conventions
+                let sorted_log_query = LogQuery {
+                    timestamp: Timestamp(0),
+                    tx_number_in_block: previous.tx_number_in_block,
+                    aux_byte: 0,
+                    shard_id: previous.shard_id,
+                    address: previous.address,
+                    key: previous.key,
+                    read_value: U256::zero(),
+                    written_value: previous.written_value,
+                    rw_flag: false,
+                    rollback: false,
+                    is_service: previous.is_service,
+                };
+
+                net_history.push(sorted_log_query);
+            }
+        }
+    }
+
+    if let Some(previous) = stack.pop() {
+        // cleanup some fields
+        // flags are conventions
+        let sorted_log_query = LogQuery {
+            timestamp: Timestamp(0),
+            tx_number_in_block: previous.tx_number_in_block,
+            aux_byte: 0,
+            shard_id: previous.shard_id,
+            address: previous.address,
+            key: previous.key,
+            read_value: U256::zero(),
+            written_value: previous.written_value,
+            rw_flag: false,
+            rollback: false,
+            is_service: previous.is_service,
+        };
+
+        net_history.push(sorted_log_query);
+    }
+
+    let mut simulator = LogQueueSimulator::<Bn256>::empty();
+    for el in net_history.iter().copied() {
+        simulator.push(el, &round_function);
+    }
+
+    let queue_len = simulator.num_items;
+    let tail = simulator.tail;
+
+    (net_history, (queue_len, tail))
 }
