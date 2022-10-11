@@ -69,67 +69,13 @@ pub fn compute_events_dedup_and_sort<
         (encoding, transformed_query, old_tail)
     }).collect();
 
-    // now just implement the logic to sort and deduplicate
-    let mut it = sorted_queries.iter().peekable();
+    let sorted_queries = sort_and_dedup_events_log(sorted_queries);
 
-    loop {
-        if it.peek().is_none() {
-            break;
-        }
-
-        let mut stack: Vec<LogQuery> = vec![];
-
-        let candidate = it.peek().unwrap().clone();
-
-        let subit = it.clone().take_while(|el| {
-            el.timestamp == candidate.timestamp
-        });
-
-        for (idx, el) in subit.enumerate() {
-            let _ = it.next().unwrap();
-            assert!(el.rw_flag);
-            if idx == 0 {
-                assert!(el.rollback == false);
-            } 
-
-            if el.rollback {
-                assert!(stack.len() == 1);
-                let _ = stack.pop().unwrap();
-            } else {
-                assert!(stack.len() == 0);
-                stack.push(*el);
-            }
-        }
-
-        if stack.len() == 0 {
-            continue;
-        }
-
-        assert!(stack.len() == 1);
-        let final_value = stack.pop().unwrap();
-        assert_eq!(final_value.written_value, candidate.written_value);
-        assert_eq!(final_value.is_service, candidate.is_service);
-
-        // flags are conventions
-        let sorted_log_query = LogQuery {
-            timestamp: Timestamp(0),
-            tx_number_in_block: candidate.tx_number_in_block,
-            aux_byte: 0,
-            shard_id: candidate.shard_id,
-            address: candidate.address,
-            key: candidate.key,
-            read_value: U256::zero(),
-            written_value: candidate.written_value,
-            rw_flag: false,
-            rollback: false,
-            is_service: candidate.is_service,
-        };
-
+    for sorted_log_query in sorted_queries.iter().copied() {
         result_queue_simulator.push(sorted_log_query, round_function);
-        target_deduplicated_queries.push(sorted_log_query);
     }
 
-    // dbg!(&target_deduplicated_queries);
+    *target_deduplicated_queries = sorted_queries;
 
     // in general we have everything ready, just form the witness
     use sync_vm::traits::CSWitnessable;
@@ -170,31 +116,12 @@ pub fn compute_events_dedup_and_sort<
     witness
 }
 
-// For server side use convenience
-pub fn simulate_events_log_for_commitment(history: Vec<LogQuery>) -> (Vec<LogQuery>, (u32, sync_vm::testing::Fr)) {
-    use sync_vm::recursion::get_prefered_committer;
-
-    let round_function = get_prefered_committer();
-
-    let mut sorted_history = history;
-    sorted_history.sort_by(|a, b| {
-        match a.timestamp.0.cmp(&b.timestamp.0) {
-            Ordering::Equal => {
-                if b.rollback {
-                    Ordering::Less
-                } else {
-                    Ordering::Greater
-                }
-            }
-            r @ _ => r
-        }
-    });
-
+pub fn sort_and_dedup_events_log(sorted_history: Vec<LogQuery>) -> Vec<LogQuery> {
     let mut stack = SmallVec::<[LogQuery; 2]>::new();
 
     let mut net_history = vec![];
 
-    for el in sorted_history.into_iter() {
+    for el in sorted_history.iter().copied() {
         assert_eq!(el.shard_id, 0, "only rollup shard is supported");
         if stack.is_empty() {
             assert!(el.rollback == false);
@@ -260,6 +187,31 @@ pub fn simulate_events_log_for_commitment(history: Vec<LogQuery>) -> (Vec<LogQue
 
         net_history.push(sorted_log_query);
     }
+
+    net_history
+}
+
+// For server side use convenience
+pub fn simulate_events_log_for_commitment(history: Vec<LogQuery>) -> (Vec<LogQuery>, (u32, sync_vm::testing::Fr)) {
+    use sync_vm::recursion::get_prefered_committer;
+
+    let round_function = get_prefered_committer();
+
+    let mut sorted_history = history;
+    sorted_history.sort_by(|a, b| {
+        match a.timestamp.0.cmp(&b.timestamp.0) {
+            Ordering::Equal => {
+                if b.rollback {
+                    Ordering::Less
+                } else {
+                    Ordering::Greater
+                }
+            }
+            r @ _ => r
+        }
+    });
+
+    let net_history = sort_and_dedup_events_log(sorted_history);
 
     let mut simulator = LogQueueSimulator::<Bn256>::empty();
     for el in net_history.iter().copied() {
