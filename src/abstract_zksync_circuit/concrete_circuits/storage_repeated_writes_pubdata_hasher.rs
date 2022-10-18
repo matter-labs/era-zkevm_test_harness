@@ -11,6 +11,7 @@ pub struct StorageRepeatedWritesRehasherInstanceSynthesisFunction;
 
 use sync_vm::glue::pubdata_hasher::input::PubdataHasherInstanceWitness;
 use sync_vm::glue::pubdata_hasher::hash_pubdata_entry_point;
+use sync_vm::glue::pubdata_hasher::variable_length::hash_pubdata_entry_point_variable_length;
 use sync_vm::glue::pubdata_hasher::storage_write_data::REPEATED_STORAGE_WRITE_ENCODING_LENGTH;
 use sync_vm::glue::pubdata_hasher::storage_write_data::RepeatedStorageWriteData;
 
@@ -27,6 +28,7 @@ impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for StorageRepeatedWritesRehas
         'a,
         CS: ConstraintSystem<E> + 'a,
     >() -> Box<dyn FnOnce(&mut CS, Option<Self::Witness>, &Self::RoundFunction, Self::Config) -> Result<AllocatedNum<E>, SynthesisError> + 'a> {
-        Box::new(hash_pubdata_entry_point::<_, _, _, REPEATED_STORAGE_WRITE_ENCODING_LENGTH, 40, RepeatedStorageWriteData<E>>)
+        // Box::new(hash_pubdata_entry_point::<_, _, _, REPEATED_STORAGE_WRITE_ENCODING_LENGTH, 40, RepeatedStorageWriteData<E>>)
+        Box::new(hash_pubdata_entry_point_variable_length::<_, _, _, REPEATED_STORAGE_WRITE_ENCODING_LENGTH, 40, RepeatedStorageWriteData<E>>)
     }
 }

@@ -11,6 +11,7 @@ pub struct MessagesMerklizerInstanceSynthesisFunction;
 
 use sync_vm::glue::merkleize_l1_messages::input::MessagesMerklizerInstanceWitness;
 use sync_vm::glue::merkleize_l1_messages::merkleize::merklize_messages_entry_point;
+use sync_vm::glue::merkleize_l1_messages::merkleize::merklize_messages_variable_length_entry_point;
 use sync_vm::glue::merkleize_l1_messages::tree_hasher::CircuitKeccakTreeHasher;
 use sync_vm::scheduler::queues::storage_log::STORAGE_LOG_RECORD_ENCODING_LEN;
 use sync_vm::glue::merkleize_l1_messages::input::MESSAGE_SERIALIZATION_BYTES;
@@ -29,6 +30,7 @@ impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for MessagesMerklizerInstanceS
         'a,
         CS: ConstraintSystem<E> + 'a,
     >() -> Box<dyn FnOnce(&mut CS, Option<Self::Witness>, &Self::RoundFunction, Self::Config) -> Result<AllocatedNum<E>, SynthesisError> + 'a> {
-        Box::new(merklize_messages_entry_point::<_, _, _, CircuitKeccakTreeHasher<_>, 2, 3, 2>)
+        // Box::new(merklize_messages_entry_point::<_, _, _, CircuitKeccakTreeHasher<_>, 2, 3, 2>)
+        Box::new(merklize_messages_variable_length_entry_point::<_, _, _, CircuitKeccakTreeHasher<_>, 2>)
     }
 }

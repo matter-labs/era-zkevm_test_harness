@@ -11,8 +11,8 @@ mod test {
         // let circuit_file_name = "prover_input_26";
         // let circuit_file_name = "prover_input_11";
         // let circuit_file_name = "prover_input_120656";
-        let circuit_file_name = "prover_input_6086_main_vm";
-        // let circuit_file_name = "input_151";
+        let circuit_file_name = "prover_input_14296_stage";
+        // let circuit_file_name = "prover_jobs.json";
 
         let mut content = std::fs::File::open(circuit_file_name).unwrap();
         let mut buffer = vec![];
@@ -76,7 +76,20 @@ mod test {
 
         circuit.synthesize(&mut cs).unwrap();
 
-        let is_satisified = cs.is_satisfied();
-        assert!(is_satisified);
+        // let is_satisified = cs.is_satisfied();
+        // assert!(is_satisified);
+    }
+
+    #[test]
+    fn artificial_padding() {
+        use crate::franklin_crypto::plonk::circuit::allocated_num::Num;
+        use sync_vm::testing::Fr;
+        use sync_vm::franklin_crypto::bellman::Field;
+
+        let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
+        let a = Num::alloc(&mut cs, Some(Fr::one())).unwrap();
+        let b = Num::alloc(&mut cs, Some(Fr::one())).unwrap();
+        let _c = a.mul(&mut cs, &b).unwrap();
+        cs.finalize_to_size_log_2(26);
     }
 }
