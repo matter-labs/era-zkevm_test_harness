@@ -11,7 +11,7 @@ mod test {
         // let circuit_file_name = "prover_input_26";
         // let circuit_file_name = "prover_input_11";
         // let circuit_file_name = "prover_input_120656";
-        let circuit_file_name = "prover_input_14296_stage";
+        let circuit_file_name = "prover_input_190";
         // let circuit_file_name = "prover_jobs.json";
 
         let mut content = std::fs::File::open(circuit_file_name).unwrap();
@@ -26,33 +26,22 @@ mod test {
             ZkSyncCircuit::KeccakRoundFunction(inner) => {
                 let inner = inner.clone();
                 let inner = inner.witness.take().unwrap();
-                dbg!(&inner.closed_form_input.start_flag);
-                dbg!(&inner.closed_form_input.completion_flag);
-                dbg!(&inner.closed_form_input.hidden_fsm_input.precompile_state.call_params);
-                dbg!(&inner.closed_form_input.hidden_fsm_input.precompile_state.u64_words_buffer);
-                dbg!(&inner.closed_form_input.hidden_fsm_input.precompile_state.u64_words_buffer_markers);
+                dbg!(&inner.closed_form_input.observable_input);
             },
             ZkSyncCircuit::Sha256RoundFunction(inner) => {
                 let inner = inner.clone();
                 let inner = inner.witness.take().unwrap();
-                dbg!(&inner.closed_form_input.start_flag);
-                dbg!(&inner.closed_form_input.completion_flag);
-                dbg!(&inner.closed_form_input.hidden_fsm_input.internal_fsm.precompile_call_params);
                 dbg!(&inner);
             },
             ZkSyncCircuit::StorageApplication(inner) => {
                 let inner = inner.clone();
                 let inner = inner.witness.take().unwrap();
-                dbg!(&inner.closed_form_input.start_flag);
-                dbg!(&inner.merkle_paths.len());
-                dbg!(&inner.leaf_indexes_for_reads.len());
                 dbg!(&inner);
             },
             ZkSyncCircuit::MainVM(inner) => {
                 let inner = inner.clone();
                 let inner = inner.witness.take().unwrap();
                 dbg!(&inner);
-                dbg!(&inner.witness_oracle.storage_read_queries);
                 let (public_input_committment, _) = simulate_public_input_value_from_witness(inner.closed_form_input);
 
                 expected_input = public_input_committment;

@@ -60,6 +60,7 @@ pub fn sort_storage_access_queries(unsorted_storage_queries: &[LogQuery]) -> (Ve
         });
 
         let mut current_element_history = StorageSlotHistoryKeeper::default();
+        let mut last_write_is_rollback = false;
 
         for (_idx, el) in subit.enumerate() {
             let _ = it.next().unwrap();
@@ -95,11 +96,13 @@ pub fn sort_storage_access_queries(unsorted_storage_queries: &[LogQuery]) -> (Ve
             } else if el.raw_query.rw_flag == true {
                 // write-like things manipulate the stack
                 if el.raw_query.rollback == false {
+                    last_write_is_rollback = false;
                     // write
                     assert_eq!(&el.raw_query.read_value, current_element_history.current_value.as_ref().unwrap(), "invalid for query {:?}", el);
                     current_element_history.current_value = Some(el.raw_query.written_value);
                     current_element_history.changes_stack.push(*el);
                 } else {
+                    last_write_is_rollback = true;
                     // pop from stack
                     let popped_change = current_element_history.changes_stack.pop().unwrap();
                     // we do not explicitly swap values, and use rollback flag instead, so compare this way
@@ -121,6 +124,9 @@ pub fn sort_storage_access_queries(unsorted_storage_queries: &[LogQuery]) -> (Ve
         if current_element_history.did_read_at_depth_zero == false && current_element_history.changes_stack.is_empty() {
             // whatever happened there didn't produce any final changes
             assert_eq!(current_element_history.initial_value.unwrap(), current_element_history.current_value.unwrap());
+            assert!(last_write_is_rollback == true);
+            // here we know that last write was a rollback, and there we no reads after it (otherwise "did_read_at_depth_zero" == true),
+            // so whatever was an initial value in storage slot it's not ever observed, and we do not need to issue even read here
             continue;
         } else {
             if current_element_history.initial_value.unwrap() == current_element_history.current_value.unwrap() {
@@ -148,8 +154,37 @@ pub fn sort_storage_access_queries(unsorted_storage_queries: &[LogQuery]) -> (Ve
                     // ....
                     // - write cell from b into a
 
-                    // we just do nothing!
-                    continue;
+                    // There is a catch here:
+                    // - if it's two "normal" writes, then operator can claim that initial value 
+                    // was "a", but it could have been some other, and in this case we want to 
+                    // "read" that it was indeed "a"
+                    // - but if the latest "write" was just a rollback, 
+                    // then we know that it's basically NOP. We already had a branch above that
+                    // protects us in case of write - rollback - read, so we only need to degrade write into
+                    // read here if the latest write wasn't a rollback
+
+                    assert!(last_write_is_rollback == false);
+
+                    if last_write_is_rollback == false {
+                        // degrade to protective read
+                        let sorted_log_query = LogQuery {
+                            timestamp: Timestamp(0),
+                            tx_number_in_block: 0,
+                            aux_byte: 0,
+                            shard_id: candidate.raw_query.shard_id,
+                            address: candidate.raw_query.address,
+                            key: candidate.raw_query.key,
+                            read_value: current_element_history.initial_value.unwrap(),
+                            written_value: current_element_history.current_value.unwrap(),
+                            rw_flag: false,
+                            rollback: false,
+                            is_service: false,
+                        };
+            
+                        deduplicated_storage_queries.push(sorted_log_query);
+                    } else {
+                        // we just do nothing!
+                    }
                 }
             } else {
                 // it's final net write

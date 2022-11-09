@@ -263,7 +263,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         // {
         //     continue;
         // }
-        if !matches!(&el, ZkSyncCircuit::LogDemuxer(..)) 
+        if !matches!(&el, ZkSyncCircuit::MainVM(..)) 
         {
             continue;
         }
@@ -1241,11 +1241,11 @@ fn get_circuit_capacity() {
         cycles
     } 
 
-    // let _vm_size = compute_inner::<VmMainInstanceSynthesisFunction<_, VmWitnessOracle<_>>, _>(
-    //     |x: usize| {
-    //         x
-    //     }
-    // );
+    let _vm_size = compute_inner::<VmMainInstanceSynthesisFunction<_, VmWitnessOracle<_>>, _>(
+        |x: usize| {
+            x
+        }
+    );
 
     let _log_demux_size = compute_inner::<LogDemuxInstanceSynthesisFunction, _>(
         |x: usize| {

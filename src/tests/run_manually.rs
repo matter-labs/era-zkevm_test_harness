@@ -306,9 +306,9 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
         use crate::abstract_zksync_circuit::concrete_circuits::ZkSyncCircuit;
-        // if !matches!(&el, ZkSyncCircuit::MainVM(..)) {
-        //     continue;
-        // }
+        if !matches!(&el, ZkSyncCircuit::StorageSorter(..)) {
+            continue;
+        }
         // el.debug_witness();
         use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
         let (is_satisfied, public_input) = circuit_testing::check_if_satisfied::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(el).unwrap();
