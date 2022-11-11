@@ -41,13 +41,14 @@ pub fn compute_storage_dedup_and_sort<
         &artifacts.demuxed_rollup_storage_queries
     );
 
-    artifacts.deduplicated_rollup_storage_queries = deduplicated_rollup_storage_queries;
-
     // dbg!(&sorted_storage_queries_with_extra_timestamp);
+    // dbg!(&deduplicated_rollup_storage_queries);
+
+    artifacts.deduplicated_rollup_storage_queries = deduplicated_rollup_storage_queries;
 
     let mut sorted_log_simulator = LogWithExtendedEnumerationQueueSimulator::empty();
     for el in sorted_storage_queries_with_extra_timestamp.iter() {
-        let _ = sorted_log_simulator.push(*el, round_function);
+        let _ = sorted_log_simulator.push(el.clone(), round_function);
     }
     
     use sync_vm::glue::storage_validity_by_grand_product::TimestampedStorageLogRecordWitness;
@@ -71,8 +72,6 @@ pub fn compute_storage_dedup_and_sort<
         let _ = result_queue_simulator.push(*el, round_function);
     }
 
-    // dbg!(&artifacts.deduplicated_rollup_storage_queries);
-
     // in general we have everything ready, just form the witness
     use sync_vm::glue::storage_validity_by_grand_product::input::*;
     use sync_vm::traits::CSWitnessable;
@@ -83,9 +82,6 @@ pub fn compute_storage_dedup_and_sort<
 
     let mut output_passthrough_data = StorageDeduplicatorOutputData::placeholder_witness();
     output_passthrough_data.final_queue_state = take_queue_state_from_simulator(&result_queue_simulator);
-
-    // dbg!(take_queue_state_from_simulator(&result_queue_simulator));
-    // dbg!(&result_queue_simulator.witness);
 
     let initial_queue_witness: Vec<_> = artifacts.demuxed_rollup_storage_queue_simulator.witness.iter().map(|(encoding, old_tail, element)| {
         let as_storage_log = log_query_into_storage_record_witness(element);

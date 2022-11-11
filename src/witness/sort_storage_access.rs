@@ -2,32 +2,108 @@ use crate::encodings::log_query::*;
 use zk_evm::aux_structures::LogQuery;
 use std::cmp::Ordering;
 use rayon::prelude::*;
-
+use crate::ethereum_types::H160;
 use crate::ethereum_types::U256;
+use derivative::Derivative;
+use zk_evm::aux_structures::Timestamp;
 
-#[derive(Default, Debug)]
-pub struct StorageSlotHistoryKeeper {
+#[derive(Derivative)]
+#[derivative(Default(bound = ""), Debug)]
+pub struct StorageSlotHistoryKeeper<L: LogQueryLike> {
     pub initial_value: Option<U256>,
     pub current_value: Option<U256>,
-    pub changes_stack: Vec<LogQueryWithExtendedEnumeration>,
+    pub changes_stack: Vec<LogQueryLikeWithExtendedEnumeration<L>>,
     pub did_read_at_depth_zero: bool,
 }
 
-pub fn sort_storage_access_queries(unsorted_storage_queries: &[LogQuery]) -> (Vec<LogQueryWithExtendedEnumeration>, Vec<LogQuery>) {
+// Proxy, as we just need read-only
+pub trait LogQueryLike: 'static + Clone + Send + Sync + std::fmt::Debug {
+    fn shard_id(&self) -> u8;
+    fn address(&self) -> H160;
+    fn key(&self) -> U256;
+    fn rw_flag(&self) -> bool;
+    fn rollback(&self) -> bool;
+    fn read_value(&self) -> U256;
+    fn written_value(&self) -> U256;
+    fn create_partially_filled_from_fields(
+        shard_id: u8,
+        address: H160,
+        key: U256,
+        read_value: U256,
+        written_value: U256,
+        rw_flag: bool,
+    ) -> Self;
+}
+
+impl LogQueryLike for LogQuery {
+    fn shard_id(&self) -> u8 {
+        self.shard_id
+    }
+    fn address(&self) -> H160 {
+        self.address
+    }
+    fn key(&self) -> U256 {
+        self.key
+    }
+    fn rw_flag(&self) -> bool {
+        self.rw_flag
+    }
+    fn rollback(&self) -> bool {
+        self.rollback
+    }
+    fn read_value(&self) -> U256 {
+        self.read_value
+    }
+    fn written_value(&self) -> U256 {
+        self.written_value
+    }
+    fn create_partially_filled_from_fields(
+        shard_id: u8,
+        address: H160,
+        key: U256,
+        read_value: U256,
+        written_value: U256,
+        rw_flag: bool,
+    ) -> Self {
+        // only smaller number of field matters in practice
+        LogQuery {
+            timestamp: Timestamp(0),
+            tx_number_in_block: 0,
+            aux_byte: 0,
+            shard_id,
+            address,
+            key,
+            read_value,
+            written_value,
+            rw_flag,
+            rollback: false,
+            is_service: false,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct LogQueryLikeWithExtendedEnumeration<L: LogQueryLike> {
+    pub raw_query: L,
+    pub extended_timestamp: u32
+}
+
+
+pub fn sort_storage_access_queries<L: LogQueryLike>(unsorted_storage_queries: &[L]) -> (Vec<LogQueryLikeWithExtendedEnumeration<L>>, Vec<L>) {
     let mut sorted_storage_queries_with_extra_timestamp: Vec<_> = unsorted_storage_queries.iter()
         .enumerate().map(|(i, el)| {
-            LogQueryWithExtendedEnumeration {
-                raw_query: *el,
+            LogQueryLikeWithExtendedEnumeration {
+                raw_query: el.clone(),
                 extended_timestamp: i as u32
             }
     }).collect();
 
     sorted_storage_queries_with_extra_timestamp.par_sort_by(|a, b| {
-        match a.raw_query.shard_id.cmp(&a.raw_query.shard_id) {
+        match a.raw_query.shard_id().cmp(&a.raw_query.shard_id()) {
             Ordering::Equal => {
-                match a.raw_query.address.cmp(&b.raw_query.address) {
+                match a.raw_query.address().cmp(&b.raw_query.address()) {
                     Ordering::Equal => {
-                        match a.raw_query.key.cmp(&b.raw_query.key) {
+                        match a.raw_query.key().cmp(&b.raw_query.key()) {
                             Ordering::Equal => {
                                 a.extended_timestamp.cmp(&b.extended_timestamp)
                             },
@@ -54,12 +130,12 @@ pub fn sort_storage_access_queries(unsorted_storage_queries: &[LogQuery]) -> (Ve
         let candidate = it.peek().unwrap().clone();
 
         let subit = it.clone().take_while(|el| {
-            el.raw_query.shard_id == candidate.raw_query.shard_id &&
-            el.raw_query.address == candidate.raw_query.address &&
-            el.raw_query.key == candidate.raw_query.key
+            el.raw_query.shard_id() == candidate.raw_query.shard_id() &&
+            el.raw_query.address() == candidate.raw_query.address() &&
+            el.raw_query.key() == candidate.raw_query.key()
         });
 
-        let mut current_element_history = StorageSlotHistoryKeeper::default();
+        let mut current_element_history = StorageSlotHistoryKeeper::<L>::default();
         let mut last_write_is_rollback = false;
 
         for (_idx, el) in subit.enumerate() {
@@ -68,53 +144,53 @@ pub fn sort_storage_access_queries(unsorted_storage_queries: &[LogQuery]) -> (Ve
             if current_element_history.current_value.is_none() {
                 assert!(current_element_history.initial_value.is_none(), "invalid for query {:?}", el);
                 // first read potentially
-                if el.raw_query.rw_flag == false {
+                if el.raw_query.rw_flag() == false {
                     current_element_history.did_read_at_depth_zero = true;
                 }
             } else {
                 // explicit read at zero
-                if el.raw_query.rw_flag == false && current_element_history.changes_stack.is_empty() {
+                if el.raw_query.rw_flag() == false && current_element_history.changes_stack.is_empty() {
                     current_element_history.did_read_at_depth_zero = true;
                 }
             }
 
             if current_element_history.current_value.is_none() {
                 assert!(current_element_history.initial_value.is_none(), "invalid for query {:?}", el);
-                if el.raw_query.rw_flag == false {
-                    current_element_history.initial_value = Some(el.raw_query.read_value);
-                    current_element_history.current_value = Some(el.raw_query.read_value);
+                if el.raw_query.rw_flag() == false {
+                    current_element_history.initial_value = Some(el.raw_query.read_value());
+                    current_element_history.current_value = Some(el.raw_query.read_value());
                 } else {
-                    assert!(el.raw_query.rollback == false);
-                    current_element_history.initial_value = Some(el.raw_query.read_value);
-                    current_element_history.current_value = Some(el.raw_query.read_value); // note: We apply updates few lines later
+                    assert!(el.raw_query.rollback() == false);
+                    current_element_history.initial_value = Some(el.raw_query.read_value());
+                    current_element_history.current_value = Some(el.raw_query.read_value()); // note: We apply updates few lines later
                 }
             }
 
-            if el.raw_query.rw_flag == false {
-                assert_eq!(&el.raw_query.read_value, current_element_history.current_value.as_ref().unwrap(), "invalid for query {:?}", el);
+            if el.raw_query.rw_flag() == false {
+                assert_eq!(&el.raw_query.read_value(), current_element_history.current_value.as_ref().unwrap(), "invalid for query {:?}", el);
                 // and do not place reads into the stack
-            } else if el.raw_query.rw_flag == true {
+            } else if el.raw_query.rw_flag() == true {
                 // write-like things manipulate the stack
-                if el.raw_query.rollback == false {
+                if el.raw_query.rollback() == false {
                     last_write_is_rollback = false;
                     // write
-                    assert_eq!(&el.raw_query.read_value, current_element_history.current_value.as_ref().unwrap(), "invalid for query {:?}", el);
-                    current_element_history.current_value = Some(el.raw_query.written_value);
-                    current_element_history.changes_stack.push(*el);
+                    assert_eq!(&el.raw_query.read_value(), current_element_history.current_value.as_ref().unwrap(), "invalid for query {:?}", el);
+                    current_element_history.current_value = Some(el.raw_query.written_value());
+                    current_element_history.changes_stack.push(el.clone());
                 } else {
                     last_write_is_rollback = true;
                     // pop from stack
                     let popped_change = current_element_history.changes_stack.pop().unwrap();
                     // we do not explicitly swap values, and use rollback flag instead, so compare this way
-                    assert_eq!(el.raw_query.read_value, popped_change.raw_query.read_value, "invalid for query {:?}", el);
-                    assert_eq!(el.raw_query.written_value, popped_change.raw_query.written_value, "invalid for query {:?}", el);
-                    assert_eq!(&el.raw_query.written_value, current_element_history.current_value.as_ref().unwrap(), "invalid for query {:?}", el);
+                    assert_eq!(el.raw_query.read_value(), popped_change.raw_query.read_value(), "invalid for query {:?}", el);
+                    assert_eq!(el.raw_query.written_value(), popped_change.raw_query.written_value(), "invalid for query {:?}", el);
+                    assert_eq!(&el.raw_query.written_value(), current_element_history.current_value.as_ref().unwrap(), "invalid for query {:?}", el);
                     // check that we properly apply rollbacks
-                    assert_eq!(el.raw_query.shard_id, popped_change.raw_query.shard_id, "invalid for query {:?}", el);
-                    assert_eq!(el.raw_query.address, popped_change.raw_query.address, "invalid for query {:?}", el);
-                    assert_eq!(el.raw_query.key, popped_change.raw_query.key, "invalid for query {:?}", el);
+                    assert_eq!(el.raw_query.shard_id(), popped_change.raw_query.shard_id(), "invalid for query {:?}", el);
+                    assert_eq!(el.raw_query.address(), popped_change.raw_query.address(), "invalid for query {:?}", el);
+                    assert_eq!(el.raw_query.key(), popped_change.raw_query.key(), "invalid for query {:?}", el);
                     // apply rollback
-                    current_element_history.current_value = Some(el.raw_query.read_value); // our convension
+                    current_element_history.current_value = Some(el.raw_query.read_value()); // our convension
                 }
             }
         }
@@ -133,19 +209,14 @@ pub fn sort_storage_access_queries(unsorted_storage_queries: &[LogQuery]) -> (Ve
                 // no change, but we may need protective read
                 if current_element_history.did_read_at_depth_zero {
                     // protective read
-                    let sorted_log_query = LogQuery {
-                        timestamp: Timestamp(0),
-                        tx_number_in_block: 0,
-                        aux_byte: 0,
-                        shard_id: candidate.raw_query.shard_id,
-                        address: candidate.raw_query.address,
-                        key: candidate.raw_query.key,
-                        read_value: current_element_history.initial_value.unwrap(),
-                        written_value: current_element_history.current_value.unwrap(),
-                        rw_flag: false,
-                        rollback: false,
-                        is_service: false,
-                    };
+                    let sorted_log_query = L::create_partially_filled_from_fields(
+                        candidate.raw_query.shard_id(),
+                        candidate.raw_query.address(),
+                        candidate.raw_query.key(),
+                        current_element_history.initial_value.unwrap(),
+                        current_element_history.current_value.unwrap(),
+                        false
+                    );
             
                     deduplicated_storage_queries.push(sorted_log_query);
                 } else {
@@ -167,19 +238,14 @@ pub fn sort_storage_access_queries(unsorted_storage_queries: &[LogQuery]) -> (Ve
 
                     if last_write_is_rollback == false {
                         // degrade to protective read
-                        let sorted_log_query = LogQuery {
-                            timestamp: Timestamp(0),
-                            tx_number_in_block: 0,
-                            aux_byte: 0,
-                            shard_id: candidate.raw_query.shard_id,
-                            address: candidate.raw_query.address,
-                            key: candidate.raw_query.key,
-                            read_value: current_element_history.initial_value.unwrap(),
-                            written_value: current_element_history.current_value.unwrap(),
-                            rw_flag: false,
-                            rollback: false,
-                            is_service: false,
-                        };
+                        let sorted_log_query = L::create_partially_filled_from_fields(
+                            candidate.raw_query.shard_id(),
+                            candidate.raw_query.address(),
+                            candidate.raw_query.key(),
+                            current_element_history.initial_value.unwrap(),
+                            current_element_history.current_value.unwrap(),
+                            false
+                        );
             
                         deduplicated_storage_queries.push(sorted_log_query);
                     } else {
@@ -188,19 +254,14 @@ pub fn sort_storage_access_queries(unsorted_storage_queries: &[LogQuery]) -> (Ve
                 }
             } else {
                 // it's final net write
-                let sorted_log_query = LogQuery {
-                    timestamp: Timestamp(0),
-                    tx_number_in_block: 0,
-                    aux_byte: 0,
-                    shard_id: candidate.raw_query.shard_id,
-                    address: candidate.raw_query.address,
-                    key: candidate.raw_query.key,
-                    read_value: current_element_history.initial_value.unwrap(),
-                    written_value: current_element_history.current_value.unwrap(),
-                    rw_flag: true,
-                    rollback: false,
-                    is_service: false,
-                };
+                let sorted_log_query = L::create_partially_filled_from_fields(
+                    candidate.raw_query.shard_id(),
+                    candidate.raw_query.address(),
+                    candidate.raw_query.key(),
+                    current_element_history.initial_value.unwrap(),
+                    current_element_history.current_value.unwrap(),
+                    true
+                );
         
                 deduplicated_storage_queries.push(sorted_log_query);
             }

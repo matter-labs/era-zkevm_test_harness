@@ -4,6 +4,7 @@ use zk_evm::aux_structures::LogQuery;
 use zk_evm::ethereum_types::H160;
 
 use crate::utils::{u160_from_address, biguint_from_u256};
+use crate::witness::sort_storage_access::LogQueryLikeWithExtendedEnumeration;
 
 use super::*;
 
@@ -196,13 +197,7 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 5> for LogQuery {
     }
 }
 
-
-#[derive(Derivative)]
-#[derivative(Clone, Copy, Debug)]
-pub struct LogQueryWithExtendedEnumeration {
-    pub raw_query: LogQuery,
-    pub extended_timestamp: u32
-}
+pub type LogQueryWithExtendedEnumeration = LogQueryLikeWithExtendedEnumeration<LogQuery>;
 
 impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 5> for LogQueryWithExtendedEnumeration {
     fn encoding_witness(&self) -> [<E>::Fr; 5] {
