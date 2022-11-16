@@ -1,6 +1,6 @@
 [package]
 name = "zkevm_test_harness"
-version = "1.1.2"
+version = "1.2.1"
 edition = "2021"
 authors = ["Alex Vlasov <alex.m.vlasov@gmail.com>", "Konstantin Panarin <kp@matterlabs.dev>"]
 
@@ -12,9 +12,9 @@ resolver = "2"
 # zkevm-assembly = {path = "../zkEVM-assembly"}
 # circuit_testing = {path = "../circuit_testing"}
 
-zkevm-assembly = {git = "https://github.com/matter-labs/zkEVM-assembly.git", branch = "v1.2"}
-zk_evm = {git = "https://github.com/matter-labs/zk_evm.git", branch = "v1.2"}
-sync_vm = {git = "https://github.com/matter-labs/sync_vm.git", branch = "v1.2", features = ["external_testing"]}
+zkevm-assembly = {git = "https://github.com/matter-labs/zkEVM-assembly.git", branch = "v1.2.1"}
+zk_evm = {git = "https://github.com/matter-labs/zk_evm.git", branch = "v1.2.1"}
+sync_vm = {git = "https://github.com/matter-labs/sync_vm.git", branch = "v1.2.1", features = ["external_testing"]}
 circuit_testing = {git = "https://github.com/matter-labs/circuit_testing.git", branch = "main"}
 
 num-bigint = "0.4"
