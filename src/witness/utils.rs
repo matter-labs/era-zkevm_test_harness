@@ -221,7 +221,7 @@ pub fn vm_instance_witness_to_vm_formal_state<E: Engine>(
     let mut hidden_fsm = VmGlobalState::<E, 3>::placeholder_witness();
     // depth and state encoding
     hidden_fsm.callstack.stack_sponge_state = aux_params.callstack_state.0;
-    hidden_fsm.callstack.context_stack_depth = vm_state.callstack.depth() as u16;
+    hidden_fsm.callstack.context_stack_depth = vm_state.callstack.depth() as u32;
 
     // non-saved part
     hidden_fsm.callstack.current_context.log_queue_forward_part_length = aux_params.storage_log_queue_state.num_items;

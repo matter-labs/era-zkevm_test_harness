@@ -450,7 +450,7 @@ impl EnumeratedBinaryLeaf<32> for ZkSyncStorageLeaf {
 #[cfg(test)]
 mod test {
     use sync_vm::{glue::storage_application::input::StorageApplicationCircuitInstanceWitness, testing::create_test_artifacts_with_optimized_gate, franklin_crypto::bellman::plonk::better_better_cs::cs::Circuit};
-    use zk_evm::aux_structures::STORAGE_AUX_BYTE;
+    use zk_evm::zkevm_opcode_defs::system_params::STORAGE_AUX_BYTE;
 
     use crate::witness::postprocessing::USE_BLAKE2S_EXTRA_TABLES;
 

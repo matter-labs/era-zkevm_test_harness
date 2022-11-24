@@ -25,23 +25,35 @@ use sync_vm::{
 use crate::ethereum_types::U256;
 use zk_evm::aux_structures::DecommittmentQuery;
 use zk_evm::aux_structures::{
-    LogQuery, MemoryIndex, MemoryPage, MemoryQuery, EVENT_AUX_BYTE, L1_MESSAGE_AUX_BYTE,
-    PRECOMPILE_AUX_BYTE, STORAGE_AUX_BYTE,
+    LogQuery, MemoryIndex, MemoryPage, MemoryQuery,
 };
 use sync_vm::scheduler::queues::{FullSpongeLikeQueueState, QueueStateWitness};
 use zk_evm::precompiles::ecrecover::ECRecoverRoundWitness;
 use zk_evm::precompiles::keccak256::Keccak256RoundWitness;
 use zk_evm::precompiles::sha256::Sha256RoundWitness;
-use zk_evm::precompiles::KECCAK256_ROUND_FUNCTION_PRECOMPILE_ADDRESS;
 use zk_evm::reference_impls::event_sink::ApplicationData;
 use sync_vm::scheduler::queues::FixedWidthEncodingGenericQueueState;
 use sync_vm::scheduler::queues::FixedWidthEncodingGenericQueueStateWitness;
-use zk_evm::vm_state::{CallStackEntry, TIMESTAMPS_PER_CYCLE, VmLocalState};
+use zk_evm::vm_state::{CallStackEntry, VmLocalState};
 use sync_vm::scheduler::queues::FullSpongeLikeQueueStateWitness;
 use super::callstack_handler::*;
 use sync_vm::vm::vm_cycle::memory_view::write_query::MemoryWriteQuery;
 use smallvec::SmallVec;
 use super::utils::*;
+
+use zk_evm::zkevm_opcode_defs::system_params::{
+    KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
+    SHA256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
+    ECRECOVER_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS
+};
+
+use zk_evm::zkevm_opcode_defs::system_params::{
+    STORAGE_AUX_BYTE,
+    EVENT_AUX_BYTE,
+    L1_MESSAGE_AUX_BYTE,
+    PRECOMPILE_AUX_BYTE
+};
+
 
 #[derive(Derivative)]
 #[derivative(Clone(bound = ""), Copy(bound = ""), Debug, Default)]
@@ -1307,7 +1319,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
     fn push_callstack_witness(
         &mut self,
         current_record: &ExecutionContextRecord<E>,
-        current_depth: &UInt16<E>,
+        current_depth: &UInt32<E>,
         execute: &Boolean,
     ) {
         // we do not care, but we can do self-check
@@ -1337,7 +1349,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
             if let Some(depth) = current_depth.get_value() {
                 assert_eq!(
                     depth + 1,
-                    witness_depth as u16,
+                    witness_depth as u32,
                     "depth diverged at callstack push at cycle {}:\n pushing {:?}\n, got \n{:?}\n in oracle",
                     _cycle_idx,
                     &witness,
@@ -1388,7 +1400,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
     fn get_callstack_witness(
         &mut self,
         execute: &Boolean,
-        depth: &UInt16<E>
+        depth: &UInt32<E>
     ) -> (
         Option<ExecutionContextRecordWitness<E>>,
         Option<[<E>::Fr; 3]>,
@@ -1414,7 +1426,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
             if let Some(depth) = depth.get_value() {
                 assert_eq!(
                     depth - 1,
-                    witness_depth as u16,
+                    witness_depth as u32,
                     "depth diverged at callstack pop at cycle {}, got \n{:?}\n in oracle",
                     _cycle_idx,
                     &extended_entry,

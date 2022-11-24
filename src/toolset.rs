@@ -1,6 +1,7 @@
 use zk_evm::reference_impls::event_sink::InMemoryEventSink;
 use zk_evm::precompiles::DefaultPrecompilesProcessor;
 use zk_evm::reference_impls::decommitter::SimpleDecommitter;
+use zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS;
 use crate::witness::tracer::WitnessTracer;
 use zk_evm::abstractions::Storage;
 
@@ -89,7 +90,7 @@ pub fn create_out_of_circuit_vm<'a, S: Storage>(
 
     let initial_context = initial_out_of_circuit_context(
         0,
-        u32::MAX,
+        VM_INITIAL_FRAME_ERGS,
         entry_point_address,
         caller_address,
         entry_point_address,

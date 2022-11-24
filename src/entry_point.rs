@@ -10,9 +10,9 @@ use zk_evm::abstractions::MAX_MEMORY_BYTES;
 use zk_evm::aux_structures::*;
 use zk_evm::ethereum_types::*;
 use zk_evm::vm_state::CallStackEntry;
-use zk_evm::vm_state::INITIAL_SP_ON_FAR_CALL;
 use zk_evm::vm_state::VmState;
 use zk_evm::zkevm_opcode_defs::*;
+use zk_evm::zkevm_opcode_defs::system_params::INITIAL_FRAME_FORMAL_EH_LOCATION;
 
 use super::*;
 
@@ -33,7 +33,7 @@ pub fn initial_out_of_circuit_context(
         code_page: MemoryPage(zk_evm::zkevm_opcode_defs::BOOTLOADER_CODE_PAGE),
         sp: INITIAL_SP_ON_FAR_CALL as u16,
         pc: initial_pc,
-        exception_handler_location: u16::MAX,
+        exception_handler_location: INITIAL_FRAME_FORMAL_EH_LOCATION,
         ergs_remaining: initial_ergs,
         this_shard_id: 0,
         caller_shard_id: 0,
@@ -67,7 +67,7 @@ pub fn initial_in_circuit_context<E: Engine>(
 
     ctx.saved_context.common_part.pc = UInt16::from_uint(initial_pc);
     ctx.saved_context.common_part.sp = UInt16::from_uint(INITIAL_SP_ON_FAR_CALL as u16);
-    ctx.saved_context.common_part.exception_handler_loc = UInt16::from_uint(u16::MAX);
+    ctx.saved_context.common_part.exception_handler_loc = UInt16::from_uint(INITIAL_FRAME_FORMAL_EH_LOCATION);
     ctx.saved_context.common_part.ergs_remaining = UInt32::from_uint(initial_ergs);
 
     ctx.saved_context.common_part.code_address =
@@ -324,7 +324,7 @@ pub fn run_vm_instance<
     let initial_callstack_sponge =
         Num::alloc_multiple(cs, Some(initial_callstack_sponge_state)).unwrap();
     initial_callstack.stack_sponge_state = initial_callstack_sponge;
-    initial_callstack.context_stack_depth = UInt16::allocate(cs, Some(initial_state.callstack.depth() as u16)).unwrap();
+    initial_callstack.context_stack_depth = UInt32::allocate(cs, Some(initial_state.callstack.depth() as u32)).unwrap();
 
     let mut initial_context = alloc_execution_context(
         cs,

@@ -223,7 +223,7 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
     other_contracts: Vec<(H160, Vec<[u8; 32]>)>,
     cycle_limit: usize
 ) {
-    use zk_evm::precompiles::BOOTLOADER_FORMAL_ADDRESS;
+    use zk_evm::zkevm_opcode_defs::system_params::BOOTLOADER_FORMAL_ADDRESS;
     use crate::external_calls::run;
     use sync_vm::testing::create_test_artifacts_with_optimized_gate;
     let (_, round_function, _) = create_test_artifacts_with_optimized_gate();

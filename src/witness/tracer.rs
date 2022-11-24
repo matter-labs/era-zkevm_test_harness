@@ -10,10 +10,12 @@ use zk_evm::precompiles::ecrecover::ECRecoverRoundWitness;
 use zk_evm::precompiles::keccak256::Keccak256RoundWitness;
 use zk_evm::precompiles::sha256::Sha256RoundWitness;
 
-use zk_evm::vm_state::MAX_CALLSTACK_DEPTH;
 use zk_evm::zkevm_opcode_defs::decoding::EncodingModeProduction;
-use sync_vm::vm::vm_state::NUM_SPONGES_PER_CYCLE;
 use tracing;
+use zk_evm::zkevm_opcode_defs::system_params::NUM_SPONGES;
+use zk_evm::zkevm_opcode_defs::system_params::STORAGE_AUX_BYTE;
+use zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS;
+use zk_evm::zkevm_opcode_defs::system_params::VM_MAX_STACK_DEPTH;
 
 // cycle indicators below are not timestamps!
 
@@ -136,7 +138,7 @@ pub struct AuxCallstackProto {
 impl AuxCallstackProto {
     pub fn new_with_max_ergs() -> Self {
         let mut initial_callstack = CallStackEntry::empty_context();
-        initial_callstack.ergs_remaining = u32::MAX;
+        initial_callstack.ergs_remaining = VM_INITIAL_FRAME_ERGS;
 
         Self {
             monotonic_frame_counter: 2,
@@ -172,7 +174,7 @@ impl AuxCallstackProto {
             monotonic_cycle_counter,
             (true, current_counter, previous_entry),
         ));
-        debug_assert!(self.depth() <= MAX_CALLSTACK_DEPTH);
+        debug_assert!(self.depth() <= VM_MAX_STACK_DEPTH as usize);
     }
 
     #[track_caller]
@@ -245,9 +247,9 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
     fn end_execution_cycle(&mut self, _current_state: &VmLocalState) {
         // dbg!(&self.sponge_busy_range);
         if !self.sponge_busy_range.is_empty() {
-            for i in 0..NUM_SPONGES_PER_CYCLE {
+            for i in 0..NUM_SPONGES {
                 self.sponge_busy_range.remove(&i);
-                if self.sponge_busy_range.remove(&(i + NUM_SPONGES_PER_CYCLE)) {
+                if self.sponge_busy_range.remove(&(i + NUM_SPONGES)) {
                     self.sponge_busy_range.insert(i);
                 }
             }
