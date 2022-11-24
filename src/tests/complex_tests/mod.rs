@@ -105,7 +105,7 @@ pub(crate) fn save_predeployed_contracts(storage: &mut InMemoryStorage, tree: &m
 }
 
 fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit: usize) {
-    use zk_evm::precompiles::BOOTLOADER_FORMAL_ADDRESS;
+    use zk_evm::zkevm_opcode_defs::system_params::BOOTLOADER_FORMAL_ADDRESS;
 
     use crate::external_calls::run;
 
@@ -136,7 +136,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     let mut storage_impl = InMemoryStorage::new();
     let mut tree = ZKSyncTestingTree::empty();
 
-    test_artifact.entry_point_address = *zk_evm::precompiles::BOOTLOADER_FORMAL_ADDRESS;
+    test_artifact.entry_point_address = *zk_evm::zkevm_opcode_defs::system_params::BOOTLOADER_FORMAL_ADDRESS;
     
     let predeployed_contracts = test_artifact.predeployed_contracts.clone().into_iter().chain(Some((test_artifact.entry_point_address, test_artifact.entry_point_code.clone()))).collect::<HashMap<_,_>>();
     save_predeployed_contracts(&mut storage_impl, &mut tree, &predeployed_contracts);
@@ -263,7 +263,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         // {
         //     continue;
         // }
-        if !matches!(&el, ZkSyncCircuit::StorageSorter(..)) 
+        if !matches!(&el, ZkSyncCircuit::KeccakRoundFunction(..)) 
         {
             continue;
         }
