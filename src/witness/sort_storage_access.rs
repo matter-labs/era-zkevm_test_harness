@@ -200,6 +200,7 @@ pub fn sort_storage_access_queries<L: LogQueryLike>(unsorted_storage_queries: &[
         if current_element_history.did_read_at_depth_zero == false && current_element_history.changes_stack.is_empty() {
             // whatever happened there didn't produce any final changes
             assert_eq!(current_element_history.initial_value.unwrap(), current_element_history.current_value.unwrap());
+            // and we since changes_stack is empty then we also "know" that last "write" is rollback
             assert!(last_write_is_rollback == true);
             // here we know that last write was a rollback, and there we no reads after it (otherwise "did_read_at_depth_zero" == true),
             // so whatever was an initial value in storage slot it's not ever observed, and we do not need to issue even read here
@@ -234,9 +235,9 @@ pub fn sort_storage_access_queries<L: LogQueryLike>(unsorted_storage_queries: &[
                     // protects us in case of write - rollback - read, so we only need to degrade write into
                     // read here if the latest write wasn't a rollback
 
-                    assert!(last_write_is_rollback == false);
-
                     if last_write_is_rollback == false {
+                        // it means that we did accumlate some changes
+                        assert!(current_element_history.changes_stack.is_empty() == false);
                         // degrade to protective read
                         let sorted_log_query = L::create_partially_filled_from_fields(
                             candidate.raw_query.shard_id(),
@@ -249,6 +250,8 @@ pub fn sort_storage_access_queries<L: LogQueryLike>(unsorted_storage_queries: &[
             
                         deduplicated_storage_queries.push(sorted_log_query);
                     } else {
+                        // it means that changes stack is empty
+                        assert!(current_element_history.changes_stack.is_empty() == true);
                         // we just do nothing!
                     }
                 }
