@@ -136,7 +136,6 @@ pub fn sort_storage_access_queries<L: LogQueryLike>(unsorted_storage_queries: &[
         });
 
         let mut current_element_history = StorageSlotHistoryKeeper::<L>::default();
-        let mut last_write_is_rollback = false;
 
         for (_idx, el) in subit.enumerate() {
             let _ = it.next().unwrap();
@@ -172,13 +171,11 @@ pub fn sort_storage_access_queries<L: LogQueryLike>(unsorted_storage_queries: &[
             } else if el.raw_query.rw_flag() == true {
                 // write-like things manipulate the stack
                 if el.raw_query.rollback() == false {
-                    last_write_is_rollback = false;
                     // write
                     assert_eq!(&el.raw_query.read_value(), current_element_history.current_value.as_ref().unwrap(), "invalid for query {:?}", el);
                     current_element_history.current_value = Some(el.raw_query.written_value());
                     current_element_history.changes_stack.push(el.clone());
                 } else {
-                    last_write_is_rollback = true;
                     // pop from stack
                     let popped_change = current_element_history.changes_stack.pop().unwrap();
                     // we do not explicitly swap values, and use rollback flag instead, so compare this way
@@ -200,8 +197,6 @@ pub fn sort_storage_access_queries<L: LogQueryLike>(unsorted_storage_queries: &[
         if current_element_history.did_read_at_depth_zero == false && current_element_history.changes_stack.is_empty() {
             // whatever happened there didn't produce any final changes
             assert_eq!(current_element_history.initial_value.unwrap(), current_element_history.current_value.unwrap());
-            // and we since changes_stack is empty then we also "know" that last "write" is rollback
-            assert!(last_write_is_rollback == true);
             // here we know that last write was a rollback, and there we no reads after it (otherwise "did_read_at_depth_zero" == true),
             // so whatever was an initial value in storage slot it's not ever observed, and we do not need to issue even read here
             continue;
@@ -235,9 +230,9 @@ pub fn sort_storage_access_queries<L: LogQueryLike>(unsorted_storage_queries: &[
                     // protects us in case of write - rollback - read, so we only need to degrade write into
                     // read here if the latest write wasn't a rollback
 
-                    if last_write_is_rollback == false {
-                        // it means that we did accumlate some changes
-                        assert!(current_element_history.changes_stack.is_empty() == false);
+                    if current_element_history.changes_stack.is_empty() == false {
+                        // it means that we did accumlate some changes, even though in NET result 
+                        // it CLAIMS that it didn't change a value
                         // degrade to protective read
                         let sorted_log_query = L::create_partially_filled_from_fields(
                             candidate.raw_query.shard_id(),
@@ -250,8 +245,10 @@ pub fn sort_storage_access_queries<L: LogQueryLike>(unsorted_storage_queries: &[
             
                         deduplicated_storage_queries.push(sorted_log_query);
                     } else {
-                        // it means that changes stack is empty
-                        assert!(current_element_history.changes_stack.is_empty() == true);
+                        // Whatever has happened we rolled it back completely, so unless
+                        // there was a need for protective read at depth 0, we do not need
+                        // to go into storage and check or change any value
+
                         // we just do nothing!
                     }
                 }
