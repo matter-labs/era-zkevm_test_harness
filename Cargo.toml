@@ -34,6 +34,7 @@ bincode = "*"
 test-log = "*"
 env_logger = "*"
 smallvec = "*"
+structopt = "0.3.26"
 
 [profile.release]
 debug = true
