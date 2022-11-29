@@ -32,3 +32,8 @@ It may be a little verbose, but it's a full end to end test that:
 One can see a lot of `KKK_proof_N_M.json`, `KKK_proof_N_M.key` and similar `.json` and `.key` files in the root folder. Those are all the intermediate proofs, and if proof exists then example script will skip it's recomputation (whether it's a proof or verification key). So to run the full workflow one can remove all of those, or some of those.
 
 Proofs can be verified in Ethereum by synthesizing a verification contract for "scheduler" and sending the "decommitted" public input parts (as public input is just linear hash of some parameters concatenated together). TODO: cover verification
+
+### Running geometry config generator
+```
+ cargo +nightly run --release --bin geometry_config_generator -- --numeric-circuit [3-17]
+```
