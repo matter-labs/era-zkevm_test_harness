@@ -6,6 +6,11 @@ authors = ["Alex Vlasov <alex.m.vlasov@gmail.com>", "Konstantin Panarin <kp@matt
 
 resolver = "2"
 
+[[bin]]
+name = "geometry_config_generator"
+path = "src/geometry_config_generator/main.rs"
+
+
 [dependencies]
 # zk_evm = {path = "../zk_evm"}
 # sync_vm = {path = "../sync_vm", features = ["external_testing"]}
