@@ -42,7 +42,7 @@ struct Opt {
 }
 
 fn save_geometry_config_file(geometry_config: String, filepath: &str) {
-    let file_content = "// This file is auto-generated, don not edit it manually\n\n".to_owned() + &geometry_config;
+    let file_content = "// This file is auto-generated, do not edit it manually\n\n".to_owned() + &geometry_config;
     let mut f = File::create(filepath)
         .expect("Unable to create file");
     f.write_all(file_content.as_bytes())
