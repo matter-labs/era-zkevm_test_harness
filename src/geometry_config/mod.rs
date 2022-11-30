@@ -1,13 +1,13 @@
-// This file is auto-generated, don not edit it manually
+// This file is auto-generated, do not edit it manually
 
 use crate::toolset::GeometryConfig;
 
 fn get_geometry_config() -> GeometryConfig {
     GeometryConfig {
-    cycles_per_vm_snapshot: 23677,
+    cycles_per_vm_snapshot: 23627,
     limit_for_code_decommitter_sorter: 193953,
     limit_for_log_demuxer: 102143,
-    limit_for_storage_sorter: 79795,
+    limit_for_storage_sorter: 79890,
     limit_for_events_or_l1_messages_sorter: 89002,
     limit_for_l1_messages_merklizer: 512,
     cycles_per_ram_permutation: 262134,
