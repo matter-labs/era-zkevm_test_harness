@@ -16,6 +16,7 @@ pub use self::franklin_crypto::bellman;
 pub use self::pairing::ff;
 pub use sync_vm::franklin_crypto;
 pub use sync_vm;
+pub mod geometry_config;
 
 pub use zk_evm::ethereum_types;
 
