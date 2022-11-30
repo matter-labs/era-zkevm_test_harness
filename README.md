@@ -34,6 +34,11 @@ One can see a lot of `KKK_proof_N_M.json`, `KKK_proof_N_M.key` and similar `.jso
 Proofs can be verified in Ethereum by synthesizing a verification contract for "scheduler" and sending the "decommitted" public input parts (as public input is just linear hash of some parameters concatenated together). TODO: cover verification
 
 ### Running geometry config generator
+```shell
+ cargo +nightly run --release --bin geometry_config_generator -- --code-decommitter <code-decommitter> --code-decommitter-sorter <code-decommitter-sorter> --ecrecover <ecrecover> --events-or-l1-messages-sorter <events-or-l1-messages-sorter> --initial-writes <initial-writes> --keccak256 <keccak256> --l1-messages-merklizer <l1-messages-merklizer> --log-demuxer <log-demuxer> --ram-permutation <ram-permutation> --repeated-writes <repeated-writes> --sha256 <sha256> --storage-application <storage-application> --storage-sorter <storage-sorter> --vm-snapshot <vm-snapshot>
 ```
- cargo +nightly run --release --bin geometry_config_generator -- --numeric-circuit [3-17]
+
+### Running circuit limit estimator
+```shell
+cargo +nightly run --release --bin circuit_limit_estimator -- --numeric-circuit [3-17]
 ```
