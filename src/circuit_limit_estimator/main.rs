@@ -1,3 +1,7 @@
+use std::fs::File;
+use std::io::Write;
+
+use structopt::StructOpt;
 use sync_vm::franklin_crypto::bellman::plonk::better_better_cs::gates::selector_optimized_with_d_next::SelectorOptimizedWidth4MainGateWithDNext;
 use sync_vm::rescue_poseidon::RescueParams;
 use sync_vm::testing::create_test_artifacts_with_optimized_gate;
@@ -6,11 +10,9 @@ use zkevm_test_harness::abstract_zksync_circuit::{ZkSyncUniformCircuitCircuitIns
 use zkevm_test_harness::abstract_zksync_circuit::concrete_circuits::{CodeDecommitterInstanceSynthesisFunction, CodeDecommittmentsSorterSynthesisFunction, ECRecoverFunctionInstanceSynthesisFunction, EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction, Keccak256RoundFunctionInstanceSynthesisFunction, LogDemuxInstanceSynthesisFunction, MessagesMerklizerInstanceSynthesisFunction, RAMPermutationInstanceSynthesisFunction, Sha256RoundFunctionInstanceSynthesisFunction, StorageApplicationInstanceSynthesisFunction, StorageInitialWritesRehasherInstanceSynthesisFunction, StorageRepeatedWritesRehasherInstanceSynthesisFunction, StorageSortAndDedupInstanceSynthesisFunction, VmMainInstanceSynthesisFunction};
 use zkevm_test_harness::bellman::bn256::Bn256;
 use zkevm_test_harness::bellman::plonk::better_better_cs::cs::{PlonkCsWidth4WithNextStepAndCustomGatesParams, SetupAssembly};
+use zkevm_test_harness::bellman::plonk::better_better_cs::cs::Circuit;
 use zkevm_test_harness::witness::oracle::VmWitnessOracle;
 use zkevm_test_harness::witness::postprocessing::{L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH, USE_BLAKE2S_EXTRA_TABLES};
-use zkevm_test_harness::bellman::plonk::better_better_cs::cs::Circuit;
-
-use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 #[structopt(
@@ -178,9 +180,17 @@ fn get_circuit_capacity(circuit_type: u8) -> usize {
     }
 }
 
+fn save_circuit_limit(limit: usize, filepath: String) {
+    let mut f = File::create(filepath)
+        .expect("Unable to create file");
+    f.write_all(limit.to_string().as_bytes())
+        .expect("Unable to write data");
+}
+
 fn main() {
     let opt = Opt::from_args();
     println!("Estimating circuit limit for circuit {}", opt.numeric_circuit);
     let circuit_limit = get_circuit_capacity(opt.numeric_circuit);
+    save_circuit_limit(circuit_limit, format!("circuit_limit_{}.txt", opt.numeric_circuit));
     println!("Estimated circuit limit is {} for circuit {}", circuit_limit, opt.numeric_circuit);
 }

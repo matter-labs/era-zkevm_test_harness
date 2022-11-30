@@ -35,7 +35,7 @@ Proofs can be verified in Ethereum by synthesizing a verification contract for "
 
 ### Running geometry config generator
 ```shell
- cargo +nightly run --release --bin geometry_config_generator -- --code-decommitter <code-decommitter> --code-decommitter-sorter <code-decommitter-sorter> --ecrecover <ecrecover> --events-or-l1-messages-sorter <events-or-l1-messages-sorter> --initial-writes <initial-writes> --keccak256 <keccak256> --l1-messages-merklizer <l1-messages-merklizer> --log-demuxer <log-demuxer> --ram-permutation <ram-permutation> --repeated-writes <repeated-writes> --sha256 <sha256> --storage-application <storage-application> --storage-sorter <storage-sorter> --vm-snapshot <vm-snapshot>
+ cargo run --release --bin geometry_config_generator -- --code-decommitter <code-decommitter> --code-decommitter-sorter <code-decommitter-sorter> --ecrecover <ecrecover> --events-or-l1-messages-sorter <events-or-l1-messages-sorter> --initial-writes <initial-writes> --keccak256 <keccak256> --l1-messages-merklizer <l1-messages-merklizer> --log-demuxer <log-demuxer> --ram-permutation <ram-permutation> --repeated-writes <repeated-writes> --sha256 <sha256> --storage-application <storage-application> --storage-sorter <storage-sorter> --vm-snapshot <vm-snapshot>
 ```
 
 ### Running circuit limit estimator
