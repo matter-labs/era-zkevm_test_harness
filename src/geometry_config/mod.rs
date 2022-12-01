@@ -2,7 +2,7 @@
 
 use crate::toolset::GeometryConfig;
 
-fn get_geometry_config() -> GeometryConfig {
+pub fn get_geometry_config() -> GeometryConfig {
     GeometryConfig {
     cycles_per_vm_snapshot: 23627,
     limit_for_code_decommitter_sorter: 193953,
