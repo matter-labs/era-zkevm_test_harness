@@ -54,6 +54,7 @@ fn main() {
     let mut scope = Scope::new();
     scope.import("crate::toolset", "GeometryConfig");
     let function = scope.new_fn("get_geometry_config");
+    function.vis("pub");
     function.ret("GeometryConfig");
     function.line("GeometryConfig {");
     function.line(format!("cycles_per_vm_snapshot: {},", opt.vm_snapshot));
