@@ -25,6 +25,16 @@ struct Opt {
     numeric_circuit: u8,
 }
 
+fn ensure_cycle_within_2_26_limit(cycles: usize, gates: usize, additive: usize) -> usize {
+    let two_power_26: usize = 1 << 26;
+    if (cycles * gates + additive) < two_power_26 {
+        println!("cycles*gates+additive : {}", cycles * gates + additive);
+        return cycles;
+    }
+    println!("two_power_26 - additive / gates: {}", (two_power_26 - additive) / gates);
+    (two_power_26 - additive) / gates
+}
+
 fn compute_inner<
     SF: ZkSyncUniformSynthesisFunction<Bn256, RoundFunction=GenericHasher<Bn256, RescueParams<Bn256, 2, 3>, 2, 3>>,
     F: Fn(usize) -> SF::Config
@@ -76,6 +86,7 @@ fn compute_inner<
     println!("O(1) costs = {}", additive);
 
     let cycles = (max - additive) / per_round_gates;
+    let cycles = ensure_cycle_within_2_26_limit(cycles, per_round_gates + 2, additive);
 
     println!("Can fit {} cycles for circuit type {}", cycles, SF::description());
 
