@@ -58,7 +58,9 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
     // fill the tools
     let mut to_fill = vec![];
     let entry_point_code_hash_as_u256 = U256::from_big_endian(&bytecode_hash);
-    to_fill.push((entry_point_code_hash_as_u256, contract_bytecode_to_words(&entry_point_code)));
+    if !used_bytecodes.contains_key(&entry_point_code_hash_as_u256) {
+        to_fill.push((entry_point_code_hash_as_u256, contract_bytecode_to_words(&entry_point_code)));
+    }
     for (k, v) in used_bytecodes.into_iter() {
         to_fill.push((k, contract_bytecode_to_words(&v)));
     }
