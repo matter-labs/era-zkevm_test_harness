@@ -8,6 +8,7 @@ use super::*;
 use crate::encodings::memory_query::MemoryQueueSimulator;
 use crate::utils::biguint_from_u256;
 use std::cmp::Ordering;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use crate::bellman::Engine;
 use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
@@ -134,7 +135,7 @@ pub fn compute_decommitter_circuit_snapshots<
     let mut input_passthrough_data = CodeDecommittmentsDeduplicatorInputData::<E>::placeholder_witness();
     input_passthrough_data.initial_log_queue_state = take_sponge_like_queue_state_from_simulator(&unsorted_decommittment_queue_simulator);
 
-    let input_witness: Vec<_> = unsorted_decommittment_queue_simulator.witness.iter().map(|(encoding, old_tail, element)| {
+    let input_witness: VecDeque<_> = unsorted_decommittment_queue_simulator.witness.iter().map(|(encoding, old_tail, element)| {
         let wit = DecommitQueryWitness {
             root_hash: biguint_from_u256(element.hash),
             page: element.memory_page.0,
@@ -146,7 +147,7 @@ pub fn compute_decommitter_circuit_snapshots<
         (*encoding, wit, *old_tail)
     }).collect();
 
-    let sorted_witness: Vec<_> = sorted_decommittment_queue_simulator.witness.iter().map(|(encoding, old_tail, element)| {
+    let sorted_witness: VecDeque<_> = sorted_decommittment_queue_simulator.witness.iter().map(|(encoding, old_tail, element)| {
         let wit = DecommitQueryWitness {
             root_hash: biguint_from_u256(element.hash),
             page: element.memory_page.0,
@@ -227,7 +228,7 @@ pub fn compute_decommitter_circuit_snapshots<
                 _marker_e: (),
                 _marker: std::marker::PhantomData,
             },
-            sorted_requests_queue_witness: FixedWidthEncodingSpongeLikeQueueWitness {wit: vec![]},
+            sorted_requests_queue_witness: FixedWidthEncodingSpongeLikeQueueWitness {wit: VecDeque::new()},
             code_words: vec![],
         };
 
@@ -304,7 +305,7 @@ pub fn compute_decommitter_circuit_snapshots<
                     wit.1,
                 );
 
-                current_circuit_witness.sorted_requests_queue_witness.wit.push(wit);
+                current_circuit_witness.sorted_requests_queue_witness.wit.push_back(wit);
 
                 fsm_internals.state_get_from_queue = false;
                 fsm_internals.state_decommit = true;
