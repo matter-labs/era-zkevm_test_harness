@@ -11,6 +11,10 @@ name = "circuit_limit_estimator"
 path = "src/circuit_limit_estimator/main.rs"
 
 [[bin]]
+name = "circuit_synthesis_performance_test"
+path = "src/circuit_synthesis_performance_test/main.rs"
+
+[[bin]]
 name = "geometry_config_generator"
 path = "src/geometry_config_generator/main.rs"
 

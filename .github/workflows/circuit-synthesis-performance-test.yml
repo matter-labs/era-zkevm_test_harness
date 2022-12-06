@@ -1,0 +1,43 @@
+name: Circuit Synthesis performance test
+
+on:
+  pull_request:
+    branches:
+      - v1.2
+      - v1.2.1
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: "Target branch to run performance test against"
+        type: string
+        required: true
+        default: "v1.2"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  circuit-synthesis-performance-test:
+    runs-on: [self-hosted, ci-runner]
+    strategy:
+      matrix:
+        key: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    steps:
+      - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3
+        with:
+          ref: ${{ github.event.inputs.target_branch }}
+          submodules: "recursive"
+          token: ${{ secrets.ZKSYNC_ADMIN_BOT_ORG_REPO_WRITE }}
+      - name: Setup Rust
+        run: |
+          curl https://sh.rustup.rs -sSf | bash -s -- -y
+          source "$HOME/.cargo/env"
+          sudo apt update && sudo apt install clang openssl libssl-dev gcc g++ pkg-config build-essential libclang-dev -y
+      - name: Estimate circuit limit
+        run: |
+          git config --global --add url."https://${{ secrets.ZKSYNC_ADMIN_BOT_ORG_REPO_WRITE }}:x-oauth-basic@github.com/".insteadOf ssh://git@github.com/
+          git config --global --add url."https://${{ secrets.ZKSYNC_ADMIN_BOT_ORG_REPO_WRITE }}:x-oauth-basic@github.com/".insteadOf https://github.com/
+          source "$HOME/.cargo/env"
+          cargo run --release --bin circuit_synthesis_performance_test -- --numeric-circuit ${{ matrix.key }}
+
