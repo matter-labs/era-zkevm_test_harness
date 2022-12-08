@@ -2,7 +2,7 @@ mod utils;
 mod serialize_utils;
 pub mod invididual_debugs;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use super::*;
 use crate::abstract_zksync_circuit::concrete_circuits::ZkSyncCircuit;
@@ -685,7 +685,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         let proof_file_name = format!("leaf_proof_{}", idx);
         let output_file_name = format!("leaf_output_{}", idx);
         
-        let queue_wit: Vec<_> = leaf_layer_subqueues[idx].witness.iter().map(|el| {
+        let queue_wit: VecDeque<_> = leaf_layer_subqueues[idx].witness.iter().map(|el| {
             let (enc, prev_tail, el) = el.clone();
             let w = RecursiveProofQueryWitness {
                 cicruit_type: el.circuit_type,
@@ -881,7 +881,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
 
         for (idx, subset) in merged.iter().cloned().enumerate() {
 
-            let queue_wit: Vec<_> = subset.witness.iter().map(|el| {
+            let queue_wit: VecDeque<_> = subset.witness.iter().map(|el| {
                 let (enc, prev_tail, el) = el.clone();
                 let w = RecursiveProofQueryWitness {
                     cicruit_type: el.circuit_type,

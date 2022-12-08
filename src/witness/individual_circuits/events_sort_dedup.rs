@@ -63,7 +63,7 @@ pub fn compute_events_dedup_and_sort<
     }
 
     let sorted_simulator_final_state = take_queue_state_from_simulator(&sorted_simulator);
-    let sorted_queue_witness: Vec<_> = sorted_simulator.witness.into_iter().map(|(encoding, old_tail, el)| {
+    let sorted_queue_witness: VecDeque<_> = sorted_simulator.witness.into_iter().map(|(encoding, old_tail, el)| {
         let transformed_query = log_query_into_storage_record_witness(&el);
 
         (encoding, transformed_query, old_tail)
@@ -90,7 +90,7 @@ pub fn compute_events_dedup_and_sort<
     // dbg!(take_queue_state_from_simulator(&result_queue_simulator));
     // dbg!(&result_queue_simulator.witness);
 
-    let initial_queue_witness: Vec<_> = unsorted_simulator.witness.iter().map(|(encoding, old_tail, element)| {
+    let initial_queue_witness: VecDeque<_> = unsorted_simulator.witness.iter().map(|(encoding, old_tail, element)| {
         let as_storage_log = log_query_into_storage_record_witness(element);
 
         (*encoding, as_storage_log, *old_tail)
