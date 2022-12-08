@@ -40,5 +40,10 @@ Proofs can be verified in Ethereum by synthesizing a verification contract for "
 
 ### Running circuit limit estimator
 ```shell
-cargo +nightly run --release --bin circuit_limit_estimator -- --numeric-circuit [3-17]
+cargo run --release --bin circuit_limit_estimator -- --numeric-circuit [3-17]
+```
+
+### Running circuit synthesis performance test
+```shell
+cargo run --release --bin circuit_synthesis_performance_test -- --numeric-circuit [3-17]
 ```

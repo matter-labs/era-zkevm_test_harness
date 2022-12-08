@@ -91,7 +91,7 @@ pub fn compute_logs_demux<
 
     // dbg!(&output_passthrough_data);
 
-    let input_witness: Vec<_> = artifacts.original_log_queue_simulator.witness.iter().map(|(encoding, old_tail, element)| {
+    let input_witness: VecDeque<_> = artifacts.original_log_queue_simulator.witness.iter().map(|(encoding, old_tail, element)| {
         let as_storage_log = log_query_into_storage_record_witness(element);
 
         (*encoding, as_storage_log, *old_tail)

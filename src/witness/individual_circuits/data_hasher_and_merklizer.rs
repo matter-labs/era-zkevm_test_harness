@@ -57,7 +57,7 @@ pub fn compute_pubdata_hasher_witness<
     // dbg!(take_queue_state_from_simulator(&result_queue_simulator));
     // dbg!(&result_queue_simulator.witness);
 
-    let input_queue_witness: Vec<_> = simulator.witness.iter().map(|(encoding, old_tail, element)| {
+    let input_queue_witness: VecDeque<_> = simulator.witness.iter().map(|(encoding, old_tail, element)| {
         let circuit_witness = element.reflect();
 
         (*encoding, circuit_witness, *old_tail)
@@ -146,7 +146,7 @@ pub fn compute_merklizer_witness<
     output_passthrough_data.linear_hash = Bytes32Witness::from_bytes_array(&linear_hash);
     output_passthrough_data.root_hash = Bytes32Witness::from_bytes_array(&root);
 
-    let input_queue_witness: Vec<_> = simulator.witness.iter().map(|(encoding, old_tail, element)| {
+    let input_queue_witness: VecDeque<_> = simulator.witness.iter().map(|(encoding, old_tail, element)| {
         let circuit_witness = element.reflect();
 
         (*encoding, circuit_witness, *old_tail)

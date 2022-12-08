@@ -144,7 +144,7 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
                 _marker_e: (),
                 _marker: std::marker::PhantomData
             },
-            requests_queue_witness: FixedWidthEncodingGenericQueueWitness {wit: vec![]},
+            requests_queue_witness: FixedWidthEncodingGenericQueueWitness {wit: VecDeque::new()},
             memory_reads_witness: vec![],
         };
         result.push(witness);
@@ -390,7 +390,7 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
                 use crate::encodings::log_query::log_query_into_storage_record_witness;
 
                 let range = starting_request_idx..(request_idx+1);
-                let wit: Vec<_> = (&simulator_witness[range]).iter().map(|el| {
+                let wit: VecDeque<_> = (&simulator_witness[range]).iter().map(|el| {
                     let mapped = log_query_into_storage_record_witness::<E>(&el.2);
 
                     (el.0, mapped, el.1)

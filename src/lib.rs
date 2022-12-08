@@ -17,7 +17,7 @@ pub use self::pairing::ff;
 pub use sync_vm::franklin_crypto;
 pub use sync_vm;
 pub mod geometry_config;
-
+pub mod circuit_limit_estimator;
 pub use zk_evm::ethereum_types;
 
 use self::utils::*;

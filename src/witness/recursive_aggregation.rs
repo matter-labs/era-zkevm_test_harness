@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 
 use super::*;
 use super::full_block_artifact::{BlockBasicCircuits, BlockBasicCircuitsPublicInputs};
@@ -368,7 +368,7 @@ pub fn prepare_leaf_aggregations(
         
         use sync_vm::scheduler::RecursiveProofQueryWitness;
 
-        let queue_wit: Vec<_> = leaf_layer_subqueues[idx].witness.iter().map(|el| {
+        let queue_wit: VecDeque<_> = leaf_layer_subqueues[idx].witness.iter().map(|el| {
             let (enc, prev_tail, el) = el.clone();
             let w = RecursiveProofQueryWitness {
                 cicruit_type: el.circuit_type,
@@ -635,7 +635,7 @@ pub fn prepare_node_aggregations(
     let mut circuit_to_aggregate_index = 0;
 
     for (_idx, subset) in merged.iter().cloned().enumerate() {
-        let queue_wit: Vec<_> = subset.witness.iter().map(|el| {
+        let queue_wit: VecDeque<_> = subset.witness.iter().map(|el| {
             let (enc, prev_tail, el) = el.clone();
             let w = RecursiveProofQueryWitness {
                 cicruit_type: el.circuit_type,

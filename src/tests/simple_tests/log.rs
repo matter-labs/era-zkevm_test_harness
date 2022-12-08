@@ -39,7 +39,7 @@ fn test_write_same_value() {
         .globl	__entry
     __entry:
     .main:
-        near_call r1, @inner, @handler
+        near_call r0, @inner, @handler
         context.ergs_left r15
         ret.ok r0
     inner:
@@ -66,7 +66,7 @@ fn test_rollback_to_same_value_no_reads() {
         .globl	__entry
     __entry:
     .main:
-        near_call r1, @inner, @handler
+        near_call r0, @inner, @handler
         context.ergs_left r15
         ret.ok r0
     inner:

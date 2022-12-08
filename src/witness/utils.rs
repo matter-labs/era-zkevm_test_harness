@@ -99,7 +99,7 @@ pub fn take_sponge_like_queue_state_from_simulator<
 
 use sync_vm::scheduler::queues::FixedWidthEncodingGenericQueueWitness;
 use sync_vm::glue::traits::*;
-
+use std::collections::VecDeque;
 pub fn transform_queue_witness<
     'a, 
     E: Engine, 
@@ -109,7 +109,7 @@ pub fn transform_queue_witness<
 >(
     witness_iter: impl Iterator<Item = &'a ([E::Fr; N], E::Fr, I)>,
 ) -> FixedWidthEncodingGenericQueueWitness<E, D, N> {
-    let wit: Vec<_> = witness_iter.map(|(enc, old_tail, el)| {
+    let wit: VecDeque<_> = witness_iter.map(|(enc, old_tail, el)| {
         (*enc, el.reflect(), *old_tail)
     }).collect();
 
