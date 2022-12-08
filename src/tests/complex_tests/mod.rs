@@ -263,7 +263,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         // {
         //     continue;
         // }
-        if !matches!(&el, ZkSyncCircuit::KeccakRoundFunction(..)) 
+        if !matches!(&el, ZkSyncCircuit::MainVM(..)) 
         {
             continue;
         }

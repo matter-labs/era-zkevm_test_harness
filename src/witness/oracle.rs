@@ -562,7 +562,6 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
     use crate::encodings::callstack_entry::CallstackSimulator;
     let mut callstack_argebraic_simulator = CallstackSimulator::<E>::empty();
     let mut callstack_values_witnesses = vec![]; // index of cycle -> witness for callstack
-    // let mut rollback_queue_initial_tails_for_new_frames = vec![];
     // we need to simultaneously follow the logic of pushes/joins of the storage queues,
     // and encoding of the current callstack state as the sponge state
 
