@@ -141,7 +141,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     let predeployed_contracts = test_artifact.predeployed_contracts.clone().into_iter().chain(Some((test_artifact.entry_point_address, test_artifact.entry_point_code.clone()))).collect::<HashMap<_,_>>();
     save_predeployed_contracts(&mut storage_impl, &mut tree, &predeployed_contracts);
 
-    let used_bytecodes = HashMap::from_iter(test_artifact.predeployed_contracts.iter().map(|(_,bytecode)| (bytecode_to_code_hash(&bytecode).unwrap().into(), bytecode.clone())));
+    let used_bytecodes = HashMap::from_iter(test_artifact.predeployed_contracts.iter().map(|(_,bytecode)| (bytecode_to_code_hash(&bytecode).unwrap().into(), bytecode.clone()))).chain(Some(test_artifact.default_account_code));
     for (k, _) in used_bytecodes.iter() {
         println!("Have bytecode hash 0x{:x}", k);
     }
@@ -177,14 +177,14 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     // let ram_queries = vec![
     //     (sync_vm::scheduler::PREVIOUS_BLOCK_HASH_HEAP_SLOT, U256::from_big_endian(&previous_content_hash))
     // ];
-
+    let default_account_codehash = bytecode_to_code_hash(&test_artifact.default_account_code).unwrap();
     let (basic_block_circuits, basic_block_circuits_inputs, mut scheduler_partial_input) = run(
         Address::zero(),
         test_artifact.entry_point_address,
         test_artifact.entry_point_code,
         vec![],
         false,
-        U256::zero(), // no default AA for this test
+        default_account_codehash,
         used_bytecodes,
         vec![],
         cycle_limit,

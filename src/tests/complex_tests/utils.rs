@@ -11,6 +11,8 @@ pub struct TestArtifact {
     pub entry_point_address: Address,
     #[serde(deserialize_with = "deserialize_bytecode")]
     pub entry_point_code: Vec<[u8;32]>,
+    #[serde(deserialize_with = "default_account_code")]
+    pub default_account_code: Vec<[u8;32]>,
     #[serde(deserialize_with = "deserialize_bytecodes_with_addresses")]
     pub predeployed_contracts: HashMap<Address, Vec<[u8;32]>>
 }
