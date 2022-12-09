@@ -177,14 +177,14 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     // let ram_queries = vec![
     //     (sync_vm::scheduler::PREVIOUS_BLOCK_HASH_HEAP_SLOT, U256::from_big_endian(&previous_content_hash))
     // ];
-
+    let default_account_codehash = bytecode_to_code_hash(&test_artifact.default_account_code).unwrap();
     let (basic_block_circuits, basic_block_circuits_inputs, mut scheduler_partial_input) = run(
         Address::zero(),
         test_artifact.entry_point_address,
         test_artifact.entry_point_code,
         vec![],
         false,
-        U256::zero(), // no default AA for this test
+        default_account_codehash,
         used_bytecodes,
         vec![],
         cycle_limit,
