@@ -141,7 +141,10 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     let predeployed_contracts = test_artifact.predeployed_contracts.clone().into_iter().chain(Some((test_artifact.entry_point_address, test_artifact.entry_point_code.clone()))).collect::<HashMap<_,_>>();
     save_predeployed_contracts(&mut storage_impl, &mut tree, &predeployed_contracts);
 
-    let used_bytecodes = HashMap::from_iter(test_artifact.predeployed_contracts.iter().map(|(_,bytecode)| (bytecode_to_code_hash(&bytecode).unwrap().into(), bytecode.clone()))).chain(Some(test_artifact.default_account_code));
+    let used_bytecodes = HashMap::from_iter(
+        test_artifact.predeployed_contracts.iter().map(|(_,bytecode)| (bytecode_to_code_hash(&bytecode).unwrap().into(), bytecode.clone()))
+        .chain(Some(test_artifact.default_account_code.clone()).map(|bytecode|(bytecode_to_code_hash(&bytecode).unwrap().into(), bytecode.clone())))
+    );
     for (k, _) in used_bytecodes.iter() {
         println!("Have bytecode hash 0x{:x}", k);
     }
@@ -178,6 +181,10 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     //     (sync_vm::scheduler::PREVIOUS_BLOCK_HASH_HEAP_SLOT, U256::from_big_endian(&previous_content_hash))
     // ];
     let default_account_codehash = bytecode_to_code_hash(&test_artifact.default_account_code).unwrap();
+    let default_account_codehash = U256::from_big_endian(&default_account_codehash);
+
+    println!("Default AA code hash 0x{:x}", default_account_codehash);
+
     let (basic_block_circuits, basic_block_circuits_inputs, mut scheduler_partial_input) = run(
         Address::zero(),
         test_artifact.entry_point_address,
@@ -263,10 +270,11 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         // {
         //     continue;
         // }
-        if !matches!(&el, ZkSyncCircuit::MainVM(..)) 
-        {
-            continue;
-        }
+        
+        // if !matches!(&el, ZkSyncCircuit::MainVM(..)) 
+        // {
+        //     continue;
+        // }
 
         // el.debug_witness();
         use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
