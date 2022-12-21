@@ -50,7 +50,7 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
         &mut artifacts.demuxed_ecrecover_queue_states,
         vec![],
     );
-    let simulator_witness = artifacts.demuxed_ecrecover_queue_simulator.witness.clone();
+    let simulator_witness: Vec<_> = artifacts.demuxed_ecrecover_queue_simulator.witness.clone().into();
     let round_function_witness =
         std::mem::replace(&mut artifacts.ecrecover_witnesses, vec![]);
 

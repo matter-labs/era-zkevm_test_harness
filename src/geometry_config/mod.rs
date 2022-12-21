@@ -7,7 +7,7 @@ pub const fn get_geometry_config() -> GeometryConfig {
     cycles_per_vm_snapshot: 23594,
     limit_for_code_decommitter_sorter: 192838,
     limit_for_log_demuxer: 101833,
-    limit_for_storage_sorter: 79700,
+    cycles_per_storage_sorter: 79700,
     limit_for_events_or_l1_messages_sorter: 88767,
     limit_for_l1_messages_merklizer: 512,
     cycles_per_ram_permutation: 260102,

@@ -219,7 +219,7 @@ pub fn circuits_for_vk_generation(
     // storage sorter
     let circuit = StorageSorterCircuit::new(
         None,
-        geometry.limit_for_storage_sorter as usize,
+        geometry.cycles_per_storage_sorter as usize,
         round_function.clone(),
         None,
     );

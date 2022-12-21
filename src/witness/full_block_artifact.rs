@@ -279,13 +279,12 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
         tracing::debug!("Running storage deduplication simulation");
 
-        assert!(self.demuxed_rollup_storage_queries.len() <= geometry.limit_for_storage_sorter as usize, "too many storage accesses to sort by single circuit");
-
         let storage_deduplicator_circuit_data = compute_storage_dedup_and_sort(
             self,
+            geometry.cycles_per_storage_sorter as usize,
             round_function
         );
-        self.storage_deduplicator_circuit_data = vec![storage_deduplicator_circuit_data];
+        self.storage_deduplicator_circuit_data = storage_deduplicator_circuit_data;
 
         use crate::witness::individual_circuits::events_sort_dedup::compute_events_dedup_and_sort;
 
@@ -391,7 +390,7 @@ pub struct BlockBasicCircuits<E: Engine> {
     // when it's all done we prove the memory validity and finish with it
     pub ram_permutation_circuits: Vec<RAMPermutationCircuit<E>>,
     // sort storage changes
-    pub storage_sorter_circuit: StorageSorterCircuit<E>,
+    pub storage_sorter_circuits: Vec<StorageSorterCircuit<E>>,
     // apply them
     pub storage_application_circuits: Vec<StorageApplicationCircuit<E>>,
     // rehash initial writes
@@ -417,7 +416,7 @@ impl<E: Engine> BlockBasicCircuits<E> {
             sha256_precompile_circuits, 
             ecrecover_precompile_circuits, 
             ram_permutation_circuits, 
-            storage_sorter_circuit, 
+            storage_sorter_circuits, 
             storage_application_circuits, 
             initial_writes_hasher_circuit, 
             repeated_writes_hasher_circuit, 
@@ -440,8 +439,8 @@ impl<E: Engine> BlockBasicCircuits<E> {
         result.extend(ecrecover_precompile_circuits.into_iter().map(|el| ZkSyncCircuit::ECRecover(el)));
 
         result.extend(ram_permutation_circuits.into_iter().map(|el| ZkSyncCircuit::RAMPermutation(el)));
-
-        result.push(ZkSyncCircuit::StorageSorter(storage_sorter_circuit));
+        
+        result.extend(storage_sorter_circuits.into_iter().map(|el| ZkSyncCircuit::StorageSorter(el)));
 
         result.extend(storage_application_circuits.into_iter().map(|el| ZkSyncCircuit::StorageApplication(el)));
 
@@ -478,7 +477,7 @@ pub struct BlockBasicCircuitsPublicInputs<E: Engine> {
     // when it's all done we prove the memory validity and finish with it
     pub ram_permutation_circuits: Vec<E::Fr>,
     // sort storage changes
-    pub storage_sorter_circuit: E::Fr,
+    pub storage_sorter_circuits: Vec<E::Fr>,
     // apply them
     pub storage_application_circuits: Vec<E::Fr>,
     // rehash initial writes
@@ -504,7 +503,7 @@ impl<E: Engine> BlockBasicCircuitsPublicInputs<E> {
             sha256_precompile_circuits, 
             ecrecover_precompile_circuits, 
             ram_permutation_circuits, 
-            storage_sorter_circuit, 
+            storage_sorter_circuits, 
             storage_application_circuits, 
             initial_writes_hasher_circuit, 
             repeated_writes_hasher_circuit, 
@@ -530,7 +529,7 @@ impl<E: Engine> BlockBasicCircuitsPublicInputs<E> {
 
         result.extend(ram_permutation_circuits);
 
-        result.push(storage_sorter_circuit);
+        result.extend(storage_sorter_circuits);
 
         result.extend(storage_application_circuits);
 
@@ -568,7 +567,7 @@ pub struct BlockBasicCircuitsPublicCompactFormsWitnesses<E: Engine> {
     // when it's all done we prove the memory validity and finish with it
     pub ram_permutation_circuits: Vec<ClosedFormInputCompactFormWitness<E>>,
     // sort storage changes
-    pub storage_sorter_circuit: ClosedFormInputCompactFormWitness<E>,
+    pub storage_sorter_circuits: Vec<ClosedFormInputCompactFormWitness<E>>,
     // apply them
     pub storage_application_circuits: Vec<ClosedFormInputCompactFormWitness<E>>,
     // rehash initial writes
@@ -594,7 +593,7 @@ impl<E: Engine> BlockBasicCircuitsPublicCompactFormsWitnesses<E> {
             sha256_precompile_circuits, 
             ecrecover_precompile_circuits, 
             ram_permutation_circuits, 
-            storage_sorter_circuit, 
+            storage_sorter_circuits, 
             storage_application_circuits, 
             initial_writes_hasher_circuit, 
             repeated_writes_hasher_circuit, 
@@ -620,7 +619,7 @@ impl<E: Engine> BlockBasicCircuitsPublicCompactFormsWitnesses<E> {
 
         result.extend(ram_permutation_circuits);
 
-        result.push(storage_sorter_circuit);
+        result.extend(storage_sorter_circuits);
 
         result.extend(storage_application_circuits);
 

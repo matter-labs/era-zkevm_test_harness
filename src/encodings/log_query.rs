@@ -113,7 +113,7 @@ use sync_vm::vm::vm_state::saved_contract_context::scale_and_accumulate;
 
 // Ok(([el0, el1, el2, el3, el4], revert_falg_offset))
 
-use sync_vm::glue::storage_validity_by_grand_product::{EXTENDED_TIMESTAMP_ENCODING_OFFSET, EXTENDED_TIMESTAMP_ENCODING_ELEMENT};
+use sync_vm::glue::storage_validity_by_grand_product::{EXTENDED_TIMESTAMP_ENCODING_OFFSET, EXTENDED_TIMESTAMP_ENCODING_ELEMENT, TimestampedStorageLogRecord, TimestampedStorageLogRecordWitness};
 
 impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 5> for LogQuery {
     fn encoding_witness(&self) -> [<E>::Fr; 5] {
@@ -221,6 +221,29 @@ impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 5> for LogQueryWithExtendedE
     }
 }
 
+pub fn comparison_key<E: Engine>(query: &LogQuery) -> [E::Fr; 2] {
+    use num_bigint::BigUint;
+    use crate::franklin_crypto::plonk::circuit::bigint::biguint_to_fe;
+
+    let mut k0 = BigUint::from(0u64);
+    // lowest 192 bits of key
+    k0 += BigUint::from(query.key.0[2]);
+    k0 <<= 64;
+    k0 += BigUint::from(query.key.0[1]);
+    k0 <<= 64;
+    k0 += BigUint::from(query.key.0[0]);
+
+    // rest of key, address, and shard
+    let mut k1 = BigUint::from(0u64);
+    k1 += BigUint::from(query.shard_id as u64);
+    k1 <<= 160;
+    k1 += BigUint::from_bytes_be(&query.address.0);
+    k1 <<= 64;
+    k1 += BigUint::from(query.key.0[3]);
+
+    [biguint_to_fe::<E::Fr>(k0), biguint_to_fe::<E::Fr>(k1)]
+}
+
 
 pub type LogQueueSimulator<E> = QueueSimulator<E, LogQuery, 5, 3>;
 pub type LogQueueState<E> = QueueIntermediateStates<E, 3, 3>;
@@ -246,6 +269,15 @@ pub fn log_query_into_storage_record_witness<E: Engine>(query: &LogQuery) -> <St
         tx_number_in_block: query.tx_number_in_block,
         timestamp: query.timestamp.0,
         _marker: std::marker::PhantomData
+    }
+}
+
+pub fn log_query_into_timestamped_storage_record_witness<E: Engine>(query: &LogQueryWithExtendedEnumeration) -> <TimestampedStorageLogRecord<E> as CSWitnessable<E>>::Witness {
+    use sync_vm::scheduler::queues::StorageLogRecordWitness;
+
+    TimestampedStorageLogRecordWitness {
+        record: log_query_into_storage_record_witness(&query.raw_query),
+        timestamp: query.extended_timestamp,
     }
 }
 

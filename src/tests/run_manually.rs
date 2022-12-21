@@ -234,7 +234,7 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         cycles_per_vm_snapshot: 10,
         limit_for_code_decommitter_sorter: 16,
         limit_for_log_demuxer: 32,
-        limit_for_storage_sorter: 32,
+        cycles_per_storage_sorter: 4,
         limit_for_events_or_l1_messages_sorter: 32,
         cycles_per_ram_permutation: 4,
         cycles_per_code_decommitter: 4,

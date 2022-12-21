@@ -310,22 +310,38 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
 
     // storage sorter
 
-    assert!(storage_deduplicator_circuit_data.len() == 1);        
-    let circuit_input = storage_deduplicator_circuit_data.into_iter().next().unwrap();
+    let mut storage_sorter_circuits = vec![];
+    let mut storage_sorter_circuit_inputs = vec![];
+    let mut storage_sorter_circuit_compact_form_witnesses = vec![];
+    let num_instances = storage_deduplicator_circuit_data.len();
+    let mut observable_input = None;
+    for (instance_idx, mut circuit_input) in storage_deduplicator_circuit_data.into_iter().enumerate() {
+        let is_first = instance_idx == 0;
+        let _is_last = instance_idx == num_instances - 1;
 
-    let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
-        circuit_input.closed_form_input.clone(),
-    );
+        if observable_input.is_none() {
+            assert!(is_first);
+            observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
+        } else {
+            circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
+        }
 
-    let storage_sorter_circuit = StorageSorterCircuit {
-        witness: AtomicCell::new(Some(circuit_input)),
-        config: Arc::new(geometry.limit_for_storage_sorter as usize),
-        round_function: round_function.clone(),
-        expected_public_input: Some(proof_system_input),
-    };
-    let storage_sorter_circuit_input = proof_system_input;
-    let storage_sorter_circuit_compact_form_witness = compact_form_witness;
+        let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
+            circuit_input.closed_form_input.clone(),
+        );
 
+        let instance = StorageSorterCircuit {
+            witness: AtomicCell::new(Some(circuit_input)),
+            config: Arc::new(geometry.cycles_per_storage_sorter as usize),
+            round_function: round_function.clone(),
+            expected_public_input: Some(proof_system_input),
+        };
+
+        storage_sorter_circuits.push(instance);
+        storage_sorter_circuit_inputs.push(proof_system_input);
+        storage_sorter_circuit_compact_form_witnesses.push(compact_form_witness);
+    }
+  
     // storage application
 
     let mut storage_application_circuits = vec![];
@@ -466,7 +482,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         sha256_precompile_circuits,
         ecrecover_precompile_circuits,
         ram_permutation_circuits,
-        storage_sorter_circuit,
+        storage_sorter_circuits,
         storage_application_circuits,
         initial_writes_hasher_circuit,
         repeated_writes_hasher_circuit,
@@ -484,7 +500,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         sha256_precompile_circuits: sha256_precompile_circuits_inputs,
         ecrecover_precompile_circuits: ecrecover_precompile_circuits_inputs,
         ram_permutation_circuits: ram_permutation_circuits_inputs,
-        storage_sorter_circuit: storage_sorter_circuit_input,
+        storage_sorter_circuits: storage_sorter_circuit_inputs,
         storage_application_circuits: storage_application_circuits_inputs,
         initial_writes_hasher_circuit: initial_writes_hasher_circuit_input,
         repeated_writes_hasher_circuit: repeated_writes_hasher_circuit_input,
@@ -502,7 +518,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         sha256_precompile_circuits: sha256_precompile_circuits_compact_forms_witnesses,
         ecrecover_precompile_circuits: ecrecover_precompile_circuits_compact_forms_witnesses,
         ram_permutation_circuits: ram_permutation_circuits_compact_forms_witnesses,
-        storage_sorter_circuit: storage_sorter_circuit_compact_form_witness,
+        storage_sorter_circuits: storage_sorter_circuit_compact_form_witnesses,
         storage_application_circuits: storage_application_circuits_compact_forms_witnesses,
         initial_writes_hasher_circuit: initial_writes_hasher_circuit_compact_form_witness,
         repeated_writes_hasher_circuit: repeated_writes_hasher_circuit_compact_form_witness,

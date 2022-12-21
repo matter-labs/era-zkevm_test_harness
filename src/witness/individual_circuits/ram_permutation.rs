@@ -81,110 +81,11 @@ pub fn compute_ram_circuit_snapshots<
     let lhs_contributions: Vec<_> = artifacts.memory_queue_simulator.witness.iter().map(|el| el.0).collect();
     let rhs_contributions: Vec<_> = sorted_memory_queries_simulator.witness.iter().map(|el| el.0).collect();
 
-    let mut lhs_grand_product_chain: Vec<E::Fr> = vec![E::Fr::zero(); lhs_contributions.len()];
-    let mut rhs_grand_product_chain: Vec<E::Fr> = vec![E::Fr::zero(); rhs_contributions.len()];
-
-    let challenges: [E::Fr; 3] = challenges.try_into().unwrap();
-
-    lhs_grand_product_chain.par_chunks_mut(RAM_PERMUTATION_CHUNK_SIZE).zip(lhs_contributions.par_chunks(RAM_PERMUTATION_CHUNK_SIZE)).for_each(
-        |(dst, src)| {
-            let mut grand_product = E::Fr::one();
-            for (dst, src) in dst.iter_mut().zip(src.iter()) {
-                let mut acc = challenges[2];
-
-                let mut tmp = src[0];
-                tmp.mul_assign(&challenges[0]);
-                acc.add_assign(&tmp);
-
-                let mut tmp = src[1];
-                tmp.mul_assign(&challenges[1]);
-                acc.add_assign(&tmp);
-
-                grand_product.mul_assign(&acc);
-    
-                *dst = grand_product;
-            }
-        }
+    let (lhs_grand_product_chain, rhs_grand_product_chain) = compute_grand_product_chains::<E, 2, 3>(
+        &lhs_contributions,
+        &rhs_contributions,
+        challenges
     );
-
-    rhs_grand_product_chain.par_chunks_mut(RAM_PERMUTATION_CHUNK_SIZE).zip(rhs_contributions.par_chunks(RAM_PERMUTATION_CHUNK_SIZE)).for_each(
-        |(dst, src)| {
-            let mut grand_product = E::Fr::one();
-            for (dst, src) in dst.iter_mut().zip(src.iter()) {
-                let mut acc = challenges[2];
-
-                let mut tmp = src[0];
-                tmp.mul_assign(&challenges[0]);
-                acc.add_assign(&tmp);
-
-                let mut tmp = src[1];
-                tmp.mul_assign(&challenges[1]);
-                acc.add_assign(&tmp);
-
-                grand_product.mul_assign(&acc);
-    
-                *dst = grand_product;
-            }
-        }
-    );
-
-    // elementwise products are done, now must fold
-
-    let mut lhs_intermediates: Vec<E::Fr> = lhs_grand_product_chain.par_chunks(RAM_PERMUTATION_CHUNK_SIZE).map(
-        |slice: &[E::Fr]| {
-            *slice.last().unwrap()
-        }
-    ).collect();
-
-    let mut rhs_intermediates: Vec<E::Fr> = rhs_grand_product_chain.par_chunks(RAM_PERMUTATION_CHUNK_SIZE).map(
-        |slice: &[E::Fr]| {
-            *slice.last().unwrap()
-        }
-    ).collect();
-
-    assert_eq!(lhs_intermediates.len(), lhs_grand_product_chain.chunks(RAM_PERMUTATION_CHUNK_SIZE).len());
-    assert_eq!(rhs_intermediates.len(), rhs_grand_product_chain.chunks(RAM_PERMUTATION_CHUNK_SIZE).len());
-
-    // accumulate intermediate products
-    // we should multiply element [1] by element [0],
-    // element [2] by [0] * [1],
-    // etc
-    let mut acc_lhs = E::Fr::one();
-    for el in lhs_intermediates.iter_mut() {
-        let tmp = *el;
-        el.mul_assign(&acc_lhs);
-        acc_lhs.mul_assign(&tmp);
-    }
-
-    let mut acc_rhs = E::Fr::one();
-    for el in rhs_intermediates.iter_mut() {
-        let tmp = *el;
-        el.mul_assign(&acc_rhs);
-        acc_rhs.mul_assign(&tmp);
-    }
-
-    assert_eq!(lhs_intermediates.last().unwrap(), rhs_intermediates.last().unwrap());
-
-    lhs_grand_product_chain.par_chunks_mut(RAM_PERMUTATION_CHUNK_SIZE).skip(1).zip(lhs_intermediates.par_chunks(1)).for_each(
-        |(dst, src)| {
-            let src = src[0];
-            for dst in dst.iter_mut() {
-                dst.mul_assign(&src);
-            }
-        }
-    );
-
-    rhs_grand_product_chain.par_chunks_mut(RAM_PERMUTATION_CHUNK_SIZE).skip(1).zip(rhs_intermediates.par_chunks(1)).for_each(
-        |(dst, src)| {
-            let src = src[0];
-            for dst in dst.iter_mut() {
-                dst.mul_assign(&src);
-            }
-        }
-    );
-
-    // sanity check
-    assert_eq!(lhs_grand_product_chain.last().unwrap(), rhs_grand_product_chain.last().unwrap());
 
     // now we need to split them into individual circuits
     // splitting is not extra hard here, we walk over iterator over everything and save states on checkpoints
@@ -196,12 +97,15 @@ pub fn compute_ram_circuit_snapshots<
 
     // we also want to have chunks of witness for each of all the intermediate states
 
+    assert!(artifacts.memory_queue_simulator.witness.as_slices().1.is_empty());
+    assert!(sorted_memory_queries_simulator.witness.as_slices().1.is_empty());
+
     let it = artifacts.all_memory_queue_states.chunks(per_circuit_capacity)
             .zip(artifacts.sorted_memory_queue_states.chunks(per_circuit_capacity))
             .zip(lhs_grand_product_chain.chunks(per_circuit_capacity))
             .zip(rhs_grand_product_chain.chunks(per_circuit_capacity))
-            .zip(artifacts.memory_queue_simulator.witness.chunks(per_circuit_capacity))
-            .zip(sorted_memory_queries_simulator.witness.chunks(per_circuit_capacity));
+            .zip(artifacts.memory_queue_simulator.witness.as_slices().0.chunks(per_circuit_capacity))
+            .zip(sorted_memory_queries_simulator.witness.as_slices().0.chunks(per_circuit_capacity));
 
     // now trivial transformation into desired data structures,
     // and we are all good
@@ -361,6 +265,120 @@ pub fn compute_ram_circuit_snapshots<
     }
 
     results
+}
+
+pub(crate) fn compute_grand_product_chains<E: Engine, const N: usize, const M: usize>(
+    lhs_contributions: &Vec<[E::Fr; N]>,
+    rhs_contributions: &Vec<[E::Fr; N]>,
+    challenges: Vec<E::Fr>,
+) -> (Vec<E::Fr>, Vec<E::Fr>) {
+    assert_eq!(N+1, M);
+    let mut lhs_grand_product_chain: Vec<E::Fr> = vec![E::Fr::zero(); lhs_contributions.len()];
+    let mut rhs_grand_product_chain: Vec<E::Fr> = vec![E::Fr::zero(); rhs_contributions.len()];
+
+    let challenges: [E::Fr; M] = challenges.try_into().unwrap();
+
+    lhs_grand_product_chain.par_chunks_mut(RAM_PERMUTATION_CHUNK_SIZE).zip(lhs_contributions.par_chunks(RAM_PERMUTATION_CHUNK_SIZE)).for_each(
+        |(dst, src)| {
+            let mut grand_product = E::Fr::one();
+            for (dst, src) in dst.iter_mut().zip(src.iter()) {
+                let mut acc = challenges[M-1];
+
+                debug_assert_eq!(challenges[..(M-1)].len(), src.len());
+
+                for (a, b) in src.iter().zip(challenges[..(M-1)].iter()) {
+                    let mut tmp = *a;
+                    tmp.mul_assign(b);
+                    acc.add_assign(&tmp);
+                }
+
+                grand_product.mul_assign(&acc);
+    
+                *dst = grand_product;
+            }
+        }
+    );
+
+    rhs_grand_product_chain.par_chunks_mut(RAM_PERMUTATION_CHUNK_SIZE).zip(rhs_contributions.par_chunks(RAM_PERMUTATION_CHUNK_SIZE)).for_each(
+        |(dst, src)| {
+            let mut grand_product = E::Fr::one();
+            for (dst, src) in dst.iter_mut().zip(src.iter()) {
+                let mut acc = challenges[M-1];
+
+                debug_assert_eq!(challenges[..(M-1)].len(), src.len());
+
+                for (a, b) in src.iter().zip(challenges[..(M-1)].iter()) {
+                    let mut tmp = *a;
+                    tmp.mul_assign(b);
+                    acc.add_assign(&tmp);
+                }
+
+                grand_product.mul_assign(&acc);
+    
+                *dst = grand_product;
+            }
+        }
+    );
+
+    // elementwise products are done, now must fold
+
+    let mut lhs_intermediates: Vec<E::Fr> = lhs_grand_product_chain.par_chunks(RAM_PERMUTATION_CHUNK_SIZE).map(
+        |slice: &[E::Fr]| {
+            *slice.last().unwrap()
+        }
+    ).collect();
+
+    let mut rhs_intermediates: Vec<E::Fr> = rhs_grand_product_chain.par_chunks(RAM_PERMUTATION_CHUNK_SIZE).map(
+        |slice: &[E::Fr]| {
+            *slice.last().unwrap()
+        }
+    ).collect();
+
+    assert_eq!(lhs_intermediates.len(), lhs_grand_product_chain.chunks(RAM_PERMUTATION_CHUNK_SIZE).len());
+    assert_eq!(rhs_intermediates.len(), rhs_grand_product_chain.chunks(RAM_PERMUTATION_CHUNK_SIZE).len());
+
+    // accumulate intermediate products
+    // we should multiply element [1] by element [0],
+    // element [2] by [0] * [1],
+    // etc
+    let mut acc_lhs = E::Fr::one();
+    for el in lhs_intermediates.iter_mut() {
+        let tmp = *el;
+        el.mul_assign(&acc_lhs);
+        acc_lhs.mul_assign(&tmp);
+    }
+
+    let mut acc_rhs = E::Fr::one();
+    for el in rhs_intermediates.iter_mut() {
+        let tmp = *el;
+        el.mul_assign(&acc_rhs);
+        acc_rhs.mul_assign(&tmp);
+    }
+
+    assert_eq!(lhs_intermediates.last().unwrap(), rhs_intermediates.last().unwrap());
+
+    lhs_grand_product_chain.par_chunks_mut(RAM_PERMUTATION_CHUNK_SIZE).skip(1).zip(lhs_intermediates.par_chunks(1)).for_each(
+        |(dst, src)| {
+            let src = src[0];
+            for dst in dst.iter_mut() {
+                dst.mul_assign(&src);
+            }
+        }
+    );
+
+    rhs_grand_product_chain.par_chunks_mut(RAM_PERMUTATION_CHUNK_SIZE).skip(1).zip(rhs_intermediates.par_chunks(1)).for_each(
+        |(dst, src)| {
+            let src = src[0];
+            for dst in dst.iter_mut() {
+                dst.mul_assign(&src);
+            }
+        }
+    );
+
+    // sanity check
+    assert_eq!(lhs_grand_product_chain.last().unwrap(), rhs_grand_product_chain.last().unwrap());
+
+    (lhs_grand_product_chain, rhs_grand_product_chain)
 }
 
 #[test]

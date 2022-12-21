@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use crate::ff::{Field, PrimeField};
 use crate::pairing::Engine;
 use derivative::Derivative;
@@ -57,7 +59,7 @@ pub struct QueueSimulator<
     pub num_items: u32,
     #[serde(bound(serialize = "[E::Fr; N]: serde::Serialize, I: serde::Serialize"))]
     #[serde(bound(deserialize = "[E::Fr; N]: serde::de::DeserializeOwned, I: serde::de::DeserializeOwned"))]
-    pub witness: Vec<([E::Fr; N], E::Fr, I)>,
+    pub witness: VecDeque<([E::Fr; N], E::Fr, I)>,
 }
 
 impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const ROUNDS: usize>
@@ -68,7 +70,7 @@ impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const
             head: E::Fr::zero(),
             tail: E::Fr::zero(),
             num_items: 0,
-            witness: vec![],
+            witness: VecDeque::new(),
         }
     }
 
@@ -80,10 +82,10 @@ impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const
             return (self, artificial_empty)
         }
 
-        let first_wit: Vec<_> = self.witness.drain(..(at as usize)).collect();
+        let first_wit: VecDeque<_> = self.witness.drain(..(at as usize)).collect();
         let rest_wit = self.witness;
 
-        let splitting_point = rest_wit.first().unwrap().1;
+        let splitting_point = rest_wit.front().unwrap().1;
 
         let first = Self {
             head: self.head,
@@ -145,8 +147,8 @@ impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const
         let states =
             round_function.simulate_absorb_multiple_rounds_into_empty_with_specialization(&to_hash);
         let new_tail = R::simulate_state_into_commitment(states.last().map(|el| el.1).unwrap());
-        self.witness.push((encoding, old_tail, element));
-        // self.witness.push((encoding, new_tail, element));
+        self.witness.push_back((encoding, old_tail, element));
+
         self.num_items += 1;
         self.tail = new_tail;
 
@@ -174,7 +176,7 @@ impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const
         QueueIntermediateStates<E, SW, ROUNDS>,
     ) {
         let old_head = self.head;
-        let (_, _, element) = self.witness.drain(0..1).next().unwrap();
+        let (_, _, element) = self.witness.pop_front().unwrap();
 
         let encoding = element.encoding_witness();
         let mut to_hash = vec![];
@@ -227,7 +229,7 @@ pub struct SpongeLikeQueueSimulator<
     pub head: [E::Fr; SW],
     pub tail: [E::Fr; SW],
     pub num_items: u32,
-    pub witness: Vec<([E::Fr; N], [E::Fr; SW], I)>,
+    pub witness: VecDeque<([E::Fr; N], [E::Fr; SW], I)>,
 }
 
 impl<
@@ -256,7 +258,7 @@ impl<
             head: [E::Fr::zero(); SW],
             tail: [E::Fr::zero(); SW],
             num_items: 0,
-            witness: vec![],
+            witness: VecDeque::new(),
         }
     }
 
@@ -286,7 +288,7 @@ impl<
         let states = round_function.simulate_absorb_multiple_rounds(self.tail, &encoding);
         let new_tail = states.last().map(|el| el.1).unwrap();
 
-        self.witness.push((encoding, new_tail, element));
+        self.witness.push_back((encoding, new_tail, element));
         self.num_items += 1;
         self.tail = new_tail;
 
@@ -314,7 +316,7 @@ impl<
     ) {
         let old_head = self.head;
         assert!(N % AW == 0);
-        let (_, _, element) = self.witness.drain(0..1).next().unwrap();
+        let (_, _, element) = self.witness.pop_front().unwrap();
         let encoding = element.encoding_witness();
 
         let states = round_function.simulate_absorb_multiple_rounds(self.head, &encoding);

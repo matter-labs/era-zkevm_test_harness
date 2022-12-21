@@ -283,7 +283,7 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
             keccak256_observable_output: basic_circuits.keccak_precompile_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
             sha256_observable_output: basic_circuits.sha256_precompile_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
             ecrecover_observable_output: basic_circuits.ecrecover_precompile_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
-            storage_sorter_observable_output: basic_circuits.storage_sorter_circuit.clone_witness().unwrap().closed_form_input.observable_output,
+            storage_sorter_observable_output: basic_circuits.storage_sorter_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
             storage_application_observable_output: basic_circuits.storage_application_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
             initial_writes_rehasher_observable_output: basic_circuits.initial_writes_hasher_circuit.clone_witness().unwrap().closed_form_input.observable_output,
             repeated_writes_rehasher_observable_output: basic_circuits.repeated_writes_hasher_circuit.clone_witness().unwrap().closed_form_input.observable_output,
