@@ -16,7 +16,7 @@ use std::sync::Arc;
 use crossbeam::atomic::AtomicCell;
 
 pub const USE_BLAKE2S_EXTRA_TABLES: bool = true;
-pub const L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH: bool = true;
+pub const L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH: bool = false;
 
 pub fn create_leaf_level_circuits_and_scheduler_witness(
     zkporter_is_available: bool,
@@ -432,42 +432,72 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
 
     // events sorter
 
-    assert!(events_deduplicator_circuit_data.len() == 1);        
-    let circuit_input = events_deduplicator_circuit_data.into_iter().next().unwrap();
+    let mut events_sorter_circuits = vec![];
+    let mut events_sorter_circuits_inputs = vec![];
+    let mut events_sorter_circuits_compact_forms_witnesses = vec![];
+    let num_instances = events_deduplicator_circuit_data.len();
+    let mut observable_input = None;
+    for (instance_idx, mut circuit_input) in events_deduplicator_circuit_data.into_iter().enumerate() {
+        let is_first = instance_idx == 0;
+        let _is_last = instance_idx == num_instances - 1;
 
-    let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
-        circuit_input.closed_form_input.clone(),
-    );
+        if observable_input.is_none() {
+            assert!(is_first);
+            observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
+        } else {
+            circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
+        }
 
-    let events_sorter_circuit = EventsSorterCircuit {
-        witness: AtomicCell::new(Some(circuit_input)),
-        config: Arc::new(geometry.limit_for_events_or_l1_messages_sorter as usize),
-        round_function: round_function.clone(),
-        expected_public_input: Some(proof_system_input),
-    };
+        let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
+            circuit_input.closed_form_input.clone(),
+        );
 
-    let events_sorter_circuit_input = proof_system_input;
-    let events_sorter_circuit_compact_form_witness = compact_form_witness;
+        let instance = EventsSorterCircuit {
+            witness: AtomicCell::new(Some(circuit_input)),
+            config: Arc::new(geometry.cycles_per_events_or_l1_messages_sorter as usize),
+            round_function: round_function.clone(),
+            expected_public_input: Some(proof_system_input),
+        };
+
+        events_sorter_circuits.push(instance);
+        events_sorter_circuits_inputs.push(proof_system_input);
+        events_sorter_circuits_compact_forms_witnesses.push(compact_form_witness);
+    }
 
     // l1 messages sorter
+
+    let mut l1_messages_sorter_circuits = vec![];
+    let mut l1_messages_sorter_circuits_inputs = vec![];
+    let mut l1_messages_sorter_circuits_compact_forms_witnesses = vec![];
+    let num_instances = l1_messages_deduplicator_circuit_data.len();
+    let mut observable_input = None;
+    for (instance_idx, mut circuit_input) in l1_messages_deduplicator_circuit_data.into_iter().enumerate() {
+        let is_first = instance_idx == 0;
+        let _is_last = instance_idx == num_instances - 1;
+
+        if observable_input.is_none() {
+            assert!(is_first);
+            observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
+        } else {
+            circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
+        }
+
+        let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
+            circuit_input.closed_form_input.clone(),
+        );
+
+        let instance = L1MessagesSorterCircuit {
+            witness: AtomicCell::new(Some(circuit_input)),
+            config: Arc::new(geometry.cycles_per_events_or_l1_messages_sorter as usize),
+            round_function: round_function.clone(),
+            expected_public_input: Some(proof_system_input),
+        };
+
+        l1_messages_sorter_circuits.push(instance);
+        l1_messages_sorter_circuits_inputs.push(proof_system_input);
+        l1_messages_sorter_circuits_compact_forms_witnesses.push(compact_form_witness);
+    }
     
-    assert!(l1_messages_deduplicator_circuit_data.len() == 1);        
-    let circuit_input = l1_messages_deduplicator_circuit_data.into_iter().next().unwrap();
-
-    let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
-        circuit_input.closed_form_input.clone(),
-    );
-
-    let l1_messages_sorter_circuit = L1MessagesSorterCircuit {
-        witness: AtomicCell::new(Some(circuit_input)),
-        config: Arc::new(geometry.limit_for_events_or_l1_messages_sorter as usize),
-        round_function: round_function.clone(),
-        expected_public_input: Some(proof_system_input),
-    };
-
-    let l1_messages_sorter_circuit_input = proof_system_input;
-    let l1_messages_sorter_circuit_compact_form_witness = compact_form_witness;
-
     // l1 messages merklizer
 
     assert!(l1_messages_merklizer_data.len() == 1);        
@@ -502,8 +532,8 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         storage_application_circuits,
         initial_writes_hasher_circuit,
         repeated_writes_hasher_circuit,
-        events_sorter_circuit,
-        l1_messages_sorter_circuit,
+        events_sorter_circuits,
+        l1_messages_sorter_circuits,
         l1_messages_merklizer_circuit,
     };
 
@@ -520,8 +550,8 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         storage_application_circuits: storage_application_circuits_inputs,
         initial_writes_hasher_circuit: initial_writes_hasher_circuit_input,
         repeated_writes_hasher_circuit: repeated_writes_hasher_circuit_input,
-        events_sorter_circuit: events_sorter_circuit_input,
-        l1_messages_sorter_circuit: l1_messages_sorter_circuit_input,
+        events_sorter_circuits: events_sorter_circuits_inputs,
+        l1_messages_sorter_circuits: l1_messages_sorter_circuits_inputs,
         l1_messages_merklizer_circuit: l1_messages_merklizer_circuit_input,
     };
 
@@ -538,8 +568,8 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         storage_application_circuits: storage_application_circuits_compact_forms_witnesses,
         initial_writes_hasher_circuit: initial_writes_hasher_circuit_compact_form_witness,
         repeated_writes_hasher_circuit: repeated_writes_hasher_circuit_compact_form_witness,
-        events_sorter_circuit: events_sorter_circuit_compact_form_witness,
-        l1_messages_sorter_circuit: l1_messages_sorter_circuit_compact_form_witness,
+        events_sorter_circuits: events_sorter_circuits_compact_forms_witnesses,
+        l1_messages_sorter_circuits: l1_messages_sorter_circuits_compact_forms_witnesses,
         l1_messages_merklizer_circuit: l1_messages_merklizer_circuit_compact_form_witness,
     };
 

@@ -235,7 +235,7 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         limit_for_code_decommitter_sorter: 16,
         cycles_per_log_demuxer: 8,
         cycles_per_storage_sorter: 4,
-        limit_for_events_or_l1_messages_sorter: 32,
+        cycles_per_events_or_l1_messages_sorter: 2,
         cycles_per_ram_permutation: 4,
         cycles_per_code_decommitter: 4,
         cycles_per_storage_application: 2,
@@ -306,7 +306,7 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
         use crate::abstract_zksync_circuit::concrete_circuits::ZkSyncCircuit;
-        if !matches!(&el, ZkSyncCircuit::LogDemuxer(..)) {
+        if !matches!(&el, ZkSyncCircuit::L1MessagesSorter(..)) {
             continue;
         }
         // el.debug_witness();

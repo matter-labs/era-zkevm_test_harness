@@ -1,3 +1,4 @@
+use sync_vm::franklin_crypto::plonk::circuit::utils::u64_to_fe;
 use sync_vm::traits::CSWitnessable;
 use sync_vm::utils::compute_shifts;
 use zk_evm::aux_structures::LogQuery;
@@ -244,6 +245,13 @@ pub fn comparison_key<E: Engine>(query: &LogQuery) -> [E::Fr; 2] {
     [biguint_to_fe::<E::Fr>(k0), biguint_to_fe::<E::Fr>(k1)]
 }
 
+pub fn event_comparison_key<E: Engine>(query: &LogQuery) -> E::Fr {
+    let mut k0: u64 = query.timestamp.0 as u64;
+    k0 <<= 1;
+    k0 += query.rollback as u64;
+
+    u64_to_fe(k0)
+}
 
 pub type LogQueueSimulator<E> = QueueSimulator<E, LogQuery, 5, 3>;
 pub type LogQueueState<E> = QueueIntermediateStates<E, 3, 3>;

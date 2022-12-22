@@ -127,7 +127,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         limit_for_code_decommitter_sorter: 512,
         cycles_per_log_demuxer: 512,
         cycles_per_storage_sorter: 512,
-        limit_for_events_or_l1_messages_sorter: 128,
+        cycles_per_events_or_l1_messages_sorter: 128,
         limit_for_initial_writes_pubdata_hasher: 16,
         limit_for_repeated_writes_pubdata_hasher: 16,
         limit_for_l1_messages_merklizer: 32,

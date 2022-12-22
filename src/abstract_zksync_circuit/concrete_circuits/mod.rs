@@ -20,6 +20,7 @@ pub mod events_sort_dedup;
 pub mod l1_messages_merklize;
 pub mod storage_initial_writes_pubdata_hasher;
 pub mod storage_repeated_writes_pubdata_hasher;
+pub mod l1_messages_hasher;
 
 pub mod leaf_aggregation;
 pub mod node_aggregation;
@@ -40,6 +41,7 @@ pub use self::events_sort_dedup::EventsAndL1MessagesSortAndDedupInstanceSynthesi
 pub use self::l1_messages_merklize::MessagesMerklizerInstanceSynthesisFunction;
 pub use self::storage_initial_writes_pubdata_hasher::StorageInitialWritesRehasherInstanceSynthesisFunction;
 pub use self::storage_repeated_writes_pubdata_hasher::StorageRepeatedWritesRehasherInstanceSynthesisFunction;
+pub use self::l1_messages_hasher::L1MessagesRehasherInstanceSynthesisFunction;
 
 pub use self::leaf_aggregation::LeafAggregationInstanceSynthesisFunction;
 pub use self::node_aggregation::NodeAggregationInstanceSynthesisFunction;
@@ -64,6 +66,7 @@ pub type L1MessagesSorterCircuit<E> = ZkSyncUniformCircuitCircuitInstance<E, Eve
 pub type L1MessagesMerklizerCircuit<E> = ZkSyncUniformCircuitCircuitInstance<E, MessagesMerklizerInstanceSynthesisFunction>;
 pub type InitialStorageWritesPubdataHasherCircuit<E> = ZkSyncUniformCircuitCircuitInstance<E, StorageInitialWritesRehasherInstanceSynthesisFunction>;
 pub type RepeatedStorageWritesPubdataHasherCircuit<E> = ZkSyncUniformCircuitCircuitInstance<E, StorageRepeatedWritesRehasherInstanceSynthesisFunction>;
+pub type L1MessagesHasherCircuit<E> = ZkSyncUniformCircuitCircuitInstance<E, L1MessagesRehasherInstanceSynthesisFunction>;
 
 pub type LeafAggregationCircuit<E> = ZkSyncUniformCircuitCircuitInstance<E, LeafAggregationInstanceSynthesisFunction>;
 pub type NodeAggregationCircuit<E> = ZkSyncUniformCircuitCircuitInstance<E, NodeAggregationInstanceSynthesisFunction>;
@@ -95,6 +98,7 @@ pub enum ZkSyncCircuit<E: Engine, W: WitnessOracle<E>> {
     L1MessagesMerklier(L1MessagesMerklizerCircuit<E>),
     InitialWritesPubdataHasher(InitialStorageWritesPubdataHasherCircuit<E>),
     RepeatedWritesPubdataHasher(RepeatedStorageWritesPubdataHasherCircuit<E>),
+    L1MessagesPubdataHasher(L1MessagesHasherCircuit<E>),
 }
 
 impl<E: Engine,  W: WitnessOracle<E>> Circuit<E> for ZkSyncCircuit<E, W> {
@@ -128,6 +132,7 @@ impl<E: Engine,  W: WitnessOracle<E>> Circuit<E> for ZkSyncCircuit<E, W> {
             ZkSyncCircuit::L1MessagesMerklier(inner) => {inner.synthesize(cs)},
             ZkSyncCircuit::InitialWritesPubdataHasher(inner) => {inner.synthesize(cs)},
             ZkSyncCircuit::RepeatedWritesPubdataHasher(inner) => {inner.synthesize(cs)},
+            _ => unimplemented!()
         }
     }
 }
@@ -155,6 +160,7 @@ impl<E: Engine, W: WitnessOracle<E>> ZkSyncCircuit<E, W> {
             ZkSyncCircuit::L1MessagesMerklier(..) => "L1 messages merklizer",
             ZkSyncCircuit::InitialWritesPubdataHasher(..) => "Initial writes pubdata rehasher",
             ZkSyncCircuit::RepeatedWritesPubdataHasher(..) => "Repeated writes pubdata rehasher",
+            ZkSyncCircuit::L1MessagesPubdataHasher(..) => "L1 messages rehasher",
         }
     }
 
@@ -178,6 +184,7 @@ impl<E: Engine, W: WitnessOracle<E>> ZkSyncCircuit<E, W> {
             ZkSyncCircuit::L1MessagesMerklier(inner) => {inner.debug_witness();},
             ZkSyncCircuit::InitialWritesPubdataHasher(inner) => {inner.debug_witness();},
             ZkSyncCircuit::RepeatedWritesPubdataHasher(inner) => {inner.debug_witness();},
+            ZkSyncCircuit::L1MessagesPubdataHasher(inner) => {inner.debug_witness();},
         };
 
         ()
@@ -205,6 +212,7 @@ impl<E: Engine, W: WitnessOracle<E>> ZkSyncCircuit<E, W> {
             ZkSyncCircuit::L1MessagesMerklier(..) => CircuitType::L1MessagesMerkelization as u8,
             ZkSyncCircuit::InitialWritesPubdataHasher(..) => CircuitType::StorageFreshWritesHasher as u8,
             ZkSyncCircuit::RepeatedWritesPubdataHasher(..) => CircuitType::StorageRepeatedWritesHasher as u8,
+            ZkSyncCircuit::L1MessagesPubdataHasher(..) => unimplemented!()
         }
     }
 }

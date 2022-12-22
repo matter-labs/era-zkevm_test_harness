@@ -157,7 +157,6 @@ pub fn compute_storage_dedup_and_sort<
     let mut previous_key = U256::zero();
     let mut previous_timestamp = 0u32;
     let mut cycle_idx = 0u32;
-    let mut previous_is_trivial = true;
     use crate::ethereum_types::Address;
     let mut previous_address = Address::default();
     let mut previous_shard_id = 0u8;
@@ -219,16 +218,6 @@ pub fn compute_storage_dedup_and_sort<
         let last_address = last_sorted_query.raw_query.address;
         let last_shard_id = last_sorted_query.raw_query.shard_id;
         let last_timestamp = last_sorted_query.extended_timestamp;
-
-        let last_is_trivial = if is_last {
-            if sorted_states.len() == per_circuit_capacity {
-                false
-            } else {
-                true
-            }
-        } else {
-            false
-        };
 
         // simulate the logic 
         let (
@@ -436,7 +425,6 @@ pub fn compute_storage_dedup_and_sort<
                     previous_packed_key,
                     previous_key: biguint_from_u256(previous_key),
                     previous_address: u160_from_address(previous_address),
-                    previous_item_is_trivial: previous_is_trivial,
                     previous_timestamp,
                     previous_shard_id,
                     this_cell_has_explicit_read_and_rollback_depth_zero,
@@ -455,7 +443,6 @@ pub fn compute_storage_dedup_and_sort<
                     previous_packed_key: last_packed_key,
                     previous_key: biguint_from_u256(last_key),
                     previous_address: u160_from_address(last_address),
-                    previous_item_is_trivial: last_is_trivial,
                     previous_timestamp: last_timestamp,
                     previous_shard_id: last_shard_id,
                     this_cell_has_explicit_read_and_rollback_depth_zero: new_this_cell_has_explicit_read_and_rollback_depth_zero,
@@ -490,7 +477,6 @@ pub fn compute_storage_dedup_and_sort<
         previous_timestamp = last_timestamp;
         previous_address = last_address;
         previous_shard_id = last_shard_id;
-        previous_is_trivial = last_is_trivial;
 
         this_cell_has_explicit_read_and_rollback_depth_zero = new_this_cell_has_explicit_read_and_rollback_depth_zero;
         this_cell_base_value = new_this_cell_base_value;

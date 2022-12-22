@@ -25,6 +25,7 @@ use crate::encodings::log_query::log_query_into_storage_record_witness;
 use crate::encodings::log_query::*;
 use sync_vm::glue::log_sorter::input::*;
 use super::*;
+use crate::encodings::QueueIntermediateStates;
 
 pub fn compute_events_dedup_and_sort<
     E: Engine,
@@ -33,9 +34,11 @@ pub fn compute_events_dedup_and_sort<
     unsorted_queries: &Vec<LogQuery>,
     target_deduplicated_queries: &mut Vec<LogQuery>,
     unsorted_simulator: &LogQueueSimulator<E>,
+    unsorted_simulator_states: &Vec<QueueIntermediateStates<E, 3, 3>>,
     result_queue_simulator: &mut LogQueueSimulator<E>,
+    per_circuit_capacity: usize,
     round_function: &R,
-) -> EventsDeduplicatorInstanceWitness<E> {
+) -> Vec<EventsDeduplicatorInstanceWitness<E>> {
     // parallelizable 
     
     // have to manually unroll, otherwise borrow checker will complain
@@ -57,63 +60,336 @@ pub fn compute_events_dedup_and_sort<
         }
     });
 
-    let mut sorted_simulator = LogQueueSimulator::empty();
+    let mut intermediate_sorted_simulator = LogQueueSimulator::empty();
+    let mut intermediate_sorted_log_simulator_states = Vec::with_capacity(sorted_queries.len());
     for el in sorted_queries.iter() {
-        let _ = sorted_simulator.push(*el, round_function);
+        let (_, states) = intermediate_sorted_simulator.push_and_output_intermediate_data(*el, round_function);
+        intermediate_sorted_log_simulator_states.push(states);
     }
 
-    let sorted_simulator_final_state = take_queue_state_from_simulator(&sorted_simulator);
-    let sorted_queue_witness: VecDeque<_> = sorted_simulator.witness.into_iter().map(|(encoding, old_tail, el)| {
-        let transformed_query = log_query_into_storage_record_witness(&el);
+    let intermediate_sorted_simulator_final_state = take_queue_state_from_simulator(&intermediate_sorted_simulator);
+    // let sorted_queue_witness: VecDeque<_> = intermediate_sorted_simulator.witness.into_iter().map(|(encoding, old_tail, el)| {
+    //     let transformed_query = log_query_into_storage_record_witness(&el);
 
-        (encoding, transformed_query, old_tail)
-    }).collect();
+    //     (encoding, transformed_query, old_tail)
+    // }).collect();
 
     let sorted_queries = sort_and_dedup_events_log(sorted_queries);
 
-    for sorted_log_query in sorted_queries.iter().copied() {
-        result_queue_simulator.push(sorted_log_query, round_function);
+    let unsorted_simulator_final_state = take_queue_state_from_simulator(unsorted_simulator);
+
+    let mut challenges = vec![];
+
+    let mut fs_input = vec![];
+    fs_input.push(unsorted_simulator_final_state.tail_state);
+    fs_input.push(u64_to_fe(unsorted_simulator_final_state.num_items as u64));
+    fs_input.push(intermediate_sorted_simulator_final_state.tail_state);
+    fs_input.push(u64_to_fe(intermediate_sorted_simulator_final_state.num_items as u64));
+
+    let sequence_of_states = round_function.simulate_absorb_multiple_rounds_into_empty_with_specialization(&fs_input);
+    let final_state = sequence_of_states.last().unwrap().1;
+
+    // manually unroll to get irreducible over every challenge
+    challenges.push(final_state[0]);
+    challenges.push(final_state[1]);
+    let final_state = round_function.simulate_round_function(final_state);
+    challenges.push(final_state[0]);
+    challenges.push(final_state[1]);
+    let final_state = round_function.simulate_round_function(final_state);
+    challenges.push(final_state[0]);
+    challenges.push(final_state[1]);
+
+    assert_eq!(unsorted_simulator_final_state.num_items, intermediate_sorted_simulator_final_state.num_items);
+
+    let lhs_contributions: Vec<_> = unsorted_simulator.witness.iter().map(|el| el.0).collect();
+    let rhs_contributions: Vec<_> = intermediate_sorted_simulator.witness.iter().map(|el| el.0).collect();
+
+    // --------------------
+
+    // compute chains themselves
+
+    use crate::witness::individual_circuits::ram_permutation::compute_grand_product_chains;
+
+    let (lhs_grand_product_chain, rhs_grand_product_chain) = compute_grand_product_chains::<E, 5, 6>(
+        &lhs_contributions,
+        &rhs_contributions,
+        challenges
+    );
+
+    // now we need to split them into individual circuits
+    // splitting is not extra hard here, we walk over iterator over everything and save states on checkpoints
+
+    assert_eq!(lhs_grand_product_chain.len(), unsorted_simulator.witness.len());
+    assert_eq!(lhs_grand_product_chain.len(), intermediate_sorted_simulator.witness.len());
+    
+    assert!(unsorted_simulator.witness.as_slices().1.is_empty());
+    assert!(intermediate_sorted_simulator.witness.as_slices().1.is_empty());
+
+    let it = unsorted_simulator_states.chunks(per_circuit_capacity)
+        .zip(intermediate_sorted_log_simulator_states.chunks(per_circuit_capacity))
+        .zip(lhs_grand_product_chain.chunks(per_circuit_capacity))
+        .zip(rhs_grand_product_chain.chunks(per_circuit_capacity))
+        .zip(unsorted_simulator.witness.as_slices().0.chunks(per_circuit_capacity))
+        .zip(intermediate_sorted_simulator.witness.as_slices().0.chunks(per_circuit_capacity));
+
+
+    let num_circuits = it.len();
+    let mut results = vec![];
+
+    use crate::ethereum_types::Address;
+    use crate::ethereum_types::U256;
+
+    let mut current_lhs_product = E::Fr::zero();
+    let mut current_rhs_product = E::Fr::zero();
+    let mut previous_packed_key = E::Fr::zero();
+    let empty_log_item = LogQuery {
+        timestamp: Timestamp(0),
+        tx_number_in_block: 0,
+        aux_byte: 0,
+        shard_id: 0,
+        address: Address::zero(),
+        key: U256::zero(),
+        read_value: U256::zero(),
+        written_value: U256::zero(),
+        rw_flag: false,
+        rollback: false,
+        is_service: false,
+    };
+
+    let mut previous_item = empty_log_item;
+
+    let mut deduplicated_queries_it = sorted_queries.iter();
+
+    let mut current_final_sorted_queue_state = take_queue_state_from_simulator(&result_queue_simulator);
+
+    for (idx, (((((unsorted_sponge_states, sorted_sponge_states), lhs_grand_product), rhs_grand_product), unsorted_states), sorted_states)) in it.enumerate() {
+        // we need witnesses to pop elements from the front of the queue
+        use sync_vm::scheduler::queues::FixedWidthEncodingSpongeLikeQueueWitness;
+
+        let unsorted_queue_witness: VecDeque<_> = unsorted_states.iter().map(|(encoding, old_tail, element)| {
+            let as_storage_log = log_query_into_storage_record_witness(element);
+
+            (*encoding, as_storage_log, *old_tail)
+        }).collect();
+
+        let unsorted_witness = FixedWidthEncodingGenericQueueWitness {
+            wit: unsorted_queue_witness
+        };
+
+        let intermediate_sorted_queue_witness: VecDeque<_> = sorted_states.iter().map(|(encoding, old_tail, element)| {
+            let as_timestamped_storage_witness = log_query_into_storage_record_witness(element);
+
+            (*encoding, as_timestamped_storage_witness, *old_tail)
+        }).collect();
+
+        let intermediate_sorted_queue_witness = FixedWidthEncodingGenericQueueWitness {
+            wit: intermediate_sorted_queue_witness
+        };
+
+        // now we need to have final grand product value that will also become an input for the next circuit
+
+        let is_first = idx == 0;
+        let is_last = idx == num_circuits - 1;
+
+        let last_unsorted_state = unsorted_sponge_states.last().unwrap().clone();
+        let last_sorted_state = sorted_sponge_states.last().unwrap().clone();
+
+        let accumulated_lhs = *lhs_grand_product.last().unwrap();
+        let accumulated_rhs = *rhs_grand_product.last().unwrap();
+
+        // simulate the logic 
+        let (
+            new_last_packed_key,
+            new_last_item,
+        ) = {
+            let mut new_last_packed_key = previous_packed_key;
+            let mut new_last_item = previous_item;
+            let mut current_timestamp = previous_item.timestamp.0;
+
+            let num_items_in_chunk = sorted_states.len();
+
+            for (sub_idx, (_encoding, _previous_tail, item)) in sorted_states.iter().enumerate() {
+                let first_ever = sub_idx == 0 && is_first;
+
+                if !first_ever {
+                    assert!(item.rw_flag == true);
+                    let same_cell = current_timestamp == item.timestamp.0;
+
+                    if same_cell {
+                        assert!(item.rollback == true);
+                    } else {
+                        // finish with previous one and start a new one
+                        let next_query = deduplicated_queries_it.next().unwrap();
+                        let _ = result_queue_simulator.push_and_output_intermediate_data(*next_query, round_function);
+
+                        current_timestamp = item.timestamp.0;
+                    }
+
+                    new_last_packed_key = event_comparison_key::<E>(&item);
+                    new_last_item = *item;
+                } else {
+                    new_last_packed_key = event_comparison_key::<E>(&item);
+                    new_last_item = *item;
+                }
+
+                let is_last_ever = (sub_idx == num_items_in_chunk - 1) && is_last;
+                if is_last_ever {
+                    if new_last_item.rollback == false {
+                        let next_query = deduplicated_queries_it.next().unwrap();
+                        let _ = result_queue_simulator.push_and_output_intermediate_data(*next_query, round_function);
+                    }
+                }
+            }
+        
+            (
+                new_last_packed_key,
+                new_last_item
+            )
+        };
+
+        use sync_vm::scheduler::queues::FixedWidthEncodingGenericQueueState;
+        use sync_vm::traits::CSWitnessable;
+        let placeholder_witness = FixedWidthEncodingGenericQueueState::placeholder_witness();
+
+        let (current_unsorted_queue_state, current_intermediate_sorted_queue_state) = results.last().map(|el: &EventsDeduplicatorInstanceWitness<E>| {
+            let tmp = &el.closed_form_input.hidden_fsm_output;
+
+            (tmp.initial_unsorted_queue_state.clone(), tmp.intermediate_sorted_queue_state.clone())
+        }).unwrap_or(
+            (placeholder_witness.clone(), placeholder_witness)
+        );
+
+        // assert_eq!(current_unsorted_queue_state.length, current_sorted_queue_state.length);
+
+        // we use current final state as the intermediate head
+        let mut final_unsorted_state = transform_queue_state(last_unsorted_state);
+        final_unsorted_state.head_state = final_unsorted_state.tail_state;
+        final_unsorted_state.tail_state = unsorted_simulator_final_state.tail_state;
+        final_unsorted_state.num_items = unsorted_simulator_final_state.num_items - final_unsorted_state.num_items;
+
+        let mut final_intermediate_sorted_state = transform_queue_state(last_sorted_state);
+        final_intermediate_sorted_state.head_state = last_sorted_state.tail;
+        final_intermediate_sorted_state.tail_state = intermediate_sorted_simulator_final_state.tail_state;
+        final_intermediate_sorted_state.num_items = intermediate_sorted_simulator_final_state.num_items - last_sorted_state.num_items;
+
+        assert_eq!(final_unsorted_state.num_items, final_intermediate_sorted_state.num_items);
+
+        let last_final_sorted_queue_state = take_queue_state_from_simulator(&result_queue_simulator);
+
+        let mut instance_witness = EventsDeduplicatorInstanceWitness {
+            closed_form_input: ClosedFormInputWitness {
+                _marker_e: (),
+                start_flag: is_first,
+                completion_flag: is_last,
+                observable_input: EventsDeduplicatorInputDataWitness {
+                    initial_log_queue_state: unsorted_simulator_final_state.clone(),
+                    intermediate_sorted_queue_state: intermediate_sorted_simulator_final_state.clone(),
+                    _marker: std::marker::PhantomData,
+                },
+                observable_output: EventsDeduplicatorOutputData::placeholder_witness(),
+                hidden_fsm_input: EventsDeduplicatorFSMInputOutputWitness {
+                    lhs_accumulator: current_lhs_product,
+                    rhs_accumulator: current_rhs_product,
+                    initial_unsorted_queue_state: current_unsorted_queue_state,
+                    intermediate_sorted_queue_state: current_intermediate_sorted_queue_state,
+                    final_result_queue_state: current_final_sorted_queue_state.clone(),
+                    previous_packed_key,
+                    previous_item: log_query_into_storage_record_witness(&previous_item),
+                    _marker: std::marker::PhantomData,
+                },
+                hidden_fsm_output: EventsDeduplicatorFSMInputOutputWitness {
+                    lhs_accumulator: accumulated_lhs,
+                    rhs_accumulator: accumulated_rhs,
+                    initial_unsorted_queue_state: final_unsorted_state,
+                    intermediate_sorted_queue_state: final_intermediate_sorted_state,
+                    final_result_queue_state: last_final_sorted_queue_state.clone(),
+                    previous_packed_key: new_last_packed_key,
+                    previous_item: log_query_into_storage_record_witness(&new_last_item),
+                    _marker: std::marker::PhantomData,
+                },
+                _marker: std::marker::PhantomData,
+            },
+            initial_queue_witness: unsorted_witness,
+            intermediate_sorted_queue_witness: intermediate_sorted_queue_witness,
+        };
+
+        assert_eq!(instance_witness.initial_queue_witness.wit.len(), instance_witness.intermediate_sorted_queue_witness.wit.len());
+
+        if sorted_states.len() % per_circuit_capacity != 0 {
+            // circuit does padding, so all previous values must be reset
+            instance_witness.closed_form_input.hidden_fsm_output.previous_packed_key = E::Fr::zero();
+            instance_witness.closed_form_input.hidden_fsm_output.previous_item = log_query_into_storage_record_witness(
+                &empty_log_item
+            );
+        }
+
+        current_lhs_product = accumulated_lhs;
+        current_rhs_product = accumulated_rhs;
+
+        previous_packed_key = new_last_packed_key;
+        previous_item = new_last_item;
+
+        current_final_sorted_queue_state = last_final_sorted_queue_state;
+
+        results.push(instance_witness);
     }
+
+    assert!(deduplicated_queries_it.next().is_none());
+
+    let final_sorted_queue_state = take_queue_state_from_simulator(&result_queue_simulator);
+
+    results.last_mut().unwrap().closed_form_input.observable_output.final_queue_state = final_sorted_queue_state.clone();
 
     *target_deduplicated_queries = sorted_queries;
 
-    // in general we have everything ready, just form the witness
-    use sync_vm::traits::CSWitnessable;
+    println!("Events simulation done, got {} witnesses", results.len());
 
-    let mut input_passthrough_data = EventsDeduplicatorInputData::placeholder_witness();
-    // we only need the state of demuxed rollup storage queue
-    input_passthrough_data.initial_log_queue_state = take_queue_state_from_simulator(&unsorted_simulator);
+    results
 
-    let mut output_passthrough_data = EventsDeduplicatorOutputData::placeholder_witness();
-    output_passthrough_data.final_queue_state = take_queue_state_from_simulator(&result_queue_simulator);
 
-    // dbg!(take_queue_state_from_simulator(&result_queue_simulator));
-    // dbg!(&result_queue_simulator.witness);
+    // for sorted_log_query in sorted_queries.iter().copied() {
+    //     result_queue_simulator.push(sorted_log_query, round_function);
+    // }
 
-    let initial_queue_witness: VecDeque<_> = unsorted_simulator.witness.iter().map(|(encoding, old_tail, element)| {
-        let as_storage_log = log_query_into_storage_record_witness(element);
+    // *target_deduplicated_queries = sorted_queries;
 
-        (*encoding, as_storage_log, *old_tail)
-    }).collect();
+    // // in general we have everything ready, just form the witness
+    // use sync_vm::traits::CSWitnessable;
+
+    // let mut input_passthrough_data = EventsDeduplicatorInputData::placeholder_witness();
+    // // we only need the state of demuxed rollup storage queue
+    // input_passthrough_data.initial_log_queue_state = take_queue_state_from_simulator(&unsorted_simulator);
+
+    // let mut output_passthrough_data = EventsDeduplicatorOutputData::placeholder_witness();
+    // output_passthrough_data.final_queue_state = take_queue_state_from_simulator(&result_queue_simulator);
+
+    // // dbg!(take_queue_state_from_simulator(&result_queue_simulator));
+    // // dbg!(&result_queue_simulator.witness);
+
+    // let initial_queue_witness: VecDeque<_> = unsorted_simulator.witness.iter().map(|(encoding, old_tail, element)| {
+    //     let as_storage_log = log_query_into_storage_record_witness(element);
+
+    //     (*encoding, as_storage_log, *old_tail)
+    // }).collect();
     
-    let witness = EventsDeduplicatorInstanceWitness {
-        closed_form_input: ClosedFormInputWitness { 
-            start_flag: true, 
-            completion_flag: true, 
-            observable_input: input_passthrough_data, 
-            observable_output: output_passthrough_data, 
-            hidden_fsm_input: (), 
-            hidden_fsm_output: (), 
-            _marker_e: (), 
-            _marker: std::marker::PhantomData 
-        },
+    // let witness = EventsDeduplicatorInstanceWitness {
+    //     closed_form_input: ClosedFormInputWitness { 
+    //         start_flag: true, 
+    //         completion_flag: true, 
+    //         observable_input: input_passthrough_data, 
+    //         observable_output: output_passthrough_data, 
+    //         hidden_fsm_input: (), 
+    //         hidden_fsm_output: (), 
+    //         _marker_e: (), 
+    //         _marker: std::marker::PhantomData 
+    //     },
 
-        initial_queue_witness: FixedWidthEncodingGenericQueueWitness {wit: initial_queue_witness},
-        intermediate_sorted_queue_state: sorted_simulator_final_state,
-        sorted_queue_witness: FixedWidthEncodingGenericQueueWitness {wit: sorted_queue_witness},
-    };
+    //     initial_queue_witness: FixedWidthEncodingGenericQueueWitness {wit: initial_queue_witness},
+    //     intermediate_sorted_queue_state: sorted_simulator_final_state,
+    //     sorted_queue_witness: FixedWidthEncodingGenericQueueWitness {wit: sorted_queue_witness},
+    // };
 
-    witness
+    // witness
 }
 
 pub fn sort_and_dedup_events_log(sorted_history: Vec<LogQuery>) -> Vec<LogQuery> {

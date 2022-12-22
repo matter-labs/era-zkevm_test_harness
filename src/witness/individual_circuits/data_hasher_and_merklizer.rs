@@ -35,11 +35,6 @@ pub fn compute_pubdata_hasher_witness<
         full_bytestring.extend(serialized);
     } 
 
-    // full_bytestring.resize(4 + (capacity * SERIALIZATION_WIDTH), 0);
-    // for ((_, _, el), chunk) in simulator.witness.iter().zip(full_bytestring[4..].chunks_exact_mut(SERIALIZATION_WIDTH)) {
-    //     chunk.copy_from_slice(&el.serialize());
-    // } 
-
     // println!("Hashing over 0x{}", hex::encode(&full_bytestring));
     let pubdata_hash: [u8; 32] = Keccak256::digest(&full_bytestring).as_slice().try_into().unwrap();
 
@@ -111,14 +106,7 @@ pub fn compute_merklizer_witness<
             assert_eq!(serialized.len(), SERIALIZATION_WIDTH);
             full_bytestring.extend(serialized);
         } 
-
-        // println!("Hashing over 0x{}", hex::encode(&full_bytestring));
-
-        // full_bytestring.resize(4 + (capacity * SERIALIZATION_WIDTH), 0);
-        // for ((_, _, el), chunk) in simulator.witness.iter().zip(full_bytestring[4..].chunks_exact_mut(SERIALIZATION_WIDTH)) {
-        //     chunk.copy_from_slice(&el.serialize());
-        // } 
-
+        
         let linear_hash: [u8; 32] = Keccak256::digest(&full_bytestring).as_slice().try_into().unwrap();
 
         linear_hash

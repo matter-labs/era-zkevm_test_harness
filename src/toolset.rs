@@ -26,7 +26,7 @@ pub struct GeometryConfig {
     pub limit_for_code_decommitter_sorter: u32,
     pub cycles_per_log_demuxer: u32,
     pub cycles_per_storage_sorter: u32,
-    pub limit_for_events_or_l1_messages_sorter: u32,
+    pub cycles_per_events_or_l1_messages_sorter: u32,
     pub limit_for_l1_messages_merklizer: u32,
     pub cycles_per_ram_permutation: u32,
     pub cycles_per_code_decommitter: u32,

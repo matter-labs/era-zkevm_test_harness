@@ -289,31 +289,31 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
         tracing::debug!("Running events deduplication simulation");
 
-        assert!(self.demuxed_event_queries.len() <= geometry.limit_for_events_or_l1_messages_sorter as usize, "too many events to sort by single circuit");
-
         let events_deduplicator_circuit_data = compute_events_dedup_and_sort(
             &self.demuxed_event_queries,
             &mut self.deduplicated_event_queries,
             &self.demuxed_events_queue_simulator,
+            &self.demuxed_event_queue_states,
             &mut self.deduplicated_event_queue_simulator,
+            geometry.cycles_per_events_or_l1_messages_sorter as usize,
             round_function
         );
 
-        self.events_deduplicator_circuit_data = vec![events_deduplicator_circuit_data];
+        self.events_deduplicator_circuit_data = events_deduplicator_circuit_data;
 
         tracing::debug!("Running L1 messages deduplication simulation");
-
-        assert!(self.demuxed_to_l1_queries.len() <= geometry.limit_for_events_or_l1_messages_sorter as usize, "too many L1 messages to sort by single circuit");
 
         let l1_messages_deduplicator_circuit_data = compute_events_dedup_and_sort(
             &self.demuxed_to_l1_queries,
             &mut self.deduplicated_to_l1_queries,
             &self.demuxed_to_l1_queue_simulator,
+            &self.demuxed_to_l1_queue_states,
             &mut self.deduplicated_to_l1_queue_simulator,
+            geometry.cycles_per_events_or_l1_messages_sorter as usize,
             round_function
         );
 
-        self.l1_messages_deduplicator_circuit_data = vec![l1_messages_deduplicator_circuit_data];
+        self.l1_messages_deduplicator_circuit_data = l1_messages_deduplicator_circuit_data;
 
         // merklize some messages
 
@@ -321,12 +321,14 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
         tracing::debug!("Running L1 messages merklization simulation");
 
+        use crate::witness::postprocessing::L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH;
+
         assert!(self.deduplicated_to_l1_queue_simulator.num_items <= geometry.limit_for_l1_messages_merklizer, "too many L1 messages to merklize by single circuit");
 
         let l1_messages_merklizer_data = compute_merklizer_witness(
             &self.deduplicated_to_l1_queue_simulator,
             geometry.limit_for_l1_messages_merklizer as usize,
-            true,
+            L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH,
         );
 
         self.l1_messages_merklizer_data = vec![l1_messages_merklizer_data];
@@ -397,9 +399,9 @@ pub struct BlockBasicCircuits<E: Engine> {
     // rehash repeated writes
     pub repeated_writes_hasher_circuit: RepeatedStorageWritesPubdataHasherCircuit<E>,
     // sort and dedup events
-    pub events_sorter_circuit: EventsSorterCircuit<E>,
+    pub events_sorter_circuits: Vec<EventsSorterCircuit<E>>,
     // sort and dedup L1 messages
-    pub l1_messages_sorter_circuit: L1MessagesSorterCircuit<E>,
+    pub l1_messages_sorter_circuits: Vec<L1MessagesSorterCircuit<E>>,
     // merklize L1 message
     pub l1_messages_merklizer_circuit: L1MessagesMerklizerCircuit<E>
 }
@@ -419,8 +421,8 @@ impl<E: Engine> BlockBasicCircuits<E> {
             storage_application_circuits, 
             initial_writes_hasher_circuit, 
             repeated_writes_hasher_circuit, 
-            events_sorter_circuit, 
-            l1_messages_sorter_circuit, 
+            events_sorter_circuits, 
+            l1_messages_sorter_circuits, 
             l1_messages_merklizer_circuit 
         } = self;
 
@@ -445,8 +447,11 @@ impl<E: Engine> BlockBasicCircuits<E> {
 
         result.push(ZkSyncCircuit::InitialWritesPubdataHasher(initial_writes_hasher_circuit));
         result.push(ZkSyncCircuit::RepeatedWritesPubdataHasher(repeated_writes_hasher_circuit));
-        result.push(ZkSyncCircuit::EventsSorter(events_sorter_circuit));
-        result.push(ZkSyncCircuit::L1MessagesSorter(l1_messages_sorter_circuit));
+
+        result.extend(events_sorter_circuits.into_iter().map(|el| ZkSyncCircuit::EventsSorter(el)));
+        
+        result.extend(l1_messages_sorter_circuits.into_iter().map(|el| ZkSyncCircuit::L1MessagesSorter(el)));
+        
         result.push(ZkSyncCircuit::L1MessagesMerklier(l1_messages_merklizer_circuit));
 
         result
@@ -484,9 +489,9 @@ pub struct BlockBasicCircuitsPublicInputs<E: Engine> {
     // rehash repeated writes
     pub repeated_writes_hasher_circuit: E::Fr,
     // sort and dedup events
-    pub events_sorter_circuit: E::Fr,
+    pub events_sorter_circuits: Vec<E::Fr>,
     // sort and dedup L1 messages
-    pub l1_messages_sorter_circuit: E::Fr,
+    pub l1_messages_sorter_circuits: Vec<E::Fr>,
     // merklize L1 message
     pub l1_messages_merklizer_circuit: E::Fr,
 }
@@ -506,8 +511,8 @@ impl<E: Engine> BlockBasicCircuitsPublicInputs<E> {
             storage_application_circuits, 
             initial_writes_hasher_circuit, 
             repeated_writes_hasher_circuit, 
-            events_sorter_circuit, 
-            l1_messages_sorter_circuit, 
+            events_sorter_circuits, 
+            l1_messages_sorter_circuits, 
             l1_messages_merklizer_circuit 
         } = self;
 
@@ -534,8 +539,8 @@ impl<E: Engine> BlockBasicCircuitsPublicInputs<E> {
 
         result.push(initial_writes_hasher_circuit);
         result.push(repeated_writes_hasher_circuit);
-        result.push(events_sorter_circuit);
-        result.push(l1_messages_sorter_circuit);
+        result.extend(events_sorter_circuits);
+        result.extend(l1_messages_sorter_circuits);
         result.push(l1_messages_merklizer_circuit);
 
         result
@@ -574,9 +579,9 @@ pub struct BlockBasicCircuitsPublicCompactFormsWitnesses<E: Engine> {
     // rehash repeated writes
     pub repeated_writes_hasher_circuit: ClosedFormInputCompactFormWitness<E>,
     // sort and dedup events
-    pub events_sorter_circuit: ClosedFormInputCompactFormWitness<E>,
+    pub events_sorter_circuits: Vec<ClosedFormInputCompactFormWitness<E>>,
     // sort and dedup L1 messages
-    pub l1_messages_sorter_circuit: ClosedFormInputCompactFormWitness<E>,
+    pub l1_messages_sorter_circuits: Vec<ClosedFormInputCompactFormWitness<E>>,
     // merklize L1 message
     pub l1_messages_merklizer_circuit: ClosedFormInputCompactFormWitness<E>,
 }
@@ -596,8 +601,8 @@ impl<E: Engine> BlockBasicCircuitsPublicCompactFormsWitnesses<E> {
             storage_application_circuits, 
             initial_writes_hasher_circuit, 
             repeated_writes_hasher_circuit, 
-            events_sorter_circuit, 
-            l1_messages_sorter_circuit, 
+            events_sorter_circuits, 
+            l1_messages_sorter_circuits, 
             l1_messages_merklizer_circuit 
         } = self;
 
@@ -624,8 +629,8 @@ impl<E: Engine> BlockBasicCircuitsPublicCompactFormsWitnesses<E> {
 
         result.push(initial_writes_hasher_circuit);
         result.push(repeated_writes_hasher_circuit);
-        result.push(events_sorter_circuit);
-        result.push(l1_messages_sorter_circuit);
+        result.extend(events_sorter_circuits);
+        result.extend(l1_messages_sorter_circuits);
         result.push(l1_messages_merklizer_circuit);
 
         result

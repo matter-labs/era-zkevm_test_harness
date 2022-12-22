@@ -61,7 +61,7 @@ fn main() {
     function.line(format!("limit_for_code_decommitter_sorter: {},", opt.code_decommitter_sorter));
     function.line(format!("cycles_per_log_demuxer: {},", opt.log_demuxer));
     function.line(format!("cycles_per_storage_sorter: {},", opt.storage_sorter));
-    function.line(format!("limit_for_events_or_l1_messages_sorter: {},", opt.events_or_l1_messages_sorter));
+    function.line(format!("cycles_per_events_or_l1_messages_sorter: {},", opt.events_or_l1_messages_sorter));
     function.line(format!("limit_for_l1_messages_merklizer: {},", opt.l1_messages_merklizer));
     function.line(format!("cycles_per_ram_permutation: {},", opt.ram_permutation));
     function.line(format!("cycles_per_code_decommitter: {},", opt.code_decommitter));

@@ -260,7 +260,7 @@ pub fn circuits_for_vk_generation(
     // events sorter
     let circuit = EventsSorterCircuit::new(
         None,
-        geometry.limit_for_events_or_l1_messages_sorter as usize,
+        geometry.cycles_per_events_or_l1_messages_sorter as usize,
         round_function.clone(),
         None,
     );
@@ -270,7 +270,7 @@ pub fn circuits_for_vk_generation(
     // l1 messages sorter
     let circuit = L1MessagesSorterCircuit::new(
         None,
-        geometry.limit_for_events_or_l1_messages_sorter as usize,
+        geometry.cycles_per_events_or_l1_messages_sorter as usize,
         round_function.clone(),
         None,
     );
