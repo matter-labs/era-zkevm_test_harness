@@ -552,7 +552,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
                             // just burn ergs
                         },
                     }
-                }
+                },
                 _ => unreachable!(),
             }
         }

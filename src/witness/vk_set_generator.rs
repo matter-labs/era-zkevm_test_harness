@@ -169,7 +169,7 @@ pub fn circuits_for_vk_generation(
     // log demuxer
     let circuit = LogDemuxerCircuit::new(
         None,
-        geometry.limit_for_log_demuxer as usize,
+        geometry.cycles_per_log_demuxer as usize,
         round_function.clone(),
         None,
     );

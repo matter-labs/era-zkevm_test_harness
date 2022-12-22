@@ -156,21 +156,37 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
 
     // log demux
 
-    assert!(log_demuxer_circuit_data.len() == 1);        
-    let circuit_input = log_demuxer_circuit_data.into_iter().next().unwrap();
+    let mut log_demux_circuits = vec![];
+    let mut log_demux_circuits_inputs = vec![];
+    let mut log_demux_circuits_compact_forms_witnesses = vec![];
+    let num_instances = log_demuxer_circuit_data.len();
+    let mut observable_input = None;
+    for (instance_idx, mut circuit_input) in log_demuxer_circuit_data.into_iter().enumerate() {
+        let is_first = instance_idx == 0;
+        let _is_last = instance_idx == num_instances - 1;
 
-    let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
-        circuit_input.closed_form_input.clone(),
-    );
+        if observable_input.is_none() {
+            assert!(is_first);
+            observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
+        } else {
+            circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
+        }
 
-    let log_demux_circuit = LogDemuxerCircuit {
-        witness: AtomicCell::new(Some(circuit_input)),
-        config: Arc::new(geometry.limit_for_log_demuxer as usize),
-        round_function: round_function.clone(),
-        expected_public_input: Some(proof_system_input),
-    };
-    let log_demux_circuit_input = proof_system_input;
-    let log_demux_circuit_compact_form_witness = compact_form_witness;
+        let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
+            circuit_input.closed_form_input.clone(),
+        );
+
+        let instance = LogDemuxerCircuit {
+            witness: AtomicCell::new(Some(circuit_input)),
+            config: Arc::new(geometry.cycles_per_log_demuxer as usize),
+            round_function: round_function.clone(),
+            expected_public_input: Some(proof_system_input),
+        };
+
+        log_demux_circuits.push(instance);
+        log_demux_circuits_inputs.push(proof_system_input);
+        log_demux_circuits_compact_forms_witnesses.push(compact_form_witness);
+    }
 
     // keccak precompiles
 
@@ -477,7 +493,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         main_vm_circuits,
         code_decommittments_sorter_circuit,
         code_decommitter_circuits,
-        log_demux_circuit,
+        log_demux_circuits,
         keccak_precompile_circuits,
         sha256_precompile_circuits,
         ecrecover_precompile_circuits,
@@ -495,7 +511,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         main_vm_circuits: main_vm_circuits_inputs,
         code_decommittments_sorter_circuit: code_decommittments_sorter_circuit_input,
         code_decommitter_circuits: code_decommitter_circuits_inputs,
-        log_demux_circuit: log_demux_circuit_input,
+        log_demux_circuits: log_demux_circuits_inputs,
         keccak_precompile_circuits: keccak_precompile_circuits_inputs,
         sha256_precompile_circuits: sha256_precompile_circuits_inputs,
         ecrecover_precompile_circuits: ecrecover_precompile_circuits_inputs,
@@ -513,7 +529,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         main_vm_circuits: main_vm_circuits_compact_forms_witnesses,
         code_decommittments_sorter_circuit: code_decommittments_sorter_circuit_compact_form_witness,
         code_decommitter_circuits: code_decommitter_circuits_compact_forms_witnesses,
-        log_demux_circuit: log_demux_circuit_compact_form_witness,
+        log_demux_circuits: log_demux_circuits_compact_forms_witnesses,
         keccak_precompile_circuits: keccak_precompile_circuits_compact_forms_witnesses,
         sha256_precompile_circuits: sha256_precompile_circuits_compact_forms_witnesses,
         ecrecover_precompile_circuits: ecrecover_precompile_circuits_compact_forms_witnesses,

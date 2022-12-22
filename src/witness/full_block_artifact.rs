@@ -210,14 +210,13 @@ impl<E: Engine> FullBlockArtifacts<E> {
 
         tracing::debug!("Running log demux simulation");
 
-        assert!(self.original_log_queue_states.len() <= geometry.limit_for_log_demuxer as usize, "too many IO-like accesses (storage R/W, events, L1 messages, precompiles) to demux by single circuit");
-
         let log_demuxer_witness = compute_logs_demux(
             self,
+            geometry.cycles_per_log_demuxer as usize,
             round_function
         );
 
-        self.log_demuxer_circuit_data = vec![log_demuxer_witness];
+        self.log_demuxer_circuit_data = log_demuxer_witness;
 
         // keccak precompile
 
@@ -378,8 +377,8 @@ pub struct BlockBasicCircuits<E: Engine> {
     pub code_decommittments_sorter_circuit: CodeDecommittsSorterCircuit<E>,
     // few code decommitters: code hash -> memory
     pub code_decommitter_circuits: Vec<CodeDecommitterCircuit<E>>,
-    // demux logs to get precompiles for RAM too. 1 circuit
-    pub log_demux_circuit: LogDemuxerCircuit<E>,
+    // demux logs to get precompiles for RAM too
+    pub log_demux_circuits: Vec<LogDemuxerCircuit<E>>,
     // process precompiles
     // keccak
     pub keccak_precompile_circuits: Vec<Keccak256RoundFunctionCircuit<E>>,
@@ -411,7 +410,7 @@ impl<E: Engine> BlockBasicCircuits<E> {
             main_vm_circuits, 
             code_decommittments_sorter_circuit, 
             code_decommitter_circuits, 
-            log_demux_circuit, 
+            log_demux_circuits, 
             keccak_precompile_circuits, 
             sha256_precompile_circuits, 
             ecrecover_precompile_circuits, 
@@ -432,7 +431,7 @@ impl<E: Engine> BlockBasicCircuits<E> {
 
         result.extend(code_decommitter_circuits.into_iter().map(|el| ZkSyncCircuit::CodeDecommitter(el)));
 
-        result.push(ZkSyncCircuit::LogDemuxer(log_demux_circuit));
+        result.extend(log_demux_circuits.into_iter().map(|el| ZkSyncCircuit::LogDemuxer(el)));
 
         result.extend(keccak_precompile_circuits.into_iter().map(|el| ZkSyncCircuit::KeccakRoundFunction(el)));
         result.extend(sha256_precompile_circuits.into_iter().map(|el| ZkSyncCircuit::Sha256RoundFunction(el)));
@@ -461,12 +460,12 @@ impl<E: Engine> BlockBasicCircuits<E> {
 pub struct BlockBasicCircuitsPublicInputs<E: Engine> {
     // main VM circuit. Many of them
     pub main_vm_circuits: Vec<E::Fr>,
-    // code decommittments sorter is only 1 circuit per block
+    // code decommittments sorter
     pub code_decommittments_sorter_circuit: E::Fr,
     // few code decommitters: code hash -> memory
     pub code_decommitter_circuits: Vec<E::Fr>,
-    // demux logs to get precompiles for RAM too. 1 circuit
-    pub log_demux_circuit: E::Fr,
+    // demux logs to get precompiles for RAM too
+    pub log_demux_circuits: Vec<E::Fr>,
     // process precompiles
     // keccak
     pub keccak_precompile_circuits: Vec<E::Fr>,
@@ -498,7 +497,7 @@ impl<E: Engine> BlockBasicCircuitsPublicInputs<E> {
             main_vm_circuits, 
             code_decommittments_sorter_circuit, 
             code_decommitter_circuits, 
-            log_demux_circuit, 
+            log_demux_circuits, 
             keccak_precompile_circuits, 
             sha256_precompile_circuits, 
             ecrecover_precompile_circuits, 
@@ -521,7 +520,7 @@ impl<E: Engine> BlockBasicCircuitsPublicInputs<E> {
 
         result.extend(code_decommitter_circuits);
 
-        result.push(log_demux_circuit);
+        result.extend(log_demux_circuits);
 
         result.extend(keccak_precompile_circuits);
         result.extend(sha256_precompile_circuits);
@@ -551,12 +550,12 @@ use sync_vm::inputs::ClosedFormInputCompactFormWitness;
 pub struct BlockBasicCircuitsPublicCompactFormsWitnesses<E: Engine> {
     // main VM circuit. Many of them
     pub main_vm_circuits: Vec<ClosedFormInputCompactFormWitness<E>>,
-    // code decommittments sorter is only 1 circuit per block
+    // code decommittments sorter
     pub code_decommittments_sorter_circuit: ClosedFormInputCompactFormWitness<E>,
     // few code decommitters: code hash -> memory
     pub code_decommitter_circuits: Vec<ClosedFormInputCompactFormWitness<E>>,
-    // demux logs to get precompiles for RAM too. 1 circuit
-    pub log_demux_circuit: ClosedFormInputCompactFormWitness<E>,
+    // demux logs to get precompiles for RAM too
+    pub log_demux_circuits: Vec<ClosedFormInputCompactFormWitness<E>>,
     // process precompiles
     // keccak
     pub keccak_precompile_circuits: Vec<ClosedFormInputCompactFormWitness<E>>,
@@ -588,7 +587,7 @@ impl<E: Engine> BlockBasicCircuitsPublicCompactFormsWitnesses<E> {
             main_vm_circuits, 
             code_decommittments_sorter_circuit, 
             code_decommitter_circuits, 
-            log_demux_circuit, 
+            log_demux_circuits, 
             keccak_precompile_circuits, 
             sha256_precompile_circuits, 
             ecrecover_precompile_circuits, 
@@ -611,7 +610,7 @@ impl<E: Engine> BlockBasicCircuitsPublicCompactFormsWitnesses<E> {
 
         result.extend(code_decommitter_circuits);
 
-        result.push(log_demux_circuit);
+        result.extend(log_demux_circuits);
 
         result.extend(keccak_precompile_circuits);
         result.extend(sha256_precompile_circuits);

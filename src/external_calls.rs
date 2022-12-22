@@ -279,7 +279,7 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
             vm_end_of_execution_observable_output: basic_circuits.main_vm_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
             decommits_sorter_observable_output: basic_circuits.code_decommittments_sorter_circuit.clone_witness().unwrap().closed_form_input.observable_output,
             code_decommitter_observable_output: basic_circuits.code_decommitter_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
-            log_demuxer_observable_output: basic_circuits.log_demux_circuit.clone_witness().unwrap().closed_form_input.observable_output,
+            log_demuxer_observable_output: basic_circuits.log_demux_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
             keccak256_observable_output: basic_circuits.keccak_precompile_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
             sha256_observable_output: basic_circuits.sha256_precompile_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
             ecrecover_observable_output: basic_circuits.ecrecover_precompile_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,

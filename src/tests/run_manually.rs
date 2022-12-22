@@ -233,7 +233,7 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
     let geometry = GeometryConfig {
         cycles_per_vm_snapshot: 10,
         limit_for_code_decommitter_sorter: 16,
-        limit_for_log_demuxer: 32,
+        cycles_per_log_demuxer: 8,
         cycles_per_storage_sorter: 4,
         limit_for_events_or_l1_messages_sorter: 32,
         cycles_per_ram_permutation: 4,
@@ -306,7 +306,7 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
         use crate::abstract_zksync_circuit::concrete_circuits::ZkSyncCircuit;
-        if !matches!(&el, ZkSyncCircuit::StorageSorter(..)) {
+        if !matches!(&el, ZkSyncCircuit::LogDemuxer(..)) {
             continue;
         }
         // el.debug_witness();

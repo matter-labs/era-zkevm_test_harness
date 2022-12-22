@@ -24,7 +24,7 @@ use derivative::Derivative;
 pub struct GeometryConfig {
     pub cycles_per_vm_snapshot: u32,
     pub limit_for_code_decommitter_sorter: u32,
-    pub limit_for_log_demuxer: u32,
+    pub cycles_per_log_demuxer: u32,
     pub cycles_per_storage_sorter: u32,
     pub limit_for_events_or_l1_messages_sorter: u32,
     pub limit_for_l1_messages_merklizer: u32,
