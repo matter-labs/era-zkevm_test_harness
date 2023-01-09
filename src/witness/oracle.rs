@@ -13,7 +13,7 @@ use crate::witness::tracer::{WitnessTracer, QueryMarker};
 use derivative::Derivative;
 use num_bigint::BigUint;
 use rayon::slice::ParallelSliceMut;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::ops::RangeInclusive;
 use sync_vm::traits::CSWitnessable;
 use sync_vm::vm::vm_cycle::memory::MemoryLocation;
@@ -77,14 +77,15 @@ pub struct RollbackQueueStateWitness<E: Engine> {
 #[derivative(Default(bound = ""), Clone(bound = ""))]
 #[serde(bound = "")]
 pub struct VmWitnessOracle<E: Engine> {
-    pub memory_read_witness: Vec<(u32, MemoryQuery)>,
-    pub memory_write_witness: Option<Vec<(u32, MemoryQuery)>>,
-    pub rollback_queue_head_segments: Vec<(u32, E::Fr)>,
-    pub decommittment_requests_witness: Vec<(u32, DecommittmentQuery)>,
-    pub rollback_queue_initial_tails_for_new_frames: Vec<(u32, E::Fr)>,
-    pub storage_read_queries: Vec<(u32, LogQuery)>,
+    pub memory_read_witness: VecDeque<(u32, MemoryQuery)>,
+    pub memory_write_witness: Option<VecDeque<(u32, MemoryQuery)>>,
+    pub rollback_queue_head_segments: VecDeque<(u32, E::Fr)>,
+    pub decommittment_requests_witness: VecDeque<(u32, DecommittmentQuery)>,
+    pub rollback_queue_initial_tails_for_new_frames: VecDeque<(u32, E::Fr)>,
+    pub storage_queries: VecDeque<(u32, LogQuery)>, // cycle, query
+    pub storage_refund_queries: VecDeque<(u32, LogQuery, u32)>, // cycle, query, pubdata refund
     pub callstack_values_witnesses:
-        Vec<(u32, (ExtendedCallstackEntry<E>, CallstackSimulatorState<E>))>,
+        VecDeque<(u32, (ExtendedCallstackEntry<E>, CallstackSimulatorState<E>))>,
 }
 
 #[derive(Derivative)]
@@ -197,7 +198,8 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 ) -> (Vec<VmInstanceWitness<E, VmWitnessOracle<E>>>, FullBlockArtifacts<E>) {
     let WitnessTracer {
         memory_queries,
-        storage_read_queries,
+        storage_queries,
+        refunds_logs,
         decommittment_queries,
         keccak_round_function_witnesses,
         sha256_round_function_witnesses,
@@ -350,7 +352,6 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
     tracing::debug!("Running storage log simulation");
 
-    // for ((_, (query_marker, cycle, query)), was_applied) in
     for (extended_query, was_applied) in
         forward.iter().cloned().zip(std::iter::repeat(true)).chain(
             rollbacks
@@ -935,13 +936,25 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
             }
         }
 
-        let per_instance_storage_read_witnesses: Vec<_> = storage_read_queries.iter()
+        let per_instance_storage_queries_witnesses: Vec<_> = storage_queries.iter()
             .skip_while(
                 |el| el.0 < initial_state.at_cycle
             )
             .take_while(
                 |el| el.0 < final_state.at_cycle
-            ).cloned().collect();
+            )
+            .cloned()
+            .collect();
+
+        let per_instance_refund_logs: Vec<_> = refunds_logs.iter()
+            .skip_while(
+                |el| el.0 < initial_state.at_cycle
+            )
+            .take_while(
+                |el| el.0 < final_state.at_cycle
+            )
+            .cloned()
+            .collect();
 
         let decommittment_requests_witness: Vec<_> = artifacts.all_decommittment_queries.iter()
             .skip_while(
@@ -986,12 +999,13 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
         // construct an oracle
         let witness_oracle = VmWitnessOracle::<E> {
-            memory_read_witness: per_instance_memory_read_witnesses,
-            memory_write_witness: Some(per_instance_memory_write_witnesses),
+            memory_read_witness: per_instance_memory_read_witnesses.into(),
+            memory_write_witness: Some(per_instance_memory_write_witnesses.into()),
             rollback_queue_head_segments,
-            decommittment_requests_witness,
-            rollback_queue_initial_tails_for_new_frames,
-            storage_read_queries: per_instance_storage_read_witnesses,
+            decommittment_requests_witness: decommittment_requests_witness.into(),
+            rollback_queue_initial_tails_for_new_frames: rollback_queue_initial_tails_for_new_frames.into(),
+            storage_queries: per_instance_storage_queries_witnesses.into(),
+            storage_refund_queries: per_instance_refund_logs.into(),
             callstack_values_witnesses,
         };
 
@@ -1116,7 +1130,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
                     key.create_witness()
                 );
             }
-            let (_cycle, query) = self.memory_read_witness.drain(..1).next().unwrap();
+            let (_cycle, query) = self.memory_read_witness.pop_front().unwrap();
 
             // tracing::debug!("Query value = 0x{:064x}", query.value);
             if let Some(ts) = timestamp.get_value() {
@@ -1180,7 +1194,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
                         wit.memory_index,
                     );
                 }
-                let (_cycle, query) = write_witness.drain(..1).next().unwrap();
+                let (_cycle, query) = write_witness.pop_front().unwrap();
 
                 assert_eq!(
                     wit.timestamp,
@@ -1245,13 +1259,13 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
         execute: &Boolean,
     ) -> Option<num_bigint::BigUint> {
         if execute.get_value().unwrap_or(false) && needs_read_witness.get_value().unwrap_or(false) {
-            if self.storage_read_queries.is_empty() {
+            if self.storage_queries.is_empty() {
                 panic!(
                     "should have a witness for storage read at {:?}",
                     record.create_witness()
                 );
             }
-            let (_cycle, query) = self.storage_read_queries.drain(..1).next().unwrap();
+            let (_cycle, query) = self.storage_queries.pop_front().unwrap();
 
             if let Some(record) = record.create_witness() {
                 assert_eq!(record.aux_byte, query.aux_byte);
@@ -1276,8 +1290,50 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
         }
     }
 
-    fn push_storage_witness(&mut self, _record: &StorageLogRecord<E>, _execute: &Boolean) {
-        // logic is captured in "read"
+    fn get_refunds(
+        &mut self, 
+        record: &StorageLogRecord<E>, 
+        is_write: &Boolean,
+        execute: &Boolean
+    ) -> Option<u32> {
+        if execute.get_value().unwrap_or(false) && is_write.get_value().unwrap_or(false) {
+            if self.storage_refund_queries.is_empty() {
+                panic!(
+                    "should have a refund witness for storage write attempt at {:?}",
+                    record.create_witness()
+                );
+            }
+            let (_cycle, query, refund) = self.storage_refund_queries.pop_front().unwrap();
+
+            if let Some(record) = record.create_witness() {
+                assert_eq!(record.aux_byte, query.aux_byte);
+                assert_eq!(record.address, u160_from_address(query.address));
+                assert_eq!(record.key, u256_to_biguint(query.key));
+                assert_eq!(record.r_w_flag, query.rw_flag);
+                assert!(record.r_w_flag == true);
+                assert_eq!(record.written_value, u256_to_biguint(query.written_value));
+                assert_eq!(record.rollback, false);
+                assert_eq!(record.rollback, query.rollback);
+                assert_eq!(record.shard_id, query.shard_id);
+                // the rest are not filled in out-of-circuit implementations
+                assert_eq!(record.is_service, query.is_service);
+            }
+
+            Some(refund)
+        } else {
+            Some(0u32)
+        }
+    }
+
+    fn push_storage_witness(
+        &mut self, 
+        _record: &StorageLogRecord<E>, 
+        _is_write: &Boolean,
+        _execute: &Boolean
+    ) {
+        // logic is captured in read for a reason that we NEED
+        // previous value of the cell for rollback to work
+        unreachable!()
     }
 
     // may be should also track key for debug purposes
@@ -1287,7 +1343,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
         execute: &Boolean,
     ) -> Option<<E>::Fr> {
         if execute.get_value().unwrap_or(false) {
-            let (_cycle, head) = self.rollback_queue_head_segments.drain(..1).next().unwrap();
+            let (_cycle, head) = self.rollback_queue_head_segments.pop_front().unwrap();
             // dbg!(head);
 
             Some(head)
@@ -1304,8 +1360,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
         if execute.get_value().unwrap_or(false) {
             let (_cycle_idx, tail) = self
                 .rollback_queue_initial_tails_for_new_frames
-                .drain(..1)
-                .next()
+                .pop_front()
                 .unwrap();
             // dbg!(tail);
 
@@ -1325,7 +1380,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
 
         if execute.get_value().unwrap_or(false) {
             let (_cycle_idx, (extended_entry, internediate_info)) =
-                self.callstack_values_witnesses.drain(..1).next().unwrap();
+                self.callstack_values_witnesses.pop_front().unwrap();
 
             let CallstackSimulatorState {
                 is_push,
@@ -1406,7 +1461,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
     ) {
         if execute.get_value().unwrap_or(false) {
             let (_cycle_idx, (extended_entry, internediate_info)) =
-                self.callstack_values_witnesses.drain(..1).next().unwrap();
+                self.callstack_values_witnesses.pop_front().unwrap();
             let CallstackSimulatorState {
                 is_push,
                 previous_state: _,
@@ -1501,8 +1556,7 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
 
             let (_frame_idx, query) = self
                 .decommittment_requests_witness
-                .drain(..1)
-                .next()
+                .pop_front()
                 .unwrap_or_else(|| {
                     if let Some(wit) = request.create_witness() {
                         panic!("Witness value is missing for {:?}", wit);
@@ -1540,8 +1594,12 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
             }
         }
 
-        if self.storage_read_queries.is_empty() == false {
-            panic!("Too many storage queries in witness: have left\n{:?}", self.storage_read_queries);
+        if self.storage_queries.is_empty() == false {
+            panic!("Too many storage queries in witness: have left\n{:?}", self.storage_queries);
+        }
+
+        if self.storage_refund_queries.is_empty() == false {
+            panic!("Too many storage queries for refunds in witness: have left\n{:?}", self.storage_refund_queries);
         }
 
         if self.callstack_values_witnesses.is_empty() == false {

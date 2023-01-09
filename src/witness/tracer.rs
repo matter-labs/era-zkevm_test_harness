@@ -50,7 +50,8 @@ pub struct WitnessTracer {
     pub current_cycle_counter: u32,
     pub cycle_counter_of_last_snapshot: u32,
     pub memory_queries: Vec<(u32, MemoryQuery)>, // flattened memory queries, with cycle indicators
-    pub storage_read_queries: Vec<(u32, LogQuery)>, // storage read queries with cycle indicators
+    pub storage_queries: Vec<(u32, LogQuery)>, // storage read queries with cycle indicators
+    pub refunds_logs: Vec<(u32, LogQuery, u32)>,
     pub decommittment_queries: Vec<(u32, DecommittmentQuery, Vec<U256>)>,
     pub keccak_round_function_witnesses: Vec<(u32, LogQuery, Vec<Keccak256RoundWitness>)>,
     pub sha256_round_function_witnesses: Vec<(u32, LogQuery, Vec<Sha256RoundWitness>)>,
@@ -109,7 +110,8 @@ impl WitnessTracer {
             current_cycle_counter: 0,
             cycle_counter_of_last_snapshot: 0,
             memory_queries: vec![],
-            storage_read_queries: vec![],
+            storage_queries: vec![],
+            refunds_logs: vec![],
             decommittment_queries: vec![],
             keccak_round_function_witnesses: vec![],
             sha256_round_function_witnesses: vec![],
@@ -277,11 +279,20 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
             .push((monotonic_cycle_counter, memory_query));
     }
 
+    fn record_refund_for_query(
+        &mut self, 
+        monotonic_cycle_counter: u32, 
+        log_query: LogQuery, 
+        refund: zk_evm::abstractions::RefundType
+    ) {
+        assert!(log_query.aux_byte == STORAGE_AUX_BYTE);
+        self.refunds_logs.push((monotonic_cycle_counter, log_query, refund.pubdata_refund()));
+    }
+
     fn add_log_query(&mut self, monotonic_cycle_counter: u32, log_query: LogQuery) {
-        // log reads
-        // if !log_query.rw_flag && log_query.aux_byte == STORAGE_AUX_BYTE {
+        // log both reads and writes
         if log_query.aux_byte == STORAGE_AUX_BYTE {
-            self.storage_read_queries
+            self.storage_queries
                 .push((monotonic_cycle_counter, log_query));
         }
 

@@ -33,6 +33,8 @@ pub fn compute_storage_dedup_and_sort<
     per_circuit_capacity: usize,
     round_function: &R,
 ) -> Vec<StorageDeduplicatorInstanceWitness<E>> {
+    // TODO: handle a case if no storage accesses exist
+
     // first we sort the storage log (only storage now) by composite key
 
     use crate::witness::sort_storage_access::sort_storage_access_queries;
@@ -497,8 +499,6 @@ pub fn compute_storage_dedup_and_sort<
     results.last_mut().unwrap().closed_form_input.observable_output.final_sorted_queue_state = final_sorted_queue_state.clone();
 
     artifacts.deduplicated_rollup_storage_queue_simulator = result_queue_simulator;
-
-    println!("Storage simulation done, got {} witnesses", results.len());
 
     results
 }

@@ -285,7 +285,7 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         &mut tree
     );
 
-    println!("Simulation and witness creation as completed");
+    println!("Simulation and witness creation are completed");
 
     // let flattened = basic_block_circuits.into_flattened_set();
     // for el in flattened.into_iter() {
@@ -306,7 +306,7 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
         use crate::abstract_zksync_circuit::concrete_circuits::ZkSyncCircuit;
-        if !matches!(&el, ZkSyncCircuit::L1MessagesSorter(..)) {
+        if !matches!(&el, ZkSyncCircuit::MainVM(..)) {
             continue;
         }
         // el.debug_witness();

@@ -342,54 +342,7 @@ pub fn compute_events_dedup_and_sort<
 
     *target_deduplicated_queries = sorted_queries;
 
-    println!("Events simulation done, got {} witnesses", results.len());
-
     results
-
-
-    // for sorted_log_query in sorted_queries.iter().copied() {
-    //     result_queue_simulator.push(sorted_log_query, round_function);
-    // }
-
-    // *target_deduplicated_queries = sorted_queries;
-
-    // // in general we have everything ready, just form the witness
-    // use sync_vm::traits::CSWitnessable;
-
-    // let mut input_passthrough_data = EventsDeduplicatorInputData::placeholder_witness();
-    // // we only need the state of demuxed rollup storage queue
-    // input_passthrough_data.initial_log_queue_state = take_queue_state_from_simulator(&unsorted_simulator);
-
-    // let mut output_passthrough_data = EventsDeduplicatorOutputData::placeholder_witness();
-    // output_passthrough_data.final_queue_state = take_queue_state_from_simulator(&result_queue_simulator);
-
-    // // dbg!(take_queue_state_from_simulator(&result_queue_simulator));
-    // // dbg!(&result_queue_simulator.witness);
-
-    // let initial_queue_witness: VecDeque<_> = unsorted_simulator.witness.iter().map(|(encoding, old_tail, element)| {
-    //     let as_storage_log = log_query_into_storage_record_witness(element);
-
-    //     (*encoding, as_storage_log, *old_tail)
-    // }).collect();
-    
-    // let witness = EventsDeduplicatorInstanceWitness {
-    //     closed_form_input: ClosedFormInputWitness { 
-    //         start_flag: true, 
-    //         completion_flag: true, 
-    //         observable_input: input_passthrough_data, 
-    //         observable_output: output_passthrough_data, 
-    //         hidden_fsm_input: (), 
-    //         hidden_fsm_output: (), 
-    //         _marker_e: (), 
-    //         _marker: std::marker::PhantomData 
-    //     },
-
-    //     initial_queue_witness: FixedWidthEncodingGenericQueueWitness {wit: initial_queue_witness},
-    //     intermediate_sorted_queue_state: sorted_simulator_final_state,
-    //     sorted_queue_witness: FixedWidthEncodingGenericQueueWitness {wit: sorted_queue_witness},
-    // };
-
-    // witness
 }
 
 pub fn sort_and_dedup_events_log(sorted_history: Vec<LogQuery>) -> Vec<LogQuery> {

@@ -387,6 +387,7 @@ pub fn run_vm_instance<
         tx_number_in_block,
         previous_super_pc,
         did_call_or_ret_recently,
+        pending_exception: Boolean::constant(false),
         ergs_per_pubdata_byte,
         callstack: initial_callstack,
         pending_sponges: PendingRoundFunctions::<E, 3>::empty(), // we guarantee that those are empty

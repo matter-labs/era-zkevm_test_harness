@@ -355,7 +355,14 @@ pub(crate) fn compute_grand_product_chains<E: Engine, const N: usize, const M: u
         acc_rhs.mul_assign(&tmp);
     }
 
-    assert_eq!(lhs_intermediates.last().unwrap(), rhs_intermediates.last().unwrap());
+    match (lhs_intermediates.last(), rhs_intermediates.last()) {
+        (Some(lhs), Some(rhs)) => {
+            assert_eq!(lhs, rhs);
+        },
+        (None, None) => {
+        },
+        _ => unreachable!(),
+    }
 
     lhs_grand_product_chain.par_chunks_mut(RAM_PERMUTATION_CHUNK_SIZE).skip(1).zip(lhs_intermediates.par_chunks(1)).for_each(
         |(dst, src)| {
@@ -376,7 +383,14 @@ pub(crate) fn compute_grand_product_chains<E: Engine, const N: usize, const M: u
     );
 
     // sanity check
-    assert_eq!(lhs_grand_product_chain.last().unwrap(), rhs_grand_product_chain.last().unwrap());
+    match (lhs_grand_product_chain.last(), rhs_grand_product_chain.last()) {
+        (Some(lhs), Some(rhs)) => {
+            assert_eq!(lhs, rhs);
+        },
+        (None, None) => {
+        },
+        _ => unreachable!(),
+    }
 
     (lhs_grand_product_chain, rhs_grand_product_chain)
 }
