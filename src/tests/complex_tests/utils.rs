@@ -28,6 +28,7 @@ pub fn read_test_artifact(test_name: &str) -> TestArtifact {
     }
 
     let text = fs::read_to_string(path.as_path()).unwrap_or_else(|_| panic!("Failed to read the test artifact"));
+    serde_json::from_str(text.as_str()).unwrap()
 
-    serde_json::from_str(text.as_str()).unwrap_or_else(|_| panic!("Failed to deserialize the test artifact"))
+    // serde_json::from_str(text.as_str()).unwrap_or_else(|_| panic!("Failed to deserialize the test artifact"))
 }

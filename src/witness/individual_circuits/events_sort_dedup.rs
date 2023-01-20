@@ -207,9 +207,12 @@ pub fn compute_events_dedup_and_sort<
             let mut current_timestamp = previous_item.timestamp.0;
 
             let num_items_in_chunk = sorted_states.len();
+            let mut exhausted = false;
 
             for (sub_idx, (_encoding, _previous_tail, item)) in sorted_states.iter().enumerate() {
                 let first_ever = sub_idx == 0 && is_first;
+                let last_iteration = sub_idx == num_items_in_chunk - 1;
+                let is_last_ever = last_iteration && is_last;
 
                 if !first_ever {
                     assert!(item.rw_flag == true);
@@ -218,25 +221,34 @@ pub fn compute_events_dedup_and_sort<
                     if same_cell {
                         assert!(item.rollback == true);
                     } else {
-                        // finish with previous one and start a new one
-                        let next_query = deduplicated_queries_it.next().unwrap();
-                        let _ = result_queue_simulator.push_and_output_intermediate_data(*next_query, round_function);
-
-                        current_timestamp = item.timestamp.0;
+                        assert!(item.rollback == false);
+                        if new_last_item.rollback == false {
+                            // finish with previous one and start a new one
+                            if let Some(next_query) = deduplicated_queries_it.next() {
+                                assert_eq!(next_query.address, new_last_item.address);
+                                assert_eq!(next_query.key, new_last_item.key);
+                                assert_eq!(next_query.written_value, new_last_item.written_value);
+                                let _ = result_queue_simulator.push_and_output_intermediate_data(*next_query, round_function);
+                            } else {
+                                assert!(is_last);
+                                assert!(exhausted == false);
+                                exhausted = true;
+                            }
+                        }
                     }
-
-                    new_last_packed_key = event_comparison_key::<E>(&item);
-                    new_last_item = *item;
-                } else {
-                    new_last_packed_key = event_comparison_key::<E>(&item);
-                    new_last_item = *item;
                 }
 
-                let is_last_ever = (sub_idx == num_items_in_chunk - 1) && is_last;
+                new_last_packed_key = event_comparison_key::<E>(&item);
+                new_last_item = *item;
+                current_timestamp = item.timestamp.0;
+
+                // last cycle is special, we do not try to pop if we processed the last item
                 if is_last_ever {
-                    if new_last_item.rollback == false {
-                        let next_query = deduplicated_queries_it.next().unwrap();
-                        let _ = result_queue_simulator.push_and_output_intermediate_data(*next_query, round_function);
+                    if !exhausted {
+                        if new_last_item.rollback == false {
+                            let next_query = deduplicated_queries_it.next().unwrap();
+                            let _ = result_queue_simulator.push_and_output_intermediate_data(*next_query, round_function);
+                        }
                     }
                 }
             }

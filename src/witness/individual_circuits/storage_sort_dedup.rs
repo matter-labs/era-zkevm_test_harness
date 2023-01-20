@@ -238,8 +238,11 @@ pub fn compute_storage_dedup_and_sort<
 
             let num_items_in_chunk = sorted_states.len();
 
+            let mut exhausted = false;
+
             for (sub_idx, (_encoding, _previous_tail, item)) in sorted_states.iter().enumerate() {
                 let first_ever = sub_idx == 0 && is_first;
+                let is_last_ever = (sub_idx == num_items_in_chunk - 1) && is_last;
 
                 if !first_ever {
                     let same_cell = current_shard_id == item.raw_query.shard_id
@@ -248,7 +251,8 @@ pub fn compute_storage_dedup_and_sort<
 
                     if same_cell {
                         // proceed previous one
-                        if item.raw_query.rw_flag {
+                        if item.raw_query.rw_flag == true {
+                            // write or rollback
                             if item.raw_query.rollback == false {
                                 new_this_cell_current_depth += 1;
                                 new_this_cell_current_value = item.raw_query.written_value;
@@ -257,14 +261,93 @@ pub fn compute_storage_dedup_and_sort<
                                 new_this_cell_current_value = item.raw_query.read_value;
                             }
                         } else {
+                            // read
                             if new_this_cell_current_depth == 0 {
+                                if sub_idx == 7 {
+                                    println!("Protective read");
+                                }
                                 new_this_cell_has_explicit_read_and_rollback_depth_zero = true || new_this_cell_has_explicit_read_and_rollback_depth_zero;
                             }
                             new_this_cell_current_value = item.raw_query.read_value;
                         }
                     } else {
                         // finish with previous one and start a new one
+                        if new_this_cell_current_depth > 0 {
+                            // net write
+                            if let Some(next_query) = deduplicated_queries_it.next() {
+                                if new_this_cell_current_value == new_this_cell_base_value {
+                                    // protective read, to ensure that if we follow
+                                    // the claim of initial value and do not overwrite,
+                                    // then we are consistent
+                                    assert!(next_query.rw_flag == false);
+                                    assert!(next_query.shard_id == current_shard_id);
+                                    assert!(next_query.address == current_address);
+                                    assert!(next_query.key == current_key);
+                                    assert!(next_query.read_value == new_this_cell_current_value);
+                                    assert!(next_query.written_value == new_this_cell_current_value);
+                                } else {
+                                    // plain write
+                                    assert!(next_query.rw_flag == true);
+                                    assert!(next_query.shard_id == current_shard_id);
+                                    assert!(next_query.address == current_address);
+                                    assert!(next_query.key == current_key);
+                                    assert!(next_query.read_value == new_this_cell_base_value);
+                                    assert!(next_query.written_value == new_this_cell_current_value);
+                                }
+    
+                                let _ = result_queue_simulator.push_and_output_intermediate_data(*next_query, round_function);
+                            } else {
+                                // empty cycles
+                                assert!(is_last);
+                                assert!(exhausted == false);
+                                exhausted = true;
+                            }
 
+                        } else {
+                            if new_this_cell_has_explicit_read_and_rollback_depth_zero == true {
+                                // protective read
+                                if let Some(next_query) = deduplicated_queries_it.next() {
+                                    assert!(next_query.rw_flag == false);
+                                    assert!(next_query.shard_id == current_shard_id);
+                                    assert!(next_query.address == current_address);
+                                    assert!(next_query.key == current_key);
+                                    assert!(next_query.read_value == new_this_cell_base_value);
+                                    assert!(next_query.written_value == new_this_cell_base_value);
+                                    let _ = result_queue_simulator.push_and_output_intermediate_data(*next_query, round_function);
+                                } else {
+                                    assert!(is_last);
+                                    assert!(exhausted == false);
+                                    exhausted = true;
+                                }
+                            }
+                        }
+
+                        // start for new one
+                        if item.raw_query.rw_flag == true {
+                            assert!(item.raw_query.rollback == false);
+                            new_this_cell_current_depth = 1;
+                            new_this_cell_has_explicit_read_and_rollback_depth_zero = false;
+                        } else {
+                            new_this_cell_current_depth = 0;
+                            new_this_cell_has_explicit_read_and_rollback_depth_zero = true;
+                        }
+
+                        new_this_cell_base_value = item.raw_query.read_value;
+                        if item.raw_query.rw_flag == true{
+                            new_this_cell_current_value = item.raw_query.written_value;
+                        } else {
+                            new_this_cell_current_value = item.raw_query.read_value;
+                        }
+                    }
+                }
+
+                // always update keys
+                current_shard_id = item.raw_query.shard_id;
+                current_address = item.raw_query.address;
+                current_key = item.raw_query.key;
+
+                if is_last_ever {
+                    if exhausted == false {
                         if new_this_cell_current_depth > 0 {
                             // net write
                             let next_query = deduplicated_queries_it.next().unwrap();
@@ -299,70 +382,6 @@ pub fn compute_storage_dedup_and_sort<
                                 let _ = result_queue_simulator.push_and_output_intermediate_data(*next_query, round_function);
                             }
                         }
-
-                        // start for new one
-                        if item.raw_query.rw_flag {
-                            assert!(item.raw_query.rollback == false);
-                            new_this_cell_current_depth = 1;
-                        } else {
-                            new_this_cell_current_depth = 0;
-                            new_this_cell_has_explicit_read_and_rollback_depth_zero = true;
-                        }
-
-                        new_this_cell_base_value = item.raw_query.read_value;
-                        if item.raw_query.rw_flag {
-                            new_this_cell_current_value = item.raw_query.written_value;
-                        } else {
-                            new_this_cell_current_value = item.raw_query.read_value;
-                        }
-                    }
-
-                    // always update keys
-                    current_shard_id = item.raw_query.shard_id;
-                    current_address = item.raw_query.address;
-                    current_key = item.raw_query.key;
-
-                } else {
-                    current_shard_id = item.raw_query.shard_id;
-                    current_address = item.raw_query.address;
-                    current_key = item.raw_query.key;
-                }
-
-                let is_last_ever = (sub_idx == num_items_in_chunk - 1) && is_last;
-                if is_last_ever {
-                    if new_this_cell_current_depth > 0 {
-                        // net write
-                        let next_query = deduplicated_queries_it.next().unwrap();
-                        if new_this_cell_current_value == new_this_cell_base_value {
-                            // protective read
-                            assert!(next_query.rw_flag == false);
-                            assert!(next_query.shard_id == current_shard_id);
-                            assert!(next_query.address == current_address);
-                            assert!(next_query.key == current_key);
-                            assert!(next_query.read_value == new_this_cell_current_value);
-                            assert!(next_query.written_value == new_this_cell_current_value);
-                        } else {
-                            assert!(next_query.rw_flag == true);
-                            assert!(next_query.shard_id == current_shard_id);
-                            assert!(next_query.address == current_address);
-                            assert!(next_query.key == current_key);
-                            assert!(next_query.read_value == new_this_cell_base_value);
-                            assert!(next_query.written_value == new_this_cell_current_value);
-                        }
-
-                        let _ = result_queue_simulator.push_and_output_intermediate_data(*next_query, round_function);
-                    } else {
-                        if new_this_cell_has_explicit_read_and_rollback_depth_zero == true {
-                            // protective read
-                            let next_query = deduplicated_queries_it.next().unwrap();
-                            assert!(next_query.rw_flag == false);
-                            assert!(next_query.shard_id == current_shard_id);
-                            assert!(next_query.address == current_address);
-                            assert!(next_query.key == current_key);
-                            assert!(next_query.read_value == new_this_cell_base_value);
-                            assert!(next_query.written_value == new_this_cell_base_value);
-                            let _ = result_queue_simulator.push_and_output_intermediate_data(*next_query, round_function);
-                        }
                     }
                 }
             }
@@ -374,7 +393,6 @@ pub fn compute_storage_dedup_and_sort<
                 new_this_cell_current_depth,
             )
         };
-
 
         use sync_vm::traits::CSWitnessable;
         let placeholder_witness = FixedWidthEncodingGenericQueueState::placeholder_witness();
@@ -462,6 +480,8 @@ pub fn compute_storage_dedup_and_sort<
         assert_eq!(instance_witness.unsorted_queue_witness.wit.len(), instance_witness.intermediate_sorted_queue_witness.wit.len());
 
         if sorted_states.len() % per_circuit_capacity != 0 {
+            println!("Do padding");
+            assert!(is_last);
             // circuit does padding, so all previous values must be reset
             instance_witness.closed_form_input.hidden_fsm_output.previous_packed_key = [E::Fr::zero(); 2];
             instance_witness.closed_form_input.hidden_fsm_output.previous_key = BigUint::from(0u64);

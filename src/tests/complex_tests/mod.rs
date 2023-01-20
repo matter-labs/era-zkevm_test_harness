@@ -125,9 +125,9 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         cycles_per_ecrecover_circuit: 2,
 
         limit_for_code_decommitter_sorter: 512,
-        cycles_per_log_demuxer: 512,
-        cycles_per_storage_sorter: 512,
-        cycles_per_events_or_l1_messages_sorter: 128,
+        cycles_per_log_demuxer: 16,
+        cycles_per_storage_sorter: 16,
+        cycles_per_events_or_l1_messages_sorter: 4,
         limit_for_initial_writes_pubdata_hasher: 16,
         limit_for_repeated_writes_pubdata_hasher: 16,
         limit_for_l1_messages_merklizer: 32,
@@ -176,10 +176,6 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     let mut previous_content_hash = [0u8; 32];
     (&mut previous_content_hash[..]).copy_from_slice(&hasher.finalize().as_slice());
 
-    // // RAM verification queries
-    // let ram_queries = vec![
-    //     (sync_vm::scheduler::PREVIOUS_BLOCK_HASH_HEAP_SLOT, U256::from_big_endian(&previous_content_hash))
-    // ];
     let default_account_codehash = bytecode_to_code_hash(&test_artifact.default_account_code).unwrap();
     let default_account_codehash = U256::from_big_endian(&default_account_codehash);
 
@@ -258,6 +254,8 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     //     serde_json::to_writer(&mut vk_file_for_json, &vk).unwrap();
     // }
 
+    // let mut skip = true;
+
     for (idx, (el, input_value)) in basic_block_circuits.clone().into_flattened_set().into_iter().zip(basic_block_circuits_inputs.clone().into_flattened_set().into_iter()).enumerate() {
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
@@ -271,8 +269,18 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         //     continue;
         // }
         
-        // if !matches!(&el, ZkSyncCircuit::MainVM(..)) 
+        // if !matches!(&el, ZkSyncCircuit::StorageSorter(..)) 
         // {
+
+        //     continue;
+        // }
+
+        // if matches!(&el, ZkSyncCircuit::StorageSorter(..)) 
+        // {
+        //     skip = false;
+        // }
+
+        // if skip {
         //     continue;
         // }
 
