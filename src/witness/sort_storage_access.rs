@@ -168,15 +168,15 @@ pub fn sort_storage_access_queries<L: LogQueryLike>(unsorted_storage_queries: &[
             if el.raw_query.rw_flag() == false {
                 assert_eq!(&el.raw_query.read_value(), current_element_history.current_value.as_ref().unwrap(), "invalid for query {:?}", el);
                 // and do not place reads into the stack
-            } else if el.raw_query.rw_flag() == true {
+            } else {
                 // write-like things manipulate the stack
                 if el.raw_query.rollback() == false {
-                    // write
+                    // write and push to the stack
                     assert_eq!(&el.raw_query.read_value(), current_element_history.current_value.as_ref().unwrap(), "invalid for query {:?}", el);
                     current_element_history.current_value = Some(el.raw_query.written_value());
                     current_element_history.changes_stack.push(el.clone());
                 } else {
-                    // pop from stack
+                    // pop from stack and self-check
                     let popped_change = current_element_history.changes_stack.pop().unwrap();
                     // we do not explicitly swap values, and use rollback flag instead, so compare this way
                     assert_eq!(el.raw_query.read_value(), popped_change.raw_query.read_value(), "invalid for query {:?}", el);

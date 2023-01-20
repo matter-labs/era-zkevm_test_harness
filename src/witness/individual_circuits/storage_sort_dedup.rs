@@ -172,10 +172,6 @@ pub fn compute_storage_dedup_and_sort<
 
     let mut deduplicated_queries_it = artifacts.deduplicated_rollup_storage_queries.iter();
 
-    // for el in artifacts.deduplicated_rollup_storage_queries.iter() {
-    //     let _ = result_queue_simulator.push(*el, round_function);
-    // }
-
     let mut current_final_sorted_queue_state = take_queue_state_from_simulator(&result_queue_simulator);
 
     for (idx, (((((unsorted_sponge_states, sorted_sponge_states), lhs_grand_product), rhs_grand_product), unsorted_states), sorted_states)) in it.enumerate() {
