@@ -252,7 +252,7 @@ pub fn compute_storage_dedup_and_sort<
                     }
 
                     new_this_cell_base_value = item.raw_query.read_value;
-                    if item.raw_query.rw_flag == true{
+                    if item.raw_query.rw_flag == true {
                         new_this_cell_current_value = item.raw_query.written_value;
                     } else {
                         new_this_cell_current_value = item.raw_query.read_value;

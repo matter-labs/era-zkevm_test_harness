@@ -214,6 +214,9 @@ pub fn compute_events_dedup_and_sort<
                 let last_iteration = sub_idx == num_items_in_chunk - 1;
                 let is_last_ever = last_iteration && is_last;
 
+                // we know that timestamp of 0 is unreachable, so we do not need
+                // to have a special first cycle here
+
                 if !first_ever {
                     assert!(item.rw_flag == true);
                     let same_cell = current_timestamp == item.timestamp.0;
