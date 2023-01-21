@@ -240,7 +240,26 @@ pub fn compute_storage_dedup_and_sort<
                 let first_ever = sub_idx == 0 && is_first;
                 let is_last_ever = (sub_idx == num_items_in_chunk - 1) && is_last;
 
-                if !first_ever {
+                if first_ever {
+                    // only set current values
+                    if item.raw_query.rw_flag == true {
+                        assert!(item.raw_query.rollback == false);
+                        new_this_cell_current_depth = 1;
+                        new_this_cell_has_explicit_read_and_rollback_depth_zero = false;
+                    } else {
+                        new_this_cell_current_depth = 0;
+                        new_this_cell_has_explicit_read_and_rollback_depth_zero = true;
+                    }
+
+                    new_this_cell_base_value = item.raw_query.read_value;
+                    if item.raw_query.rw_flag == true{
+                        new_this_cell_current_value = item.raw_query.written_value;
+                    } else {
+                        new_this_cell_current_value = item.raw_query.read_value;
+                    }
+                } else {
+                    // main cycle
+
                     let same_cell = current_shard_id == item.raw_query.shard_id
                         && current_address == item.raw_query.address
                         && current_key == item.raw_query.key;
