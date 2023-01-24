@@ -7,7 +7,7 @@ on:
         description: "Target branch to generate geometry config against"
         type: string
         required: true
-        default: "v1.3"
+        default: "v1.3.0"
       circuit_type:
         description: "Numeric value of circuit type for which estimation is done"
         type: string
@@ -21,9 +21,6 @@ concurrency:
 jobs:
   estimate-circuit-limit:
     runs-on: [self-hosted, ci-runner]
-    strategy:
-      matrix:
-        key: [${{ github.circuit_type }}]
     steps:
       - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3
         with:
@@ -40,7 +37,9 @@ jobs:
           git config --global --add url."https://${{ secrets.ZKSYNC_ADMIN_BOT_ORG_REPO_WRITE }}:x-oauth-basic@github.com/".insteadOf ssh://git@github.com/
           git config --global --add url."https://${{ secrets.ZKSYNC_ADMIN_BOT_ORG_REPO_WRITE }}:x-oauth-basic@github.com/".insteadOf https://github.com/
           source "$HOME/.cargo/env"
-          cargo run --release --bin circuit_limit_estimator -- --numeric-circuit ${{ matrix.key }}
+          echo "Estimating limit for circuit"
+          echo ${{ github.circuit_type }}
+          cargo run --release --bin circuit_limit_estimator -- --numeric-circuit "${{ inputs.circuit_type }}"
       - uses: actions/upload-artifact@83fd05a356d7e2593de66fc9913b3002723633cb # v3
         with:
           path: ./circuit_limit_${{ matrix.key }}.txt
