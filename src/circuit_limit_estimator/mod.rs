@@ -3,7 +3,7 @@ use crate::sync_vm::rescue_poseidon::RescueParams;
 use crate::sync_vm::testing::create_test_artifacts_with_optimized_gate;
 use crate::sync_vm::traits::GenericHasher;
 use crate::abstract_zksync_circuit::{ZkSyncUniformCircuitCircuitInstance, ZkSyncUniformSynthesisFunction};
-use crate::abstract_zksync_circuit::concrete_circuits::{CodeDecommitterInstanceSynthesisFunction, CodeDecommittmentsSorterSynthesisFunction, ECRecoverFunctionInstanceSynthesisFunction, EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction, Keccak256RoundFunctionInstanceSynthesisFunction, LogDemuxInstanceSynthesisFunction, MessagesMerklizerInstanceSynthesisFunction, RAMPermutationInstanceSynthesisFunction, Sha256RoundFunctionInstanceSynthesisFunction, StorageApplicationInstanceSynthesisFunction, StorageInitialWritesRehasherInstanceSynthesisFunction, StorageRepeatedWritesRehasherInstanceSynthesisFunction, StorageSortAndDedupInstanceSynthesisFunction, VmMainInstanceSynthesisFunction};
+use crate::abstract_zksync_circuit::concrete_circuits::{CodeDecommitterInstanceSynthesisFunction, CodeDecommittmentsSorterSynthesisFunction, ECRecoverFunctionInstanceSynthesisFunction, EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction, Keccak256RoundFunctionInstanceSynthesisFunction, L1MessagesRehasherInstanceSynthesisFunction, LogDemuxInstanceSynthesisFunction, MessagesMerklizerInstanceSynthesisFunction, RAMPermutationInstanceSynthesisFunction, Sha256RoundFunctionInstanceSynthesisFunction, StorageApplicationInstanceSynthesisFunction, StorageInitialWritesRehasherInstanceSynthesisFunction, StorageRepeatedWritesRehasherInstanceSynthesisFunction, StorageSortAndDedupInstanceSynthesisFunction, VmMainInstanceSynthesisFunction};
 use crate::bellman::bn256::Bn256;
 use crate::bellman::plonk::better_better_cs::cs::{PlonkCsWidth4WithNextStepAndCustomGatesParams, SetupAssembly};
 use crate::bellman::plonk::better_better_cs::cs::Circuit;
@@ -168,7 +168,12 @@ pub fn get_circuit_capacity(circuit_type: u8) -> usize {
                 x
             }
         ),
-        17 => compute_inner::<MessagesMerklizerInstanceSynthesisFunction, _>(
+        17 => compute_inner::<L1MessagesRehasherInstanceSynthesisFunction, _>(
+            |x: usize| {
+                x
+            }
+        ),
+        18 => compute_inner::<MessagesMerklizerInstanceSynthesisFunction, _>(
             |x: usize| {
                 (x, L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH)
             }
