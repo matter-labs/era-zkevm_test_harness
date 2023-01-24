@@ -132,7 +132,7 @@ impl<E: Engine,  W: WitnessOracle<E>> Circuit<E> for ZkSyncCircuit<E, W> {
             ZkSyncCircuit::L1MessagesMerklier(inner) => {inner.synthesize(cs)},
             ZkSyncCircuit::InitialWritesPubdataHasher(inner) => {inner.synthesize(cs)},
             ZkSyncCircuit::RepeatedWritesPubdataHasher(inner) => {inner.synthesize(cs)},
-            _ => unimplemented!()
+            ZkSyncCircuit::L1MessagesPubdataHasher(inner) => {inner.synthesize(cs)},
         }
     }
 }
@@ -212,7 +212,7 @@ impl<E: Engine, W: WitnessOracle<E>> ZkSyncCircuit<E, W> {
             ZkSyncCircuit::L1MessagesMerklier(..) => CircuitType::L1MessagesMerkelization as u8,
             ZkSyncCircuit::InitialWritesPubdataHasher(..) => CircuitType::StorageFreshWritesHasher as u8,
             ZkSyncCircuit::RepeatedWritesPubdataHasher(..) => CircuitType::StorageRepeatedWritesHasher as u8,
-            ZkSyncCircuit::L1MessagesPubdataHasher(..) => unimplemented!()
+            ZkSyncCircuit::L1MessagesPubdataHasher(..) => CircuitType::L1MessagesHasher as u8
         }
     }
 }

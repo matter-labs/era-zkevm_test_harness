@@ -278,9 +278,6 @@ pub fn compute_storage_dedup_and_sort<
                         } else {
                             // read
                             if new_this_cell_current_depth == 0 {
-                                if sub_idx == 7 {
-                                    println!("Protective read");
-                                }
                                 new_this_cell_has_explicit_read_and_rollback_depth_zero = true || new_this_cell_has_explicit_read_and_rollback_depth_zero;
                             }
                             new_this_cell_current_value = item.raw_query.read_value;
@@ -495,7 +492,6 @@ pub fn compute_storage_dedup_and_sort<
         assert_eq!(instance_witness.unsorted_queue_witness.wit.len(), instance_witness.intermediate_sorted_queue_witness.wit.len());
 
         if sorted_states.len() % per_circuit_capacity != 0 {
-            println!("Do padding");
             assert!(is_last);
             // circuit does padding, so all previous values must be reset
             instance_witness.closed_form_input.hidden_fsm_output.previous_packed_key = [E::Fr::zero(); 2];

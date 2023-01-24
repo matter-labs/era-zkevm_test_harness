@@ -131,6 +131,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         limit_for_initial_writes_pubdata_hasher: 16,
         limit_for_repeated_writes_pubdata_hasher: 16,
         limit_for_l1_messages_merklizer: 32,
+        limit_for_l1_messages_pudata_hasher: 32,
     };
 
     let mut storage_impl = InMemoryStorage::new();
@@ -229,36 +230,39 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         }
     }
 
-    // for circuit in unique_set.iter().cloned() {
-    //     let descr = circuit.short_description();
-    //     println!("Creating VK for {}", descr);
-    //     let base_name = basic_circuit_vk_name(circuit.numeric_circuit_type());
+    for circuit in unique_set.iter().cloned() {
+        let descr = circuit.short_description();
+        println!("Creating VK for {}", descr);
+        let base_name = basic_circuit_vk_name(circuit.numeric_circuit_type());
 
-    //     let vk_file_name_for_bytes = format!("{}.key", &base_name);
-    //     let vk_file_name_for_json = format!("{}.json", &base_name);
+        let vk_file_name_for_bytes = format!("{}.key", &base_name);
+        let vk_file_name_for_json = format!("{}.json", &base_name);
 
-    //     if std::path::Path::new(&vk_file_name_for_bytes).exists() {
-    //         continue;
-    //     }
+        if std::path::Path::new(&vk_file_name_for_bytes).exists() {
+            continue;
+        }
 
-    //     let vk = circuit_testing::create_vk::<
-    //         Bn256, 
-    //         _, 
-    //         PlonkCsWidth4WithNextStepAndCustomGatesParams, 
-    //     >(circuit).unwrap();
+        let vk = circuit_testing::create_vk::<
+            Bn256, 
+            _, 
+            PlonkCsWidth4WithNextStepAndCustomGatesParams, 
+        >(circuit).unwrap();
 
-    //     let mut vk_file_for_bytes = std::fs::File::create(&vk_file_name_for_bytes).unwrap();
-    //     let mut vk_file_for_json = std::fs::File::create(&vk_file_name_for_json).unwrap();
+        let mut vk_file_for_bytes = std::fs::File::create(&vk_file_name_for_bytes).unwrap();
+        let mut vk_file_for_json = std::fs::File::create(&vk_file_name_for_json).unwrap();
 
-    //     vk.write(&mut vk_file_for_bytes).unwrap();
-    //     serde_json::to_writer(&mut vk_file_for_json, &vk).unwrap();
-    // }
+        vk.write(&mut vk_file_for_bytes).unwrap();
+        serde_json::to_writer(&mut vk_file_for_json, &vk).unwrap();
+    }
 
     // let mut skip = true;
 
     for (idx, (el, input_value)) in basic_block_circuits.clone().into_flattened_set().into_iter().zip(basic_block_circuits_inputs.clone().into_flattened_set().into_iter()).enumerate() {
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
+
+        continue;
+
         // if idx < 604 {
         //     continue;
         // }
@@ -269,7 +273,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         //     continue;
         // }
         
-        // if !matches!(&el, ZkSyncCircuit::StorageSorter(..)) 
+        // if !matches!(&el, ZkSyncCircuit::L1MessagesPubdataHasher(..)) 
         // {
 
         //     continue;
@@ -291,23 +295,23 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         assert_eq!(public_input, input_value, "Public input diverged for circuit {} of type {}", idx, descr);
     }
 
-    return;
+    // return;
 
     for (idx, (el, input_value)) in basic_block_circuits.clone().into_flattened_set().into_iter().zip(basic_block_circuits_inputs.clone().into_flattened_set()).enumerate() {
         let descr = el.short_description();
-        println!("Doing {}: {}", idx, descr);
+        println!("Proving {}: {}", idx, descr);
 
-        if matches!(&el, ZkSyncCircuit::MainVM(..)) {
-            use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
-            let el = el.clone();
-            el.debug_witness();
-            let (is_satisfied, public_input) = circuit_testing::check_if_satisfied::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(el).unwrap();
-            assert!(is_satisfied);
-            assert_eq!(public_input, input_value, "Public input diverged for circuit {} of type {}", idx, descr);
-            continue;
-        } else {
-            continue;
-        }
+        // if matches!(&el, ZkSyncCircuit::MainVM(..)) {
+        //     use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
+        //     let el = el.clone();
+        //     el.debug_witness();
+        //     let (is_satisfied, public_input) = circuit_testing::check_if_satisfied::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(el).unwrap();
+        //     assert!(is_satisfied);
+        //     assert_eq!(public_input, input_value, "Public input diverged for circuit {} of type {}", idx, descr);
+        //     continue;
+        // } else {
+        //     continue;
+        // }
 
         // if !matches!(&el, ZkSyncCircuit::ECRecover(..)) {
         //     continue;
@@ -348,7 +352,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         serde_json::to_writer(&mut proof_file_for_json, &proof).unwrap();
     }
 
-    panic!("Done");
+    // panic!("Done");
 
     // recursion step. We decide on some arbitrary parameters
     let splitting_factor = 4; // we either split into N subqueues, or we do N leaf proofs per layer
@@ -380,7 +384,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
 
     for (idx, el) in flattened.iter().enumerate(){
         let descr = el.short_description();
-        println!("Doing {}: {}", idx, descr);
+        println!("Aggregating {}: {}", idx, descr);
 
         let base_vk_name = basic_circuit_vk_name(el.numeric_circuit_type());
         let base_proof_name = basic_circuit_proof_name(el.numeric_circuit_type(), idx);
@@ -413,6 +417,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
                 let encoding = vk_in_rns.encode().unwrap();
                 let committment = simulate_variable_length_hash(&encoding, &round_function);
                 dbg!(idx);
+                dbg!(el.numeric_circuit_type());
                 dbg!(&committment);
                 all_vk_encodings.push(encoding);
                 all_vk_committments.push(committment);
@@ -427,6 +432,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
             let encoding = vk_in_rns.encode().unwrap();
             let committment = simulate_variable_length_hash(&encoding, &round_function);
             dbg!(idx);
+            dbg!(el.numeric_circuit_type());
             dbg!(&committment);
             all_vk_encodings.push(encoding);
             all_vk_committments.push(committment);
@@ -663,6 +669,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     let mut all_requests = vec![];
 
     for (idx, (circuit, public_input)) in basic_block_circuits.into_flattened_set().into_iter().zip(basic_block_circuits_inputs.into_flattened_set().into_iter()).enumerate() {
+        println!("Pushing recursive request for circuit {} with input {}", circuit.short_description(), public_input);
         let req = RecursionRequest {
             circuit_type: circuit.numeric_circuit_type(),
             public_input,
@@ -1333,6 +1340,12 @@ fn get_circuit_capacity() {
 
     let _repeated_pubdata = compute_inner::<StorageRepeatedWritesRehasherInstanceSynthesisFunction, _>(
         |x: usize| {
+            x
+        }
+    );
+
+    let _l1_messages_rehasher = compute_inner::<L1MessagesRehasherInstanceSynthesisFunction, _>(
+        |x: usize| {            
             x
         }
     );

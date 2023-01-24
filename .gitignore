@@ -4,3 +4,10 @@ setup_2^26.key
 .idea
 prover_input_*
 .DS_Store
+basic_circuit_*.*
+leaf_output_.*
+leaf_proof_.*
+leaf_vk.*
+node_vk.*
+node_proof_.*
+scheduler_.*

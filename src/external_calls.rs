@@ -289,6 +289,7 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
             repeated_writes_rehasher_observable_output: basic_circuits.repeated_writes_hasher_circuit.clone_witness().unwrap().closed_form_input.observable_output,
             events_sorter_observable_output: basic_circuits.events_sorter_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
             l1messages_sorter_observable_output: basic_circuits.l1_messages_sorter_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
+            l1messages_linear_hasher_observable_output: basic_circuits.l1_messages_pubdata_hasher_circuit.clone_witness().unwrap().closed_form_input.observable_output,
             l1messages_merklizer_observable_output: basic_circuits.l1_messages_merklizer_circuit.clone_witness().unwrap().closed_form_input.observable_output,
             storage_log_tail: basic_circuits.main_vm_circuits.first().unwrap().clone_witness().unwrap().closed_form_input.observable_input.rollback_queue_tail_for_block,
             per_circuit_closed_form_inputs: per_circuit_inputs,
@@ -296,6 +297,10 @@ pub fn run<R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn2
             ram_sorted_queue_state: ram_permutation_sorted_state,
             rollup_initital_writes_pubdata_hash: basic_circuits.initial_writes_hasher_circuit.clone_witness().unwrap().closed_form_input.observable_output.pubdata_hash,
             rollup_repeated_writes_pubdata_hash: basic_circuits.repeated_writes_hasher_circuit.clone_witness().unwrap().closed_form_input.observable_output.pubdata_hash,
+
+            events_sorter_intermediate_queue_state: basic_circuits.events_sorter_circuits.first().unwrap().clone_witness().unwrap().closed_form_input.observable_input.intermediate_sorted_queue_state,
+            l1messages_sorter_intermediate_queue_state: basic_circuits.l1_messages_sorter_circuits.first().unwrap().clone_witness().unwrap().closed_form_input.observable_input.intermediate_sorted_queue_state,
+            rollup_storage_sorter_intermediate_queue_state: basic_circuits.storage_sorter_circuits.first().unwrap().clone_witness().unwrap().closed_form_input.observable_input.intermediate_sorted_queue_state,
 
             previous_block_meta_hash: Bytes32::placeholder_witness(),
             previous_block_aux_hash: Bytes32::placeholder_witness(),

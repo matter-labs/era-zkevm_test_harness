@@ -42,6 +42,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         sha256_circuits_data,
         ecrecover_circuits_data,
         l1_messages_merklizer_data,
+        l1_messages_linear_hash_data,
         ..
     } = artifacts;
 
@@ -497,6 +498,25 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         l1_messages_sorter_circuits_inputs.push(proof_system_input);
         l1_messages_sorter_circuits_compact_forms_witnesses.push(compact_form_witness);
     }
+
+    // l1 messages pubdata hasher
+
+    assert!(l1_messages_linear_hash_data.len() == 1);        
+    let circuit_input = l1_messages_linear_hash_data.into_iter().next().unwrap();
+
+    let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
+        circuit_input.closed_form_input.clone(),
+    );
+
+    let l1_messages_pubdata_hasher_circuit = L1MessagesHasherCircuit {
+        witness: AtomicCell::new(Some(circuit_input)),
+        config: Arc::new(geometry.limit_for_l1_messages_pudata_hasher as usize),
+        round_function: round_function.clone(),
+        expected_public_input: Some(proof_system_input),
+    };
+
+    let l1_messages_pubdata_hasher_circuit_input = proof_system_input;
+    let l1_messages_pubdata_hasher_circuit_compact_form_witness = compact_form_witness;
     
     // l1 messages merklizer
 
@@ -509,7 +529,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
 
     let l1_messages_merklizer_circuit = L1MessagesMerklizerCircuit {
         witness: AtomicCell::new(Some(circuit_input)),
-        config: Arc::new((geometry.limit_for_l1_messages_merklizer as usize, L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH)), // output linear hash too
+        config: Arc::new((geometry.limit_for_l1_messages_merklizer as usize, L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH)),
         round_function: round_function.clone(),
         expected_public_input: Some(proof_system_input),
     };
@@ -534,6 +554,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         repeated_writes_hasher_circuit,
         events_sorter_circuits,
         l1_messages_sorter_circuits,
+        l1_messages_pubdata_hasher_circuit,
         l1_messages_merklizer_circuit,
     };
 
@@ -552,6 +573,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         repeated_writes_hasher_circuit: repeated_writes_hasher_circuit_input,
         events_sorter_circuits: events_sorter_circuits_inputs,
         l1_messages_sorter_circuits: l1_messages_sorter_circuits_inputs,
+        l1_messages_pubdata_hasher_circuit: l1_messages_pubdata_hasher_circuit_input,
         l1_messages_merklizer_circuit: l1_messages_merklizer_circuit_input,
     };
 
@@ -570,6 +592,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         repeated_writes_hasher_circuit: repeated_writes_hasher_circuit_compact_form_witness,
         events_sorter_circuits: events_sorter_circuits_compact_forms_witnesses,
         l1_messages_sorter_circuits: l1_messages_sorter_circuits_compact_forms_witnesses,
+        l1_messages_pubdata_hasher_circuit: l1_messages_pubdata_hasher_circuit_compact_form_witness,
         l1_messages_merklizer_circuit: l1_messages_merklizer_circuit_compact_form_witness,
     };
 
