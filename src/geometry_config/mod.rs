@@ -15,7 +15,7 @@ pub const fn get_geometry_config() -> GeometryConfig {
         cycles_per_storage_application: 118,
         limit_for_initial_writes_pubdata_hasher: 4765,
         limit_for_repeated_writes_pubdata_hasher: 7564,
-        limit_for_l1_messages_pudata_hasher: 512,
+        limit_for_l1_messages_pudata_hasher: 3678,
         cycles_per_keccak256_circuit: 2141,
         cycles_per_sha256_circuit: 11812,
         cycles_per_ecrecover_circuit: 72,
