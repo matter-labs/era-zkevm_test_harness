@@ -277,6 +277,16 @@ pub fn circuits_for_vk_generation(
     let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::L1MessagesSorter(circuit);
     result.push(circuit);
 
+    // l1 messages hasher
+    let circuit = L1MessagesHasherCircuit::new(
+        None,
+        geometry.limit_for_l1_messages_pudata_hasher as usize,
+        round_function.clone(),
+        None,
+    );
+    let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::L1MessagesPubdataHasher(circuit);
+    result.push(circuit);
+
     use crate::witness::postprocessing::L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH;
     // l1 merklizer
     let circuit = L1MessagesMerklizerCircuit::new(
