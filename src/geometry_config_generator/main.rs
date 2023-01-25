@@ -39,6 +39,8 @@ struct Opt {
     events_or_l1_messages_sorter: u64,
     #[structopt(long)]
     l1_messages_merklizer: u64,
+    #[structopt(long)]
+    l1_messages_pudata_hasher: u64,
 }
 
 fn save_geometry_config_file(geometry_config: String, filepath: &str) {
@@ -71,6 +73,7 @@ fn main() {
     function.line(format!("cycles_per_keccak256_circuit: {},", opt.keccak256));
     function.line(format!("cycles_per_sha256_circuit: {},", opt.sha256));
     function.line(format!("cycles_per_ecrecover_circuit: {},", opt.ecrecover));
+    function.line(format!("limit_for_l1_messages_pudata_hasher: {},", opt.l1_messages_pudata_hasher));
     function.line("}");
     println!("Generated config:\n {}", scope.to_string());
     save_geometry_config_file(scope.to_string(), "src/geometry_config/mod.rs");
