@@ -1565,8 +1565,8 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
                 });
 
             if let Some(wit) = request.create_witness() {
-                assert_eq!(wit.root_hash, u256_to_biguint(query.hash));
                 assert_eq!(wit.timestamp, query.timestamp.0);
+                assert!(wit.root_hash.clone() == u256_to_biguint(query.hash), "circuit expected hash 0x{:064x}, while witness had 0x{:064x}", wit.root_hash, u256_to_biguint(query.hash));
             }
 
             let wit = DecommitQueryWitness::<E> {
