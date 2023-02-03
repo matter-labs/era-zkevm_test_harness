@@ -239,6 +239,7 @@ pub enum ZkSyncProof<E: Engine> {
     StorageApplication(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
     EventsSorter(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
     L1MessagesSorter(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    L1MessagesPubdataHasher(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
     L1MessagesMerklier(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
     InitialWritesPubdataHasher(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
     RepeatedWritesPubdataHasher(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
@@ -265,6 +266,7 @@ impl<E: Engine> ZkSyncProof<E> {
             ZkSyncProof::StorageApplication(..) => CircuitType::StorageApplicator as u8,
             ZkSyncProof::EventsSorter(..) => CircuitType::EventsRevertsFilter as u8,
             ZkSyncProof::L1MessagesSorter(..) => CircuitType::L1MessagesRevertsFilter as u8,
+            ZkSyncProof::L1MessagesPubdataHasher(..) => CircuitType::L1MessagesHasher as u8,
             ZkSyncProof::L1MessagesMerklier(..) => CircuitType::L1MessagesMerkelization as u8,
             ZkSyncProof::InitialWritesPubdataHasher(..) => CircuitType::StorageFreshWritesHasher as u8,
             ZkSyncProof::RepeatedWritesPubdataHasher(..) => CircuitType::StorageRepeatedWritesHasher as u8,
@@ -291,6 +293,7 @@ impl<E: Engine> ZkSyncProof<E> {
             a if a == CircuitType::EventsRevertsFilter as u8 => ZkSyncProof::EventsSorter(proof),
             a if a == CircuitType::L1MessagesRevertsFilter as u8 => ZkSyncProof::L1MessagesSorter(proof),
             a if a == CircuitType::L1MessagesMerkelization as u8 => ZkSyncProof::L1MessagesMerklier(proof),
+            a if a == CircuitType::L1MessagesHasher as u8 => ZkSyncProof::L1MessagesPubdataHasher(proof),
             a if a == CircuitType::StorageFreshWritesHasher as u8 => ZkSyncProof::InitialWritesPubdataHasher(proof),
             a if a == CircuitType::StorageRepeatedWritesHasher as u8 => ZkSyncProof::RepeatedWritesPubdataHasher(proof),
             a @ _ => panic!("unknown numeric type {}", a)
@@ -315,6 +318,7 @@ impl<E: Engine> ZkSyncProof<E> {
             ZkSyncProof::EventsSorter(inner) => inner,
             ZkSyncProof::L1MessagesSorter(inner) => inner,
             ZkSyncProof::L1MessagesMerklier(inner) => inner,
+            ZkSyncProof::L1MessagesPubdataHasher(inner) => inner,
             ZkSyncProof::InitialWritesPubdataHasher(inner) => inner,
             ZkSyncProof::RepeatedWritesPubdataHasher(inner) => inner,
         }
@@ -337,6 +341,7 @@ impl<E: Engine> ZkSyncProof<E> {
             ZkSyncProof::StorageApplication(inner) => inner,
             ZkSyncProof::EventsSorter(inner) => inner,
             ZkSyncProof::L1MessagesSorter(inner) => inner,
+            ZkSyncProof::L1MessagesPubdataHasher(inner) => inner,
             ZkSyncProof::L1MessagesMerklier(inner) => inner,
             ZkSyncProof::InitialWritesPubdataHasher(inner) => inner,
             ZkSyncProof::RepeatedWritesPubdataHasher(inner) => inner,
@@ -366,6 +371,7 @@ pub enum ZkSyncVerificationKey<E: Engine> {
     StorageApplication(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
     EventsSorter(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
     L1MessagesSorter(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
+    L1MessagesPubdataHasher(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
     L1MessagesMerklier(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
     InitialWritesPubdataHasher(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
     RepeatedWritesPubdataHasher(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
@@ -391,6 +397,7 @@ impl<E: Engine> ZkSyncVerificationKey<E> {
             ZkSyncVerificationKey::StorageApplication(..) => CircuitType::StorageApplicator as u8,
             ZkSyncVerificationKey::EventsSorter(..) => CircuitType::EventsRevertsFilter as u8,
             ZkSyncVerificationKey::L1MessagesSorter(..) => CircuitType::L1MessagesRevertsFilter as u8,
+            ZkSyncVerificationKey::L1MessagesPubdataHasher(..) => CircuitType::L1MessagesHasher as u8,
             ZkSyncVerificationKey::L1MessagesMerklier(..) => CircuitType::L1MessagesMerkelization as u8,
             ZkSyncVerificationKey::InitialWritesPubdataHasher(..) => CircuitType::StorageFreshWritesHasher as u8,
             ZkSyncVerificationKey::RepeatedWritesPubdataHasher(..) => CircuitType::StorageRepeatedWritesHasher as u8,
@@ -416,6 +423,7 @@ impl<E: Engine> ZkSyncVerificationKey<E> {
             a if a == CircuitType::StorageApplicator as u8 => ZkSyncVerificationKey::StorageApplication(vk),
             a if a == CircuitType::EventsRevertsFilter as u8 => ZkSyncVerificationKey::EventsSorter(vk),
             a if a == CircuitType::L1MessagesRevertsFilter as u8 => ZkSyncVerificationKey::L1MessagesSorter(vk),
+            a if a == CircuitType::L1MessagesHasher as u8 => ZkSyncVerificationKey::L1MessagesPubdataHasher(vk),
             a if a == CircuitType::L1MessagesMerkelization as u8 => ZkSyncVerificationKey::L1MessagesMerklier(vk),
             a if a == CircuitType::StorageFreshWritesHasher as u8 => ZkSyncVerificationKey::InitialWritesPubdataHasher(vk),
             a if a == CircuitType::StorageRepeatedWritesHasher as u8 => ZkSyncVerificationKey::RepeatedWritesPubdataHasher(vk),
@@ -440,6 +448,7 @@ impl<E: Engine> ZkSyncVerificationKey<E> {
             ZkSyncVerificationKey::StorageApplication(inner) => inner,
             ZkSyncVerificationKey::EventsSorter(inner) => inner,
             ZkSyncVerificationKey::L1MessagesSorter(inner) => inner,
+            ZkSyncVerificationKey::L1MessagesPubdataHasher(inner) => inner,
             ZkSyncVerificationKey::L1MessagesMerklier(inner) => inner,
             ZkSyncVerificationKey::InitialWritesPubdataHasher(inner) => inner,
             ZkSyncVerificationKey::RepeatedWritesPubdataHasher(inner) => inner,
@@ -463,6 +472,7 @@ impl<E: Engine> ZkSyncVerificationKey<E> {
             ZkSyncVerificationKey::StorageApplication(inner) => inner,
             ZkSyncVerificationKey::EventsSorter(inner) => inner,
             ZkSyncVerificationKey::L1MessagesSorter(inner) => inner,
+            ZkSyncVerificationKey::L1MessagesPubdataHasher(inner) => inner,
             ZkSyncVerificationKey::L1MessagesMerklier(inner) => inner,
             ZkSyncVerificationKey::InitialWritesPubdataHasher(inner) => inner,
             ZkSyncVerificationKey::RepeatedWritesPubdataHasher(inner) => inner,
@@ -506,6 +516,7 @@ impl ZkSyncVerificationKey<Bn256> {
             a @ ZkSyncVerificationKey::StorageApplication(..) |
             a @ ZkSyncVerificationKey::EventsSorter(..) |
             a @ ZkSyncVerificationKey::L1MessagesSorter(..) |
+            a @ ZkSyncVerificationKey::L1MessagesPubdataHasher(..) |
             a @ ZkSyncVerificationKey::L1MessagesMerklier(..) |
             a @ ZkSyncVerificationKey::InitialWritesPubdataHasher(..) |
             a @ ZkSyncVerificationKey::RepeatedWritesPubdataHasher(..) => {
