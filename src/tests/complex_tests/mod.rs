@@ -231,6 +231,8 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     }
 
     for circuit in unique_set.iter().cloned() {
+        continue;
+
         let descr = circuit.short_description();
         println!("Creating VK for {}", descr);
         let base_name = basic_circuit_vk_name(circuit.numeric_circuit_type());
@@ -261,8 +263,6 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
 
-        continue;
-
         // if idx < 604 {
         //     continue;
         // }
@@ -273,11 +273,11 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         //     continue;
         // }
         
-        // if !matches!(&el, ZkSyncCircuit::L1MessagesPubdataHasher(..)) 
-        // {
+        if !matches!(&el, ZkSyncCircuit::MainVM(..)) 
+        {
 
-        //     continue;
-        // }
+            continue;
+        }
 
         // if matches!(&el, ZkSyncCircuit::StorageSorter(..)) 
         // {
@@ -295,7 +295,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         assert_eq!(public_input, input_value, "Public input diverged for circuit {} of type {}", idx, descr);
     }
 
-    // return;
+    return;
 
     for (idx, (el, input_value)) in basic_block_circuits.clone().into_flattened_set().into_iter().zip(basic_block_circuits_inputs.clone().into_flattened_set()).enumerate() {
         let descr = el.short_description();
