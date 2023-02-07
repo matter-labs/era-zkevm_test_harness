@@ -3,14 +3,14 @@ name: Geometry config generator
 # Only trigger, when the deployment workflow succeeded
 on:
   push:
-    branches: ["v1.3.0"]
+    branches: ["v1.3.1"]
   workflow_dispatch:
     inputs:
       target_branch:
         description: "Target branch to generate geometry config against"
         type: string
         required: true
-        default: "v1.2"
+        default: "v1.3.1"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
