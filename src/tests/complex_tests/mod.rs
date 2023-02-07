@@ -47,6 +47,11 @@ const ACCOUNT_CODE_STORAGE_ADDRESS: Address = H160([
     0x00, 0x00, 0x80, 0x02,
 ]);
 
+const KNOWN_CODE_HASHES_ADDRESS: Address = H160([
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x80, 0x04,
+]);
+
 
 #[test]
 fn basic_test() {
@@ -84,8 +89,13 @@ pub(crate) fn save_predeployed_contracts(storage: &mut InMemoryStorage, tree: &m
 
             println!("Have address {:?} with code hash {:x}", address, U256::from(hash));
 
-            (0, ACCOUNT_CODE_STORAGE_ADDRESS, U256::from_big_endian(address.as_bytes()), U256::from(hash))
+            vec![
+                (0, ACCOUNT_CODE_STORAGE_ADDRESS, U256::from_big_endian(address.as_bytes()), U256::from(hash)),
+                (0, KNOWN_CODE_HASHES_ADDRESS, U256::from(hash), U256::from(1u64))
+            ]
+
         })
+        .flatten()
         .collect();
 
     storage.populate(storage_logs.clone());
@@ -263,9 +273,10 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
 
-        // if idx < 604 {
-        //     continue;
+        // if idx < 12 {
+        //     continue;;
         // }
+
         // if !matches!(&el, ZkSyncCircuit::InitialWritesPubdataHasher(..)) 
         //     && !matches!(&el, ZkSyncCircuit::RepeatedWritesPubdataHasher(..)) 
         //     && !matches!(&el, ZkSyncCircuit::L1MessagesMerklier(..)) 

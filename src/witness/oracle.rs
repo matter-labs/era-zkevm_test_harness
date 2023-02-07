@@ -1137,15 +1137,13 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
                 assert_eq!(
                     ts,
                     query.timestamp.0,
-                    "invalid memory access location at cycle {:?}: VM asks at timestamp {}, witness has timestamp {}",
+                    "invalid memory access location at cycle {:?}: VM asks at timestamp {}, witness has timestamp {}. Witness key = {:?}, query = {:?}",
                     _cycle,
                     ts,
                     query.timestamp.0,
+                    key.create_witness().unwrap(),
+                    query,
                 );
-
-                // let _roughly_a_cycle = (ts - zk_evm::zkevm_opcode_defs::STARTING_TIMESTAMP) / TIMESTAMPS_PER_CYCLE
-                //     + INITIAL_MONOTONIC_CYCLE_COUNTER;
-                // assert_eq!(_cycle, _roughly_a_cycle);
             }
 
             if let Some(location) = key.create_witness() {
