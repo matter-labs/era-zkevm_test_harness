@@ -4,6 +4,7 @@ use zk_evm::reference_impls::decommitter::SimpleDecommitter;
 use zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS;
 use crate::witness::tracer::WitnessTracer;
 use zk_evm::abstractions::Storage;
+use std::hash::Hash;
 
 /// Set should only differ due to another storage that would be sustituted from outside,
 /// and all other tools can be as simple as possible
@@ -20,7 +21,7 @@ pub struct ProvingToolset<S: Storage> {
 use derivative::Derivative;
 
 #[derive(Derivative)]
-#[derivative(Clone, Debug, Default)]
+#[derivative(Clone, Debug, Default, Hash)]
 pub struct GeometryConfig {
     pub cycles_per_vm_snapshot: u32,
     pub cycles_per_log_demuxer: u32,
