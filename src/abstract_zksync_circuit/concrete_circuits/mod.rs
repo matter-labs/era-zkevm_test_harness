@@ -215,6 +215,30 @@ impl<E: Engine, W: WitnessOracle<E>> ZkSyncCircuit<E, W> {
             ZkSyncCircuit::L1MessagesPubdataHasher(..) => CircuitType::L1MessagesHasher as u8
         }
     }
+
+    pub fn erase_witness(&self) {
+        match &self {
+            ZkSyncCircuit::Scheduler(inner) => {inner.erase_witness();},
+            ZkSyncCircuit::LeafAggregation(inner) => {inner.erase_witness();},
+            ZkSyncCircuit::NodeAggregation(inner) => {inner.erase_witness();},
+            ZkSyncCircuit::MainVM(inner) => {inner.erase_witness();},
+            ZkSyncCircuit::CodeDecommittmentsSorter(inner) => {inner.erase_witness();},
+            ZkSyncCircuit::CodeDecommitter(inner) => {inner.erase_witness();},
+            ZkSyncCircuit::LogDemuxer(inner) => {inner.erase_witness();},
+            ZkSyncCircuit::KeccakRoundFunction(inner) => {inner.erase_witness();},
+            ZkSyncCircuit::Sha256RoundFunction(inner) => {inner.erase_witness();},
+            ZkSyncCircuit::ECRecover(inner) => {inner.erase_witness();},
+            ZkSyncCircuit::RAMPermutation(inner) => {inner.erase_witness();},
+            ZkSyncCircuit::StorageSorter(inner) => {inner.erase_witness();},
+            ZkSyncCircuit::StorageApplication(inner) => {inner.erase_witness();},
+            ZkSyncCircuit::EventsSorter(inner) => {inner.erase_witness();},
+            ZkSyncCircuit::L1MessagesSorter(inner) => {inner.erase_witness();},
+            ZkSyncCircuit::L1MessagesMerklier(inner) => {inner.erase_witness();},
+            ZkSyncCircuit::InitialWritesPubdataHasher(inner) => {inner.erase_witness();},
+            ZkSyncCircuit::RepeatedWritesPubdataHasher(inner) => {inner.erase_witness();},
+            ZkSyncCircuit::L1MessagesPubdataHasher(inner) => {inner.erase_witness();},
+        };
+    }
 }
 
 use crate::bellman::plonk::better_better_cs::proof::Proof;

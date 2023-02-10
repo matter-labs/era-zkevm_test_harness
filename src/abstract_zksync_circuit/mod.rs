@@ -78,6 +78,10 @@ impl<E: Engine, S: ZkSyncUniformSynthesisFunction<E>> ZkSyncUniformCircuitCircui
 
         ww
     }
+
+    pub fn erase_witness(&self) {
+        let _ = self.witness.take();
+    }
 }
 
 fn serialize_atomic_cell<T: serde::Serialize, S>(t: &AtomicCell<Option<T>>, serializer: S) -> Result<S::Ok, S::Error> where S: serde::Serializer {
