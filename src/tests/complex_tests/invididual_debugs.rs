@@ -11,13 +11,17 @@ mod test {
         // let circuit_file_name = "prover_input_26";
         // let circuit_file_name = "prover_input_11";
         // let circuit_file_name = "prover_input_120656";
-        let circuit_file_name = "prover_input_1_Main_VM";
+        // 
+        let circuit_file_name = "prover_jobs_3_87_Main VM_BasicCircuits.bin";
         // let circuit_file_name = "prover_jobs.json";
 
         let mut content = std::fs::File::open(circuit_file_name).unwrap();
         let mut buffer = vec![];
         content.read_to_end(&mut buffer).unwrap();
         let circuit: ZkSyncCircuit<Bn256, VmWitnessOracle<Bn256>> = bincode::deserialize(&buffer).unwrap();
+
+        let mut file_for_json = std::fs::File::create(&format!("{}.json", circuit_file_name)).unwrap();
+        serde_json::to_writer(&mut file_for_json, &circuit).unwrap();
 
         use sync_vm::franklin_crypto::bellman::Field;
         let mut expected_input = sync_vm::testing::Fr::zero();
@@ -57,7 +61,9 @@ mod test {
 
                 // expected_input = public_input_committment;
             },
-            _ => unreachable!()
+            _ => {
+               // unreachable!()
+            }
         }
 
         dbg!(circuit.short_description());
@@ -68,8 +74,8 @@ mod test {
 
         circuit.synthesize(&mut cs).unwrap();
 
-        // let is_satisified = cs.is_satisfied();
-        // assert!(is_satisified);
+        let is_satisified = cs.is_satisfied();
+        assert!(is_satisified);
     }
 
     #[test]
