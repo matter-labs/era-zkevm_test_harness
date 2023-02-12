@@ -1,5 +1,4 @@
-use crate::utils::{address_to_fe, u256_to_fe};
-use sync_vm::circuit_structures::utils::compute_shifts;
+use boojum::field::SmallField;
 use zk_evm::vm_state::CallStackEntry;
 
 use super::*;
@@ -7,7 +6,7 @@ use super::*;
 // we need some extra data to preserve
 #[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(bound = "")]
-pub struct ExtendedCallstackEntry<E: Engine> {
+pub struct ExtendedCallstackEntry<F: SmallField> {
     pub callstack_entry: CallStackEntry,
     pub rollback_queue_head: E::Fr,
     pub rollback_queue_tail: E::Fr,

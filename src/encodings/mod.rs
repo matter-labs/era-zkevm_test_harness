@@ -1,13 +1,10 @@
 use std::collections::VecDeque;
-
-use crate::ff::{Field, PrimeField};
-use crate::pairing::Engine;
+use boojum::field::SmallField;
 use derivative::Derivative;
-use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
 
 // for we need to encode some structures as packed field elements
-pub trait OutOfCircuitFixedLengthEncodable<E: Engine, const N: usize>: Clone {
-    fn encoding_witness(&self) -> [E::Fr; N];
+pub trait OutOfCircuitFixedLengthEncodable<F: SmallField, const N: usize>: Clone {
+    fn encoding_witness(&self) -> [F; N];
 }
 
 // all encodings must match circuit counterparts
@@ -23,24 +20,24 @@ pub use self::log_query::*;
 
 #[derive(Derivative)]
 #[derivative(Debug, Clone(bound = ""), Copy(bound = ""))]
-pub struct QueueIntermediateStates<E: Engine, const SW: usize, const ROUNDS: usize> {
-    pub head: E::Fr,
-    pub tail: E::Fr,
-    pub previous_head: E::Fr,
-    pub previous_tail: E::Fr,
+pub struct QueueIntermediateStates<F: SmallField, const T: usize, const SW: usize, const ROUNDS: usize> {
+    pub head: [F; T],
+    pub tail: [F; T],
+    pub previous_head: [F; T],
+    pub previous_tail: [F; T],
     pub num_items: u32,
-    pub round_function_execution_pairs: [([E::Fr; SW], [E::Fr; SW]); ROUNDS],
+    pub round_function_execution_pairs: [([F; SW], [F; SW]); ROUNDS],
 }
 
-impl<E: Engine, const SW: usize, const ROUNDS: usize> QueueIntermediateStates<E, SW, ROUNDS> {
+impl<F: SmallField, const T: usize, const SW: usize, const ROUNDS: usize> QueueIntermediateStates<E, SW, ROUNDS> {
     pub fn empty() -> Self {
         Self {
-            head: E::Fr::zero(),
-            tail: E::Fr::zero(),
-            previous_head: E::Fr::zero(),
-            previous_tail: E::Fr::zero(),
+            head: [F::ZERO; T],
+            tail: [F::ZERO; T],
+            previous_head: [F::ZERO; T],
+            previous_tail: [F::ZERO; T],
             num_items: 0,
-            round_function_execution_pairs: [([E::Fr::zero(); SW], [E::Fr::zero(); SW]); ROUNDS],
+            round_function_execution_pairs: [([F::ZERO; SW], [F::ZERO; SW]); ROUNDS],
         }
     }
 }
@@ -49,26 +46,33 @@ impl<E: Engine, const SW: usize, const ROUNDS: usize> QueueIntermediateStates<E,
 #[derivative(Clone(bound = ""), Default(bound = ""), Debug)]
 #[serde(bound = "")]
 pub struct QueueSimulator<
-    E: Engine,
-    I: OutOfCircuitFixedLengthEncodable<E, N>,
+    F: SmallField,
+    I: OutOfCircuitFixedLengthEncodable<F, N>,
+    const T: usize,
     const N: usize,
     const ROUNDS: usize,
 > {
-    pub head: E::Fr,
-    pub tail: E::Fr,
+    pub head: [F; T],
+    pub tail: [F; T],
     pub num_items: u32,
-    #[serde(bound(serialize = "[E::Fr; N]: serde::Serialize, I: serde::Serialize"))]
-    #[serde(bound(deserialize = "[E::Fr; N]: serde::de::DeserializeOwned, I: serde::de::DeserializeOwned"))]
-    pub witness: VecDeque<([E::Fr; N], E::Fr, I)>,
+    #[serde(bound(serialize = "[F; N]: serde::Serialize, I: serde::Serialize"))]
+    #[serde(bound(deserialize = "[F; N]: serde::de::DeserializeOwned, I: serde::de::DeserializeOwned"))]
+    pub witness: VecDeque<([F; N], [F; T], I)>,
 }
 
-impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const ROUNDS: usize>
-    QueueSimulator<E, I, N, ROUNDS>
+impl<
+    F: SmallField, 
+    I: OutOfCircuitFixedLengthEncodable<F, N>, 
+    const T: usize, 
+    const N: usize, 
+    const ROUNDS: usize
+>
+    QueueSimulator<F, I, T, N, ROUNDS>
 {
     pub fn empty() -> Self {
         Self {
-            head: E::Fr::zero(),
-            tail: E::Fr::zero(),
+            head: [F::ZERO; T],
+            tail: [F::ZERO; T],
             num_items: 0,
             witness: VecDeque::new(),
         }
@@ -118,7 +122,7 @@ impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const
         }
     }
 
-    pub fn push<R: CircuitArithmeticRoundFunction<E, AW, SW>, const AW: usize, const SW: usize>(
+    pub fn push<R: CircuitArithmeticRoundFunction<E, AW, SW>, const AW: usize, const SW: usize, const CW: usize>(
         &mut self,
         element: I,
         round_function: &R,
@@ -130,13 +134,14 @@ impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const
         R: CircuitArithmeticRoundFunction<E, AW, SW>,
         const AW: usize,
         const SW: usize,
+        const CW: usize,
     >(
         &mut self,
         element: I,
         round_function: &R,
     ) -> (
-        E::Fr,                                  // old tail
-        QueueIntermediateStates<E, SW, ROUNDS>, // new head/tail, as well as round function ins/outs
+        [F; T],                                  // old tail
+        QueueIntermediateStates<F, T, SW, ROUNDS>, // new head/tail, as well as round function ins/outs
     ) {
         let old_tail = self.tail;
         let encoding = element.encoding_witness();
@@ -168,12 +173,13 @@ impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const
         R: CircuitArithmeticRoundFunction<E, AW, SW>,
         const AW: usize,
         const SW: usize,
+        const CW: usize,
     >(
         &mut self,
         round_function: &R,
     ) -> (
-        I, // old tail
-        QueueIntermediateStates<E, SW, ROUNDS>,
+        I,
+        QueueIntermediateStates<F, T, SW, ROUNDS>,
     ) {
         let old_head = self.head;
         let (_, _, element) = self.witness.pop_front().unwrap();
@@ -208,37 +214,37 @@ impl<E: Engine, I: OutOfCircuitFixedLengthEncodable<E, N>, const N: usize, const
 
 #[derive(Derivative)]
 #[derivative(Debug, Clone(bound = ""), Copy(bound = ""))]
-pub struct SpongeLikeQueueIntermediateStates<E: Engine, const SW: usize, const ROUNDS: usize> {
-    pub head: [E::Fr; SW],
-    pub tail: [E::Fr; SW],
-    pub old_head: [E::Fr; SW],
-    pub old_tail: [E::Fr; SW],
+pub struct SpongeLikeQueueIntermediateStates<F: SmallField, const SW: usize, const ROUNDS: usize> {
+    pub head: [F; SW],
+    pub tail: [F; SW],
+    pub old_head: [F; SW],
+    pub old_tail: [F; SW],
     pub num_items: u32,
-    pub round_function_execution_pairs: [([E::Fr; SW], [E::Fr; SW]); ROUNDS],
+    pub round_function_execution_pairs: [([F; SW], [F; SW]); ROUNDS],
 }
 
 #[derive(Derivative)]
 #[derivative(Debug, Clone(bound = ""))]
 pub struct SpongeLikeQueueSimulator<
-    E: Engine,
-    I: OutOfCircuitFixedLengthEncodable<E, N>,
+    F: SmallField,
+    I: OutOfCircuitFixedLengthEncodable<F, N>,
     const N: usize,
     const SW: usize,
     const ROUNDS: usize,
 > {
-    pub head: [E::Fr; SW],
-    pub tail: [E::Fr; SW],
+    pub head: [F; SW],
+    pub tail: [F; SW],
     pub num_items: u32,
-    pub witness: VecDeque<([E::Fr; N], [E::Fr; SW], I)>,
+    pub witness: VecDeque<([F; N], [F; SW], I)>,
 }
 
 impl<
-        E: Engine,
-        I: OutOfCircuitFixedLengthEncodable<E, N>,
-        const N: usize,
-        const SW: usize,
-        const ROUNDS: usize,
-    > Default for SpongeLikeQueueSimulator<E, I, N, SW, ROUNDS>
+    F: SmallField,
+    I: OutOfCircuitFixedLengthEncodable<F, N>,
+    const N: usize,
+    const SW: usize,
+    const ROUNDS: usize,
+> Default for SpongeLikeQueueSimulator<F, I, N, SW, ROUNDS>
 { 
     fn default() -> Self {
         Self::empty()
@@ -246,23 +252,23 @@ impl<
 }
 
 impl<
-        E: Engine,
-        I: OutOfCircuitFixedLengthEncodable<E, N>,
-        const N: usize,
-        const SW: usize,
-        const ROUNDS: usize,
-    > SpongeLikeQueueSimulator<E, I, N, SW, ROUNDS>
+    F: SmallField,
+    I: OutOfCircuitFixedLengthEncodable<F, N>,
+    const N: usize,
+    const SW: usize,
+    const ROUNDS: usize,
+> SpongeLikeQueueSimulator<F, I, N, SW, ROUNDS>
 {
     pub fn empty() -> Self {
         Self {
-            head: [E::Fr::zero(); SW],
-            tail: [E::Fr::zero(); SW],
+            head: [F::ZERO; SW],
+            tail: [F::ZERO; SW],
             num_items: 0,
             witness: VecDeque::new(),
         }
     }
 
-    pub fn push<R: CircuitArithmeticRoundFunction<E, AW, SW>, const AW: usize>(
+    pub fn push<R: CircuitArithmeticRoundFunction<E, AW, SW>, const AW: usize, const CW: usize>(
         &mut self,
         element: I,
         round_function: &R,
@@ -273,6 +279,7 @@ impl<
     pub fn push_and_output_intermediate_data<
         R: CircuitArithmeticRoundFunction<E, AW, SW>,
         const AW: usize,
+        const CW: usize,
     >(
         &mut self,
         element: I,
@@ -307,12 +314,13 @@ impl<
     pub fn pop_and_output_intermediate_data<
         R: CircuitArithmeticRoundFunction<E, AW, SW>,
         const AW: usize,
+        const CW: usize,
     >(
         &mut self,
         round_function: &R,
     ) -> (
-        I, // old tail
-        SpongeLikeQueueIntermediateStates<E, SW, ROUNDS>,
+        I,
+        SpongeLikeQueueIntermediateStates<F, SW, ROUNDS>,
     ) {
         let old_head = self.head;
         assert!(N % AW == 0);
@@ -346,41 +354,41 @@ impl<
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Debug, Clone(bound = ""), Copy(bound = ""))]
 #[serde(bound = "")]
-pub struct SpongeLikeStackIntermediateStates<E: Engine, const SW: usize, const ROUNDS: usize> {
+pub struct SpongeLikeStackIntermediateStates<F: SmallField, const SW: usize, const ROUNDS: usize> {
     pub is_push: bool,
-    #[serde(with = "sync_vm::utils::BigArraySerde")]
-    pub previous_state: [E::Fr; SW],
-    #[serde(with = "sync_vm::utils::BigArraySerde")]
-    pub new_state: [E::Fr; SW],
+    #[serde(with = "boojum::serde_utils::BigArraySerde")]
+    pub previous_state: [F; SW],
+    #[serde(with = "boojum::serde_utils::BigArraySerde")]
+    pub new_state: [F; SW],
     pub depth: u32,
     #[serde(skip)]
-    #[serde(default = "empty_array_of_arrays::<E, SW, ROUNDS>")]
-    pub round_function_execution_pairs: [([E::Fr; SW], [E::Fr; SW]); ROUNDS],
+    #[serde(default = "empty_array_of_arrays::<F, SW, ROUNDS>")]
+    pub round_function_execution_pairs: [([F; SW], [F; SW]); ROUNDS],
 }
 
-fn empty_array_of_arrays<E: Engine, const SW: usize, const ROUNDS: usize>() -> [([E::Fr; SW], [E::Fr; SW]); ROUNDS] {
-    [([E::Fr::zero(); SW], [E::Fr::zero(); SW]); ROUNDS]
+fn empty_array_of_arrays<F: SmallField, const SW: usize, const ROUNDS: usize>() -> [([F; SW], [F; SW]); ROUNDS] {
+    [([F::ZERO; SW], [F::ZERO; SW]); ROUNDS]
 }
 
 pub struct SpongeLikeStackSimulator<
-    E: Engine,
-    I: OutOfCircuitFixedLengthEncodable<E, N>,
+    F: SmallField,
+    I: OutOfCircuitFixedLengthEncodable<F, N>,
     const N: usize,
     const SW: usize,
     const ROUNDS: usize,
 > {
-    pub state: [E::Fr; SW],
+    pub state: [F; SW],
     pub num_items: u32,
-    pub witness: Vec<([E::Fr; N], [E::Fr; SW], I)>,
+    pub witness: Vec<([F; N], [F; SW], I)>,
 }
 
 impl<
-        E: Engine,
-        I: OutOfCircuitFixedLengthEncodable<E, N>,
-        const N: usize,
-        const SW: usize,
-        const ROUNDS: usize,
-    > SpongeLikeStackSimulator<E, I, N, SW, ROUNDS>
+    F: SmallField,
+    I: OutOfCircuitFixedLengthEncodable<F, N>,
+    const N: usize,
+    const SW: usize,
+    const ROUNDS: usize,
+> SpongeLikeStackSimulator<F, I, N, SW, ROUNDS>
 {
     pub fn empty() -> Self {
         Self {
@@ -390,7 +398,7 @@ impl<
         }
     }
 
-    pub fn push<R: CircuitArithmeticRoundFunction<E, AW, SW>, const AW: usize>(
+    pub fn push<R: CircuitArithmeticRoundFunction<E, AW, SW>, const AW: usize, const CW: usize>(
         &mut self,
         element: I,
         round_function: &R,
@@ -401,11 +409,12 @@ impl<
     pub fn push_and_output_intermediate_data<
         R: CircuitArithmeticRoundFunction<E, AW, SW>,
         const AW: usize,
+        const CW: usize,
     >(
         &mut self,
         element: I,
         round_function: &R,
-    ) -> SpongeLikeStackIntermediateStates<E, SW, ROUNDS> {
+    ) -> SpongeLikeStackIntermediateStates<F, SW, ROUNDS> {
         assert!(N % AW == 0);
         let encoding = element.encoding_witness();
 
@@ -432,10 +441,11 @@ impl<
     pub fn pop_and_output_intermediate_data<
         R: CircuitArithmeticRoundFunction<E, AW, SW>,
         const AW: usize,
+        const CW: usize,
     >(
         &mut self,
         round_function: &R,
-    ) -> (I, SpongeLikeStackIntermediateStates<E, SW, ROUNDS>) {
+    ) -> (I, SpongeLikeStackIntermediateStates<F, SW, ROUNDS>) {
         assert!(N % AW == 0);
 
         let current_state = self.state;
