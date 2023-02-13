@@ -1,6 +1,6 @@
 use crate::{ethereum_types::{Address, U256}, utils::calldata_to_aligned_data};
 use crate::toolset::GeometryConfig;
-use boojum::{field::SmallField, implementations::poseidon_goldilocks::PoseidonGoldilocks};
+use boojum::{field::{SmallField, goldilocks::GoldilocksField}, implementations::poseidon_goldilocks::PoseidonGoldilocks};
 use zk_evm::abstractions::Storage;
 use crate::toolset::create_tools;
 use zk_evm::contract_bytecode_to_words;
@@ -22,6 +22,10 @@ use boojum::algebraic_props::round_function::AlgebraicRoundFunction;
 use boojum::gadgets::poseidon::CircuitRoundFunction;
 
 pub const SCHEDULER_TIMESTAMP: u32 = 1;
+
+use crate::witness::oracle::VmInstanceWitness;
+use crate::witness::oracle::VmWitnessOracle;
+use crate::witness::full_block_artifact::FullBlockArtifacts;
 
 /// This is a testing interface that basically will
 /// setup the environment and will run out-of-circuit and then in-circuit
@@ -45,7 +49,8 @@ pub fn run<
     storage: S,
     tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
 // ) -> (BlockBasicCircuits<Bn256>, BlockBasicCircuitsPublicInputs<Bn256>, SchedulerCircuitInstanceWitness<Bn256>) {
-) {
+) -> (Vec<VmInstanceWitness<F, VmWitnessOracle<F>>>, FullBlockArtifacts<F>) {
+// ) {
     assert!(zk_porter_is_available == false);
     assert_eq!(ram_verification_queries.len(), 0, "for now it's implemented such that we do not need it");
 
@@ -175,8 +180,7 @@ pub fn run<
 
     // dbg!(tools.witness_tracer.vm_snapshots.len());
 
-    // let (instance_oracles, artifacts) =
-    let _ =
+    let (instance_oracles, artifacts) =
         create_artifacts_from_tracer(
             tools.witness_tracer,
             &round_function, 
@@ -185,6 +189,8 @@ pub fn run<
             tree,
             num_non_deterministic_heap_queries
         );
+
+    return (instance_oracles, artifacts)
 
     // assert!(artifacts.special_initial_decommittment_queries.len() == 1);
     // use sync_vm::scheduler::queues::SpongeLikeQueueStateWitness;
@@ -332,7 +338,8 @@ pub fn run_with_fixed_params<S: Storage>(
     geometry: GeometryConfig,
     storage: S,
     tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
-) {
+// ) {
+) -> (Vec<VmInstanceWitness<GoldilocksField, VmWitnessOracle<GoldilocksField>>>, FullBlockArtifacts<GoldilocksField>) {
 // ) -> (BlockBasicCircuits<Bn256>, BlockBasicCircuitsPublicInputs<Bn256>, SchedulerCircuitInstanceWitness<Bn256>) {
 
     let round_function = PoseidonGoldilocks;

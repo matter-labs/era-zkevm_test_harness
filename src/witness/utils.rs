@@ -2,6 +2,8 @@ use boojum::gadgets::queue::QueueStateWitness;
 use boojum::gadgets::queue::QueueTailState;
 use boojum::gadgets::queue::QueueTailStateWitness;
 use boojum::gadgets::traits::encodable::CircuitEncodable;
+use boojum::zksync::base_structures::vm_state::GlobalContextWitness;
+use boojum::zksync::base_structures::vm_state::VmLocalStateWitness;
 use zk_evm::aux_structures::LogQuery;
 use crate::encodings::log_query::LogQueueState;
 use crate::encodings::log_query::LogQueueSimulator;
@@ -179,182 +181,181 @@ use num_bigint::BigUint;
 // use sync_vm::vm::vm_cycle::witness_oracle::WitnessOracle;
 // use sync_vm::vm::vm_cycle::input::VmCircuitWitness;
 
-// use crate::witness::oracle::VmInCircuitAuxilaryParameters;
+use crate::witness::oracle::VmInCircuitAuxilaryParameters;
 
-// pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
-//     vm_state: &zk_evm::vm_state::VmLocalState,
-//     aux_params: &VmInCircuitAuxilaryParameters<E>,
-// ) -> VmGlobalStateWitness<E, 3> {
-//     use sync_vm::vm::vm_state::VmGlobalState;
+pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
+    vm_state: &zk_evm::vm_state::VmLocalState,
+    aux_params: &VmInCircuitAuxilaryParameters<F>,
+) -> VmLocalStateWitness<F> {
+    use boojum::gadgets::traits::allocatable::CSAllocatable;
+    use boojum::zksync::base_structures::vm_state::VmLocalState;
 
-//     let mut hidden_fsm = VmGlobalState::<E, 3>::placeholder_witness();
-//     // depth and state encoding
-//     hidden_fsm.callstack.stack_sponge_state = aux_params.callstack_state.0;
-//     hidden_fsm.callstack.context_stack_depth = vm_state.callstack.depth() as u32;
+    let mut hidden_fsm = VmLocalState::placeholder_witness();
+    // depth and state encoding
+    hidden_fsm.callstack.stack_sponge_state = aux_params.callstack_state.0;
+    hidden_fsm.callstack.context_stack_depth = vm_state.callstack.depth() as u32;
 
-//     // non-saved part
-//     hidden_fsm.callstack.current_context.log_queue_forward_part_length = aux_params.storage_log_queue_state.num_items;
-//     hidden_fsm.callstack.current_context.log_queue_forward_tail = aux_params.storage_log_queue_state.tail_state;
-//     // saved part
+    // non-saved part
+    hidden_fsm.callstack.current_context.log_queue_forward_part_length = aux_params.storage_log_queue_state.tail.length;
+    hidden_fsm.callstack.current_context.log_queue_forward_tail = aux_params.storage_log_queue_state.tail.tail;
+    // saved part
 
-//     let mut ctx = &mut hidden_fsm.callstack.current_context;
-//     let out_of_circuit_context = &vm_state.callstack.current;
+    let mut ctx = &mut hidden_fsm.callstack.current_context;
+    let out_of_circuit_context = &vm_state.callstack.current;
 
-//     // memory pages
-//     ctx.saved_context.common_part.base_page = out_of_circuit_context.base_memory_page.0;
-//     ctx.saved_context.common_part.code_page = out_of_circuit_context.code_page.0;
+    // memory pages
+    ctx.saved_context.base_page = out_of_circuit_context.base_memory_page.0;
+    ctx.saved_context.code_page = out_of_circuit_context.code_page.0;
 
-//     // memory sizes
-//     ctx.saved_context.common_part.heap_upper_bound = out_of_circuit_context.heap_bound;
-//     ctx.saved_context.common_part.aux_heap_upper_bound = out_of_circuit_context.aux_heap_bound;
+    // memory sizes
+    ctx.saved_context.heap_upper_bound = out_of_circuit_context.heap_bound;
+    ctx.saved_context.aux_heap_upper_bound = out_of_circuit_context.aux_heap_bound;
 
-//     // context composite
-//     ctx.saved_context.common_part.context_u128_value_composite[0] = out_of_circuit_context.context_u128_value as u64;
-//     ctx.saved_context.common_part.context_u128_value_composite[1] = (out_of_circuit_context.context_u128_value >> 64) as u64;
+    // context composite
+    ctx.saved_context.context_u128_value_composite[0] = out_of_circuit_context.context_u128_value as u32;
+    ctx.saved_context.context_u128_value_composite[1] = (out_of_circuit_context.context_u128_value >> 32) as u32;
+    ctx.saved_context.context_u128_value_composite[2] = (out_of_circuit_context.context_u128_value >> 64) as u32;
+    ctx.saved_context.context_u128_value_composite[3] = (out_of_circuit_context.context_u128_value >> 96) as u32;
 
-//     // various counters
-//     ctx.saved_context.common_part.pc = out_of_circuit_context.pc;
-//     ctx.saved_context.common_part.sp = out_of_circuit_context.sp;
-//     ctx.saved_context.common_part.exception_handler_loc = out_of_circuit_context.exception_handler_location;
-//     ctx.saved_context.common_part.ergs_remaining = out_of_circuit_context.ergs_remaining;
+    // various counters
+    ctx.saved_context.pc = out_of_circuit_context.pc;
+    ctx.saved_context.sp = out_of_circuit_context.sp;
+    ctx.saved_context.exception_handler_loc = out_of_circuit_context.exception_handler_location;
+    ctx.saved_context.ergs_remaining = out_of_circuit_context.ergs_remaining;
 
-//     // addresses
-//     use crate::u160_from_address;
-//     ctx.saved_context.common_part.code_address = u160_from_address(out_of_circuit_context.code_address);
-//     ctx.saved_context.common_part.this = u160_from_address(out_of_circuit_context.this_address);
-//     ctx.saved_context.common_part.caller = u160_from_address(out_of_circuit_context.msg_sender);
+    // addresses
+    ctx.saved_context.code_address = out_of_circuit_context.code_address;
+    ctx.saved_context.this = out_of_circuit_context.this_address;
+    ctx.saved_context.caller = out_of_circuit_context.msg_sender;
     
-//     // flags
-//     ctx.saved_context.common_part.is_static_execution = out_of_circuit_context.is_static;
-//     ctx.saved_context.extension.is_local_call = out_of_circuit_context.is_local_frame;
-//     ctx.saved_context.common_part.is_kernel_mode = out_of_circuit_context.is_kernel_mode();
+    // flags
+    ctx.saved_context.is_static_execution = out_of_circuit_context.is_static;
+    ctx.saved_context.is_local_call = out_of_circuit_context.is_local_frame;
+    ctx.saved_context.is_kernel_mode = out_of_circuit_context.is_kernel_mode();
 
-//     drop(ctx);
+    drop(ctx);
 
-//     // storage log specific part
-//     hidden_fsm.callstack.current_context.saved_context.common_part.reverted_queue_head = aux_params.current_frame_rollback_queue_head;
-//     hidden_fsm.callstack.current_context.saved_context.common_part.reverted_queue_tail = aux_params.current_frame_rollback_queue_tail;
-//     hidden_fsm.callstack.current_context.saved_context.common_part.reverted_queue_segment_len = aux_params.current_frame_rollback_queue_segment_length;
+    // storage log specific part
+    hidden_fsm.callstack.current_context.saved_context.reverted_queue_head = aux_params.current_frame_rollback_queue_head;
+    hidden_fsm.callstack.current_context.saved_context.reverted_queue_tail = aux_params.current_frame_rollback_queue_tail;
+    hidden_fsm.callstack.current_context.saved_context.reverted_queue_segment_len = aux_params.current_frame_rollback_queue_segment_length;
 
-//     // arithmetic flags
-//     hidden_fsm.flags = ArithmeticFlagsPortWitness {
-//         overflow_or_less_than: vm_state.flags.overflow_or_less_than_flag,
-//         equal: vm_state.flags.equality_flag,
-//         greater_than: vm_state.flags.greater_than_flag,
-//     };
+    use boojum::zksync::base_structures::vm_state::ArithmeticFlagsPortWitness;
 
-//     // registers
-//     assert_eq!(hidden_fsm.registers.len(), vm_state.registers.len());
-//     for (dst, src) in hidden_fsm.registers.iter_mut().zip(vm_state.registers.iter()) {
-//         let low = (src.value.0[0] as u128) + ((src.value.0[1] as u128) << 64);
-//         let high = (src.value.0[2] as u128) + ((src.value.0[3] as u128) << 64);
-//         dst.inner[0] = low;
-//         dst.inner[1] = high;
-//         dst.is_ptr = src.is_pointer;
-//     }
+    // arithmetic flags
+    hidden_fsm.flags = ArithmeticFlagsPortWitness {
+        overflow_or_less_than: vm_state.flags.overflow_or_less_than_flag,
+        equal: vm_state.flags.equality_flag,
+        greater_than: vm_state.flags.greater_than_flag,
+    };
 
-//     for (i, dst) in hidden_fsm.previous_code_word.iter_mut().enumerate() {
-//         let value = vm_state.previous_code_word.0[i];
-//         *dst = value;
-//     }
+    // registers
+    assert_eq!(hidden_fsm.registers.len(), vm_state.registers.len());
+    for (dst, src) in hidden_fsm.registers.iter_mut().zip(vm_state.registers.iter()) {
+        dst.value = src.value;
+        dst.is_pointer = src.is_pointer;
+    }
 
-//     // auxilary counters and information
+    hidden_fsm.previous_code_word = vm_state.previous_code_word;
 
-//     hidden_fsm.timestamp = vm_state.timestamp;
-//     hidden_fsm.memory_page_counter = vm_state.memory_page_counter;
-//     hidden_fsm.tx_number_in_block = vm_state.tx_number_in_block;
-//     hidden_fsm.previous_super_pc = vm_state.previous_super_pc;
-//     hidden_fsm.did_call_or_ret_recently = vm_state.did_call_or_ret_recently;
-//     hidden_fsm.ergs_per_pubdata_byte = vm_state.current_ergs_per_pubdata_byte;
+    // auxilary counters and information
 
-//     hidden_fsm.context_composite_u128 = [
-//         vm_state.context_u128_register as u64,
-//         (vm_state.context_u128_register >> 64) as u64,
-//     ];
+    hidden_fsm.timestamp = vm_state.timestamp;
+    hidden_fsm.memory_page_counter = vm_state.memory_page_counter;
+    hidden_fsm.tx_number_in_block = vm_state.tx_number_in_block as u32;
+    hidden_fsm.previous_super_pc = vm_state.previous_super_pc;
+    hidden_fsm.ergs_per_pubdata_byte = vm_state.current_ergs_per_pubdata_byte;
 
-//     hidden_fsm.memory_queue_state = aux_params.memory_queue_state.tail;
-//     hidden_fsm.memory_queue_length = aux_params.memory_queue_state.length;
+    hidden_fsm.context_composite_u128 = [
+        vm_state.context_u128_register as u32,
+        (out_of_circuit_context.context_u128_value >> 32) as u32,
+        (out_of_circuit_context.context_u128_value >> 64) as u32,
+        (out_of_circuit_context.context_u128_value >> 96) as u32,
+    ];
 
-//     hidden_fsm.code_decommittment_queue_state = aux_params.decommittment_queue_state.tail;
-//     hidden_fsm.code_decommittment_queue_length = aux_params.decommittment_queue_state.length;
+    hidden_fsm.memory_queue_state = aux_params.memory_queue_state.tail.tail;
+    hidden_fsm.memory_queue_length = aux_params.memory_queue_state.tail.length;
 
-//     hidden_fsm
-// }
+    hidden_fsm.code_decommittment_queue_state = aux_params.decommittment_queue_state.tail.tail;
+    hidden_fsm.code_decommittment_queue_length = aux_params.decommittment_queue_state.tail.length;
 
-// pub fn vm_instance_witness_to_circuit_formal_input<F: SmallField, O: WitnessOracle<E>>(
-//     witness: VmInstanceWitness<E, O>,
-//     is_first: bool,
-//     is_last: bool,
-//     global_context: GlobalContext<E>,
-// ) -> VmCircuitWitness<E, O> {
-//     let VmInstanceWitness {
-//         initial_state,
-//         witness_oracle,
-//         auxilary_initial_parameters,
-//         cycles_range: _,
+    hidden_fsm
+}
+
+use crate::witness::oracle::VmInstanceWitness;
+use boojum::zksync::main_vm::witness_oracle::WitnessOracle;
+use boojum::zksync::fsm_input_output::circuit_inputs::main_vm::VmCircuitWitness;
+
+pub fn vm_instance_witness_to_circuit_formal_input<F: SmallField, O: WitnessOracle<F>>(
+    witness: VmInstanceWitness<F, O>,
+    is_first: bool,
+    is_last: bool,
+    global_context: GlobalContextWitness<F>,
+) -> VmCircuitWitness<F, O> {
+    let VmInstanceWitness {
+        initial_state,
+        witness_oracle,
+        auxilary_initial_parameters,
+        cycles_range: _,
     
-//         // final state for test purposes
-//         final_state,
-//         auxilary_final_parameters,
-//     } = witness;
+        // final state for test purposes
+        final_state,
+        auxilary_final_parameters,
+    } = witness;
 
-//     use sync_vm::traits::CSWitnessable;
-//     use sync_vm::vm::vm_cycle::input::*;
-//     use crate::witness::oracle::VmInCircuitAuxilaryParameters;
+    use crate::witness::oracle::VmInCircuitAuxilaryParameters;
 
-//     use sync_vm::vm::vm_state::*;
+    let hidden_fsm_input = vm_instance_witness_to_vm_formal_state(
+        &initial_state,
+        &auxilary_initial_parameters
+    );
 
-//     let hidden_fsm_input = vm_instance_witness_to_vm_formal_state(
-//         &initial_state,
-//         &auxilary_initial_parameters
-//     );
+    let hidden_fsm_output = vm_instance_witness_to_vm_formal_state(
+        &final_state,
+        &auxilary_final_parameters
+    );
 
-//     let hidden_fsm_output = vm_instance_witness_to_vm_formal_state(
-//         &final_state,
-//         &auxilary_final_parameters
-//     );
+    use boojum::gadgets::traits::allocatable::CSAllocatable;
+    use boojum::zksync::fsm_input_output::circuit_inputs::main_vm::*;
 
-//     let mut observable_input = VmInputData::placeholder_witness();
-//     if is_first {
-//         let VmInCircuitAuxilaryParameters {
-//             decommittment_queue_state,
-//             memory_queue_state,
-//             current_frame_rollback_queue_tail,
-//             ..
-//         } = auxilary_initial_parameters;
+    let mut observable_input = VmInputData::placeholder_witness();
+    if is_first {
+        let VmInCircuitAuxilaryParameters {
+            decommittment_queue_state,
+            memory_queue_state,
+            current_frame_rollback_queue_tail,
+            ..
+        } = auxilary_initial_parameters;
 
-//         observable_input.rollback_queue_tail_for_block = current_frame_rollback_queue_tail;
-//         observable_input.memory_queue_initial_state = memory_queue_state;
-//         observable_input.decommitment_queue_initial_state = decommittment_queue_state;
-//         observable_input.per_block_context = global_context.create_witness().unwrap();
-//     }
+        observable_input.rollback_queue_tail_for_block = current_frame_rollback_queue_tail;
+        observable_input.memory_queue_initial_state = memory_queue_state.tail;
+        observable_input.decommitment_queue_initial_state = decommittment_queue_state.tail;
+        observable_input.per_block_context = global_context;
+    }
 
+    let mut observable_output = VmOutputData::placeholder_witness();
+    if is_last {
+        let VmInCircuitAuxilaryParameters {
+            decommittment_queue_state,
+            memory_queue_state,
+            storage_log_queue_state,
+            ..
+        } = auxilary_final_parameters;
 
-//     let mut observable_output = VmOutputData::placeholder_witness();
-//     if is_last {
-//         let VmInCircuitAuxilaryParameters {
-//             decommittment_queue_state,
-//             memory_queue_state,
-//             storage_log_queue_state,
-//             ..
-//         } = auxilary_final_parameters;
+        observable_output.memory_queue_final_state = memory_queue_state;
+        observable_output.decommitment_queue_final_state = decommittment_queue_state;
+        observable_output.log_queue_final_state = storage_log_queue_state;
+    }
 
-//         observable_output.memory_queue_final_state = memory_queue_state;
-//         observable_output.decommitment_queue_final_state = decommittment_queue_state;
-//         observable_output.log_queue_final_state = storage_log_queue_state;
-//     }
-
-//     VmCircuitWitness {
-//         closed_form_input: VmCircuitInputOutputWitness::<E> {
-//             start_flag: is_first,
-//             completion_flag: is_last,
-//             observable_input,
-//             observable_output,
-//             hidden_fsm_input,
-//             hidden_fsm_output,
-//             _marker_e: (),
-//             _marker: std::marker::PhantomData,
-//         },
-//         witness_oracle,
-//     }
-// }
+    VmCircuitWitness {
+        closed_form_input: VmCircuitInputOutputWitness {
+            start_flag: is_first,
+            completion_flag: is_last,
+            observable_input,
+            observable_output,
+            hidden_fsm_input,
+            hidden_fsm_output,
+        },
+        witness_oracle,
+    }
+}

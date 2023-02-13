@@ -32,7 +32,15 @@ pub(crate) fn make_round_function_pairs<
     initial: [F; N],
     intermediates: [[F; N]; ROUNDS]
 ) -> [([F; N], [F; N]); ROUNDS] {
-    todo!()
+    let mut result = [([F::ZERO; N], [F::ZERO; N]); ROUNDS];
+    result[0].0 = initial;
+    result[0].1 = intermediates[0];
+    for idx in 1..ROUNDS {
+        result[idx].0 = result[idx - 1].1;
+        result[idx].1 = intermediates[idx];
+    }
+
+    result
 }
 
 #[derive(Derivative)]

@@ -9,7 +9,9 @@ use crate::encodings::memory_query::MemoryQueueSimulator;
 use crate::toolset::GeometryConfig;
 use crate::witness::tracer::{WitnessTracer, QueryMarker};
 use boojum::field::SmallField;
-use boojum::zksync::base_structures::vm_state::{QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH};
+use boojum::implementations::poseidon_goldilocks::PoseidonGoldilocks;
+use boojum::zksync::base_structures::vm_state::{QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH, GlobalContextWitness};
+use boojum::zksync::main_vm::main_vm_entry_point;
 use derivative::Derivative;
 use num_bigint::BigUint;
 use rayon::slice::ParallelSliceMut;
@@ -203,10 +205,7 @@ pub fn create_artifacts_from_tracer<
     entry_point_decommittment_query: (DecommittmentQuery, Vec<U256>),
     tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
     num_non_deterministic_heap_queries: usize,
-// ) -> (Vec<VmInstanceWitness<E, VmWitnessOracle<E>>>, FullBlockArtifacts<E>) {
-) 
-    where LogAccessSpongesInfo<F>: Default
-{
+) -> (Vec<VmInstanceWitness<F, VmWitnessOracle<F>>>, FullBlockArtifacts<F>) {
     let WitnessTracer {
         memory_queries,
         storage_queries,
@@ -1115,14 +1114,8 @@ pub fn create_artifacts_from_tracer<
             assert_eq!(o, i);
         }
     }
-
-    // run some circuit 
-
-    {
-
-    }
-
-    // (all_instances_witnesses, artifacts)
+    
+    (all_instances_witnesses, artifacts)
 }
 
 use crate::INITIAL_MONOTONIC_CYCLE_COUNTER;

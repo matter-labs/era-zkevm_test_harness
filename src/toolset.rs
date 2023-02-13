@@ -21,7 +21,7 @@ pub struct ProvingToolset<S: Storage> {
 use derivative::Derivative;
 
 #[derive(Derivative)]
-#[derivative(Clone, Debug, Default, Hash)]
+#[derivative(Clone, Copy, Debug, Default, Hash)]
 pub struct GeometryConfig {
     pub cycles_per_vm_snapshot: u32,
     pub cycles_per_log_demuxer: u32,

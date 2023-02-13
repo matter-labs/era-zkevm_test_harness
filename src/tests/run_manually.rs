@@ -7,6 +7,8 @@ use crate::ethereum_types::*;
 use crate::witness::oracle::create_artifacts_from_tracer;
 use crate::witness::oracle::VmWitnessOracle;
 use boojum::implementations::poseidon_goldilocks::PoseidonGoldilocks;
+use boojum::zksync::base_structures::vm_state::GlobalContextWitness;
+use boojum::zksync::main_vm::main_vm_entry_point;
 use zk_evm::abstractions::*;
 use zk_evm::aux_structures::DecommittmentQuery;
 use zk_evm::aux_structures::*;
@@ -203,7 +205,9 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
     let round_function = PoseidonGoldilocks;
 
     // let (basic_block_circuits, basic_block_circuits_inputs, scheduler_input) = run(
-    let _ = run(
+    let (vm_instances_witness, artifacts) = 
+    // let _ = 
+    run(
         Address::zero(),
         *BOOTLOADER_FORMAL_ADDRESS,
         entry_point_bytecode,
@@ -218,6 +222,54 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         storage_impl,
         &mut tree
     );
+
+    let global_ctx = GlobalContextWitness {
+        zkporter_is_available: false,
+        default_aa_code_hash: U256::zero(),
+    };
+
+    let num_instances = vm_instances_witness.len();
+    let mut observable_input = None;
+
+    use boojum::zksync::main_vm::cycle::*;
+
+    let cs_geometry = reference_vm_geometry();
+
+    for (instance_idx, vm_instance) in vm_instances_witness.into_iter().enumerate() {
+        use crate::witness::utils::vm_instance_witness_to_circuit_formal_input;
+        let is_first = instance_idx == 0;
+        let is_last = instance_idx == num_instances - 1;
+        let mut circuit_input = vm_instance_witness_to_circuit_formal_input(
+            vm_instance,
+            is_first,
+            is_last,
+            global_ctx.clone(),
+        );
+
+        if observable_input.is_none() {
+            assert!(is_first);
+            observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
+        } else {
+            circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
+        }
+
+        let gates = gates_setup(&cs_geometry);
+        let mut cs_owned = testing_cs(
+            cs_geometry,
+            1 << 18,
+            gates
+        );
+
+        let _ = main_vm_entry_point(&mut cs_owned, circuit_input, &round_function, geometry.cycles_per_vm_snapshot as usize);
+        cs_owned.pad_and_shrink();
+
+        use boojum::worker::Worker;
+        let worker = Worker::new();
+        println!("Checking if satisfied");
+        assert!(cs_owned.check_if_satisfied(&worker));
+    }
+
+    
 
     todo!();
 

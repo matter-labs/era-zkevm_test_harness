@@ -19,12 +19,12 @@ resolver = "2"
 # path = "src/geometry_config_generator/main.rs"
 
 [dependencies]
-# zk_evm = {path = "../zk_evm"}
+zk_evm = {path = "../zk_evm"}
 boojum = {path = "../boojum"}
 # zkevm-assembly = {path = "../zkEVM-assembly"}
 
 zkevm-assembly = {git = "https://github.com/matter-labs/zkEVM-assembly.git", branch = "v1.3.1"}
-zk_evm = {git = "https://github.com/matter-labs/zk_evm.git", branch = "v1.4.0"}
+# zk_evm = {git = "https://github.com/matter-labs/zk_evm.git", branch = "v1.4.0"}
 # boojum = {git = "https://github.com/matter-labs/boojum.git", branch = "main"}
 
 num-bigint = "0.4"
