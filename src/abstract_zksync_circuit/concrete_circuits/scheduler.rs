@@ -11,19 +11,19 @@ pub struct SchedulerInstanceSynthesisFunction;
 
 use sync_vm::recursion::node_aggregation::*;
 use sync_vm::recursion::transcript::GenericTranscriptGadget;
-use crate::franklin_crypto::plonk::circuit::bigint::RnsParameters;
+use cratFanklin_crypto::plonk::circuit::bigint::RnsParameters;
 use sync_vm::recursion::recursion_tree::AggregationParameters;
 use sync_vm::recursion::recursion_tree::NUM_LIMBS;
 use sync_vm::scheduler::SchedulerCircuitInstanceWitness;
 use sync_vm::scheduler::scheduler_function;
 
-impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for SchedulerInstanceSynthesisFunction {
+impl<F: SmallField> ZkSyncUniformSynthesisFunction<E> for SchedulerInstanceSynthesisFunction {
     type Witness = SchedulerCircuitInstanceWitness<E>;
     type Config = (
         u32,
         RnsParameters<E, E::Fq>, 
         AggregationParameters<E, GenericTranscriptGadget<E, RescueParams<E, 2, 3>, 2, 3>, RescueParams<E, 2, 3>, 2, 3>,
-        Vec<E::Fr>,
+        Vec<F>,
         ZkSyncParametricProof<E>, 
         Option<[E::G2Affine; 2]>
     );
@@ -42,7 +42,7 @@ impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for SchedulerInstanceSynthesis
 }
 
 #[track_caller]
-fn scheduler_outer_function<E: Engine, CS: ConstraintSystem<E>, R: CircuitArithmeticRoundFunction<E, 2, 3, StateElement = Num<E>>>(
+fn scheduler_outer_function<F: SmallField, CS: ConstraintSystem<E>, R: CircuitArithmeticRoundFunction<E, 2, 3, StateElement = Num<E>>>(
     cs: &mut CS,
     witness: Option<SchedulerCircuitInstanceWitness<E>>,
     round_function: &R,
@@ -50,7 +50,7 @@ fn scheduler_outer_function<E: Engine, CS: ConstraintSystem<E>, R: CircuitArithm
         u32,
         RnsParameters<E, E::Fq>, 
         AggregationParameters<E, GenericTranscriptGadget<E, RescueParams<E, 2, 3>, 2, 3>, RescueParams<E, 2, 3>, 2, 3>,
-        Vec<E::Fr>,
+        Vec<F>,
         ZkSyncParametricProof<E>, 
         Option<[E::G2Affine; 2]>
     ),
@@ -64,7 +64,7 @@ fn scheduler_outer_function<E: Engine, CS: ConstraintSystem<E>, R: CircuitArithm
         g2_elements
     ) = params;
 
-    let padding_vk_encoding_fixed: [E::Fr; sync_vm::recursion::node_aggregation::VK_ENCODING_LENGTH] = padding_vk_encoding.try_into().unwrap();
+    let padding_vk_encoding_fixed: [F; sync_vm::recursion::node_aggregation::VK_ENCODING_LENGTH] = padding_vk_encoding.try_into().unwrap();
 
     let params = (
         limit, 

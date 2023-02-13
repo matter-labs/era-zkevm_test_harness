@@ -21,7 +21,7 @@ use zk_evm::aux_structures::MemoryQuery;
 use sync_vm::glue::sort_decommittment_requests::input::CodeDecommittmentsDeduplicatorInstanceWitness;
 
 pub fn compute_decommitter_circuit_snapshots<
-    E: Engine,
+    F: SmallField,
     R: CircuitArithmeticRoundFunction<E, 2, 3>
 >(
     artifacts: &mut FullBlockArtifacts<E>,
@@ -310,7 +310,7 @@ pub fn compute_decommitter_circuit_snapshots<
                 fsm_internals.state_get_from_queue = false;
                 fsm_internals.state_decommit = true;
                 fsm_internals.num_rounds_left = num_rounds as u16;
-                fsm_internals.sha256_inner_state = crate::franklin_crypto::plonk::circuit::hashes_with_tables::sha256::gadgets::Sha256Gadget::<E>::iv();
+                fsm_internals.sha256_inner_state = cratFanklin_crypto::plonk::circuit::hashes_with_tables::sha256::gadgets::Sha256Gadget::<E>::iv();
                 fsm_internals.current_index = 0;
                 fsm_internals.current_page = memory_page.0;
                 fsm_internals.timestamp = timestamp.0;

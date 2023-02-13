@@ -13,7 +13,7 @@ pub struct CodeDecommitterInstanceSynthesisFunction;
 use sync_vm::glue::code_unpacker_sha256::input::CodeDecommitterCircuitInstanceWitness;
 use sync_vm::glue::code_unpacker_sha256::unpack_code_into_memory_entry_point;
 
-impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for CodeDecommitterInstanceSynthesisFunction {
+impl<F: SmallField> ZkSyncUniformSynthesisFunction<E> for CodeDecommitterInstanceSynthesisFunction {
     type Witness = CodeDecommitterCircuitInstanceWitness<E>;
     type Config = usize;
     type RoundFunction = GenericHasher<E, RescueParams<E, 2, 3>, 2, 3>;

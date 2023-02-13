@@ -16,7 +16,7 @@ use blake2::Blake2s256;
 use tracing;
 
 pub fn decompose_into_storage_application_witnesses<
-    E: Engine,
+    F: SmallField,
     R: CircuitArithmeticRoundFunction<E, 2, 3>,
 >(
     artifacts: &mut FullBlockArtifacts<E>,

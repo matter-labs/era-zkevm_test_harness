@@ -21,7 +21,7 @@ use blake2::Blake2s256;
 
 // We only quickly walk over the sequence of storage related logs, and separate them into either repeated application or a new one
 pub fn compute_storage_application_pubdata_queues<
-    E: Engine,
+    F: SmallField,
     R: CircuitArithmeticRoundFunction<E, 2, 3>,
 >(
     artifacts: &mut FullBlockArtifacts<E>,

@@ -1,90 +1,145 @@
 use super::*;
-use num_bigint::BigUint;
-use sync_vm::franklin_crypto::plonk::circuit::bigint::biguint_to_fe;
-use sync_vm::utils::compute_shifts;
-use sync_vm::vm::vm_cycle::witness_oracle::u256_to_biguint;
-use sync_vm::vm::vm_state::saved_contract_context::scale_and_accumulate;
-
 use zk_evm::aux_structures::MemoryQuery;
 
-pub fn sorting_key<E: Engine>(query: &MemoryQuery) -> E::Fr {
-    let mut key = BigUint::from(0u64);
-    // page | index | timestamp
-    key += BigUint::from(query.location.page.0 as u64);
-    key <<= 32;
-    key += BigUint::from(query.location.index.0 as u64);
-    key <<= 32;
-    key += BigUint::from(query.timestamp.0 as u64);
+pub fn sorting_key(query: &MemoryQuery) -> Key<3> {
+    let le_words = [
+        query.timestamp.0,
+        query.location.index.0,
+        query.location.page.0,
+    ];
 
-    biguint_to_fe::<E::Fr>(key)
+    Key(le_words)
 }
 
-pub fn comparison_key<E: Engine>(query: &MemoryQuery) -> E::Fr {
-    let mut key = BigUint::from(0u64);
-    // page | index
-    key += BigUint::from(query.location.page.0 as u64);
-    key <<= 32;
-    key += BigUint::from(query.location.index.0 as u64);
+pub fn comparison_key(query: &MemoryQuery) -> Key<2> {
+    let le_words = [
+        query.location.index.0,
+        query.location.page.0,
+    ];
 
-    biguint_to_fe::<E::Fr>(key)
+    Key(le_words)
 }
 
-impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 2> for MemoryQuery {
-    fn encoding_witness(&self) -> [<E>::Fr; 2] {
-        let shifts = compute_shifts::<E::Fr>();
+use boojum::zksync::base_structures::memory_query::MEMORY_QUERY_PACKED_WIDTH;
 
-        let mut lc = E::Fr::zero();
-        let mut shift = 0;
-        scale_and_accumulate::<E, _>(&mut lc, self.value.0[0], &shifts, shift);
-        shift += 64;
-        scale_and_accumulate::<E, _>(&mut lc, self.value.0[1], &shifts, shift);
-        shift += 64;
-        scale_and_accumulate::<E, _>(&mut lc, self.value.0[2], &shifts, shift);
-        shift += 64;
+impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, MEMORY_QUERY_PACKED_WIDTH> for MemoryQuery {
+    fn encoding_witness(&self) -> [F; MEMORY_QUERY_PACKED_WIDTH] {
+        // we assume the fact that capacity of F is quite close to 64 bits
+        debug_assert!(F::CAPACITY_BITS >= 56);
 
-        assert!(shift <= E::Fr::CAPACITY as usize);
-        let el0 = lc;
+        let value = decompose_u256_as_u32x8(self.value);
 
-        let mut lc = E::Fr::zero();
-        let mut shift = 0;
-        scale_and_accumulate::<E, _>(&mut lc, self.value.0[3], &shifts, shift);
-        shift += 64;
-        scale_and_accumulate::<E, _>(&mut lc, self.location.index.0 as u32, &shifts, shift);
-        shift += 32;
-        scale_and_accumulate::<E, _>(&mut lc, self.location.page.0 as u32, &shifts, shift);
-        shift += 32;
-        scale_and_accumulate::<E, _>(&mut lc, self.timestamp.0, &shifts, shift);
-        shift += 32;
-        scale_and_accumulate::<E, _>(&mut lc, self.rw_flag, &shifts, shift);
-        shift += 1;
-        scale_and_accumulate::<E, _>(&mut lc, self.value_is_pointer, &shifts, shift);
-        shift += 1;
-        assert!(shift <= E::Fr::CAPACITY as usize);
-        let el1 = lc;
+        // strategy: we use 3 field elements to pack timestamp, decomposition of page, index and r/w flag,
+        // and 5 more elements to tightly pack 8xu32 of values
 
-        // dbg!([el0, el1]);
+        let v0 = self.timestamp.0.into_field();
+        let v1 = self.location.page.0.into_field();
+        let v2 = linear_combination(
+            &[
+                (self.location.index.0.into_field(), F::ONE),
+                (self.rw_flag.into_field(), F::from_u64_unchecked(1u64 << 32)),
+                (self.value_is_pointer.into_field(), F::from_u64_unchecked(1u64 << 33)),
+            ],
+        );
 
-        [el0, el1]
+        // value. Those in most of the cases will be nops
+        let decomposition_5 = value[5].to_le_bytes();
+        let decomposition_6 = value[6].to_le_bytes();
+        let decomposition_7 = value[7].to_le_bytes();
+
+        let v3 = linear_combination(
+            &[
+                (value[0].into_field(), F::ONE),
+                (
+                    decomposition_5[0].into_field(),
+                    F::from_u64_unchecked(1u64 << 32),
+                ),
+                (
+                    decomposition_5[1].into_field(),
+                    F::from_u64_unchecked(1u64 << 40),
+                ),
+                (
+                    decomposition_5[2].into_field(),
+                    F::from_u64_unchecked(1u64 << 48),
+                ),
+            ],
+        );
+
+        let v4 = linear_combination(
+            &[
+                (value[1].into_field(), F::ONE),
+                (
+                    decomposition_5[3].into_field(),
+                    F::from_u64_unchecked(1u64 << 32),
+                ),
+                (
+                    decomposition_6[0].into_field(),
+                    F::from_u64_unchecked(1u64 << 40),
+                ),
+                (
+                    decomposition_6[1].into_field(),
+                    F::from_u64_unchecked(1u64 << 48),
+                ),
+            ],
+        );
+
+        let v5 = linear_combination(
+            &[
+                (value[2].into_field(), F::ONE),
+                (
+                    decomposition_6[2].into_field(),
+                    F::from_u64_unchecked(1u64 << 32),
+                ),
+                (
+                    decomposition_6[3].into_field(),
+                    F::from_u64_unchecked(1u64 << 40),
+                ),
+                (
+                    decomposition_7[0].into_field(),
+                    F::from_u64_unchecked(1u64 << 48),
+                ),
+            ],
+        );
+
+        let v6 = linear_combination(
+            &[
+                (value[3].into_field(), F::ONE),
+                (
+                    decomposition_7[1].into_field(),
+                    F::from_u64_unchecked(1u64 << 32),
+                ),
+                (
+                    decomposition_7[2].into_field(),
+                    F::from_u64_unchecked(1u64 << 40),
+                ),
+                (
+                    decomposition_7[3].into_field(),
+                    F::from_u64_unchecked(1u64 << 48),
+                ),
+            ],
+        );
+
+        let v7 = value[4].into_field();
+
+        [v0, v1, v2, v3, v4, v5, v6, v7]
     }
 }
 
-pub type MemoryQueueSimulator<E> = SpongeLikeQueueSimulator<E, MemoryQuery, 2, 3, 1>;
-pub type MemoryQueueState<E> = SpongeLikeQueueIntermediateStates<E, 3, 1>;
+pub type MemoryQueueSimulator<E> = FullWidthQueueSimulator<E, MemoryQuery, 8, FULL_SPONGE_QUEUE_STATE_WIDTH, 1>;
+pub type MemoryQueueState<E> = FullWidthQueueIntermediateStates<E, FULL_SPONGE_QUEUE_STATE_WIDTH, 1>;
 
-use super::initial_storage_write::CircuitEquivalentReflection;
-use sync_vm::traits::CSWitnessable;
+impl<F: SmallField> CircuitEquivalentReflection<F> for MemoryQuery {
+    type Destination = boojum::zksync::base_structures::memory_query::MemoryQuery<F>;
+    fn reflect(&self) -> <Self::Destination as CSAllocatable<F>>::Witness {
+        use boojum::zksync::base_structures::memory_query::MemoryQueryWitness;
 
-impl<E: Engine> CircuitEquivalentReflection<E> for MemoryQuery {
-    type Destination = sync_vm::glue::code_unpacker_sha256::memory_query_updated::MemoryQuery<E>;
-    fn reflect(&self) -> <Self::Destination as CSWitnessable<E>>::Witness {
-        sync_vm::glue::code_unpacker_sha256::memory_query_updated::MemoryQueryWitness::<E> {
+        MemoryQueryWitness {
             timestamp: self.timestamp.0,
             memory_page: self.location.page.0,
-            memory_index: self.location.index.0,
+            index: self.location.index.0,
             rw_flag: self.rw_flag,
-            value: u256_to_biguint(self.value),
-            value_is_ptr: self.value_is_pointer,
-            _marker: std::marker::PhantomData
+            value: self.value,
+            is_ptr: self.value_is_pointer,
         }
     }
 }

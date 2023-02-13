@@ -13,7 +13,7 @@ pub struct CodeDecommittmentsSorterSynthesisFunction;
 use sync_vm::glue::sort_decommittment_requests::input::CodeDecommittmentsDeduplicatorInstanceWitness;
 use sync_vm::glue::sort_decommittment_requests::sort_and_deduplicate_code_decommittments_entry_point;
 
-impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for CodeDecommittmentsSorterSynthesisFunction {
+impl<F: SmallField> ZkSyncUniformSynthesisFunction<E> for CodeDecommittmentsSorterSynthesisFunction {
     type Witness = CodeDecommittmentsDeduplicatorInstanceWitness<E>;
     type Config = usize;
     type RoundFunction = GenericHasher<E, RescueParams<E, 2, 3>, 2, 3>;

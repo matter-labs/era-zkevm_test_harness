@@ -79,7 +79,7 @@ pub type SchedulerCircuit<E> = ZkSyncUniformCircuitCircuitInstance<E, SchedulerI
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone(bound = ""))]
 #[serde(bound = "")]
-pub enum ZkSyncCircuit<E: Engine, W: WitnessOracle<E>> {
+pub enum ZkSyncCircuit<F: SmallField, W: WitnessOracle<E>> {
     Scheduler(SchedulerCircuit<E>),
     NodeAggregation(NodeAggregationCircuit<E>),
     LeafAggregation(LeafAggregationCircuit<E>),
@@ -101,7 +101,7 @@ pub enum ZkSyncCircuit<E: Engine, W: WitnessOracle<E>> {
     L1MessagesPubdataHasher(L1MessagesHasherCircuit<E>),
 }
 
-impl<E: Engine,  W: WitnessOracle<E>> Circuit<E> for ZkSyncCircuit<E, W> {
+impl<F: SmallField,  W: WitnessOracle<E>> Circuit<E> for ZkSyncCircuit<E, W> {
     type MainGate = SelectorOptimizedWidth4MainGateWithDNext;
     // always two gates
     fn declare_used_gates() -> Result<Vec<Box<dyn GateInternal<E>>>, SynthesisError> {
@@ -139,7 +139,7 @@ impl<E: Engine,  W: WitnessOracle<E>> Circuit<E> for ZkSyncCircuit<E, W> {
 
 // use sync_vm::*;
 
-impl<E: Engine, W: WitnessOracle<E>> ZkSyncCircuit<E, W> {
+impl<F: SmallField, W: WitnessOracle<E>> ZkSyncCircuit<E, W> {
     pub fn short_description(&self) -> &'static str {
         match &self {
             ZkSyncCircuit::Scheduler(..) => "Scheduler",
@@ -247,7 +247,7 @@ use crate::bellman::plonk::better_better_cs::proof::Proof;
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone(bound = ""))]
 #[serde(bound = "")]
-pub enum ZkSyncProof<E: Engine> {
+pub enum ZkSyncProof<F: SmallField> {
     Scheduler(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
     LeafAggregation(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
     NodeAggregation(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
@@ -269,7 +269,7 @@ pub enum ZkSyncProof<E: Engine> {
     RepeatedWritesPubdataHasher(Proof<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
 }
 
-impl<E: Engine> ZkSyncProof<E> {
+impl<F: SmallField> ZkSyncProof<E> {
 
     pub fn numeric_circuit_type(&self) -> u8 {
         use sync_vm::scheduler::CircuitType;
@@ -379,7 +379,7 @@ use crate::bellman::plonk::better_better_cs::setup::VerificationKey;
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Debug, Clone(bound = ""))]
 #[serde(bound = "")]
-pub enum ZkSyncVerificationKey<E: Engine> {
+pub enum ZkSyncVerificationKey<F: SmallField> {
     Scheduler(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
     LeafAggregation(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
     NodeAggregation(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
@@ -401,7 +401,7 @@ pub enum ZkSyncVerificationKey<E: Engine> {
     RepeatedWritesPubdataHasher(VerificationKey<E, ZkSyncCircuit<E, VmWitnessOracle<E>>>),
 }
 
-impl<E: Engine> ZkSyncVerificationKey<E> {
+impl<F: SmallField> ZkSyncVerificationKey<E> {
     pub fn numeric_circuit_type(&self) -> u8 {
         use sync_vm::scheduler::CircuitType;
 

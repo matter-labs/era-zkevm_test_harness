@@ -80,7 +80,7 @@ mod test {
 
     #[test]
     fn artificial_padding() {
-        use crate::franklin_crypto::plonk::circuit::allocated_num::Num;
+        use cratFanklin_crypto::plonk::circuit::allocated_num::Num;
         use sync_vm::testing::Fr;
         use sync_vm::franklin_crypto::bellman::Field;
 

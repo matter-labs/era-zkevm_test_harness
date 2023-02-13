@@ -12,7 +12,7 @@ pub struct EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction;
 use sync_vm::glue::log_sorter::input::EventsDeduplicatorInstanceWitness;
 use sync_vm::glue::log_sorter::sort_and_deduplicate_events_entry_point;
 
-impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction {
+impl<F: SmallField> ZkSyncUniformSynthesisFunction<E> for EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction {
     type Witness = EventsDeduplicatorInstanceWitness<E>;
     type Config = usize;
     type RoundFunction = GenericHasher<E, RescueParams<E, 2, 3>, 2, 3>;

@@ -11,22 +11,22 @@ pub struct NodeAggregationInstanceSynthesisFunction;
 
 use sync_vm::recursion::node_aggregation::*;
 use sync_vm::recursion::transcript::GenericTranscriptGadget;
-use crate::franklin_crypto::plonk::circuit::bigint::RnsParameters;
+use cratFanklin_crypto::plonk::circuit::bigint::RnsParameters;
 use sync_vm::recursion::recursion_tree::AggregationParameters;
 use sync_vm::recursion::recursion_tree::NUM_LIMBS;
 
-impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for NodeAggregationInstanceSynthesisFunction {
+impl<F: SmallField> ZkSyncUniformSynthesisFunction<E> for NodeAggregationInstanceSynthesisFunction {
     type Witness = NodeAggregationCircuitInstanceWitness<E>;
     type Config = (
         usize, // num proofs this circuit aggregates
         usize, // num proofs that each leaf aggregates
         RnsParameters<E, E::Fq>, 
         AggregationParameters<E, GenericTranscriptGadget<E, RescueParams<E, 2, 3>, 2, 3>, RescueParams<E, 2, 3>, 2, 3>,
-        E::Fr, 
-        Vec<E::Fr>, 
-        Vec<E::Fr>,
+        F, 
+        Vec<F>, 
+        Vec<F>,
         Vec<ZkSyncParametricProof<E>>, 
-        Vec<([E::Fr; NUM_LIMBS], [E::Fr; NUM_LIMBS], [E::Fr; NUM_LIMBS], [E::Fr; NUM_LIMBS])>,
+        Vec<([F; NUM_LIMBS], [F; NUM_LIMBS], [F; NUM_LIMBS], [F; NUM_LIMBS])>,
         Option<[E::G2Affine; 2]>
     );
     type RoundFunction = GenericHasher<E, RescueParams<E, 2, 3>, 2, 3>;
@@ -44,7 +44,7 @@ impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for NodeAggregationInstanceSyn
 }
 
 #[track_caller]
-fn node_aggregation_outer_function<E: Engine, CS: ConstraintSystem<E>, R: CircuitArithmeticRoundFunction<E, 2, 3, StateElement = Num<E>>>(
+fn node_aggregation_outer_function<F: SmallField, CS: ConstraintSystem<E>, R: CircuitArithmeticRoundFunction<E, 2, 3, StateElement = Num<E>>>(
     cs: &mut CS,
     witness: Option<NodeAggregationCircuitInstanceWitness<E>>,
     round_function: &R,
@@ -53,11 +53,11 @@ fn node_aggregation_outer_function<E: Engine, CS: ConstraintSystem<E>, R: Circui
         usize,
         RnsParameters<E, E::Fq>, 
         AggregationParameters<E, GenericTranscriptGadget<E, RescueParams<E, 2, 3>, 2, 3>, RescueParams<E, 2, 3>, 2, 3>,
-        E::Fr, 
-        Vec<E::Fr>, 
-        Vec<E::Fr>,
+        F, 
+        Vec<F>, 
+        Vec<F>,
         Vec<ZkSyncParametricProof<E>>, 
-        Vec<([E::Fr; NUM_LIMBS], [E::Fr; NUM_LIMBS], [E::Fr; NUM_LIMBS], [E::Fr; NUM_LIMBS])>,
+        Vec<([F; NUM_LIMBS], [F; NUM_LIMBS], [F; NUM_LIMBS], [F; NUM_LIMBS])>,
         Option<[E::G2Affine; 2]>
     ),
 ) -> Result<AllocatedNum<E>, SynthesisError> {
@@ -74,7 +74,7 @@ fn node_aggregation_outer_function<E: Engine, CS: ConstraintSystem<E>, R: Circui
         g2_elements
     ) = params;
 
-    let padding_vk_encoding_fixed: [E::Fr; sync_vm::recursion::node_aggregation::VK_ENCODING_LENGTH] = padding_vk_encoding.try_into().unwrap();
+    let padding_vk_encoding_fixed: [F; sync_vm::recursion::node_aggregation::VK_ENCODING_LENGTH] = padding_vk_encoding.try_into().unwrap();
 
     let params = (
         num_proofs_to_aggregate, 

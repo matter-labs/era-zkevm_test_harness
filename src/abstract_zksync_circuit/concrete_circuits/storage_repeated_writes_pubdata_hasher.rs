@@ -15,7 +15,7 @@ use sync_vm::glue::pubdata_hasher::variable_length::hash_pubdata_entry_point_var
 use sync_vm::glue::pubdata_hasher::storage_write_data::REPEATED_STORAGE_WRITE_ENCODING_LENGTH;
 use sync_vm::glue::pubdata_hasher::storage_write_data::RepeatedStorageWriteData;
 
-impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for StorageRepeatedWritesRehasherInstanceSynthesisFunction {
+impl<F: SmallField> ZkSyncUniformSynthesisFunction<E> for StorageRepeatedWritesRehasherInstanceSynthesisFunction {
     type Witness = PubdataHasherInstanceWitness<E, REPEATED_STORAGE_WRITE_ENCODING_LENGTH, 40, RepeatedStorageWriteData<E>>;
     type Config = usize;
     type RoundFunction = GenericHasher<E, RescueParams<E, 2, 3>, 2, 3>;

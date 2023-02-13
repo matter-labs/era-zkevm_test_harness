@@ -220,26 +220,17 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
         assert_eq!(self.current_cycle_counter, current_state.monotonic_cycle_counter);
 
         if self.current_cycle_counter >= self.cycle_counter_of_last_snapshot + self.cycles_to_use_per_snapshot {
-            let is_pending = current_state.pending_port.is_any_pending();
-            if self.current_cycle_counter > self.cycle_counter_of_last_snapshot + self.cycles_to_use_per_snapshot {
-                assert!(!is_pending);
-            }
+            // do it immediatelly
+            let snapshot = VmSnapshot {
+                local_state: current_state.clone(),
+                at_cycle: self.current_cycle_counter
+            };
+            self.vm_snapshots.push(snapshot);
+            tracing::debug!("Made snapshot at cycle {:?}", self.current_cycle_counter);
+            println!("Made snapshot at cycle {:?}", self.current_cycle_counter);
 
-            if !is_pending {
-                // do it immediatelly
-                let snapshot = VmSnapshot {
-                    local_state: current_state.clone(),
-                    at_cycle: self.current_cycle_counter
-                };
-                self.vm_snapshots.push(snapshot);
-                tracing::debug!("Made snapshot at cycle {:?}", self.current_cycle_counter);
-                println!("Made snapshot at cycle {:?}", self.current_cycle_counter);
-
-                // we made a snapshot now, but the cycle itself will be the first one for the next snapshot 
-                self.cycle_counter_of_last_snapshot = current_state.monotonic_cycle_counter;
-            } else {
-                // wait for 1 more cycle
-            }
+            // we made a snapshot now, but the cycle itself will be the first one for the next snapshot 
+            self.cycle_counter_of_last_snapshot = current_state.monotonic_cycle_counter;
         }
 
         // monotonic counter always increases
@@ -258,22 +249,7 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
         }
         // println!("Cycle ends");
     }
-    fn add_sponge_marker(
-        &mut self,
-        _monotonic_cycle_counter: u32,
-        _marker: SpongeExecutionMarker,
-        sponges_range: Range<usize>,
-        _is_pended: bool,
-    ) {
-        // println!("Adding sponges range {:?}", &sponges_range);
-        for el in sponges_range {
-            let is_unique = self.sponge_busy_range.insert(el);
-            if !is_unique {
-                panic!("sponge markers are {:?} and trying to add {:?}", &self.sponge_busy_range, &el);
-            }
-        }
-    }
-
+    
     fn add_memory_query(&mut self, monotonic_cycle_counter: u32, memory_query: MemoryQuery) {
         self.memory_queries
             .push((monotonic_cycle_counter, memory_query));

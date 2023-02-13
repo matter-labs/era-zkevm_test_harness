@@ -1,5 +1,6 @@
-use crate::{ethereum_types::{Address, U256}, witness::{full_block_artifact::FullBlockArtifacts}, utils::calldata_to_aligned_data};
+use crate::{ethereum_types::{Address, U256}, utils::calldata_to_aligned_data};
 use crate::toolset::GeometryConfig;
+use boojum::{field::SmallField, implementations::poseidon_goldilocks::PoseidonGoldilocks};
 use zk_evm::abstractions::Storage;
 use crate::toolset::create_tools;
 use zk_evm::contract_bytecode_to_words;
@@ -11,18 +12,23 @@ use crate::entry_point::*;
 use zk_evm::GenericNoopTracer;
 use crate::witness::oracle::create_artifacts_from_tracer;
 use crate::witness::tree::ZKSyncTestingTree;
-use crate::witness::full_block_artifact::BlockBasicCircuits;
+// use crate::witness::full_block_artifact::BlockBasicCircuits;
 use blake2::Blake2s256;
 use crate::witness::tree::ZkSyncStorageLeaf;
 use crate::witness::tree::BinarySparseStorageTree;
-use crate::witness::full_block_artifact::BlockBasicCircuitsPublicInputs;
+// use crate::witness::full_block_artifact::BlockBasicCircuitsPublicInputs;
 use ::tracing;
+use boojum::algebraic_props::round_function::AlgebraicRoundFunction;
+use boojum::gadgets::poseidon::CircuitRoundFunction;
+
+pub const SCHEDULER_TIMESTAMP: u32 = 1;
 
 /// This is a testing interface that basically will
 /// setup the environment and will run out-of-circuit and then in-circuit
 /// and perform intermediate tests
 pub fn run<
-    R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn256>>, 
+    F: SmallField,
+    R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
     S: Storage
 >(
     caller: Address, // for real block must be zero
@@ -169,7 +175,8 @@ pub fn run<
 
     // dbg!(tools.witness_tracer.vm_snapshots.len());
 
-    let (instance_oracles, artifacts) =
+    // let (instance_oracles, artifacts) =
+    let _ =
         create_artifacts_from_tracer(
             tools.witness_tracer,
             &round_function, 
@@ -327,7 +334,9 @@ pub fn run_with_fixed_params<S: Storage>(
     tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
 ) {
 // ) -> (BlockBasicCircuits<Bn256>, BlockBasicCircuitsPublicInputs<Bn256>, SchedulerCircuitInstanceWitness<Bn256>) {
-    let (_, round_function, _) = create_test_artifacts_with_optimized_gate();
+
+    let round_function = PoseidonGoldilocks;
+
     run(
         caller,
         entry_point_address,

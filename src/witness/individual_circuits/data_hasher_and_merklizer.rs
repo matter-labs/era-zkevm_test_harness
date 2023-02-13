@@ -15,7 +15,7 @@ pub fn compute_pubdata_hasher_witness<
     const ENCODING_ELEMS: usize,
     const ROUNDS: usize,
     I: OutOfCircuitFixedLengthEncodable<E, ENCODING_ELEMS> + BytesSerializable<SERIALIZATION_WIDTH> + CircuitEquivalentReflection<E, Destination = D>,
-    E: Engine,
+    F: SmallField,
     D: CircuitFixedLengthEncodableExt<E, ENCODING_ELEMS> + CircuitFixedLengthDecodableExt<E, ENCODING_ELEMS> + ByteSerializable<E, SERIALIZATION_WIDTH>,
 >(
     simulator: &QueueSimulator<E, I, ENCODING_ELEMS, ROUNDS>,
@@ -83,7 +83,7 @@ pub fn compute_merklizer_witness<
     const ENCODING_ELEMS: usize,
     const ROUNDS: usize,
     I: OutOfCircuitFixedLengthEncodable<E, ENCODING_ELEMS> + BytesSerializable<SERIALIZATION_WIDTH> + CircuitEquivalentReflection<E, Destination = D>,
-    E: Engine,
+    F: SmallField,
     D: CircuitFixedLengthEncodableExt<E, ENCODING_ELEMS> + CircuitFixedLengthDecodableExt<E, ENCODING_ELEMS> + ByteSerializable<E, SERIALIZATION_WIDTH>,
 >(
     simulator: &QueueSimulator<E, I, ENCODING_ELEMS, ROUNDS>,

@@ -23,7 +23,7 @@ pub enum Sha256PrecompileState {
 // In practice the only difficulty is buffer state, everything else is provided by out-of-circuit VM
 
 pub fn sha256_decompose_into_per_circuit_witness<
-E: Engine,
+F: SmallField,
 R: CircuitArithmeticRoundFunction<E, 2, 3>
 >(
     artifacts: &mut FullBlockArtifacts<E>,
@@ -89,7 +89,7 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
 
         let mut hidden_fsm_output_state = Sha256RoundFunctionFSM::<E>::placeholder_witness();
         hidden_fsm_output_state.completed = true;
-        use crate::franklin_crypto::plonk::circuit::hashes_with_tables::sha256::gadgets::Sha256Gadget;
+        use cratFanklin_crypto::plonk::circuit::hashes_with_tables::sha256::gadgets::Sha256Gadget;
 
         use zk_evm::precompiles::sha256::Sha256;
         // internal state is a bit more tricky, it'll be a round over empty input
@@ -100,9 +100,9 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
         let sha256_internal_state_over_empty_buffer =
             zk_evm::precompiles::sha256::transmute_state(internal_state_over_empty_buffer.clone());
 
-        let circuit_hash_internal_state: [E::Fr; 8] = sha256_internal_state_over_empty_buffer
+        let circuit_hash_internal_state: [F; 8] = sha256_internal_state_over_empty_buffer
             .into_iter()
-            .map(|el| u64_to_fe::<E::Fr>(el as u64))
+            .map(|el| u64_to_fe::<F>(el as u64))
             .collect::<Vec<_>>()
             .try_into()
             .unwrap();
@@ -257,9 +257,9 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
                 let state_inner =
                     zk_evm::precompiles::sha256::transmute_state(internal_state.clone());
 
-                let mut circuit_hash_internal_state: [E::Fr; 8] = state_inner
+                let mut circuit_hash_internal_state: [F; 8] = state_inner
                     .into_iter()
-                    .map(|el| u64_to_fe::<E::Fr>(el as u64))
+                    .map(|el| u64_to_fe::<F>(el as u64))
                     .collect::<Vec<_>>()
                     .try_into()
                     .unwrap();
@@ -287,7 +287,7 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
     
                     circuit_hash_internal_state = sha256_internal_state_over_empty_buffer
                         .into_iter()
-                        .map(|el| u64_to_fe::<E::Fr>(el as u64))
+                        .map(|el| u64_to_fe::<F>(el as u64))
                         .collect::<Vec<_>>()
                         .try_into()
                         .unwrap();

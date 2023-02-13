@@ -6,6 +6,7 @@ use crate::entry_point::{create_out_of_circuit_global_context};
 use crate::ethereum_types::*;
 use crate::witness::oracle::create_artifacts_from_tracer;
 use crate::witness::oracle::VmWitnessOracle;
+use boojum::implementations::poseidon_goldilocks::PoseidonGoldilocks;
 use zk_evm::abstractions::*;
 use zk_evm::aux_structures::DecommittmentQuery;
 use zk_evm::aux_structures::*;
@@ -193,13 +194,16 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
     let mut known_contracts = HashMap::new();
     known_contracts.extend(other_contracts.iter().cloned());
 
-    crate::tests::complex_tests::save_predeployed_contracts(
+    save_predeployed_contracts(
         &mut storage_impl,
         &mut tree,
         &known_contracts
     );
 
-    let (basic_block_circuits, basic_block_circuits_inputs, scheduler_input) = run(
+    let round_function = PoseidonGoldilocks;
+
+    // let (basic_block_circuits, basic_block_circuits_inputs, scheduler_input) = run(
+    let _ = run(
         Address::zero(),
         *BOOTLOADER_FORMAL_ADDRESS,
         entry_point_bytecode,

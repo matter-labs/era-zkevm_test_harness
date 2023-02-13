@@ -87,7 +87,7 @@ pub fn bytes_to_u128_le<const N: usize, const M: usize>(bytes: &[u8; N]) -> [u12
     result
 }
 
-use crate::encodings::initial_storage_write::BytesSerializable;
+use crate::encodings::BytesSerializable;
 
 pub fn binary_merklize_set<
     'a, 

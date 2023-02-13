@@ -12,7 +12,7 @@ pub struct Keccak256RoundFunctionInstanceSynthesisFunction;
 use sync_vm::glue::keccak256_round_function_circuit::input::Keccak256RoundFunctionInstanceWitness;
 use sync_vm::glue::keccak256_round_function_circuit::keccak256_round_function_entry_point;
 
-impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for Keccak256RoundFunctionInstanceSynthesisFunction {
+impl<F: SmallField> ZkSyncUniformSynthesisFunction<E> for Keccak256RoundFunctionInstanceSynthesisFunction {
     type Witness = Keccak256RoundFunctionInstanceWitness<E>;
     type Config = usize;
     type RoundFunction = GenericHasher<E, RescueParams<E, 2, 3>, 2, 3>;

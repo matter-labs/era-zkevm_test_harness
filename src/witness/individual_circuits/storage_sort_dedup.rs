@@ -26,7 +26,7 @@ use crate::encodings::log_query::log_query_into_storage_record_witness;
 use crate::encodings::log_query::*;
 
 pub fn compute_storage_dedup_and_sort<
-    E: Engine,
+    F: SmallField,
     R: CircuitArithmeticRoundFunction<E, 2, 3>
 >(
     artifacts: &mut FullBlockArtifacts<E>,
@@ -153,9 +153,9 @@ pub fn compute_storage_dedup_and_sort<
     let num_circuits = it.len();
     let mut results = vec![];
 
-    let mut current_lhs_product = E::Fr::zero();
-    let mut current_rhs_product = E::Fr::zero();
-    let mut previous_packed_key = [E::Fr::zero(); 2];
+    let mut current_lhs_product = F::zero();
+    let mut current_rhs_product = F::zero();
+    let mut previous_packed_key = [F::zero(); 2];
     let mut previous_key = U256::zero();
     let mut previous_timestamp = 0u32;
     let mut cycle_idx = 0u32;
@@ -494,7 +494,7 @@ pub fn compute_storage_dedup_and_sort<
         if sorted_states.len() % per_circuit_capacity != 0 {
             assert!(is_last);
             // circuit does padding, so all previous values must be reset
-            instance_witness.closed_form_input.hidden_fsm_output.previous_packed_key = [E::Fr::zero(); 2];
+            instance_witness.closed_form_input.hidden_fsm_output.previous_packed_key = [F::zero(); 2];
             instance_witness.closed_form_input.hidden_fsm_output.previous_key = BigUint::from(0u64);
             instance_witness.closed_form_input.hidden_fsm_output.previous_address = u160_from_address(Address::default());
             instance_witness.closed_form_input.hidden_fsm_output.previous_shard_id = 0u8;

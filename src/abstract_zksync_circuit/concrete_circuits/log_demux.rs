@@ -12,7 +12,7 @@ pub struct LogDemuxInstanceSynthesisFunction;
 use sync_vm::glue::demux_log_queue::input::LogDemuxerCircuitInstanceWitness;
 use sync_vm::glue::demux_log_queue::demultiplex_storage_logs_enty_point;
 
-impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for LogDemuxInstanceSynthesisFunction {
+impl<F: SmallField> ZkSyncUniformSynthesisFunction<E> for LogDemuxInstanceSynthesisFunction {
     type Witness = LogDemuxerCircuitInstanceWitness<E>;
     type Config = usize;
     type RoundFunction = GenericHasher<E, RescueParams<E, 2, 3>, 2, 3>;

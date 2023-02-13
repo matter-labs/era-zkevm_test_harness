@@ -27,7 +27,7 @@ pub enum Keccak256PrecompileState {
 // In practice the only difficulty is buffer state, everything else is provided by out-of-circuit VM
 
 pub fn keccak256_decompose_into_per_circuit_witness<
-E: Engine,
+F: SmallField,
 R: CircuitArithmeticRoundFunction<E, 2, 3>
 >(
     artifacts: &mut FullBlockArtifacts<E>,
@@ -113,9 +113,9 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
             }
         }
 
-        let keccak_internal_state: [E::Fr; 25] = keccak_internal_state_over_empty_buffer
+        let keccak_internal_state: [F; 25] = keccak_internal_state_over_empty_buffer
             .into_iter()
-            .map(|el| u64_to_fe::<E::Fr>(el))
+            .map(|el| u64_to_fe::<F>(el))
             .collect::<Vec<_>>()
             .try_into()
             .unwrap();
@@ -310,9 +310,9 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
                     }
                 }
 
-                let mut keccak_internal_state: [E::Fr; 25] = keccak_internal_state
+                let mut keccak_internal_state: [F; 25] = keccak_internal_state
                     .into_iter()
-                    .map(|el| u64_to_fe::<E::Fr>(el))
+                    .map(|el| u64_to_fe::<F>(el))
                     .collect::<Vec<_>>()
                     .try_into()
                     .unwrap();
@@ -347,7 +347,7 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
     
                     keccak_internal_state = keccak_internal_state_over_empty_buffer
                         .into_iter()
-                        .map(|el| u64_to_fe::<E::Fr>(el))
+                        .map(|el| u64_to_fe::<F>(el))
                         .collect::<Vec<_>>()
                         .try_into()
                         .unwrap();
@@ -511,13 +511,13 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
 
 //         let initial_memory_state =
 //             FullSpongeLikeQueueState::alloc_from_witness(cs, Some(memory_queue_input_state))?;
-//         let mut memory_queue = MemoryQueriesQueue::from_state(cs, initial_memory_state)?;
+//         let mut memory_queue = MemoryQueriesQueuFom_state(cs, initial_memory_state)?;
 
 //         let initial_requests_queue_state = FixedWidthEncodingGenericQueueState::alloc_from_witness(
 //             cs,
 //             Some(log_queue_input_state),
 //         )?;
-//         let mut requests_queue = StorageLogQueue::from_state(cs, initial_requests_queue_state)?;
+//         let mut requests_queue = StorageLogQueuFom_state(cs, initial_requests_queue_state)?;
 
 //         let final_state = keccak256_precompile_inner(
 //             cs,

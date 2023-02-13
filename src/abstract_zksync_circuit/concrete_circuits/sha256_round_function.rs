@@ -12,7 +12,7 @@ pub struct Sha256RoundFunctionInstanceSynthesisFunction;
 use sync_vm::glue::sha256_round_function_circuit::input::*;
 use sync_vm::glue::sha256_round_function_circuit::sha256_round_function_entry_point;
 
-impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for Sha256RoundFunctionInstanceSynthesisFunction {
+impl<F: SmallField> ZkSyncUniformSynthesisFunction<E> for Sha256RoundFunctionInstanceSynthesisFunction {
     type Witness = Sha256RoundFunctionCircuitInstanceWitness<E>;
     type Config = usize;
     type RoundFunction = GenericHasher<E, RescueParams<E, 2, 3>, 2, 3>;

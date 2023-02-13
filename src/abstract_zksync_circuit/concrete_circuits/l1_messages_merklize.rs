@@ -17,7 +17,7 @@ use sync_vm::scheduler::queues::storage_log::STORAGE_LOG_RECORD_ENCODING_LEN;
 use sync_vm::glue::merkleize_l1_messages::input::MESSAGE_SERIALIZATION_BYTES;
 use sync_vm::scheduler::data_access_functions::StorageLogRecord;
 
-impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for MessagesMerklizerInstanceSynthesisFunction {
+impl<F: SmallField> ZkSyncUniformSynthesisFunction<E> for MessagesMerklizerInstanceSynthesisFunction {
     type Witness = MessagesMerklizerInstanceWitness<E, STORAGE_LOG_RECORD_ENCODING_LEN, MESSAGE_SERIALIZATION_BYTES, StorageLogRecord<E>>;
     type Config = (usize, bool);
     type RoundFunction = GenericHasher<E, RescueParams<E, 2, 3>, 2, 3>;

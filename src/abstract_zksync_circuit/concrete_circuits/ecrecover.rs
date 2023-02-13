@@ -12,7 +12,7 @@ pub struct ECRecoverFunctionInstanceSynthesisFunction;
 use sync_vm::glue::ecrecover_circuit::input::*;
 use sync_vm::glue::ecrecover_circuit::ecrecover_function_entry_point;
 
-impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for ECRecoverFunctionInstanceSynthesisFunction {
+impl<F: SmallField> ZkSyncUniformSynthesisFunction<E> for ECRecoverFunctionInstanceSynthesisFunction {
     type Witness = EcrecoverCircuitInstanceWitness<E>;
     type Config = usize;
     type RoundFunction = GenericHasher<E, RescueParams<E, 2, 3>, 2, 3>;

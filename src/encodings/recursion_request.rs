@@ -1,26 +1,23 @@
 use super::*;
 use num_bigint::BigUint;
-use sync_vm::franklin_crypto::plonk::circuit::bigint::biguint_to_fe;
-use sync_vm::utils::compute_shifts;
-use sync_vm::vm::vm_state::saved_contract_context::scale_and_accumulate;
 
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone, Copy, Debug)]
 #[serde(bound = "")]
-pub struct RecursionRequest<E: Engine> {
+pub struct RecursionRequest<F: SmallField> {
     pub circuit_type: u8,
-    pub public_input: E::Fr,
+    pub public_input: F,
 }
 
-impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 2> for RecursionRequest<E> {
+impl<F: SmallField> OutOfCircuitFixedLengthEncodable<E, 2> for RecursionRequest<E> {
     fn encoding_witness(&self) -> [<E>::Fr; 2] {
-        let shifts = compute_shifts::<E::Fr>();
+        let shifts = compute_shifts::<F>();
 
-        let mut lc = E::Fr::zero();
+        let mut lc = F::zero();
         let mut shift = 0;
         scale_and_accumulate::<E, _>(&mut lc, self.circuit_type, &shifts, shift);
         shift += 8;
-        assert!(shift <= E::Fr::CAPACITY as usize);
+        assert!(shift <= F::CAPACITY as usize);
         let el0 = lc;
 
         let el1 = self.public_input;

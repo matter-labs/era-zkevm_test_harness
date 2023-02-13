@@ -1,304 +1,365 @@
-use sync_vm::franklin_crypto::plonk::circuit::utils::u64_to_fe;
-use sync_vm::traits::CSWitnessable;
-use sync_vm::utils::compute_shifts;
 use zk_evm::aux_structures::LogQuery;
 use zk_evm::ethereum_types::H160;
 
-use crate::utils::{u160_from_address, biguint_from_u256};
 use crate::witness::sort_storage_access::LogQueryLikeWithExtendedEnumeration;
 
 use super::*;
 
-use sync_vm::vm::primitives::small_uints::IntoFr;
-use sync_vm::vm::vm_state::saved_contract_context::scale_and_accumulate;
+pub fn comparison_key<F: SmallField>(query: &LogQuery) -> Key<14> {
+    let key = decompose_u256_as_u32x8(query.key);
+    let address = decompose_address_as_u32x5(query.address);
 
-// impl<E: Engine> IntoFr<E> for H160 {
-//     fn into_fr(self) -> E::Fr {
-//         let lowest = u64::from_be_bytes(self.0[0..8].try_into().unwrap());
-//         let mid = u64::from_be_bytes(self.0[8..16].try_into().unwrap());
-//         let highest = u32::from_be_bytes(self.0[16..20].try_into().unwrap());
+    let le_words = [
+        key[0],
+        key[1],
+        key[2],
+        key[3],
+        key[4],
+        key[5],
+        key[6],
+        key[7],
+        address[0],
+        address[1],
+        address[2],
+        address[3],
+        address[4],
+        query.shard_id as u32,
+    ];
 
-//         let mut repr = E::Fr::zero().into_repr();
-//         repr.as_mut()[0] = lowest;
-//         repr.as_mut()[1] = mid;
-//         repr.as_mut()[2] = highest as u32;
+    Key(le_words)
+}
 
-//         E::Fr::from_repr(repr).unwrap()
+pub fn event_comparison_key(query: &LogQuery) -> Key<2> {
+    let le_words = [
+        query.rollback as u32,
+        query.timestamp.0,
+    ];
+
+    Key(le_words)
+}
+
+// use sync_vm::glue::storage_validity_by_grand_product::{EXTENDED_TIMESTAMP_ENCODING_OFFSET, EXTENDED_TIMESTAMP_ENCODING_ELEMENT, TimestampedStorageLogRecord, TimestampedStorageLogRecordWitness};
+
+use boojum::zksync::base_structures::log_query::LOG_QUERY_PACKED_WIDTH;
+
+impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, LOG_QUERY_PACKED_WIDTH> for LogQuery {
+    fn encoding_witness(&self) -> [F; LOG_QUERY_PACKED_WIDTH] {
+        debug_assert!(F::CAPACITY_BITS >= 56);
+        // we decompose "key" and mix it into other limbs because with high probability
+        // in VM decomposition of "key" will always exist beforehand
+
+        let mut key_bytes = [0u8; 32];
+        self.key.to_little_endian(&mut key_bytes);
+        let mut address_bytes = self.address.0;
+        address_bytes.reverse();
+
+        let read_value = decompose_u256_as_u32x8(self.read_value);
+        let written_value = decompose_u256_as_u32x8(self.written_value);
+
+        // we want to pack tightly, so we "base" our packing on read and written values
+
+        let v0 = linear_combination(
+            &[
+                (read_value[0].into_field(), F::ONE),
+                (key_bytes[0].into_field(), F::from_u64_unchecked(1u64 << 32)),
+                (key_bytes[1].into_field(), F::from_u64_unchecked(1u64 << 40)),
+                (key_bytes[2].into_field(), F::from_u64_unchecked(1u64 << 48)),
+            ],
+        );
+
+        let v1 = linear_combination(
+            &[
+                (read_value[1].into_field(), F::ONE),
+                (key_bytes[3].into_field(), F::from_u64_unchecked(1u64 << 32)),
+                (key_bytes[4].into_field(), F::from_u64_unchecked(1u64 << 40)),
+                (key_bytes[5].into_field(), F::from_u64_unchecked(1u64 << 48)),
+            ],
+        );
+
+        let v2 = linear_combination(
+            &[
+                (read_value[2].into_field(), F::ONE),
+                (key_bytes[6].into_field(), F::from_u64_unchecked(1u64 << 32)),
+                (key_bytes[7].into_field(), F::from_u64_unchecked(1u64 << 40)),
+                (key_bytes[8].into_field(), F::from_u64_unchecked(1u64 << 48)),
+            ],
+        );
+
+        let v3 = linear_combination(
+            &[
+                (read_value[3].into_field(), F::ONE),
+                (key_bytes[9].into_field(), F::from_u64_unchecked(1u64 << 32)),
+                (key_bytes[10].into_field(), F::from_u64_unchecked(1u64 << 40)),
+                (key_bytes[11].into_field(), F::from_u64_unchecked(1u64 << 48)),
+            ],
+        );
+
+        let v4 = linear_combination(
+            &[
+                (read_value[4].into_field(), F::ONE),
+                (key_bytes[12].into_field(), F::from_u64_unchecked(1u64 << 32)),
+                (key_bytes[13].into_field(), F::from_u64_unchecked(1u64 << 40)),
+                (key_bytes[14].into_field(), F::from_u64_unchecked(1u64 << 48)),
+            ],
+        );
+
+        let v5 = linear_combination(
+            &[
+                (read_value[5].into_field(), F::ONE),
+                (key_bytes[15].into_field(), F::from_u64_unchecked(1u64 << 32)),
+                (key_bytes[16].into_field(), F::from_u64_unchecked(1u64 << 40)),
+                (key_bytes[17].into_field(), F::from_u64_unchecked(1u64 << 48)),
+            ],
+        );
+
+        let v6 = linear_combination(
+            &[
+                (read_value[6].into_field(), F::ONE),
+                (key_bytes[18].into_field(), F::from_u64_unchecked(1u64 << 32)),
+                (key_bytes[19].into_field(), F::from_u64_unchecked(1u64 << 40)),
+                (key_bytes[20].into_field(), F::from_u64_unchecked(1u64 << 48)),
+            ],
+        );
+
+        let v7 = linear_combination(
+            &[
+                (read_value[7].into_field(), F::ONE),
+                (key_bytes[21].into_field(), F::from_u64_unchecked(1u64 << 32)),
+                (key_bytes[22].into_field(), F::from_u64_unchecked(1u64 << 40)),
+                (key_bytes[23].into_field(), F::from_u64_unchecked(1u64 << 48)),
+            ],
+        );
+
+        // continue with written value
+
+        let v8 = linear_combination(
+            &[
+                (written_value[0].into_field(), F::ONE),
+                (key_bytes[24].into_field(), F::from_u64_unchecked(1u64 << 32)),
+                (key_bytes[25].into_field(), F::from_u64_unchecked(1u64 << 40)),
+                (key_bytes[26].into_field(), F::from_u64_unchecked(1u64 << 48)),
+            ],
+        );
+
+        let v9 = linear_combination(
+            &[
+                (written_value[1].into_field(), F::ONE),
+                (key_bytes[27].into_field(), F::from_u64_unchecked(1u64 << 32)),
+                (key_bytes[28].into_field(), F::from_u64_unchecked(1u64 << 40)),
+                (key_bytes[29].into_field(), F::from_u64_unchecked(1u64 << 48)),
+            ],
+        );
+
+        // continue mixing bytes, now from "address"
+
+        let v10 = linear_combination(
+            &[
+                (written_value[2].into_field(), F::ONE),
+                (key_bytes[30].into_field(), F::from_u64_unchecked(1u64 << 32)),
+                (key_bytes[31].into_field(), F::from_u64_unchecked(1u64 << 40)),
+                (
+                    address_bytes[0].into_field(),
+                    F::from_u64_unchecked(1u64 << 48),
+                ),
+            ],
+        );
+
+        let v11 = linear_combination(
+            &[
+                (written_value[3].into_field(), F::ONE),
+                (
+                    address_bytes[1].into_field(),
+                    F::from_u64_unchecked(1u64 << 32),
+                ),
+                (
+                    address_bytes[2].into_field(),
+                    F::from_u64_unchecked(1u64 << 40),
+                ),
+                (
+                    address_bytes[3].into_field(),
+                    F::from_u64_unchecked(1u64 << 48),
+                ),
+            ],
+        );
+
+        let v12 = linear_combination(
+            &[
+                (written_value[4].into_field(), F::ONE),
+                (
+                    address_bytes[4].into_field(),
+                    F::from_u64_unchecked(1u64 << 32),
+                ),
+                (
+                    address_bytes[5].into_field(),
+                    F::from_u64_unchecked(1u64 << 40),
+                ),
+                (
+                    address_bytes[6].into_field(),
+                    F::from_u64_unchecked(1u64 << 48),
+                ),
+            ],
+        );
+
+        let v13 = linear_combination(
+            &[
+                (written_value[5].into_field(), F::ONE),
+                (
+                    address_bytes[7].into_field(),
+                    F::from_u64_unchecked(1u64 << 32),
+                ),
+                (
+                    address_bytes[8].into_field(),
+                    F::from_u64_unchecked(1u64 << 40),
+                ),
+                (
+                    address_bytes[9].into_field(),
+                    F::from_u64_unchecked(1u64 << 48),
+                ),
+            ],
+        );
+
+        let v14 = linear_combination(
+            &[
+                (written_value[6].into_field(), F::ONE),
+                (
+                    address_bytes[10].into_field(),
+                    F::from_u64_unchecked(1u64 << 32),
+                ),
+                (
+                    address_bytes[11].into_field(),
+                    F::from_u64_unchecked(1u64 << 40),
+                ),
+                (
+                    address_bytes[12].into_field(),
+                    F::from_u64_unchecked(1u64 << 48),
+                ),
+            ],
+        );
+
+        let v15 = linear_combination(
+            &[
+                (written_value[7].into_field(), F::ONE),
+                (
+                    address_bytes[13].into_field(),
+                    F::from_u64_unchecked(1u64 << 32),
+                ),
+                (
+                    address_bytes[14].into_field(),
+                    F::from_u64_unchecked(1u64 << 40),
+                ),
+                (
+                    address_bytes[15].into_field(),
+                    F::from_u64_unchecked(1u64 << 48),
+                ),
+            ],
+        );
+
+        // now we can pack using some other "large" items as base
+
+        let v16 = linear_combination(
+            &[
+                (self.timestamp.0.into_field(), F::ONE),
+                (
+                    address_bytes[16].into_field(),
+                    F::from_u64_unchecked(1u64 << 32),
+                ),
+                (
+                    address_bytes[17].into_field(),
+                    F::from_u64_unchecked(1u64 << 40),
+                ),
+                (
+                    address_bytes[18].into_field(),
+                    F::from_u64_unchecked(1u64 << 48),
+                ),
+            ],
+        );
+
+        let v17 = linear_combination(
+            &[
+                (self.tx_number_in_block.into_field(), F::ONE), // NOTE: u16 out of circuit and u32 in circuit
+                (
+                    address_bytes[19].into_field(),
+                    F::from_u64_unchecked(1u64 << 32),
+                ),
+                (self.aux_byte.into_field(), F::from_u64_unchecked(1u64 << 40)),
+                (self.shard_id.into_field(), F::from_u64_unchecked(1u64 << 48)),
+            ],
+        );
+
+        let v18 = linear_combination(
+            &[
+                (self.rw_flag.into_field(), F::ONE),
+                (self.is_service.into_field(), F::TWO),
+            ],
+        );
+
+        // and the final into_field() is just rollback flag itself
+
+        let v19 = self.rollback.into_field();
+
+        [
+            v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18,
+            v19,
+        ]
+
+    }
+}
+
+// pub type LogQueryWithExtendedEnumeration = LogQueryLikeWithExtendedEnumeration<LogQuery>;
+
+// impl<F: SmallField> OutOfCircuitFixedLengthEncodable<E, 5> for LogQueryWithExtendedEnumeration {
+//     fn encoding_witness(&self) -> [<E>::Fr; 5] {
+//         let shifts = compute_shifts::<F>();
+
+//         let LogQueryWithExtendedEnumeration {
+//             raw_query,
+//             extended_timestamp
+//         } = self;
+
+//         let mut result = <LogQuery as OutOfCircuitFixedLengthEncodable<E, 5>>::encoding_witness(raw_query);
+
+//         let mut shift = EXTENDED_TIMESTAMP_ENCODING_OFFSET;
+//         scale_and_accumulate::<E, _>(&mut result[EXTENDED_TIMESTAMP_ENCODING_ELEMENT], *extended_timestamp, &shifts, shift);
+//         shift += 32;
+//         assert!(shift <= F::CAPACITY as usize);
+
+//         // dbg!(&result);
+        
+//         result
 //     }
 // }
 
-// // BE order:
-// // the whole structure can be placed in five field elements:
-// // el0 = [r_w_flag | aux_byte | log_idx | key0 | actor_address]
-// // el1 = [trx_idx | key1 | target_address]
-// // el2 = [rvalue32 | rvalue31 | rvalue30 | rvalue2 | rvalue1 | rvalue0]
-// // el3 = [wvalue32 | wvalue31 | wvalue30 | wvalue2 | wvalue1 | wvalue0]
-// // el4 = [target_is_zkporter | is_service | is_revert | wvalue33 | rvalue33 | key3 | key2]
+pub type LogQueueSimulator<F> = QueueSimulator<F, LogQuery, QUEUE_STATE_WIDTH, LOG_QUERY_PACKED_WIDTH, 3>;
+pub type LogQueueState<F> = QueueIntermediateStates<F, QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH, 3>;
 
-// let shifts = compute_shifts::<E::Fr>();
+// pub type LogWithExtendedEnumerationQueueSimulator<E> = QueueSimulator<E, LogQueryWithExtendedEnumeration, 5, 3>;
+// pub type LogWithExtendedEnumerationQueueState<E> = QueueIntermediateStates<E, 3, 3>;
 
-// let mut lc = LinearCombination::zero();
-// let mut shift = 0;
-// lc.add_assign_number_with_coeff(&self.address.inner, shifts[shift]);
-// shift += 160;
-// lc.add_assign_number_with_coeff(&self.key.inner[0].inner, shifts[shift]);
-// shift += 64;
-// lc.add_assign_number_with_coeff(&self.shard_id.inner, shifts[shift]);
-// shift += 8;
-// lc.add_assign_number_with_coeff(&self.aux_byte.inner, shifts[shift]);
-// shift += 8;
-// lc.add_assign_boolean_with_coeff(&self.r_w_flag, shifts[shift]);
-// shift += 1;
-// //dbg!(shift);
-// assert!(shift <= E::Fr::CAPACITY as usize);
-// let el0 = lc.into_num(cs)?;
+pub fn log_query_into_circuit_log_query_witness<F: SmallField>(query: &LogQuery) 
+    -> <boojum::zksync::base_structures::log_query::LogQuery<F> as CSAllocatable<F>>::Witness {
+    use boojum::zksync::base_structures::log_query::LogQueryWitness;
 
-// let mut lc = LinearCombination::zero();
-// let mut shift = 0;
-// lc.add_assign_number_with_coeff(&self.key.inner[1].inner, shifts[shift]);
-// shift += 64;
-// lc.add_assign_number_with_coeff(&self.key.inner[2].inner, shifts[shift]);
-// shift += 64;
-// lc.add_assign_number_with_coeff(&self.key.inner[3].inner, shifts[shift]);
-// shift += 64;
-// //dbg!(shift);
-// assert!(shift <= E::Fr::CAPACITY as usize);
-// let el1 = lc.into_num(cs)?;
-
-// let mut lc = LinearCombination::zero();
-// let mut shift = 0;
-// lc.add_assign_number_with_coeff(&self.read_value.inner[0].inner, shifts[shift]);
-// shift += 64;
-// lc.add_assign_number_with_coeff(&self.read_value.inner[1].inner, shifts[shift]);
-// shift += 64;
-// lc.add_assign_number_with_coeff(&self.read_value.inner[2].inner, shifts[shift]);
-// shift += 64;
-// //dbg!(shift);
-// assert!(shift <= E::Fr::CAPACITY as usize);
-// let el2 = lc.into_num(cs)?;
-
-// let mut lc = LinearCombination::zero();
-// let mut shift = 0;
-// lc.add_assign_number_with_coeff(&self.written_value.inner[0].inner, shifts[shift]);
-// shift += 64;
-// lc.add_assign_number_with_coeff(&self.written_value.inner[1].inner, shifts[shift]);
-// shift += 64;
-// lc.add_assign_number_with_coeff(&self.written_value.inner[2].inner, shifts[shift]);
-// shift += 64;
-// //dbg!(shift);
-// assert!(shift <= E::Fr::CAPACITY as usize);
-// let el3 = lc.into_num(cs)?;
-
-// let mut lc = LinearCombination::zero();
-// let mut shift = 0;
-// lc.add_assign_number_with_coeff(&self.read_value.inner[2].inner, shifts[shift]);
-// shift += 64;
-// lc.add_assign_number_with_coeff(&self.written_value.inner[3].inner, shifts[shift]);
-// shift += 64;
-// lc.add_assign_number_with_coeff(&self.tx_number_in_block.inner, shifts[shift]);
-// shift += 16;
-// lc.add_assign_number_with_coeff(&self.timestamp.inner, shifts[shift]);
-// shift += 32;
-// lc.add_assign_boolean_with_coeff(&self.is_service, shifts[shift]);
-// shift += 1;
-// if with_revert {
-//     lc.add_assign_boolean_with_coeff(&self.rollback, shifts[shift]);
-// }
-// let revert_falg_offset = shifts[shift];
-// shift += 1;
-
-// //dbg!(shift);
-// assert!(shift <= E::Fr::CAPACITY as usize);
-
-// let el4 = lc.into_num(cs)?;
-
-// Ok(([el0, el1, el2, el3, el4], revert_falg_offset))
-
-use sync_vm::glue::storage_validity_by_grand_product::{EXTENDED_TIMESTAMP_ENCODING_OFFSET, EXTENDED_TIMESTAMP_ENCODING_ELEMENT, TimestampedStorageLogRecord, TimestampedStorageLogRecordWitness};
-
-impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 5> for LogQuery {
-    fn encoding_witness(&self) -> [<E>::Fr; 5] {
-        use crate::utils::*;
-
-        let shifts = compute_shifts::<E::Fr>();
-
-        let mut lc = E::Fr::zero();
-        let mut shift = 0;
-        scale_and_accumulate::<E, _>(&mut lc, u160_from_address(self.address), &shifts, shift);
-        shift += 160;
-        scale_and_accumulate::<E, _>(&mut lc, self.key.0[0], &shifts, shift);
-        shift += 64;
-        scale_and_accumulate::<E, _>(&mut lc, self.shard_id, &shifts, shift);
-        shift += 8;
-        scale_and_accumulate::<E, _>(&mut lc, self.aux_byte, &shifts, shift);
-        shift += 8;
-        scale_and_accumulate::<E, _>(&mut lc, self.rw_flag, &shifts, shift);
-        shift += 1;
-        assert!(shift <= E::Fr::CAPACITY as usize);
-        let el0 = lc;
-
-        let mut lc = E::Fr::zero();
-        let mut shift = 0;
-        scale_and_accumulate::<E, _>(&mut lc, self.key.0[1], &shifts, shift);
-        shift += 64;
-        scale_and_accumulate::<E, _>(&mut lc, self.key.0[2], &shifts, shift);
-        shift += 64;
-        scale_and_accumulate::<E, _>(&mut lc, self.key.0[3], &shifts, shift);
-        shift += 64;
-        assert!(shift <= E::Fr::CAPACITY as usize);
-        assert_eq!(shift, EXTENDED_TIMESTAMP_ENCODING_OFFSET);
-        let el1 = lc;
-
-        let mut lc = E::Fr::zero();
-        let mut shift = 0;
-        scale_and_accumulate::<E, _>(&mut lc, self.read_value.0[0], &shifts, shift);
-        shift += 64;
-        scale_and_accumulate::<E, _>(&mut lc, self.read_value.0[1], &shifts, shift);
-        shift += 64;
-        scale_and_accumulate::<E, _>(&mut lc, self.read_value.0[2], &shifts, shift);
-        shift += 64;
-        //dbg!(shift);
-        assert!(shift <= E::Fr::CAPACITY as usize);
-        let el2 = lc;
-
-        let mut lc = E::Fr::zero();
-        let mut shift = 0;
-        scale_and_accumulate::<E, _>(&mut lc, self.written_value.0[0], &shifts, shift);
-        shift += 64;
-        scale_and_accumulate::<E, _>(&mut lc, self.written_value.0[1], &shifts, shift);
-        shift += 64;
-        scale_and_accumulate::<E, _>(&mut lc, self.written_value.0[2], &shifts, shift);
-        shift += 64;
-        assert!(shift <= E::Fr::CAPACITY as usize);
-        let el3 = lc;
-
-        let mut lc = E::Fr::zero();
-        let mut shift = 0;
-        scale_and_accumulate::<E, _>(&mut lc, self.read_value.0[3], &shifts, shift);
-        shift += 64;
-        scale_and_accumulate::<E, _>(&mut lc, self.written_value.0[3], &shifts, shift);
-        shift += 64;
-        scale_and_accumulate::<E, _>(&mut lc, self.tx_number_in_block, &shifts, shift);
-        shift += 16;
-        scale_and_accumulate::<E, _>(&mut lc, self.timestamp.0, &shifts, shift);
-        shift += 32;
-        scale_and_accumulate::<E, _>(&mut lc, self.is_service, &shifts, shift);
-        shift += 1;
-        scale_and_accumulate::<E, _>(&mut lc, self.rollback, &shifts, shift);
-        shift += 1;
-        assert!(shift <= E::Fr::CAPACITY as usize);
-
-        let el4 = lc;
-
-        // if self.address.0[19] == 0x02 {
-            // dbg!([el0, el1, el2, el3, el4]);
-        // }
-
-        [el0, el1, el2, el3, el4]
-    }
-}
-
-pub type LogQueryWithExtendedEnumeration = LogQueryLikeWithExtendedEnumeration<LogQuery>;
-
-impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 5> for LogQueryWithExtendedEnumeration {
-    fn encoding_witness(&self) -> [<E>::Fr; 5] {
-        let shifts = compute_shifts::<E::Fr>();
-
-        let LogQueryWithExtendedEnumeration {
-            raw_query,
-            extended_timestamp
-        } = self;
-
-        let mut result = <LogQuery as OutOfCircuitFixedLengthEncodable<E, 5>>::encoding_witness(raw_query);
-
-        let mut shift = EXTENDED_TIMESTAMP_ENCODING_OFFSET;
-        scale_and_accumulate::<E, _>(&mut result[EXTENDED_TIMESTAMP_ENCODING_ELEMENT], *extended_timestamp, &shifts, shift);
-        shift += 32;
-        assert!(shift <= E::Fr::CAPACITY as usize);
-
-        // dbg!(&result);
-        
-        result
-    }
-}
-
-pub fn comparison_key<E: Engine>(query: &LogQuery) -> [E::Fr; 2] {
-    use num_bigint::BigUint;
-    use crate::franklin_crypto::plonk::circuit::bigint::biguint_to_fe;
-
-    let mut k0 = BigUint::from(0u64);
-    // lowest 192 bits of key
-    k0 += BigUint::from(query.key.0[2]);
-    k0 <<= 64;
-    k0 += BigUint::from(query.key.0[1]);
-    k0 <<= 64;
-    k0 += BigUint::from(query.key.0[0]);
-
-    // rest of key, address, and shard
-    let mut k1 = BigUint::from(0u64);
-    k1 += BigUint::from(query.shard_id as u64);
-    k1 <<= 160;
-    k1 += BigUint::from_bytes_be(&query.address.0);
-    k1 <<= 64;
-    k1 += BigUint::from(query.key.0[3]);
-
-    [biguint_to_fe::<E::Fr>(k0), biguint_to_fe::<E::Fr>(k1)]
-}
-
-pub fn event_comparison_key<E: Engine>(query: &LogQuery) -> E::Fr {
-    let mut k0: u64 = query.timestamp.0 as u64;
-    k0 <<= 1;
-    k0 += query.rollback as u64;
-
-    u64_to_fe(k0)
-}
-
-pub type LogQueueSimulator<E> = QueueSimulator<E, LogQuery, 5, 3>;
-pub type LogQueueState<E> = QueueIntermediateStates<E, 3, 3>;
-
-pub type LogWithExtendedEnumerationQueueSimulator<E> = QueueSimulator<E, LogQueryWithExtendedEnumeration, 5, 3>;
-pub type LogWithExtendedEnumerationQueueState<E> = QueueIntermediateStates<E, 3, 3>;
-
-use sync_vm::scheduler::data_access_functions::StorageLogRecord;
-
-pub fn log_query_into_storage_record_witness<E: Engine>(query: &LogQuery) -> <StorageLogRecord<E> as CSWitnessable<E>>::Witness {
-    use sync_vm::scheduler::queues::StorageLogRecordWitness;
-
-    StorageLogRecordWitness {
-        address: u160_from_address(query.address),
-        key: biguint_from_u256(query.key),
-        read_value: biguint_from_u256(query.read_value),
-        written_value: biguint_from_u256(query.written_value),
-        r_w_flag: query.rw_flag,
+    LogQueryWitness {
+        address: query.address,
+        key: query.key,
+        read_value: query.read_value,
+        written_value: query.written_value,
+        rw_flag: query.rw_flag,
         aux_byte: query.aux_byte,
         rollback: query.rollback,
         is_service: query.is_service,
         shard_id: query.shard_id,
-        tx_number_in_block: query.tx_number_in_block,
+        tx_number_in_block: query.tx_number_in_block as u32,
         timestamp: query.timestamp.0,
-        _marker: std::marker::PhantomData
     }
 }
 
-pub fn log_query_into_timestamped_storage_record_witness<E: Engine>(query: &LogQueryWithExtendedEnumeration) -> <TimestampedStorageLogRecord<E> as CSWitnessable<E>>::Witness {
-    use sync_vm::scheduler::queues::StorageLogRecordWitness;
-
-    TimestampedStorageLogRecordWitness {
-        record: log_query_into_storage_record_witness(&query.raw_query),
-        timestamp: query.extended_timestamp,
+impl<F: SmallField> CircuitEquivalentReflection<F> for LogQuery {
+    type Destination = boojum::zksync::base_structures::log_query::LogQuery<F>;
+    fn reflect(&self) -> <Self::Destination as CSAllocatable<F>>::Witness {
+        log_query_into_circuit_log_query_witness(self)
     }
 }
-
-use super::initial_storage_write::CircuitEquivalentReflection;
-
-impl<E: Engine> CircuitEquivalentReflection<E> for LogQuery {
-    type Destination = StorageLogRecord<E>;
-    fn reflect(&self) -> <Self::Destination as CSWitnessable<E>>::Witness {
-        log_query_into_storage_record_witness(self)
-    }
-}
-
-use super::initial_storage_write::BytesSerializable;
 
 // for purposes of L1 messages
 impl BytesSerializable<88> for LogQuery {
@@ -318,7 +379,6 @@ impl BytesSerializable<88> for LogQuery {
         result[offset..(offset + bytes_be.len())].copy_from_slice(&bytes_be);
         offset += bytes_be.len();
 
-        
         let mut bytes_be = [0u8; 32];
         self.key.to_big_endian(&mut bytes_be);
         result[offset..(offset + bytes_be.len())].copy_from_slice(&bytes_be);
@@ -334,3 +394,12 @@ impl BytesSerializable<88> for LogQuery {
         result
     }
 }
+
+// pub fn log_query_into_timestamped_storage_record_witness<F: SmallField>(query: &LogQueryWithExtendedEnumeration) -> <TimestampedStorageLogRecord<E> as CSWitnessable<E>>::Witness {
+//     use sync_vm::scheduler::queues::StorageLogRecordWitness;
+
+//     TimestampedStorageLogRecordWitness {
+//         record: log_query_into_storage_record_witness(&query.raw_query),
+//         timestamp: query.extended_timestamp,
+//     }
+// }

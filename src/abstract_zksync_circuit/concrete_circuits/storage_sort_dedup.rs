@@ -12,7 +12,7 @@ pub struct StorageSortAndDedupInstanceSynthesisFunction;
 use sync_vm::glue::storage_validity_by_grand_product::input::StorageDeduplicatorInstanceWitness;
 use sync_vm::glue::storage_validity_by_grand_product::sort_and_deduplicate_storage_access_entry_point;
 
-impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for StorageSortAndDedupInstanceSynthesisFunction {
+impl<F: SmallField> ZkSyncUniformSynthesisFunction<E> for StorageSortAndDedupInstanceSynthesisFunction {
     type Witness = StorageDeduplicatorInstanceWitness<E>;
     type Config = usize;
     type RoundFunction = GenericHasher<E, RescueParams<E, 2, 3>, 2, 3>;

@@ -57,7 +57,7 @@ pub struct BlockContentHeader {
     pub auxilary_output: BlockAuxilaryOutput,
 }
 
-impl<E: Engine> CircuitEquivalentReflection<E> for PerShardState {
+impl<F: SmallField> CircuitEquivalentReflection<E> for PerShardState {
     type Destination = sync_vm::scheduler::block_header::PerShardState<E>;
 
     fn reflect(&self) -> <Self::Destination as sync_vm::traits::CSWitnessable<E>>::Witness {
@@ -81,7 +81,7 @@ impl PerShardState {
     }
 }
 
-impl<E: Engine> CircuitEquivalentReflection<E> for BlockPassthroughData {
+impl<F: SmallField> CircuitEquivalentReflection<E> for BlockPassthroughData {
     type Destination = sync_vm::scheduler::block_header::BlockPassthroughData<E>;
 
     fn reflect(&self) -> <Self::Destination as sync_vm::traits::CSWitnessable<E>>::Witness {
@@ -120,7 +120,7 @@ impl BlockPassthroughData {
     }
 }
 
-impl<E: Engine> CircuitEquivalentReflection<E> for BlockMetaParameters {
+impl<F: SmallField> CircuitEquivalentReflection<E> for BlockMetaParameters {
     type Destination = sync_vm::scheduler::block_header::BlockMetaParameters<E>;
 
     fn reflect(&self) -> <Self::Destination as sync_vm::traits::CSWitnessable<E>>::Witness {
@@ -155,7 +155,7 @@ impl BlockMetaParameters {
     }
 }
 
-impl<E: Engine> CircuitEquivalentReflection<E> for BlockAuxilaryOutput {
+impl<F: SmallField> CircuitEquivalentReflection<E> for BlockAuxilaryOutput {
     type Destination = sync_vm::scheduler::block_header::BlockAuxilaryOutput<E>;
 
     fn reflect(&self) -> <Self::Destination as sync_vm::traits::CSWitnessable<E>>::Witness {
@@ -270,7 +270,7 @@ pub fn block_proof_input(
 fn test_equality() -> Result<(), SynthesisError> {
     use sync_vm::scheduler::block_header::keccak_output_into_bytes;
     use sync_vm::circuit_structures::byte::Byte;
-    use crate::franklin_crypto::plonk::circuit::tables::inscribe_default_range_table_for_bit_width_over_first_three_columns;
+    use cratFanklin_crypto::plonk::circuit::tables::inscribe_default_range_table_for_bit_width_over_first_three_columns;
 
     let (mut cs_outer, _, _) = create_test_artifacts_with_optimized_gate();
     use franklin_crypto::plonk::circuit::hashes_with_tables::keccak::gadgets::Keccak256Gadget;
@@ -296,7 +296,7 @@ fn test_equality() -> Result<(), SynthesisError> {
         cs.add_table(bitwise_logic_table)?;
     };
 
-    use crate::franklin_crypto::plonk::circuit::tables::RANGE_CHECK_SINGLE_APPLICATION_TABLE_NAME;
+    use cratFanklin_crypto::plonk::circuit::tables::RANGE_CHECK_SINGLE_APPLICATION_TABLE_NAME;
 
     let keccak_gadget = Keccak256Gadget::new(
         cs, 

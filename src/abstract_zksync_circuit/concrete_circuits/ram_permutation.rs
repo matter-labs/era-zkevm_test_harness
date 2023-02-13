@@ -12,7 +12,7 @@ pub struct RAMPermutationInstanceSynthesisFunction;
 use sync_vm::glue::ram_permutation::RamPermutationCircuitInstanceWitness;
 use sync_vm::glue::ram_permutation::ram_permutation_entry_point;
 
-impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for RAMPermutationInstanceSynthesisFunction {
+impl<F: SmallField> ZkSyncUniformSynthesisFunction<E> for RAMPermutationInstanceSynthesisFunction {
     type Witness = RamPermutationCircuitInstanceWitness<E>;
     type Config = usize;
     type RoundFunction = GenericHasher<E, RescueParams<E, 2, 3>, 2, 3>;

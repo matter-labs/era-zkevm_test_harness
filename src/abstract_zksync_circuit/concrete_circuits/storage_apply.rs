@@ -13,7 +13,7 @@ pub struct StorageApplicationInstanceSynthesisFunction;
 use sync_vm::glue::storage_application::input::StorageApplicationCircuitInstanceWitness;
 use sync_vm::glue::storage_application::storage_applicator_entry_point;
 
-impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for StorageApplicationInstanceSynthesisFunction {
+impl<F: SmallField> ZkSyncUniformSynthesisFunction<E> for StorageApplicationInstanceSynthesisFunction {
     type Witness = StorageApplicationCircuitInstanceWitness<E>;
     type Config = (usize, bool);
     type RoundFunction = GenericHasher<E, RescueParams<E, 2, 3>, 2, 3>;

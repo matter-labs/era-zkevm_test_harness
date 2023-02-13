@@ -16,7 +16,7 @@ use sync_vm::glue::pubdata_hasher::variable_length::hash_pubdata_entry_point_var
 use sync_vm::glue::merkleize_l1_messages::input::MESSAGE_SERIALIZATION_BYTES;
 use sync_vm::scheduler::queues::storage_log::STORAGE_LOG_RECORD_ENCODING_LEN;
 
-impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for L1MessagesRehasherInstanceSynthesisFunction {
+impl<F: SmallField> ZkSyncUniformSynthesisFunction<E> for L1MessagesRehasherInstanceSynthesisFunction {
     type Witness = PubdataHasherInstanceWitness<E, STORAGE_LOG_RECORD_ENCODING_LEN, MESSAGE_SERIALIZATION_BYTES, StorageLogRecord<E>>;
     type Config = usize;
     type RoundFunction = GenericHasher<E, RescueParams<E, 2, 3>, 2, 3>;

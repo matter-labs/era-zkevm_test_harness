@@ -9,13 +9,13 @@ use sync_vm::rescue_poseidon::RescueParams;
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone, Copy, Debug, Default(bound = ""))]
 #[serde(bound = "")]
-pub struct VmMainInstanceSynthesisFunction<E: Engine, W: WitnessOracle<E>> {
+pub struct VmMainInstanceSynthesisFunction<F: SmallField, W: WitnessOracle<E>> {
     _marker: std::marker::PhantomData<(E, W)>
 }
 
 use sync_vm::vm::vm_cycle::input::VmCircuitWitness;
 
-impl<E: Engine, W: WitnessOracle<E>> ZkSyncUniformSynthesisFunction<E> for VmMainInstanceSynthesisFunction<E, W> {
+impl<F: SmallField, W: WitnessOracle<E>> ZkSyncUniformSynthesisFunction<E> for VmMainInstanceSynthesisFunction<E, W> {
     type Witness = VmCircuitWitness<E, W>;
     type Config = usize;
     type RoundFunction = GenericHasher<E, RescueParams<E, 2, 3>, 2, 3>;

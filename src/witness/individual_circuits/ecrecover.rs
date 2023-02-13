@@ -16,7 +16,7 @@ use sync_vm::precompiles::*;
 // In practice the only difficulty is buffer state, everything else is provided by out-of-circuit VM
 
 pub fn ecrecover_decompose_into_per_circuit_witness<
-E: Engine,
+F: SmallField,
 R: CircuitArithmeticRoundFunction<E, 2, 3>
 >(
     artifacts: &mut FullBlockArtifacts<E>,

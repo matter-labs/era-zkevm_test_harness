@@ -1,41 +1,80 @@
 use zk_evm::aux_structures::DecommittmentQuery;
-use sync_vm::utils::compute_shifts;
-use sync_vm::vm::vm_state::saved_contract_context::scale_and_accumulate;
-
 use super::*;
 
-impl<E: Engine> OutOfCircuitFixedLengthEncodable<E, 2> for DecommittmentQuery {
-    fn encoding_witness(&self) -> [<E>::Fr; 2] {
-        let shifts = compute_shifts::<E::Fr>();
+use boojum::zksync::base_structures::decommit_query::DECOMMIT_QUERY_PACKED_WIDTH;
 
-        let mut lc = E::Fr::zero();
-        let mut shift = 0;
-        scale_and_accumulate::<E, _>(&mut lc, self.memory_page.0, &shifts, shift);
-        shift += 32;
-        scale_and_accumulate::<E, _>(&mut lc, self.hash.0[0], &shifts, shift);
-        shift += 64;
-        scale_and_accumulate::<E, _>(&mut lc, self.hash.0[1], &shifts, shift);
-        shift += 64;
-        scale_and_accumulate::<E, _>(&mut lc, self.is_fresh, &shifts, shift);
-        shift += 1;
+impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, DECOMMIT_QUERY_PACKED_WIDTH> for DecommittmentQuery {
+    fn encoding_witness(&self) -> [F; DECOMMIT_QUERY_PACKED_WIDTH] {
+        debug_assert!(F::CAPACITY_BITS >= 56);
 
-        assert!(shift <= E::Fr::CAPACITY as usize);
-        let el0 = lc;
+        let code_hash = decompose_u256_as_u32x8(self.hash);
 
-        let mut lc = E::Fr::zero();
-        let mut shift = 0;
-        scale_and_accumulate::<E, _>(&mut lc, self.hash.0[2], &shifts, shift);
-        shift += 64;
-        scale_and_accumulate::<E, _>(&mut lc, self.hash.0[3], &shifts, shift);
-        shift += 64;
-        scale_and_accumulate::<E, _>(&mut lc, self.timestamp.0, &shifts, shift);
-        shift += 32;
-        assert!(shift <= E::Fr::CAPACITY as usize);
-        let el1 = lc;
+        // we assume that page bytes are known, so it'll be nop anyway
+        let page_bytes = self.memory_page.0.to_le_bytes();
+        let timestamp_bytes = self.timestamp.0.to_le_bytes();
 
-        [el0, el1]
+        let v0 = linear_combination(
+            &[
+                (code_hash[0].into_field(), F::ONE),
+                (page_bytes[0].into_field(), F::from_u64_unchecked(1u64 << 32)),
+                (page_bytes[1].into_field(), F::from_u64_unchecked(1u64 << 40)),
+                (page_bytes[2].into_field(), F::from_u64_unchecked(1u64 << 48)),
+            ],
+        );
+
+        let v1 = linear_combination(
+            &[
+                (code_hash[1].into_field(), F::ONE),
+                (page_bytes[3].into_field(), F::from_u64_unchecked(1u64 << 32)),
+                (
+                    timestamp_bytes[0].into_field(),
+                    F::from_u64_unchecked(1u64 << 40),
+                ),
+                (
+                    timestamp_bytes[1].into_field(),
+                    F::from_u64_unchecked(1u64 << 48),
+                ),
+            ],
+        );
+
+        let v2 = linear_combination(
+            &[
+                (code_hash[2].into_field(), F::ONE),
+                (
+                    timestamp_bytes[2].into_field(),
+                    F::from_u64_unchecked(1u64 << 32),
+                ),
+                (
+                    timestamp_bytes[3].into_field(),
+                    F::from_u64_unchecked(1u64 << 40),
+                ),
+                (self.is_fresh.into_field(), F::from_u64_unchecked(1u64 << 48)),
+            ],
+        );
+
+        let v3 = code_hash[3].into_field();
+        let v4 = code_hash[4].into_field();
+        let v5 = code_hash[5].into_field();
+        let v6 = code_hash[6].into_field();
+        let v7 = code_hash[7].into_field();
+
+        [v0, v1, v2, v3, v4, v5, v6, v7]
     }
 }
 
-pub type DecommittmentQueueSimulator<E> = SpongeLikeQueueSimulator<E, DecommittmentQuery, 2, 3, 1>;
-pub type DecommittmentQueueState<E> = SpongeLikeQueueIntermediateStates<E, 3, 1>;
+pub type DecommittmentQueueSimulator<F> = FullWidthQueueSimulator<F, DecommittmentQuery, 8, FULL_SPONGE_QUEUE_STATE_WIDTH, 1>;
+pub type DecommittmentQueueState<F> = FullWidthQueueIntermediateStates<F, FULL_SPONGE_QUEUE_STATE_WIDTH, 1>;
+
+impl<F: SmallField> CircuitEquivalentReflection<F> for DecommittmentQuery {
+    type Destination = boojum::zksync::base_structures::decommit_query::DecommitQuery<F>;
+    fn reflect(&self) -> <Self::Destination as CSAllocatable<F>>::Witness {
+        use boojum::zksync::base_structures::decommit_query::DecommitQueryWitness;
+
+        DecommitQueryWitness {
+            timestamp: self.timestamp.0,
+            code_hash: self.hash,
+            is_first: self.is_fresh,
+            page: self.memory_page.0
+        }
+    }
+}

@@ -4,7 +4,7 @@ use super::*;
 use super::full_block_artifact::{BlockBasicCircuits, BlockBasicCircuitsPublicInputs};
 use crate::bellman::Engine;
 use sync_vm::testing::{Bn256, Fr};
-use crate::franklin_crypto::plonk::circuit::allocated_num::Num;
+use cratFanklin_crypto::plonk::circuit::allocated_num::Num;
 use sync_vm::{recursion::recursion_tree::NUM_LIMBS, circuit_structures::traits::CircuitArithmeticRoundFunction};
 use crate::abstract_zksync_circuit::concrete_circuits::{ZkSyncCircuit, ZkSyncVerificationKey};
 use crate::bellman::plonk::better_better_cs::proof::Proof;
@@ -18,11 +18,11 @@ use sync_vm::recursion::get_base_placeholder_point_for_accumulators;
 use sync_vm::scheduler::BlockApplicationWitness;
 
 #[derive(Clone, Debug)]
-pub struct AggregationResult<E: Engine> {
-    pub pairing_with_gen_x_limbs: [E::Fr; NUM_LIMBS],
-    pub pairing_with_gen_y_limbs: [E::Fr; NUM_LIMBS],
-    pub pairing_with_x_x_limbs: [E::Fr; NUM_LIMBS],
-    pub pairing_with_x_y_limbs: [E::Fr; NUM_LIMBS],
+pub struct AggregationResult<F: SmallField> {
+    pub pairing_with_gen_x_limbs: [F; NUM_LIMBS],
+    pub pairing_with_gen_y_limbs: [F; NUM_LIMBS],
+    pub pairing_with_x_x_limbs: [F; NUM_LIMBS],
+    pub pairing_with_x_y_limbs: [F; NUM_LIMBS],
 }
 
 // we need two unequal proofs and verification keys for internal procedure
@@ -72,7 +72,7 @@ pub fn get_filled_paddings(
 pub fn padding_aggregations(
     num_elements: usize
 ) -> Vec<([Fr; NUM_LIMBS], [Fr; NUM_LIMBS], [Fr; NUM_LIMBS], [Fr; NUM_LIMBS])> {
-    use crate::franklin_crypto::plonk::circuit::bigint::split_into_limbs;
+    use cratFanklin_crypto::plonk::circuit::bigint::split_into_limbs;
     let rns_params = get_prefered_rns_params();
 
     let crs_mons = circuit_testing::get_trusted_setup::<Bn256>(1<<26);

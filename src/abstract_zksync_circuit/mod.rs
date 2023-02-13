@@ -7,7 +7,7 @@ use sync_vm::vm::vm_cycle::entry_point::vm_circuit_entry_point;
 use sync_vm::vm::vm_cycle::witness_oracle::WitnessOracle;
 use crate::bellman::Engine;
 use crate::bellman::plonk::better_better_cs::cs::ConstraintSystem;
-use crate::franklin_crypto::plonk::circuit::allocated_num::{AllocatedNum, Num};
+use cratFanklin_crypto::plonk::circuit::allocated_num::{AllocatedNum, Num};
 use crate::bellman::SynthesisError;
 use crossbeam::atomic::AtomicCell;
 
@@ -17,7 +17,7 @@ use crate::bellman::plonk::better_better_cs::cs::Circuit;
 use crate::bellman::plonk::better_better_cs::cs::GateInternal;
 use crate::bellman::plonk::better_better_cs::cs::Gate;
 
-pub trait ZkSyncUniformSynthesisFunction<E: Engine>: Clone { 
+pub trait ZkSyncUniformSynthesisFunction<F: SmallField>: Clone { 
     type Witness: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned;
     type Config: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned;
     type RoundFunction: CircuitArithmeticRoundFunction<E, 2, 3, StateElement = Num<E>>;
@@ -42,7 +42,7 @@ pub trait ZkSyncUniformSynthesisFunction<E: Engine>: Clone {
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(bound = "")]
 pub struct ZkSyncUniformCircuitCircuitInstance<
-    E: Engine,
+    F: SmallField,
     S: ZkSyncUniformSynthesisFunction<E>,
 > {
     #[serde(serialize_with = "serialize_atomic_cell")]
@@ -57,11 +57,11 @@ pub struct ZkSyncUniformCircuitCircuitInstance<
     #[serde(bound(deserialize = "S::RoundFunction: serde::de::DeserializeOwned"))]
     pub round_function: std::sync::Arc<S::RoundFunction>,
 
-    pub expected_public_input: Option<E::Fr>,
+    pub expected_public_input: Option<F>,
 }
 
-impl<E: Engine, S: ZkSyncUniformSynthesisFunction<E>> ZkSyncUniformCircuitCircuitInstance<E, S> {
-    pub fn new(witness: Option<S::Witness>, config: S::Config, round_function: S::RoundFunction, expected_public_input: Option<E::Fr>) -> Self {
+impl<F: SmallField, S: ZkSyncUniformSynthesisFunction<E>> ZkSyncUniformCircuitCircuitInstance<E, S> {
+    pub fn new(witness: Option<S::Witness>, config: S::Config, round_function: S::RoundFunction, expected_public_input: Option<F>) -> Self {
         Self { witness: AtomicCell::new(witness), config: std::sync::Arc::new(config), round_function: std::sync::Arc::new(round_function), expected_public_input }
     }
 
@@ -115,7 +115,7 @@ fn deserialize_arc<'de, D, T: serde::Deserialize<'de>>(deserializer: D) -> Resul
 }
 
 impl<
-    E: Engine, 
+    F: SmallField, 
     S: ZkSyncUniformSynthesisFunction<E>,
 > Clone for ZkSyncUniformCircuitCircuitInstance<E, S> { 
     fn clone(&self) -> Self {
@@ -134,7 +134,7 @@ impl<
 
 
 impl<
-    E: Engine, 
+    F: SmallField, 
     S: ZkSyncUniformSynthesisFunction<E>,
 > Circuit<E> for ZkSyncUniformCircuitCircuitInstance<E, S> {
     type MainGate = SelectorOptimizedWidth4MainGateWithDNext;

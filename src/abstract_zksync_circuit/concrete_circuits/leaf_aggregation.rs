@@ -11,19 +11,19 @@ pub struct LeafAggregationInstanceSynthesisFunction;
 
 use sync_vm::recursion::leaf_aggregation::*;
 use sync_vm::recursion::transcript::GenericTranscriptGadget;
-use crate::franklin_crypto::plonk::circuit::bigint::RnsParameters;
+use cratFanklin_crypto::plonk::circuit::bigint::RnsParameters;
 use sync_vm::recursion::recursion_tree::AggregationParameters;
 use sync_vm::recursion::node_aggregation::ZkSyncParametricProof;
 
-impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for LeafAggregationInstanceSynthesisFunction {
+impl<F: SmallField> ZkSyncUniformSynthesisFunction<E> for LeafAggregationInstanceSynthesisFunction {
     type Witness = LeafAggregationCircuitInstanceWitness<E>;
     type Config = (
         usize, 
         RnsParameters<E, E::Fq>, 
         AggregationParameters<E, GenericTranscriptGadget<E, RescueParams<E, 2, 3>, 2, 3>, RescueParams<E, 2, 3>, 2, 3>,
-        E::Fr, 
-        Vec<E::Fr>, 
-        Vec<E::Fr>,
+        F, 
+        Vec<F>, 
+        Vec<F>,
         Vec<ZkSyncParametricProof<E>>, 
         Option<[E::G2Affine; 2]>
     );
@@ -42,7 +42,7 @@ impl<E: Engine> ZkSyncUniformSynthesisFunction<E> for LeafAggregationInstanceSyn
 }
 
 #[track_caller]
-fn leaf_aggregation_outer_function<E: Engine, CS: ConstraintSystem<E>, R: CircuitArithmeticRoundFunction<E, 2, 3, StateElement = Num<E>>>(
+fn leaf_aggregation_outer_function<F: SmallField, CS: ConstraintSystem<E>, R: CircuitArithmeticRoundFunction<E, 2, 3, StateElement = Num<E>>>(
     cs: &mut CS,
     witness: Option<LeafAggregationCircuitInstanceWitness<E>>,
     round_function: &R,
@@ -50,9 +50,9 @@ fn leaf_aggregation_outer_function<E: Engine, CS: ConstraintSystem<E>, R: Circui
         usize, 
         RnsParameters<E, E::Fq>, 
         AggregationParameters<E, GenericTranscriptGadget<E, RescueParams<E, 2, 3>, 2, 3>, RescueParams<E, 2, 3>, 2, 3>,
-        E::Fr, 
-        Vec<E::Fr>, 
-        Vec<E::Fr>,
+        F, 
+        Vec<F>, 
+        Vec<F>,
         Vec<ZkSyncParametricProof<E>>, 
         Option<[E::G2Affine; 2]>
     ),
@@ -68,7 +68,7 @@ fn leaf_aggregation_outer_function<E: Engine, CS: ConstraintSystem<E>, R: Circui
         g2_elements
     ) = params;
 
-    let padding_vk_encoding_fixed: [E::Fr; sync_vm::recursion::node_aggregation::VK_ENCODING_LENGTH] = padding_vk_encoding.try_into().unwrap();
+    let padding_vk_encoding_fixed: [F; sync_vm::recursion::node_aggregation::VK_ENCODING_LENGTH] = padding_vk_encoding.try_into().unwrap();
 
     let params = (
         num_proofs_to_aggregate, 

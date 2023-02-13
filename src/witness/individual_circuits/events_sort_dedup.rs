@@ -28,7 +28,7 @@ use super::*;
 use crate::encodings::QueueIntermediateStates;
 
 pub fn compute_events_dedup_and_sort<
-    E: Engine,
+    F: SmallField,
     R: CircuitArithmeticRoundFunction<E, 2, 3>
 >(
     unsorted_queries: &Vec<LogQuery>,
@@ -139,9 +139,9 @@ pub fn compute_events_dedup_and_sort<
     use crate::ethereum_types::Address;
     use crate::ethereum_types::U256;
 
-    let mut current_lhs_product = E::Fr::zero();
-    let mut current_rhs_product = E::Fr::zero();
-    let mut previous_packed_key = E::Fr::zero();
+    let mut current_lhs_product = F::zero();
+    let mut current_rhs_product = F::zero();
+    let mut previous_packed_key = F::zero();
     let empty_log_item = LogQuery {
         timestamp: Timestamp(0),
         tx_number_in_block: 0,
@@ -332,7 +332,7 @@ pub fn compute_events_dedup_and_sort<
 
         if sorted_states.len() % per_circuit_capacity != 0 {
             // circuit does padding, so all previous values must be reset
-            instance_witness.closed_form_input.hidden_fsm_output.previous_packed_key = E::Fr::zero();
+            instance_witness.closed_form_input.hidden_fsm_output.previous_packed_key = F::zero();
             instance_witness.closed_form_input.hidden_fsm_output.previous_item = log_query_into_storage_record_witness(
                 &empty_log_item
             );
