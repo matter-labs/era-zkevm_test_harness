@@ -1,0 +1,56 @@
+[package]
+name = "zkevm_test_harness"
+version = "1.3.1"
+edition = "2021"
+authors = ["Alex Vlasov <alex.m.vlasov@gmail.com>", "Konstantin Panarin <kp@matterlabs.dev>"]
+
+resolver = "2"
+
+[[bin]]
+name = "circuit_limit_estimator"
+path = "src/circuit_limit_estimator/main.rs"
+
+[[bin]]
+name = "circuit_synthesis_performance_test"
+path = "src/circuit_synthesis_performance_test/main.rs"
+
+[[bin]]
+name = "geometry_config_generator"
+path = "src/geometry_config_generator/main.rs"
+
+[dependencies]
+# zk_evm = {path = "../zk_evm"}
+# sync_vm = {path = "../sync_vm", features = ["external_testing"]}
+# zkevm-assembly = {path = "../zkEVM-assembly"}
+# circuit_testing = {path = "../circuit_testing"}
+
+zkevm-assembly = {git = "https://github.com/matter-labs/zkEVM-assembly.git", branch = "v1.3.1"}
+zk_evm = {git = "https://github.com/matter-labs/zk_evm.git", branch = "v1.3.1"}
+sync_vm = {git = "https://github.com/matter-labs/sync_vm.git", branch = "v1.3.1", features = ["external_testing"]}
+circuit_testing = {git = "https://github.com/matter-labs/circuit_testing.git", branch = "main"}
+
+num-bigint = "0.4"
+num-integer = "0.1"
+num-traits = "0.2"
+rayon = "*"
+derivative = "*"
+hex = "*"
+blake2 = "0.10"
+sha3 = "0.10"
+sha2 = "0.10"
+serde = {version = "1", features = ["derive"]}
+serde_json = "1.0"
+crossbeam = "0.8"
+tracing = { version= "0.1.26" }
+bincode = "*"
+test-log = "*"
+env_logger = "*"
+smallvec = "*"
+structopt = "0.3.26"
+codegen = "0.2.0"
+
+[profile.release]
+debug = true
+
+[profile.bench]
+debug = true
