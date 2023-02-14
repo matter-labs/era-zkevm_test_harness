@@ -263,6 +263,7 @@ pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
     hidden_fsm.timestamp = vm_state.timestamp;
     hidden_fsm.memory_page_counter = vm_state.memory_page_counter;
     hidden_fsm.tx_number_in_block = vm_state.tx_number_in_block as u32;
+    hidden_fsm.previous_code_page = vm_state.previous_code_memory_page.0;
     hidden_fsm.previous_super_pc = vm_state.previous_super_pc;
     hidden_fsm.ergs_per_pubdata_byte = vm_state.current_ergs_per_pubdata_byte;
 

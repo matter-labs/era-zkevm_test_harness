@@ -262,6 +262,7 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
 
         let _ = main_vm_entry_point(&mut cs_owned, circuit_input, &round_function, geometry.cycles_per_vm_snapshot as usize);
         cs_owned.pad_and_shrink();
+        cs_owned.wait_for_witness();
 
         use boojum::worker::Worker;
         let worker = Worker::new();

@@ -1,4 +1,3 @@
-use zk_evm::abstractions::MAX_MEMORY_BYTES;
 use zk_evm::aux_structures::*;
 use zk_evm::ethereum_types::*;
 use zk_evm::vm_state::CallStackEntry;
@@ -33,8 +32,8 @@ pub fn initial_out_of_circuit_context(
         is_static: false,
         is_local_frame: false,
         context_u128_value: 0,
-        heap_bound: MAX_MEMORY_BYTES as u32, // so bootloader doesn't pay for resizes
-        aux_heap_bound: MAX_MEMORY_BYTES as u32, // so bootloader doesn't pay for resizes
+        heap_bound: u32::MAX, // so bootloader doesn't pay for resizes
+        aux_heap_bound: u32::MAX, // so bootloader doesn't pay for resizes
     }
 }
 

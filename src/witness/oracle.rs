@@ -1114,7 +1114,7 @@ pub fn create_artifacts_from_tracer<
             assert_eq!(o, i);
         }
     }
-    
+
     (all_instances_witnesses, artifacts)
 }
 
