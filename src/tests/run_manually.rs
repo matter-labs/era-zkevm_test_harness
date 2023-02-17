@@ -6,6 +6,7 @@ use crate::entry_point::{create_out_of_circuit_global_context};
 use crate::ethereum_types::*;
 use crate::witness::oracle::create_artifacts_from_tracer;
 use crate::witness::oracle::VmWitnessOracle;
+use boojum::cs::traits::cs::ConstraintSystem;
 use boojum::implementations::poseidon_goldilocks::PoseidonGoldilocks;
 use boojum::zksync::base_structures::vm_state::GlobalContextWitness;
 use boojum::zksync::main_vm::main_vm_entry_point;
@@ -141,6 +142,28 @@ fn run_and_try_create_witness() {
     run_and_try_create_witness_inner(asm, 50);
 }
 
+#[test]
+fn run_pseudo_benchmark() {
+    let asm = r#"
+        .text
+        .file	"Test_26"
+        .rodata.cst32
+        .p2align	5
+        .text
+        .globl	__entry
+    __entry:
+    .main:
+        add 100, r0, r1,
+    .loop:
+        sub.s! 1, r1, r1
+        jump.ne @.loop
+    .end
+        ret.ok r0
+    "#;
+
+    run_and_try_create_witness_inner(asm, 30000);
+}
+
 pub(crate) fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
     let mut assembly = Assembly::try_from(asm.to_owned()).unwrap();
     let bytecode = assembly.compile_to_bytecode().unwrap();
@@ -163,7 +186,8 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
     use crate::toolset::GeometryConfig;
 
     let geometry = GeometryConfig {
-        cycles_per_vm_snapshot: 10,
+        // cycles_per_vm_snapshot: 5,
+        cycles_per_vm_snapshot: 5000,
         limit_for_code_decommitter_sorter: 16,
         cycles_per_log_demuxer: 8,
         cycles_per_storage_sorter: 4,
@@ -256,7 +280,28 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         let gates = gates_setup(&cs_geometry);
         let mut cs_owned = testing_cs(
             cs_geometry,
-            1 << 18,
+            // 1 << 18,
+            1 << 20,
+            gates
+        );
+
+        println!("Start synthesis");
+        let _ = main_vm_entry_point(&mut cs_owned, circuit_input.clone(), &round_function, geometry.cycles_per_vm_snapshot as usize);
+        println!("Synthesis is done");
+        dbg!(cs_owned.next_available_row());
+        cs_owned.pad_and_shrink();
+        cs_owned.wait_for_witness();
+
+        use boojum::worker::Worker;
+        let worker = Worker::new_with_num_threads(8);
+        println!("Checking if satisfied");
+        assert!(cs_owned.check_if_satisfied(&worker));
+
+        let gates = gates_setup(&cs_geometry);
+        let mut cs_owned = basic_proving_cs(
+            cs_geometry,
+            // 1 << 18,
+            1 << 20,
             gates
         );
 
@@ -264,10 +309,51 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         cs_owned.pad_and_shrink();
         cs_owned.wait_for_witness();
 
-        use boojum::worker::Worker;
-        let worker = Worker::new();
-        println!("Checking if satisfied");
-        assert!(cs_owned.check_if_satisfied(&worker));
+        println!("Creating setup");
+        let base_setup = cs_owned.create_base_setup(&worker, &mut ());
+
+        let (setup, placement, _) = cs_owned.materialize_setup_storage(8, &worker, &mut ());
+
+        use boojum::field::goldilocks::GoldilocksExt2;
+        use boojum::cs::implementations::transcript::GoldilocksPoisedonTranscript;
+        use boojum::algebraic_props::sponge::GoldilocksPoseidonSponge;
+        use boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
+        use boojum::cs::implementations::transcript::Blake2sTranscript;
+
+        println!("Proving");
+        let now = std::time::Instant::now();
+
+        let _ = cs_owned.prove_cpu_basic::<
+            GoldilocksExt2,
+            GoldilocksPoisedonTranscript,
+            GoldilocksPoseidonSponge<AbsorbtionModeOverwrite>,
+            Vec<u8>,
+            32,
+            Blake2sTranscript,
+        >(
+            &worker,
+            &base_setup,
+            &setup,
+            8,
+            ()
+        );
+
+        // let _ = cs_owned.prove_cpu_basic::<
+        //     GoldilocksExt2,
+        //     Blake2sTranscript,
+        //     boojum::blake2::Blake2s256,
+        //     Vec<u8>,
+        //     32,
+        //     Blake2sTranscript,
+        // >(
+        //     &worker,
+        //     &base_setup,
+        //     &setup,
+        //     8,
+        //     ()
+        // );
+
+        dbg!(&now.elapsed());
     }
 
     

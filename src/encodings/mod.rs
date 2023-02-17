@@ -332,7 +332,7 @@ impl<
     >(
         &mut self,
         element: I,
-        round_function: &R,
+        _round_function: &R,
     ) -> (
         [F; SW], // old tail
         FullWidthQueueIntermediateStates<F, SW, ROUNDS>,
