@@ -6,6 +6,7 @@ use crate::entry_point::{create_out_of_circuit_global_context};
 use crate::ethereum_types::*;
 use crate::witness::oracle::create_artifacts_from_tracer;
 use crate::witness::oracle::VmWitnessOracle;
+use boojum::cs::implementations::prover::ProofConfig;
 use boojum::cs::traits::cs::ConstraintSystem;
 use boojum::implementations::poseidon_goldilocks::PoseidonGoldilocks;
 use boojum::zksync::base_structures::vm_state::GlobalContextWitness;
@@ -309,6 +310,8 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         cs_owned.pad_and_shrink();
         cs_owned.wait_for_witness();
 
+        cs_owned.print_gate_stats();
+
         println!("Creating setup");
         let base_setup = cs_owned.create_base_setup(&worker, &mut ());
 
@@ -323,6 +326,9 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         println!("Proving");
         let now = std::time::Instant::now();
 
+        let mut prover_config = ProofConfig::default();
+        prover_config.lde_factor = 2;
+
         let _ = cs_owned.prove_cpu_basic::<
             GoldilocksExt2,
             GoldilocksPoisedonTranscript,
@@ -334,7 +340,7 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
             &worker,
             &base_setup,
             &setup,
-            8,
+            prover_config,
             ()
         );
 
