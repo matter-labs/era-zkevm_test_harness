@@ -80,6 +80,8 @@ pub struct VmWitnessOracle<F: SmallField> {
     pub rollback_queue_initial_tails_for_new_frames: VecDeque<(u32, [F; QUEUE_STATE_WIDTH])>,
     pub storage_queries: VecDeque<(u32, LogQuery)>, // cycle, query
     pub storage_refund_queries: VecDeque<(u32, LogQuery, u32)>, // cycle, query, pubdata refund
+    pub callstack_new_frames_witnesses:
+        VecDeque<(u32, CallStackEntry)>,
     pub callstack_values_witnesses:
         VecDeque<(u32, (ExtendedCallstackEntry<F>, CallstackSimulatorState<F>))>,
 }
@@ -1008,6 +1010,15 @@ pub fn create_artifacts_from_tracer<
             .cloned()
             .collect();
 
+        let callstack_new_frames_witnesses = callstack_with_aux_data.flat_new_frames_history.iter()
+            .skip_while(
+                |el| el.0 < initial_state.at_cycle
+            )
+            .take_while(
+                |el| el.0 < final_state.at_cycle
+            )
+            .cloned()
+            .collect();
 
         // construct an oracle
         let witness_oracle = VmWitnessOracle::<F> {
@@ -1019,6 +1030,7 @@ pub fn create_artifacts_from_tracer<
             storage_queries: per_instance_storage_queries_witnesses.into(),
             storage_refund_queries: per_instance_refund_logs.into(),
             callstack_values_witnesses,
+            callstack_new_frames_witnesses,
         };
 
         let range = history_of_storage_log_states.range(..initial_state.at_cycle);
@@ -1516,7 +1528,40 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
         is_call: bool,
         execute: bool,
     ) {
-        todo!()
+        if execute && is_call {
+            let (_cycle_idx, entry) = 
+                self.callstack_new_frames_witnesses.pop_front().unwrap();
+
+            // compare
+            let witness = new_record;
+
+            assert_eq!(entry.this_address, witness.this);
+            assert_eq!(entry.msg_sender, witness.caller);
+            assert_eq!(entry.code_address, witness.code_address);
+
+            assert_eq!(entry.code_page.0, witness.code_page);
+            assert_eq!(entry.base_memory_page.0, witness.base_page);
+
+            assert_eq!(entry.pc, witness.pc);
+            assert_eq!(entry.sp, witness.sp);
+
+            assert_eq!(entry.heap_bound, witness.heap_upper_bound);
+            assert_eq!(entry.aux_heap_bound, witness.aux_heap_upper_bound);
+
+            assert_eq!(entry.exception_handler_location, witness.exception_handler_loc);
+            assert_eq!(entry.ergs_remaining, witness.ergs_remaining);
+
+            assert_eq!(entry.is_static, witness.is_static_execution);
+            assert_eq!(entry.is_kernel_mode(), witness.is_kernel_mode);
+
+            assert_eq!(entry.this_shard_id, witness.this_shard_id);
+            assert_eq!(entry.caller_shard_id, witness.caller_shard_id);
+            assert_eq!(entry.code_shard_id, witness.code_shard_id);
+
+            assert_eq!(crate::utils::u128_as_u32_le(entry.context_u128_value), witness.context_u128_value_composite);
+
+            assert_eq!(entry.is_local_frame, witness.is_local_call);
+        }
     }
     fn get_decommittment_request_suggested_page(
         &mut self,

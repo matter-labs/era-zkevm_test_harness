@@ -1,36 +1,16 @@
-use sync_vm::franklin_crypto::plonk::circuit::utils::u128_to_fe;
-use sync_vm::glue::code_unpacker_sha256::memory_query_updated::RawMemoryQuery;
-use sync_vm::glue::code_unpacker_sha256::input::*;
-use sync_vm::glue::optimizable_queue::FixedWidthEncodingGenericQueueWitness;
-use sync_vm::inputs::ClosedFormInputWitness;
-use sync_vm::scheduler::queues::DecommitQueryWitness;
-use sync_vm::utils::u64_to_fe;
-use zk_evm::aux_structures::*;
 use super::*;
-use crate::encodings::log_query::LogQueueSimulator;
-use crate::encodings::memory_query::MemoryQueueSimulator;
-use crate::utils::biguint_from_u256;
-use std::cmp::Ordering;
-use crate::bellman::Engine;
-use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
-use crate::witness::full_block_artifact::FullBlockArtifacts;
-use rayon::prelude::*;
-use crate::ff::Field;
-use crate::encodings::decommittment_request::DecommittmentQueueSimulator;
-use zk_evm::aux_structures::MemoryIndex;
-use zk_evm::aux_structures::MemoryQuery;
-use sync_vm::glue::demux_log_queue::input::LogDemuxerCircuitInstanceWitness;
-use crate::encodings::log_query::log_query_into_storage_record_witness;
+use zkevm_circuits::demux_log_queue::input::*;
+use zkevm_circuits::base_structures::log_query::*;
 
 /// Take a storage log, output logs separately for events, l1 messages, storage, etc
 pub fn compute_logs_demux<
-    F: SmallField,
-    R: CircuitArithmeticRoundFunction<E, 2, 3>
+F: SmallField,
+R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
-    artifacts: &mut FullBlockArtifacts<E>,
+    artifacts: &mut FullBlockArtifacts<F>,
     per_circuit_capacity: usize,
     round_function: &R,
-) -> Vec<LogDemuxerCircuitInstanceWitness<E>> {
+) -> Vec<LogDemuxerCircuitInstanceWitness<F>> {
     // parallelizable 
     
     // have to manually unroll, otherwise borrow checker will complain
@@ -39,11 +19,9 @@ pub fn compute_logs_demux<
     let input_queue_witness = &artifacts.original_log_queue_simulator.witness.as_slices().0;
     let mut states_iter = artifacts.original_log_queue_states.iter();
 
-    let mut results: Vec<LogDemuxerCircuitInstanceWitness<E>> = vec![];
+    let mut results: Vec<LogDemuxerCircuitInstanceWitness<F>> = vec![];
 
     let num_chunks = input_queue_witness.chunks(per_circuit_capacity).len();
-    use sync_vm::glue::demux_log_queue::input::*;
-    use sync_vm::traits::CSWitnessable;
 
     let mut state_idx = 0;
 
@@ -162,9 +140,8 @@ pub fn compute_logs_demux<
             .skip(state_idx)
             .take(input_chunk.len())
             .map(|(encoding, old_tail, element)| {
-            let as_storage_log = log_query_into_storage_record_witness(element);
     
-            (*encoding, as_storage_log, *old_tail)
+            (log_query_into_circuit_log_query_witness(element), *old_tail)
         }).collect();
 
         state_idx += per_circuit_capacity;
@@ -173,8 +150,8 @@ pub fn compute_logs_demux<
 
         let mut fsm_output = LogDemuxerFSMInputOutput::placeholder_witness();
         let mut initial_log_queue_state = full_log_queue_state.clone();
-        initial_log_queue_state.head_state = artifacts.original_log_queue_states[idx].1.tail;
-        initial_log_queue_state.num_items -= artifacts.original_log_queue_states[idx].1.num_items;
+        initial_log_queue_state.head = artifacts.original_log_queue_states[idx].1.tail;
+        initial_log_queue_state.tail.length -= artifacts.original_log_queue_states[idx].1.num_items;
 
         fsm_output.initial_log_queue_state = initial_log_queue_state;
         fsm_output.storage_access_queue_state = take_queue_state_from_simulator(&artifacts.demuxed_rollup_storage_queue_simulator);
@@ -192,10 +169,8 @@ pub fn compute_logs_demux<
                 observable_output: output_passthrough_data.clone(), 
                 hidden_fsm_input: LogDemuxerFSMInputOutput::placeholder_witness(), 
                 hidden_fsm_output: fsm_output, 
-                _marker_e: (), 
-                _marker: std::marker::PhantomData 
             },
-            initial_queue_witness: FixedWidthEncodingGenericQueueWitness {wit: input_witness}
+            initial_queue_witness: CircuitQueueRawWitness::<F, LogQuery<F>, 4, LOG_QUERY_PACKED_WIDTH> { elements: input_witness },
         };
 
         if is_last {

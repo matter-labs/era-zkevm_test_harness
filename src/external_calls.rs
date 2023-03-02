@@ -12,27 +12,29 @@ use crate::entry_point::*;
 use zk_evm::GenericNoopTracer;
 use crate::witness::oracle::create_artifacts_from_tracer;
 use crate::witness::tree::ZKSyncTestingTree;
-// use crate::witness::full_block_artifact::BlockBasicCircuits;
+use crate::witness::full_block_artifact::BlockBasicCircuits;
 use crate::blake2::Blake2s256;
 use crate::witness::tree::ZkSyncStorageLeaf;
 use crate::witness::tree::BinarySparseStorageTree;
-// use crate::witness::full_block_artifact::BlockBasicCircuitsPublicInputs;
+use crate::witness::full_block_artifact::BlockBasicCircuitsPublicInputs;
 use ::tracing;
 use boojum::algebraic_props::round_function::AlgebraicRoundFunction;
 use boojum::gadgets::poseidon::CircuitRoundFunction;
+use crate::ZkSyncDefaultRoundFunction;
 
 pub const SCHEDULER_TIMESTAMP: u32 = 1;
 
 use crate::witness::oracle::VmInstanceWitness;
 use crate::witness::oracle::VmWitnessOracle;
 use crate::witness::full_block_artifact::FullBlockArtifacts;
+use boojum::gadgets::traits::allocatable::*;
 
 /// This is a testing interface that basically will
 /// setup the environment and will run out-of-circuit and then in-circuit
 /// and perform intermediate tests
 pub fn run<
     F: SmallField,
-    R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+    R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
     S: Storage
 >(
     caller: Address, // for real block must be zero
@@ -48,8 +50,16 @@ pub fn run<
     geometry: GeometryConfig,
     storage: S,
     tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
-// ) -> (BlockBasicCircuits<Bn256>, BlockBasicCircuitsPublicInputs<Bn256>, SchedulerCircuitInstanceWitness<Bn256>) {
-) -> (Vec<VmInstanceWitness<F, VmWitnessOracle<F>>>, FullBlockArtifacts<F>) {
+) -> (BlockBasicCircuits<F, R>, BlockBasicCircuitsPublicInputs<F>) 
+    where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <zkevm_circuits::base_structures::memory_query::MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <zkevm_circuits::base_structures::decommit_query::DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <boojum::gadgets::u256::UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <boojum::gadgets::u256::UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN + 1]:,
+    [(); <zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+{
+// ) -> (BlockBasicCircuits<GoldilocksField>, BlockBasicCircuitsPublicInputs<GoldilocksField>, SchedulerCircuitInstanceWitness<GoldilocksField>) {
+// ) -> (Vec<VmInstanceWitness<F, VmWitnessOracle<F>>>, FullBlockArtifacts<F>) {
 // ) {
     assert!(zk_porter_is_available == false);
     assert_eq!(ram_verification_queries.len(), 0, "for now it's implemented such that we do not need it");
@@ -190,7 +200,9 @@ pub fn run<
             num_non_deterministic_heap_queries
         );
 
-    return (instance_oracles, artifacts)
+    todo!();
+
+    // return (instance_oracles, artifacts)
 
     // assert!(artifacts.special_initial_decommittment_queries.len() == 1);
     // use sync_vm::scheduler::queues::SpongeLikeQueueStateWitness;
@@ -217,6 +229,8 @@ pub fn run<
     //     artifacts,
     //     geometry
     // );
+
+    // (basic_circuits, basic_circuits_inputs)
 
     // let scheduler_circuit_witness = {
     //     use sync_vm::circuit_structures::bytes32::Bytes32Witness;
@@ -339,10 +353,11 @@ pub fn run_with_fixed_params<S: Storage>(
     storage: S,
     tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
 // ) {
-) -> (Vec<VmInstanceWitness<GoldilocksField, VmWitnessOracle<GoldilocksField>>>, FullBlockArtifacts<GoldilocksField>) {
+// ) -> (Vec<VmInstanceWitness<GoldilocksField, VmWitnessOracle<GoldilocksField>>>, FullBlockArtifacts<GoldilocksField>) {
 // ) -> (BlockBasicCircuits<Bn256>, BlockBasicCircuitsPublicInputs<Bn256>, SchedulerCircuitInstanceWitness<Bn256>) {
+) -> (BlockBasicCircuits<GoldilocksField, ZkSyncDefaultRoundFunction>, BlockBasicCircuitsPublicInputs<GoldilocksField>) {
 
-    let round_function = PoseidonGoldilocks;
+    let round_function = ZkSyncDefaultRoundFunction::default();
 
     run(
         caller,

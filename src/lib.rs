@@ -28,8 +28,13 @@
 #![feature(const_type_name)]
 #![feature(iter_array_chunks)]
 #![feature(iter_next_chunk)]
+#![feature(associated_type_defaults)]
 
 #![allow(unused_imports)]
+
+use boojum::field::goldilocks::GoldilocksField;
+use boojum::implementations::poseidon2::Poseidon2Goldilocks;
+use boojum::implementations::poseidon_goldilocks::PoseidonGoldilocks;
 
 pub use zk_evm::blake2;
 pub use zk_evm::sha2;
@@ -47,10 +52,13 @@ use self::utils::*;
 pub mod external_calls;
 pub mod toolset;
 
-// pub mod abstract_zksync_circuit;
+pub mod abstract_zksync_circuit;
 // pub mod circuit_limit_estimator;
 
 pub const INITIAL_MONOTONIC_CYCLE_COUNTER: u32 = 1024;
+
+pub type ZkSyncDefaultRoundFunction = Poseidon2Goldilocks;
+// pub type ZkSyncDefaultRoundFunction = PoseidonGoldilocks;
 
 // #[cfg(test)]
 pub(crate) mod tests;

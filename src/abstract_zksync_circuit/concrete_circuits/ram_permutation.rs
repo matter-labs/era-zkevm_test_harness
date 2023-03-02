@@ -2,20 +2,17 @@ use derivative::*;
 
 use super::*;
 
-use sync_vm::glue::traits::GenericHasher;
-use sync_vm::rescue_poseidon::RescueParams;
-
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone, Copy, Debug, Default(bound = ""))]
 pub struct RAMPermutationInstanceSynthesisFunction;
 
-use sync_vm::glue::ram_permutation::RamPermutationCircuitInstanceWitness;
-use sync_vm::glue::ram_permutation::ram_permutation_entry_point;
+use zkevm_circuits::ram_permutation::RamPermutationCircuitInstanceWitness;
+use zkevm_circuits::ram_permutation::ram_permutation_entry_point;
 
 impl<F: SmallField> ZkSyncUniformSynthesisFunction<E> for RAMPermutationInstanceSynthesisFunction {
     type Witness = RamPermutationCircuitInstanceWitness<E>;
     type Config = usize;
-    type RoundFunction = GenericHasher<E, RescueParams<E, 2, 3>, 2, 3>;
+    type RoundFunction = Poseidon2Goldilocks;
 
     fn description() -> String {
         "RAM permutation".to_string()
@@ -24,7 +21,7 @@ impl<F: SmallField> ZkSyncUniformSynthesisFunction<E> for RAMPermutationInstance
     fn get_synthesis_function_dyn<
         'a,
         CS: ConstraintSystem<E> + 'a,
-    >() -> Box<dyn FnOnce(&mut CS, Option<Self::Witness>, &Self::RoundFunction, Self::Config) -> Result<AllocatedNum<E>, SynthesisError> + 'a> {
+    >() -> Box<dyn FnOnce(&mut CS, Option<Self::Witness>, &Self::RoundFunction, Self::Config) -> [Num<F>; INPUT_OUTPUT_COMMITMENT_LENGTH] + 'a> {
         Box::new(ram_permutation_entry_point)
     }
 }

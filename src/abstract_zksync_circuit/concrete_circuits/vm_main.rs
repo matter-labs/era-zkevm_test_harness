@@ -3,22 +3,35 @@ use derivative::*;
 
 use super::*;
 
-use sync_vm::glue::traits::GenericHasher;
-use sync_vm::rescue_poseidon::RescueParams;
-
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone, Copy, Debug, Default(bound = ""))]
 #[serde(bound = "")]
-pub struct VmMainInstanceSynthesisFunction<F: SmallField, W: WitnessOracle<E>> {
-    _marker: std::marker::PhantomData<(E, W)>
+pub struct VmMainInstanceSynthesisFunction<
+    F: SmallField, 
+    W: WitnessOracle<F>,
+    R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+> {
+    _marker: std::marker::PhantomData<(F, W, R)>
 }
 
-use sync_vm::vm::vm_cycle::input::VmCircuitWitness;
+use zkevm_circuits::fsm_input_output::circuit_inputs::main_vm::VmCircuitWitness;
+use zkevm_circuits::main_vm::main_vm_entry_point;
 
-impl<F: SmallField, W: WitnessOracle<E>> ZkSyncUniformSynthesisFunction<E> for VmMainInstanceSynthesisFunction<E, W> {
-    type Witness = VmCircuitWitness<E, W>;
+impl<
+    F: SmallField, 
+    W: WitnessOracle<F>,
+    R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>
+> ZkSyncUniformSynthesisFunction<F> for VmMainInstanceSynthesisFunction<F, W, R>  
+    where [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN + 1]:,
+    [(); <ExecutionContextRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+{
+    type Witness = VmCircuitWitness<F, W>;
     type Config = usize;
-    type RoundFunction = GenericHasher<E, RescueParams<E, 2, 3>, 2, 3>;
+    type RoundFunction = R;
 
     fn description() -> String {
         "VM main circuit".to_string()
@@ -26,8 +39,8 @@ impl<F: SmallField, W: WitnessOracle<E>> ZkSyncUniformSynthesisFunction<E> for V
 
     fn get_synthesis_function_dyn<
         'a,
-        CS: ConstraintSystem<E> + 'a,
-    >() -> Box<dyn FnOnce(&mut CS, Option<Self::Witness>, &Self::RoundFunction, Self::Config) -> Result<AllocatedNum<E>, SynthesisError> + 'a> {
-        Box::new(vm_circuit_entry_point)
+        CS: ConstraintSystem<F> + 'a,
+    >() -> Box<dyn FnOnce(&mut CS, Self::Witness, &Self::RoundFunction, Self::Config) -> [Num<F>; INPUT_OUTPUT_COMMITMENT_LENGTH] + 'a> {
+        Box::new(main_vm_entry_point)
     }
 }

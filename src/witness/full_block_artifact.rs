@@ -398,47 +398,59 @@ impl<F: SmallField> FullBlockArtifacts<F> {
     }
 }
 
-// use crate::abstract_zksync_circuit::concrete_circuits::*;
-// use crate::witness::oracle::VmWitnessOracle;
+use crate::abstract_zksync_circuit::concrete_circuits::*;
+use crate::witness::oracle::VmWitnessOracle;
 
-// #[derive(Derivative, serde::Serialize, serde::Deserialize)]
-// #[derivative(Clone)]
-// #[serde(bound = "")]
-// pub struct BlockBasicCircuits<F: SmallField> {
-//     // main VM circuit. Many of them
-//     pub main_vm_circuits: Vec<VMMainCircuit<E, VmWitnessOracle<F>>>,
-//     // code decommittments sorter is only 1 circuit per block
-//     pub code_decommittments_sorter_circuit: CodeDecommittsSorterCircuit<F>,
-//     // few code decommitters: code hash -> memory
-//     pub code_decommitter_circuits: Vec<CodeDecommitterCircuit<F>>,
-//     // demux logs to get precompiles for RAM too
-//     pub log_demux_circuits: Vec<LogDemuxerCircuit<F>>,
-//     // process precompiles
-//     // keccak
-//     pub keccak_precompile_circuits: Vec<Keccak256RoundFunctionCircuit<F>>,
-//     // sha256
-//     pub sha256_precompile_circuits: Vec<Sha256RoundFunctionCircuit<F>>,
-//     // ecrecover
-//     pub ecrecover_precompile_circuits: Vec<ECRecoverFunctionCircuit<F>>,
-//     // when it's all done we prove the memory validity and finish with it
-//     pub ram_permutation_circuits: Vec<RAMPermutationCircuit<F>>,
-//     // sort storage changes
-//     pub storage_sorter_circuits: Vec<StorageSorterCircuit<F>>,
-//     // apply them
-//     pub storage_application_circuits: Vec<StorageApplicationCircuit<F>>,
-//     // rehash initial writes
-//     pub initial_writes_hasher_circuit: InitialStorageWritesPubdataHasherCircuit<F>,
-//     // rehash repeated writes
-//     pub repeated_writes_hasher_circuit: RepeatedStorageWritesPubdataHasherCircuit<F>,
-//     // sort and dedup events
-//     pub events_sorter_circuits: Vec<EventsSorterCircuit<F>>,
-//     // sort and dedup L1 messages
-//     pub l1_messages_sorter_circuits: Vec<L1MessagesSorterCircuit<F>>,
-//     // hash l1 messages into pubdata
-//     pub l1_messages_pubdata_hasher_circuit: L1MessagesHasherCircuit<F>,
-//     // merklize L1 message
-//     pub l1_messages_merklizer_circuit: L1MessagesMerklizerCircuit<F>
-// }
+use boojum::gadgets::traits::allocatable::*;
+
+#[derive(Derivative, serde::Serialize, serde::Deserialize)]
+#[derivative(Clone)]
+#[serde(bound = "")]
+pub struct BlockBasicCircuits<
+    F: SmallField,
+    R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
+> 
+    where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <zkevm_circuits::base_structures::memory_query::MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <zkevm_circuits::base_structures::decommit_query::DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <boojum::gadgets::u256::UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <boojum::gadgets::u256::UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN + 1]:,
+    [(); <zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+{
+    // main VM circuit. Many of them
+    pub main_vm_circuits: Vec<VMMainCircuit<F, VmWitnessOracle<F>, R>>,
+    // // code decommittments sorter is only 1 circuit per block
+    // pub code_decommittments_sorter_circuit: CodeDecommittsSorterCircuit<F>,
+    // // few code decommitters: code hash -> memory
+    // pub code_decommitter_circuits: Vec<CodeDecommitterCircuit<F>>,
+    // demux logs to get precompiles for RAM too
+    pub log_demux_circuits: Vec<LogDemuxerCircuit<F, R>>,
+    // process precompiles
+    // keccak
+    pub keccak_precompile_circuits: Vec<Keccak256RoundFunctionCircuit<F, R>>,
+    // sha256
+    pub sha256_precompile_circuits: Vec<Sha256RoundFunctionCircuit<F, R>>,
+    // ecrecover
+    pub ecrecover_precompile_circuits: Vec<ECRecoverFunctionCircuit<F, R>>,
+    // // when it's all done we prove the memory validity and finish with it
+    // pub ram_permutation_circuits: Vec<RAMPermutationCircuit<F>>,
+    // // sort storage changes
+    // pub storage_sorter_circuits: Vec<StorageSorterCircuit<F>>,
+    // apply them
+    pub storage_application_circuits: Vec<StorageApplicationCircuit<F, R>>,
+    // // rehash initial writes
+    // pub initial_writes_hasher_circuit: InitialStorageWritesPubdataHasherCircuit<F>,
+    // // rehash repeated writes
+    // pub repeated_writes_hasher_circuit: RepeatedStorageWritesPubdataHasherCircuit<F>,
+    // // sort and dedup events
+    // pub events_sorter_circuits: Vec<EventsSorterCircuit<F>>,
+    // // sort and dedup L1 messages
+    // pub l1_messages_sorter_circuits: Vec<L1MessagesSorterCircuit<F>>,
+    // // hash l1 messages into pubdata
+    // pub l1_messages_pubdata_hasher_circuit: L1MessagesHasherCircuit<F>,
+    // // merklize L1 message
+    // pub l1_messages_merklizer_circuit: L1MessagesMerklizerCircuit<F>
+}
 
 // impl<F: SmallField> BlockBasicCircuits<F> {
 //     pub fn into_flattened_set(self) -> Vec<ZkSyncCircuit<E, VmWitnessOracle<F>>> {
@@ -495,45 +507,46 @@ impl<F: SmallField> FullBlockArtifacts<F> {
 //     }
 // }
 
+use zkevm_circuits::fsm_input_output::circuit_inputs::INPUT_OUTPUT_COMMITMENT_LENGTH;
 
-// #[derive(Derivative, serde::Serialize, serde::Deserialize)]
-// #[derivative(Clone)]
-// #[serde(bound = "")]
-// pub struct BlockBasicCircuitsPublicInputs<F: SmallField> {
-//     // main VM circuit. Many of them
-//     pub main_vm_circuits: Vec<F>,
-//     // code decommittments sorter
-//     pub code_decommittments_sorter_circuit: F,
-//     // few code decommitters: code hash -> memory
-//     pub code_decommitter_circuits: Vec<F>,
-//     // demux logs to get precompiles for RAM too
-//     pub log_demux_circuits: Vec<F>,
-//     // process precompiles
-//     // keccak
-//     pub keccak_precompile_circuits: Vec<F>,
-//     // sha256
-//     pub sha256_precompile_circuits: Vec<F>,
-//     // ecrecover
-//     pub ecrecover_precompile_circuits: Vec<F>,
-//     // when it's all done we prove the memory validity and finish with it
-//     pub ram_permutation_circuits: Vec<F>,
-//     // sort storage changes
-//     pub storage_sorter_circuits: Vec<F>,
-//     // apply them
-//     pub storage_application_circuits: Vec<F>,
-//     // rehash initial writes
-//     pub initial_writes_hasher_circuit: F,
-//     // rehash repeated writes
-//     pub repeated_writes_hasher_circuit: F,
-//     // sort and dedup events
-//     pub events_sorter_circuits: Vec<F>,
-//     // sort and dedup L1 messages
-//     pub l1_messages_sorter_circuits: Vec<F>,
-//     // hash l1 messages into pubdata
-//     pub l1_messages_pubdata_hasher_circuit: F,
-//     // merklize L1 message
-//     pub l1_messages_merklizer_circuit: F,
-// }
+#[derive(Derivative, serde::Serialize, serde::Deserialize)]
+#[derivative(Clone)]
+#[serde(bound = "")]
+pub struct BlockBasicCircuitsPublicInputs<F: SmallField> {
+    // main VM circuit. Many of them
+    pub main_vm_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
+    // // code decommittments sorter
+    // pub code_decommittments_sorter_circuit: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
+    // // few code decommitters: code hash -> memory
+    // pub code_decommitter_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
+    // demux logs to get precompiles for RAM too
+    pub log_demux_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
+    // process precompiles
+    // keccak
+    pub keccak_precompile_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
+    // sha256
+    pub sha256_precompile_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
+    // ecrecover
+    pub ecrecover_precompile_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
+    // // when it's all done we prove the memory validity and finish with it
+    // pub ram_permutation_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
+    // // sort storage changes
+    // pub storage_sorter_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
+    // apply them
+    pub storage_application_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
+    // // rehash initial writes
+    // pub initial_writes_hasher_circuit: F,
+    // // rehash repeated writes
+    // pub repeated_writes_hasher_circuit: F,
+    // // sort and dedup events
+    // pub events_sorter_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
+    // // sort and dedup L1 messages
+    // pub l1_messages_sorter_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
+    // // hash l1 messages into pubdata
+    // pub l1_messages_pubdata_hasher_circuit: F,
+    // // merklize L1 message
+    // pub l1_messages_merklizer_circuit: F,
+}
 
 // impl<F: SmallField> BlockBasicCircuitsPublicInputs<F> {
 //     pub fn into_flattened_set(self) -> Vec<F> {
@@ -589,46 +602,46 @@ impl<F: SmallField> FullBlockArtifacts<F> {
 //     }
 // }
 
-// use sync_vm::inputs::ClosedFormInputCompactFormWitness;
+use zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
 
-// #[derive(Derivative, serde::Serialize, serde::Deserialize)]
-// #[derivative(Clone)]
-// #[serde(bound = "")]
-// pub struct BlockBasicCircuitsPublicCompactFormsWitnesses<F: SmallField> {
-//     // main VM circuit. Many of them
-//     pub main_vm_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
-//     // code decommittments sorter
-//     pub code_decommittments_sorter_circuit: ClosedFormInputCompactFormWitness<F>,
-//     // few code decommitters: code hash -> memory
-//     pub code_decommitter_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
-//     // demux logs to get precompiles for RAM too
-//     pub log_demux_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
-//     // process precompiles
-//     // keccak
-//     pub keccak_precompile_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
-//     // sha256
-//     pub sha256_precompile_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
-//     // ecrecover
-//     pub ecrecover_precompile_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
-//     // when it's all done we prove the memory validity and finish with it
-//     pub ram_permutation_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
-//     // sort storage changes
-//     pub storage_sorter_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
-//     // apply them
-//     pub storage_application_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
-//     // rehash initial writes
-//     pub initial_writes_hasher_circuit: ClosedFormInputCompactFormWitness<F>,
-//     // rehash repeated writes
-//     pub repeated_writes_hasher_circuit: ClosedFormInputCompactFormWitness<F>,
-//     // sort and dedup events
-//     pub events_sorter_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
-//     // sort and dedup L1 messages
-//     pub l1_messages_sorter_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
-//     // hash l1 messages into pubdata
-//     pub l1_messages_pubdata_hasher_circuit: ClosedFormInputCompactFormWitness<F>,
-//     // merklize L1 message
-//     pub l1_messages_merklizer_circuit: ClosedFormInputCompactFormWitness<F>,
-// }
+#[derive(Derivative, serde::Serialize, serde::Deserialize)]
+#[derivative(Clone)]
+#[serde(bound = "")]
+pub struct BlockBasicCircuitsPublicCompactFormsWitnesses<F: SmallField> {
+    // main VM circuit. Many of them
+    pub main_vm_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
+    // code decommittments sorter
+    pub code_decommittments_sorter_circuit: ClosedFormInputCompactFormWitness<F>,
+    // few code decommitters: code hash -> memory
+    pub code_decommitter_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
+    // demux logs to get precompiles for RAM too
+    pub log_demux_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
+    // process precompiles
+    // keccak
+    pub keccak_precompile_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
+    // sha256
+    pub sha256_precompile_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
+    // ecrecover
+    pub ecrecover_precompile_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
+    // when it's all done we prove the memory validity and finish with it
+    pub ram_permutation_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
+    // sort storage changes
+    pub storage_sorter_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
+    // apply them
+    pub storage_application_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
+    // // rehash initial writes
+    // pub initial_writes_hasher_circuit: ClosedFormInputCompactFormWitness<F>,
+    // // rehash repeated writes
+    // pub repeated_writes_hasher_circuit: ClosedFormInputCompactFormWitness<F>,
+    // sort and dedup events
+    pub events_sorter_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
+    // sort and dedup L1 messages
+    pub l1_messages_sorter_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
+    // // hash l1 messages into pubdata
+    // pub l1_messages_pubdata_hasher_circuit: ClosedFormInputCompactFormWitness<F>,
+    // // merklize L1 message
+    // pub l1_messages_merklizer_circuit: ClosedFormInputCompactFormWitness<F>,
+}
 
 // impl<F: SmallField> BlockBasicCircuitsPublicCompactFormsWitnesses<F> {
 //     pub fn into_flattened_set(self) -> Vec<ClosedFormInputCompactFormWitness<F>> {

@@ -1,14 +1,10 @@
 use super::*;
-use crate::pairing::Engine;
-use derivative::Derivative;
-use sync_vm::franklin_crypto::plonk::circuit::utils::u64_to_fe;
-use crate::biguint_from_u256;
-use crate::witness::full_block_artifact::FullBlockArtifacts;
-use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
-use sync_vm::glue::sha256_round_function_circuit::input::*;
-use sync_vm::glue::sha256_round_function_circuit::Sha256PrecompileCallParamsWitness;
-use sync_vm::scheduler::queues::FixedWidthEncodingGenericQueueWitness;
-use sync_vm::precompiles::*;
+use zkevm_circuits::sha256_round_function::input::*;
+use boojum::gadgets::traits::allocatable::CSAllocatable;
+use zkevm_circuits::base_structures::log_query::*;
+use derivative::*;
+use zkevm_circuits::sha256_round_function::*;
+use zk_evm::zkevm_opcode_defs::ethereum_types::U256;
 
 #[derive(Derivative)]
 #[derivative(Clone, Copy, Debug, PartialEq, Eq)]
@@ -23,13 +19,13 @@ pub enum Sha256PrecompileState {
 // In practice the only difficulty is buffer state, everything else is provided by out-of-circuit VM
 
 pub fn sha256_decompose_into_per_circuit_witness<
-F: SmallField,
-R: CircuitArithmeticRoundFunction<E, 2, 3>
+    F: SmallField,
+    R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
-    artifacts: &mut FullBlockArtifacts<E>,
+    artifacts: &mut FullBlockArtifacts<F>,
     num_rounds_per_circuit: usize,
     round_function: &R,
-) -> Vec<Sha256RoundFunctionCircuitInstanceWitness<E>> {
+) -> Vec<Sha256RoundFunctionCircuitInstanceWitness<F>> {
     assert_eq!(artifacts.all_memory_queries_accumulated.len(), artifacts.all_memory_queue_states.len());
     assert_eq!(artifacts.all_memory_queries_accumulated.len(), artifacts.memory_queue_simulator.num_items as usize);
 
@@ -78,18 +74,17 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
         let current_memory_queue_state = memory_queue_input_state.clone();
 
         let mut observable_input_data = PrecompileFunctionInputData::placeholder_witness();
-        observable_input_data.initial_memory_state = memory_queue_input_state.clone();
+        observable_input_data.initial_memory_queue_state = memory_queue_input_state.clone();
         observable_input_data.initial_log_queue_state = log_queue_input_state.clone();
 
         let mut observable_output_data = PrecompileFunctionOutputData::placeholder_witness();
         observable_output_data.final_memory_state = current_memory_queue_state.clone();
 
-        let mut hidden_fsm_input_state = Sha256RoundFunctionFSM::<E>::placeholder_witness();
+        let mut hidden_fsm_input_state = Sha256RoundFunctionFSM::<F>::placeholder_witness();
         hidden_fsm_input_state.read_precompile_call = true;
 
-        let mut hidden_fsm_output_state = Sha256RoundFunctionFSM::<E>::placeholder_witness();
+        let mut hidden_fsm_output_state = Sha256RoundFunctionFSM::<F>::placeholder_witness();
         hidden_fsm_output_state.completed = true;
-        use cratFanklin_crypto::plonk::circuit::hashes_with_tables::sha256::gadgets::Sha256Gadget;
 
         use zk_evm::precompiles::sha256::Sha256;
         // internal state is a bit more tricky, it'll be a round over empty input
@@ -100,38 +95,29 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
         let sha256_internal_state_over_empty_buffer =
             zk_evm::precompiles::sha256::transmute_state(internal_state_over_empty_buffer.clone());
 
-        let circuit_hash_internal_state: [F; 8] = sha256_internal_state_over_empty_buffer
-            .into_iter()
-            .map(|el| u64_to_fe::<F>(el as u64))
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
+        let circuit_hash_internal_state = sha256_internal_state_over_empty_buffer;
             
         hidden_fsm_output_state.sha256_inner_state = circuit_hash_internal_state;
 
-        let witness = Sha256RoundFunctionCircuitInstanceWitness::<E> {
-            closed_form_input: Sha256RoundFunctionCircuitInputOutputWitness::<E> {
+        let witness = Sha256RoundFunctionCircuitInstanceWitness::<F> {
+            closed_form_input: Sha256RoundFunctionCircuitInputOutputWitness::<F> {
                 start_flag: true,
                 completion_flag: true,
                 observable_input: observable_input_data,
                 observable_output: observable_output_data,
-                hidden_fsm_input: Sha256RoundFunctionFSMInputOutputWitness::<E> {
+                hidden_fsm_input: Sha256RoundFunctionFSMInputOutputWitness::<F> {
                     internal_fsm: hidden_fsm_input_state,
                     log_queue_state: log_queue_input_state.clone(),
                     memory_queue_state: memory_queue_input_state,
-                    _marker: std::marker::PhantomData,
                 },
-                hidden_fsm_output: Sha256RoundFunctionFSMInputOutputWitness::<E> {
+                hidden_fsm_output: Sha256RoundFunctionFSMInputOutputWitness::<F> {
                     internal_fsm: hidden_fsm_output_state,
                     log_queue_state: take_queue_state_from_simulator(&artifacts.demuxed_sha256_precompile_queue_simulator),
                     memory_queue_state: current_memory_queue_state.clone(),
-                    _marker: std::marker::PhantomData,
                 },
-                _marker_e: (),
-                _marker: std::marker::PhantomData
             },
-            requests_queue_witness: FixedWidthEncodingGenericQueueWitness {wit: VecDeque::new()},
-            memory_reads_witness: vec![],
+            requests_queue_witness: CircuitQueueRawWitness::<F, LogQuery<F>, 4, LOG_QUERY_PACKED_WIDTH> { elements: VecDeque::new() },
+            memory_reads_witness: VecDeque::new(),
         };
         result.push(witness);
 
@@ -143,11 +129,7 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
 
     // convension
     let mut log_queue_input_state = take_queue_state_from_simulator(&artifacts.demuxed_sha256_precompile_queue_simulator);
-    use sync_vm::traits::CSWitnessable;
-
-    use sync_vm::glue::sha256_round_function_circuit::input::Sha256RoundFunctionFSM;
-
-    let mut hidden_fsm_input_state = Sha256RoundFunctionFSM::<E>::placeholder_witness();
+    let mut hidden_fsm_input_state = Sha256RoundFunctionFSM::<F>::placeholder_witness();
     hidden_fsm_input_state.read_precompile_call = true;
 
     let mut memory_queries_it = memory_queries.into_iter();
@@ -174,7 +156,7 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
         use zk_evm::precompiles::sha256::Sha256;
         let mut internal_state = Sha256::default();
 
-        let mut memory_reads_per_request = vec![];
+        let mut memory_reads_per_request: Vec<U256> = vec![];
 
         assert_eq!(
             precompile_state,
@@ -208,7 +190,7 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
                 data.to_big_endian(&mut block[32*query_index..32*(query_index+1)]);
                 let read_query = memory_queries_it.next().unwrap();
                 assert_eq!(read, read_query);
-                memory_reads_per_request.push(biguint_from_u256(read_query.value));
+                memory_reads_per_request.push(read_query.value);
 
                 artifacts.all_memory_queries_accumulated.push(read);
                 let (_, intermediate_info) = artifacts.memory_queue_simulator.push_and_output_intermediate_data(read, round_function);
@@ -257,12 +239,7 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
                 let state_inner =
                     zk_evm::precompiles::sha256::transmute_state(internal_state.clone());
 
-                let mut circuit_hash_internal_state: [F; 8] = state_inner
-                    .into_iter()
-                    .map(|el| u64_to_fe::<F>(el as u64))
-                    .collect::<Vec<_>>()
-                    .try_into()
-                    .unwrap();
+                let mut circuit_hash_internal_state = state_inner;
 
                 let input_is_empty = is_last_request;
                 let nothing_left = is_last_round && input_is_empty;
@@ -285,12 +262,7 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
                     let sha256_internal_state_over_empty_buffer =
                         zk_evm::precompiles::sha256::transmute_state(internal_state_over_empty_buffer.clone());
     
-                    circuit_hash_internal_state = sha256_internal_state_over_empty_buffer
-                        .into_iter()
-                        .map(|el| u64_to_fe::<F>(el as u64))
-                        .collect::<Vec<_>>()
-                        .try_into()
-                        .unwrap();
+                    circuit_hash_internal_state = sha256_internal_state_over_empty_buffer;
                 }
 
                 let completed = precompile_state == Sha256PrecompileState::Finished;
@@ -299,32 +271,26 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
                 let read_precompile_call =
                     precompile_state == Sha256PrecompileState::GetRequestFromQueue;
 
-                let hidden_fsm_output_state = Sha256RoundFunctionFSMWitness::<E> {
+                let hidden_fsm_output_state = Sha256RoundFunctionFSMWitness::<F> {
                     completed,
                     read_words_for_round,
                     sha256_inner_state: circuit_hash_internal_state,
                     read_precompile_call,
                     timestamp_to_use_for_read: request.timestamp.0,
                     timestamp_to_use_for_write: request.timestamp.0 + 1,
-                    precompile_call_params: Sha256PrecompileCallParamsWitness::<E> {
+                    precompile_call_params: Sha256PrecompileCallParamsWitness::<F> {
                         input_page: precompile_request.memory_page_to_read,
                         input_offset: precompile_request.input_memory_offset,
                         output_page: precompile_request.memory_page_to_write,
                         output_offset: precompile_request.output_memory_offset,
-                        num_rounds: num_rounds_left as u16,
-                        _marker: std::marker::PhantomData,
+                        num_rounds: num_rounds_left as u32,
                     },
-
-                    _marker: std::marker::PhantomData,
                 };
-
-                use crate::encodings::log_query::log_query_into_storage_record_witness;
 
                 let range = starting_request_idx..(request_idx+1);
                 let wit: VecDeque<_> = (&simulator_witness[range]).iter().map(|el| {
-                    let mapped = log_query_into_storage_record_witness::<E>(&el.2);
 
-                    (el.0, mapped, el.1)
+                    (log_query_into_circuit_log_query_witness(&el.2), el.1)
                 }).collect();
 
                 let current_reads = std::mem::replace(&mut memory_reads_per_request, vec![]);
@@ -333,7 +299,7 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
 
                 let mut observable_input_data = PrecompileFunctionInputData::placeholder_witness();
                 if result.len() == 0 {
-                    observable_input_data.initial_memory_state = memory_queue_input_state.clone();
+                    observable_input_data.initial_memory_queue_state = memory_queue_input_state.clone();
                     observable_input_data.initial_log_queue_state = log_queue_input_state.clone();
                 }
 
@@ -342,31 +308,25 @@ R: CircuitArithmeticRoundFunction<E, 2, 3>
                     observable_output_data.final_memory_state = current_memory_queue_state.clone();
                 }
 
-                use sync_vm::glue::sha256_round_function_circuit::input::Sha256RoundFunctionCircuitInputOutputWitness;
-
-                let witness = Sha256RoundFunctionCircuitInstanceWitness::<E> {
-                    closed_form_input: Sha256RoundFunctionCircuitInputOutputWitness::<E> {
+                let witness = Sha256RoundFunctionCircuitInstanceWitness::<F> {
+                    closed_form_input: Sha256RoundFunctionCircuitInputOutputWitness::<F> {
                         start_flag: result.len() == 0,
                         completion_flag: finished,
                         observable_input: observable_input_data,
                         observable_output: observable_output_data,
-                        hidden_fsm_input: Sha256RoundFunctionFSMInputOutputWitness::<E> {
+                        hidden_fsm_input: Sha256RoundFunctionFSMInputOutputWitness::<F> {
                             internal_fsm: hidden_fsm_input_state,
                             log_queue_state: log_queue_input_state.clone(),
                             memory_queue_state: memory_queue_input_state,
-                            _marker: std::marker::PhantomData,
                         },
-                        hidden_fsm_output: Sha256RoundFunctionFSMInputOutputWitness::<E> {
+                        hidden_fsm_output: Sha256RoundFunctionFSMInputOutputWitness::<F> {
                             internal_fsm: hidden_fsm_output_state.clone(),
                             log_queue_state: take_queue_state_from_simulator(&artifacts.demuxed_sha256_precompile_queue_simulator),
                             memory_queue_state: current_memory_queue_state.clone(),
-                            _marker: std::marker::PhantomData,
                         },
-                        _marker_e: (),
-                        _marker: std::marker::PhantomData
                     },
-                    requests_queue_witness: FixedWidthEncodingGenericQueueWitness {wit: wit},
-                    memory_reads_witness: current_witness,
+                    requests_queue_witness: CircuitQueueRawWitness::<F, LogQuery<F>, 4, LOG_QUERY_PACKED_WIDTH> { elements: wit },
+                    memory_reads_witness: current_witness.into_iter().flatten().collect(),
                 };
 
                 // make non-inclusize

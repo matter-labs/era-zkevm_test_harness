@@ -12,7 +12,7 @@ mod test {
         // let circuit_file_name = "prover_input_11";
         // let circuit_file_name = "prover_input_120656";
         // 
-        let circuit_file_name = "prover_jobs_3_87_Main VM_BasicCircuits.bin";
+        let circuit_file_name = "prover_jobs_8638_149_Main VM_BasicCircuits.bin";
         // let circuit_file_name = "prover_jobs.json";
 
         let mut content = std::fs::File::open(circuit_file_name).unwrap();

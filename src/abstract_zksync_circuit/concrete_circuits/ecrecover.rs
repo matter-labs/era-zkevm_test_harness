@@ -2,20 +2,31 @@ use derivative::*;
 
 use super::*;
 
-use sync_vm::glue::traits::GenericHasher;
-use sync_vm::rescue_poseidon::RescueParams;
-
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone, Copy, Debug, Default(bound = ""))]
-pub struct ECRecoverFunctionInstanceSynthesisFunction;
+pub struct ECRecoverFunctionInstanceSynthesisFunction<
+    F: SmallField, 
+    R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+> {
+    _marker: std::marker::PhantomData<(F, R)>
+}
 
-use sync_vm::glue::ecrecover_circuit::input::*;
-use sync_vm::glue::ecrecover_circuit::ecrecover_function_entry_point;
+use zkevm_circuits::ecrecover::input::*;
+use zkevm_circuits::ecrecover::ecrecover_function_entry_point;
 
-impl<F: SmallField> ZkSyncUniformSynthesisFunction<E> for ECRecoverFunctionInstanceSynthesisFunction {
-    type Witness = EcrecoverCircuitInstanceWitness<E>;
+impl<
+    F: SmallField,
+    R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+> ZkSyncUniformSynthesisFunction<F> for ECRecoverFunctionInstanceSynthesisFunction<F, R> 
+    where [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN + 1]: 
+{
+    type Witness = EcrecoverCircuitInstanceWitness<F>;
     type Config = usize;
-    type RoundFunction = GenericHasher<E, RescueParams<E, 2, 3>, 2, 3>;
+    type RoundFunction = R;
 
     fn description() -> String {
         "ECRecover".to_string()
@@ -23,8 +34,8 @@ impl<F: SmallField> ZkSyncUniformSynthesisFunction<E> for ECRecoverFunctionInsta
 
     fn get_synthesis_function_dyn<
         'a,
-        CS: ConstraintSystem<E> + 'a,
-    >() -> Box<dyn FnOnce(&mut CS, Option<Self::Witness>, &Self::RoundFunction, Self::Config) -> Result<AllocatedNum<E>, SynthesisError> + 'a> {
+        CS: ConstraintSystem<F> + 'a,
+    >() -> Box<dyn FnOnce(&mut CS, Self::Witness, &Self::RoundFunction, Self::Config) -> [Num<F>; INPUT_OUTPUT_COMMITMENT_LENGTH] + 'a> {
         Box::new(ecrecover_function_entry_point)
     }
 }

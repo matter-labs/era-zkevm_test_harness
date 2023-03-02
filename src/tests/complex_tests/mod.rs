@@ -241,7 +241,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     }
 
     for circuit in unique_set.iter().cloned() {
-        // continue;
+        continue;
 
         circuit.erase_witness();
 
