@@ -24,7 +24,7 @@ path = "src/geometry_config_generator/main.rs"
 # zkevm-assembly = {path = "../zkEVM-assembly"}
 # circuit_testing = {path = "../circuit_testing"}
 
-zkevm-assembly = {git = "https://github.com/matter-labs/zkEVM-assembly.git", branch = "v1.3.1"}
+zkevm-assembly = {git = "https://github.com/matter-labs/zkEVM-assembly.git", rev = "173aff40b2f43a0648b37a992ae633c0955084fe"}
 zk_evm = {git = "https://github.com/matter-labs/zk_evm.git", branch = "v1.3.1"}
 sync_vm = {git = "https://github.com/matter-labs/sync_vm.git", branch = "v1.3.1", features = ["external_testing"]}
 circuit_testing = {git = "https://github.com/matter-labs/circuit_testing.git", branch = "main"}
