@@ -38,6 +38,7 @@ use zk_evm::witness_trace::VmWitnessTracer;
 use zk_evm::GenericNoopTracer;
 use zkevm_assembly::Assembly;
 use zk_evm::testing::storage::InMemoryStorage;
+use zk_evm::reference_impls::memory::SimpleMemory;
 use crate::toolset::create_tools;
 use utils::{read_test_artifact, TestArtifact};
 use crate::witness::tree::{ZKSyncTestingTree, BinarySparseStorageTree};
@@ -161,6 +162,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     };
 
     let mut storage_impl = InMemoryStorage::new();
+    let mut memory_impl = SimpleMemory::new_without_preallocations();
     let mut tree = ZKSyncTestingTree::empty();
 
     test_artifact.entry_point_address =
@@ -246,6 +248,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         round_function.clone(),
         geometry,
         storage_impl,
+        memory_impl,
         &mut tree,
     );
 

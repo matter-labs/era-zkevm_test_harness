@@ -4,6 +4,7 @@ use crate::ethereum_types::U256;
 use derivative::Derivative;
 use rayon::prelude::*;
 use std::cmp::Ordering;
+use std::iter::IntoIterator;
 use zk_evm::aux_structures::LogQuery;
 use zk_evm::aux_structures::Timestamp;
 
@@ -88,11 +89,11 @@ pub struct LogQueryLikeWithExtendedEnumeration<L: LogQueryLike> {
     pub extended_timestamp: u32,
 }
 
-pub fn sort_storage_access_queries<L: LogQueryLike>(
-    unsorted_storage_queries: &[L],
+pub fn sort_storage_access_queries<'a, L: LogQueryLike, I: IntoIterator<Item = &'a L>>(
+    unsorted_storage_queries: I,
 ) -> (Vec<LogQueryLikeWithExtendedEnumeration<L>>, Vec<L>) {
     let mut sorted_storage_queries_with_extra_timestamp: Vec<_> = unsorted_storage_queries
-        .iter()
+        .into_iter()
         .enumerate()
         .map(|(i, el)| LogQueryLikeWithExtendedEnumeration {
             raw_query: el.clone(),

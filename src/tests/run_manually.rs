@@ -16,6 +16,7 @@ use sync_vm::vm::vm_cycle::witness_oracle::u256_to_biguint;
 use zk_evm::abstractions::*;
 use zk_evm::aux_structures::DecommittmentQuery;
 use zk_evm::aux_structures::*;
+use zk_evm::reference_impls::memory::SimpleMemory;
 use zk_evm::testing::storage::InMemoryStorage;
 use zk_evm::utils::{bytecode_to_code_hash, contract_bytecode_to_words};
 use zk_evm::witness_trace::VmWitnessTracer;
@@ -253,6 +254,7 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
     }));
 
     let mut storage_impl = InMemoryStorage::new();
+    let mut memory_impl = SimpleMemory::new_without_preallocations();
     let mut tree = ZKSyncTestingTree::empty();
 
     let mut known_contracts = HashMap::new();
@@ -277,6 +279,7 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         round_function,
         geometry,
         storage_impl,
+        memory_impl,
         &mut tree,
     );
 

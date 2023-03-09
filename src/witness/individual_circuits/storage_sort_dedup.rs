@@ -30,6 +30,8 @@ pub fn compute_storage_dedup_and_sort<E: Engine, R: CircuitArithmeticRoundFuncti
     per_circuit_capacity: usize,
     round_function: &R,
 ) -> Vec<StorageDeduplicatorInstanceWitness<E>> {
+    // TODO: handle a case if no storage accesses exist
+
     // first we sort the storage log (only storage now) by composite key
 
     use crate::witness::sort_storage_access::sort_storage_access_queries;

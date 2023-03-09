@@ -41,6 +41,7 @@ use sync_vm::scheduler::{NUM_MEMORY_QUERIES_TO_VERIFY, SCHEDULER_TIMESTAMP};
 pub fn run<
     R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn256>>,
     S: Storage,
+    M: Memory,
 >(
     caller: Address,                 // for real block must be zero
     entry_point_address: Address,    // for real block must be the bootloader
@@ -54,6 +55,7 @@ pub fn run<
     round_function: R, // used for all queues implementation
     geometry: GeometryConfig,
     storage: S,
+    memory: M,
     tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
     // ) -> FullBlockArtifacts<Bn256> {
 ) -> (
@@ -73,7 +75,7 @@ pub fn run<
 
     let bytecode_hash = bytecode_to_code_hash(&entry_point_code).unwrap();
 
-    let mut tools = create_tools(storage, &geometry);
+    let mut tools = create_tools(storage, memory, &geometry);
 
     // fill the tools
     let mut to_fill = vec![];
@@ -535,7 +537,7 @@ pub fn run<
     )
 }
 
-pub fn run_with_fixed_params<S: Storage>(
+pub fn run_with_fixed_params<S: Storage, M: Memory>(
     caller: Address,                 // for real block must be zero
     entry_point_address: Address,    // for real block must be the bootloader
     entry_point_code: Vec<[u8; 32]>, // for read lobkc must be a bootloader code
@@ -547,6 +549,7 @@ pub fn run_with_fixed_params<S: Storage>(
     cycle_limit: usize,
     geometry: GeometryConfig,
     storage: S,
+    memory: M,
     tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
 ) -> (
     BlockBasicCircuits<Bn256>,
@@ -567,6 +570,7 @@ pub fn run_with_fixed_params<S: Storage>(
         round_function,
         geometry,
         storage,
+        memory,
         tree,
     )
 }

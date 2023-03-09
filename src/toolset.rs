@@ -1,7 +1,7 @@
 use crate::witness::tracer::WitnessTracer;
 use serde::{Deserialize, Serialize};
 use std::hash::Hash;
-use zk_evm::abstractions::Storage;
+use zk_evm::abstractions::{Memory, Storage};
 use zk_evm::precompiles::DefaultPrecompilesProcessor;
 use zk_evm::reference_impls::decommitter::SimpleDecommitter;
 use zk_evm::reference_impls::event_sink::InMemoryEventSink;
@@ -9,9 +9,9 @@ use zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS;
 
 /// Set should only differ due to another storage that would be sustituted from outside,
 /// and all other tools can be as simple as possible
-pub struct ProvingToolset<S: Storage> {
+pub struct ProvingToolset<S: Storage, M: Memory> {
     pub storage: S,
-    pub memory: SimpleMemory,
+    pub memory: M,
     pub event_sink: InMemoryEventSink,
     pub precompiles_processor: DefaultPrecompilesProcessor<true>,
     pub decommittment_processor: SimpleDecommitter<true>,
@@ -42,8 +42,11 @@ pub struct GeometryConfig {
     pub limit_for_repeated_writes_pubdata_hasher: u32,
 }
 
-pub fn create_tools<S: Storage>(storage: S, config: &GeometryConfig) -> ProvingToolset<S> {
-    let memory = SimpleMemory::new_without_preallocations();
+pub fn create_tools<S: Storage, M: Memory>(
+    storage: S,
+    memory: M,
+    config: &GeometryConfig,
+) -> ProvingToolset<S, M> {
     let event_sink = InMemoryEventSink::new();
     let precompiles_processor = DefaultPrecompilesProcessor::<true>;
     let decommittment_processor = SimpleDecommitter::<true>::new();
@@ -68,15 +71,15 @@ use zk_evm::vm_state::{PrimitiveValue, VmState};
 use zk_evm::zkevm_opcode_defs::*;
 
 /// We expect that storage/memory/decommitter were prefilled
-pub fn create_out_of_circuit_vm<'a, S: Storage>(
-    tools: &'a mut ProvingToolset<S>,
+pub fn create_out_of_circuit_vm<'a, S: Storage, M: Memory>(
+    tools: &'a mut ProvingToolset<S, M>,
     block_properties: &'a BlockProperties,
     caller_address: Address,
     entry_point_address: Address,
 ) -> VmState<
     'a,
     S,
-    SimpleMemory,
+    M,
     InMemoryEventSink,
     DefaultPrecompilesProcessor<true>,
     SimpleDecommitter<true>,
