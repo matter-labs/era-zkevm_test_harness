@@ -286,11 +286,13 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         use boojum::cs::gates::*;
 
         type F = GoldilocksField;
+        // type P = GoldilocksField;
+        type P = MixedGL;
         type PoseidonGate = PoseidonFlattenedGate<GoldilocksField, 8, 12, 4, PoseidonGoldilocks>;
 
         let cs = CSReferenceImplementation::<
             GoldilocksField,
-            MixedGL,
+            P,
             DevCSConfig,
             _,
             _,
@@ -357,8 +359,8 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         let _ = main_vm_entry_point(&mut cs_owned, circuit_input.clone(), &round_function, geometry.cycles_per_vm_snapshot as usize);
         println!("Synthesis is done");
         dbg!(cs_owned.next_available_row());
-        cs_owned.pad_and_shrink();
         cs_owned.wait_for_witness();
+        cs_owned.pad_and_shrink();
         cs_owned.print_gate_stats();
 
         use boojum::worker::Worker;
@@ -381,7 +383,7 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         use boojum::cs::implementations::transcript::GoldilocksPoisedonTranscript;
         use boojum::algebraic_props::sponge::GoldilocksPoseidonSponge;
         use boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
-        use boojum::cs::implementations::transcript::Blake2sTranscript;
+        use boojum::blake2::Blake2s256;
 
         println!("Proving");
         let now = std::time::Instant::now();
@@ -393,9 +395,7 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
             GoldilocksExt2,
             GoldilocksPoisedonTranscript,
             GoldilocksPoseidonSponge<AbsorbtionModeOverwrite>,
-            Vec<u8>,
-            32,
-            Blake2sTranscript,
+            Blake2s256,
         >(
             &worker,
             &base_setup,
