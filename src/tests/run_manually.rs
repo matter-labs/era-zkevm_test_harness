@@ -6,8 +6,9 @@ use crate::entry_point::{create_out_of_circuit_global_context};
 use crate::ethereum_types::*;
 use crate::witness::oracle::create_artifacts_from_tracer;
 use crate::witness::oracle::VmWitnessOracle;
+use boojum::config::{SetupCSConfig, ProvingCSConfig};
 use boojum::cs::implementations::prover::ProofConfig;
-use boojum::cs::toolboxes::gate_config::GatePlacementStrategy;
+use boojum::cs::toolboxes::gate_config::{GatePlacementStrategy, NoGates};
 use boojum::cs::traits::cs::ConstraintSystem;
 use boojum::implementations::poseidon_goldilocks::PoseidonGoldilocks;
 use boojum::zksync::base_structures::vm_state::GlobalContextWitness;
@@ -290,94 +291,188 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         type P = MixedGL;
         type PoseidonGate = PoseidonFlattenedGate<GoldilocksField, 8, 12, 4, PoseidonGoldilocks>;
 
-        let cs = CSReferenceImplementation::<
+        use boojum::cs::toolboxes::static_toolbox::EmptyToolbox;
+
+        fn configure_cs<
+            P: boojum::field::traits::field_like::PrimeFieldLikeVectorized<Base = F>,
+            CFG: boojum::config::CSConfig,
+        >(
+            cs: CSReferenceImplementation<F, P, CFG, NoGates, EmptyToolbox>,
+        ) -> CSReferenceImplementation<
+            F, 
+            P, 
+            CFG, 
+            impl boojum::cs::toolboxes::gate_config::GateConfigurationHolder<F>,
+            impl boojum::cs::toolboxes::static_toolbox::StaticToolboxHolder
+        > where P::Context: boojum::field::traits::field_like::TrivialContext {
+            let cs = cs.allow_lookup(
+                boojum::cs::LookupParameters::UseSpecializedColumnsWithTableIdAsConstant { width: 3, num_repetitions: 5, share_table_id: true }
+            );
+
+            let cs = BooleanConstraintGate::configure_for_cs(cs, GatePlacementStrategy::UseSpecializedColumns { num_repetitions: 1, share_constants: false });
+            // let cs = U8x4FMAGate::configure_for_cs(cs, GatePlacementStrategy::UseSpecializedColumns { num_repetitions: 2, share_constants: false });
+    
+            // let cs = cs.allow_lookup(
+            //     boojum::cs::LookupParameters::TableIdAsConstant { width: 3, share_table_id: true }
+            // );
+            // let cs = BooleanConstraintGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = U8x4FMAGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            
+            let cs = ConstantsAllocatorGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = PoseidonGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = DotProductGate::<4>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = ZeroCheckGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns, false);
+            let cs = FmaGateInBaseFieldWithoutConstant::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = UIntXAddGate::<32>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = UIntXAddGate::<16>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = UIntXAddGate::<8>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = SelectionGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = ParallelSelectionGate::<4>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = PublicInputGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let mut cs_owned = ReductionGate::<_, 4>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+    
+            use boojum::zksync::tables::*;
+            use boojum::cs::tables::binop_table::*;
+            let table = create_binop_table();
+            cs_owned.add_lookup_table::<BinopTable, 3>(table);
+
+            let subpc_to_mask_table = create_subpc_bitmask_table::<F>();
+            cs_owned.add_lookup_table::<VMSubPCToBitmaskTable, 3>(subpc_to_mask_table);
+
+            let opcode_decoding_table = create_opcodes_decoding_and_pricing_table::<F>();
+            cs_owned.add_lookup_table::<VMOpcodeDecodingTable, 3>(opcode_decoding_table);
+
+            let conditions_resolution_table = create_conditionals_resolution_table::<F>();
+            cs_owned.add_lookup_table::<VMConditionalResolutionTable, 3>(conditions_resolution_table);
+
+            let integer_to_bitmask_table = create_integer_to_bitmask_table::<F>(
+                15u32.next_power_of_two().trailing_zeros() as usize,
+                REG_IDX_TO_BITMASK_TABLE_NAME,
+            );
+            cs_owned.add_lookup_table::<RegisterIndexToBitmaskTable, 3>(integer_to_bitmask_table);
+
+            let shifts_table = create_shift_to_num_converter_table::<F>();
+            cs_owned.add_lookup_table::<BitshiftTable, 3>(shifts_table);
+
+            let uma_unaligned_access_table = create_integer_to_bitmask_table::<F>(
+                5,
+                UMA_SHIFT_TO_BITMASK_TABLE_NAME
+            );
+            cs_owned.add_lookup_table::<UMAShiftToBitmaskTable, 3>(uma_unaligned_access_table);
+
+            let uma_ptr_read_cleanup_table = create_uma_ptr_read_bitmask_table::<F>();
+            cs_owned.add_lookup_table::<UMAPtrReadCleanupTable, 3>(uma_ptr_read_cleanup_table);
+
+            cs_owned
+        }
+
+        fn configure_gates(
+            cs: impl ConstraintSystem<F>,
+        ) -> impl ConstraintSystem<F> {
+            let cs = BooleanConstraintGate::configure_for_cs(cs, GatePlacementStrategy::UseSpecializedColumns { num_repetitions: 1, share_constants: false });
+            // let cs = U8x4FMAGate::configure_for_cs(cs, GatePlacementStrategy::UseSpecializedColumns { num_repetitions: 2, share_constants: false });
+    
+            // let cs = cs.allow_lookup(
+            //     boojum::cs::LookupParameters::TableIdAsConstant { width: 3, share_table_id: true }
+            // );
+            // let cs = BooleanConstraintGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = U8x4FMAGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            
+            let cs = ConstantsAllocatorGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = PoseidonGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = DotProductGate::<4>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = ZeroCheckGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns, false);
+            let cs = FmaGateInBaseFieldWithoutConstant::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = UIntXAddGate::<32>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = UIntXAddGate::<16>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = UIntXAddGate::<8>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = SelectionGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = ParallelSelectionGate::<4>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = PublicInputGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let mut cs_owned = ReductionGate::<_, 4>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+    
+            use boojum::zksync::tables::*;
+            use boojum::cs::tables::binop_table::*;
+            let table = create_binop_table();
+            cs_owned.add_lookup_table::<BinopTable, 3>(table);
+
+            let subpc_to_mask_table = create_subpc_bitmask_table::<F>();
+            cs_owned.add_lookup_table::<VMSubPCToBitmaskTable, 3>(subpc_to_mask_table);
+
+            let opcode_decoding_table = create_opcodes_decoding_and_pricing_table::<F>();
+            cs_owned.add_lookup_table::<VMOpcodeDecodingTable, 3>(opcode_decoding_table);
+
+            let conditions_resolution_table = create_conditionals_resolution_table::<F>();
+            cs_owned.add_lookup_table::<VMConditionalResolutionTable, 3>(conditions_resolution_table);
+
+            let integer_to_bitmask_table = create_integer_to_bitmask_table::<F>(
+                15u32.next_power_of_two().trailing_zeros() as usize,
+                REG_IDX_TO_BITMASK_TABLE_NAME,
+            );
+            cs_owned.add_lookup_table::<RegisterIndexToBitmaskTable, 3>(integer_to_bitmask_table);
+
+            let shifts_table = create_shift_to_num_converter_table::<F>();
+            cs_owned.add_lookup_table::<BitshiftTable, 3>(shifts_table);
+
+            let uma_unaligned_access_table = create_integer_to_bitmask_table::<F>(
+                5,
+                UMA_SHIFT_TO_BITMASK_TABLE_NAME
+            );
+            cs_owned.add_lookup_table::<UMAShiftToBitmaskTable, 3>(uma_unaligned_access_table);
+
+            let uma_ptr_read_cleanup_table = create_uma_ptr_read_bitmask_table::<F>();
+            cs_owned.add_lookup_table::<UMAPtrReadCleanupTable, 3>(uma_ptr_read_cleanup_table);
+
+            cs_owned
+        }
+
+        let setup_cs = CSReferenceImplementation::<
             GoldilocksField,
             P,
-            DevCSConfig,
+            SetupCSConfig,
             _,
             _,
         >::new_for_geometry(cs_geometry, 1 << 26, 1<<20);
-
-        let cs = cs.allow_lookup(
-            boojum::cs::LookupParameters::UseSpecializedColumnsWithTableIdAsConstant { width: 3, num_repetitions: 5, share_table_id: true }
-        );
-        let cs = BooleanConstraintGate::configure_for_cs(cs, GatePlacementStrategy::UseSpecializedColumns { num_repetitions: 1, share_constants: false });
-        // let cs = U8x4FMAGate::configure_for_cs(cs, GatePlacementStrategy::UseSpecializedColumns { num_repetitions: 2, share_constants: false });
-
-        // let cs = cs.allow_lookup(
-        //     boojum::cs::LookupParameters::TableIdAsConstant { width: 3, share_table_id: true }
-        // );
-        // let cs = BooleanConstraintGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let cs = U8x4FMAGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
-        
-        let cs = ConstantsAllocatorGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let cs = PoseidonGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let cs = DotProductGate::<4>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let cs = ZeroCheckGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns, false);
-        let cs = FmaGateInBaseFieldWithoutConstant::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let cs = UIntXAddGate::<32>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let cs = UIntXAddGate::<16>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let cs = UIntXAddGate::<8>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let cs = SelectionGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let cs = ParallelSelectionGate::<4>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let cs = PublicInputGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let mut cs_owned = ReductionGate::<_, 4>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
-
-        use boojum::zksync::tables::*;
-        use boojum::cs::tables::binop_table::*;
-        let table = create_binop_table();
-        cs_owned.add_lookup_table::<BinopTable, 3>(table);
-
-        let subpc_to_mask_table = create_subpc_bitmask_table::<F>();
-        cs_owned.add_lookup_table::<VMSubPCToBitmaskTable, 3>(subpc_to_mask_table);
-
-        let opcode_decoding_table = create_opcodes_decoding_and_pricing_table::<F>();
-        cs_owned.add_lookup_table::<VMOpcodeDecodingTable, 3>(opcode_decoding_table);
-
-        let conditions_resolution_table = create_conditionals_resolution_table::<F>();
-        cs_owned.add_lookup_table::<VMConditionalResolutionTable, 3>(conditions_resolution_table);
-
-        let integer_to_bitmask_table = create_integer_to_bitmask_table::<F>(
-            15u32.next_power_of_two().trailing_zeros() as usize,
-            REG_IDX_TO_BITMASK_TABLE_NAME,
-        );
-        cs_owned.add_lookup_table::<RegisterIndexToBitmaskTable, 3>(integer_to_bitmask_table);
-
-        let shifts_table = create_shift_to_num_converter_table::<F>();
-        cs_owned.add_lookup_table::<BitshiftTable, 3>(shifts_table);
-
-        let uma_unaligned_access_table = create_integer_to_bitmask_table::<F>(
-            5,
-            UMA_SHIFT_TO_BITMASK_TABLE_NAME
-        );
-        cs_owned.add_lookup_table::<UMAShiftToBitmaskTable, 3>(uma_unaligned_access_table);
-
-        let uma_ptr_read_cleanup_table = create_uma_ptr_read_bitmask_table::<F>();
-        cs_owned.add_lookup_table::<UMAPtrReadCleanupTable, 3>(uma_ptr_read_cleanup_table);
-
-        println!("Start synthesis");
+        let mut cs_owned = configure_cs::<P, SetupCSConfig>(setup_cs);
+        // create setup
+        println!("Start synthesis for setup");
         let _ = main_vm_entry_point(&mut cs_owned, circuit_input.clone(), &round_function, geometry.cycles_per_vm_snapshot as usize);
-        println!("Synthesis is done");
+        println!("Synthesis for setup is done");
         dbg!(cs_owned.next_available_row());
-        cs_owned.wait_for_witness();
         cs_owned.pad_and_shrink();
         cs_owned.print_gate_stats();
 
+        let quotient_lde_degree = 8;
+        let fri_lde_degree = 2;
+        let cap_size = 16;
+        
         use boojum::worker::Worker;
         let worker = Worker::new_with_num_threads(8);
-        // println!("Checking if satisfied");
-        // assert!(cs_owned.check_if_satisfied(&worker));
+        let (
+            base_setup,
+            setup,
+            vk,
+            setup_tree,
+            vars_hint,
+            wits_hint
+        ) = cs_owned.get_full_setup::<GoldilocksPoseidonSponge<AbsorbtionModeOverwrite>>(&worker, quotient_lde_degree, cap_size);
 
-        // let _ = main_vm_entry_point(&mut cs_owned, circuit_input, &round_function, geometry.cycles_per_vm_snapshot as usize);
-        // cs_owned.pad_and_shrink();
-        // cs_owned.wait_for_witness();
-
-        // cs_owned.print_gate_stats();
-
-        println!("Creating setup");
-        let base_setup = cs_owned.create_base_setup(&worker, &mut ());
-
-        let (setup, placement, _) = cs_owned.materialize_setup_storage(8, &worker, &mut ());
+        let proving_cs = CSReferenceImplementation::<
+            GoldilocksField,
+            P,
+            ProvingCSConfig,
+            _,
+            _,
+        >::new_for_geometry(cs_geometry, 1 << 26, 1<<20);
+        let mut cs_owned = configure_cs(proving_cs);
+        // create setup
+        let now = std::time::Instant::now();
+        println!("Start synthesis for proving");
+        let _ = main_vm_entry_point(&mut cs_owned, circuit_input.clone(), &round_function, geometry.cycles_per_vm_snapshot as usize);
+        dbg!(now.elapsed());
+        println!("Synthesis for setup is done");
+        dbg!(cs_owned.next_available_row());
+        cs_owned.pad_and_shrink();
 
         use boojum::field::goldilocks::GoldilocksExt2;
         use boojum::cs::implementations::transcript::GoldilocksPoisedonTranscript;
@@ -387,39 +482,29 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
 
         println!("Proving");
         let now = std::time::Instant::now();
+        let witness_set = cs_owned.take_witness_using_hints(&worker, &vars_hint, &wits_hint);
 
         let mut prover_config = ProofConfig::default();
-        prover_config.lde_factor = 2;
+        prover_config.lde_factor = fri_lde_degree;
 
-        let _ = cs_owned.prove_cpu_basic::<
+        let proof = cs_owned.prove_cpu_basic::<
             GoldilocksExt2,
             GoldilocksPoisedonTranscript,
             GoldilocksPoseidonSponge<AbsorbtionModeOverwrite>,
             Blake2s256,
         >(
             &worker,
+            witness_set,
             &base_setup,
             &setup,
+            &setup_tree,
+            &vk,
             prover_config,
             ()
         );
 
-        // let _ = cs_owned.prove_cpu_basic::<
-        //     GoldilocksExt2,
-        //     Blake2sTranscript,
-        //     boojum::blake2::Blake2s256,
-        //     Vec<u8>,
-        //     32,
-        //     Blake2sTranscript,
-        // >(
-        //     &worker,
-        //     &base_setup,
-        //     &setup,
-        //     8,
-        //     ()
-        // );
-
-        dbg!(&now.elapsed());
+        dbg!(now.elapsed());
+        println!("Proving is done");
     }
 
     
