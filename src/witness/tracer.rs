@@ -191,7 +191,6 @@ impl AuxCallstackProto {
     }
 }
 
-use zk_evm::abstractions::SpongeExecutionMarker;
 use zk_evm::vm_state::VmLocalState;
 use zk_evm::witness_trace::VmWitnessTracer;
 

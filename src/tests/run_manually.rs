@@ -10,6 +10,7 @@ use boojum::config::{SetupCSConfig, ProvingCSConfig};
 use boojum::cs::implementations::prover::ProofConfig;
 use boojum::cs::toolboxes::gate_config::{GatePlacementStrategy, NoGates};
 use boojum::cs::traits::cs::ConstraintSystem;
+use boojum::field::traits::field_like::TrivialContext;
 use boojum::implementations::poseidon_goldilocks::PoseidonGoldilocks;
 use boojum::zksync::base_structures::vm_state::GlobalContextWitness;
 use boojum::zksync::main_vm::main_vm_entry_point;
@@ -309,6 +310,8 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
                 boojum::cs::LookupParameters::UseSpecializedColumnsWithTableIdAsConstant { width: 3, num_repetitions: 5, share_table_id: true }
             );
 
+            // let t = configure_gates(cs);
+
             let cs = BooleanConstraintGate::configure_for_cs(cs, GatePlacementStrategy::UseSpecializedColumns { num_repetitions: 1, share_constants: false });
             // let cs = U8x4FMAGate::configure_for_cs(cs, GatePlacementStrategy::UseSpecializedColumns { num_repetitions: 2, share_constants: false });
     
@@ -426,6 +429,59 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
             cs_owned
         }
 
+        use boojum::worker::Worker;
+        use boojum::field::goldilocks::GoldilocksExt2;
+        use boojum::cs::implementations::transcript::GoldilocksPoisedonTranscript;
+        use boojum::algebraic_props::sponge::GoldilocksPoseidonSponge;
+        use boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
+        use boojum::blake2::Blake2s256;
+
+        let worker = Worker::new_with_num_threads(8);
+
+        let quotient_lde_degree = 8;
+        let fri_lde_degree = 2;
+        let cap_size = 16;
+
+        let mut prover_config = ProofConfig::default();
+        prover_config.lde_factor = fri_lde_degree;
+
+        // let dev_cs = CSReferenceImplementation::<
+        //     GoldilocksField,
+        //     P,
+        //     DevCSConfig,
+        //     _,
+        //     _,
+        // >::new_for_geometry(cs_geometry, 1 << 26, 1<<20);
+        // let mut cs_owned = configure_cs::<P, DevCSConfig>(dev_cs);
+        // println!("Start synthesis for debug");
+        // let _ = main_vm_entry_point(&mut cs_owned, circuit_input.clone(), &round_function, geometry.cycles_per_vm_snapshot as usize);
+        // println!("Synthesis for debug is done");
+        // let _ = cs_owned.pad_and_shrink();
+
+        // let (reference_vars, reference_wits) = cs_owned.dump_variables_set();
+        // let reference_witness = cs_owned.take_witness(&worker);
+        // let (reference_vars_hint, reference_wits_hint) = cs_owned.create_copy_hints();
+
+        // let dev_cs = CSReferenceImplementation::<
+        //     GoldilocksField,
+        //     P,
+        //     DevCSConfig,
+        //     _,
+        //     _,
+        // >::new_for_geometry(cs_geometry, 1 << 26, 1<<20);
+        // let mut cs_owned = configure_cs::<P, DevCSConfig>(dev_cs);
+        // println!("Start synthesis for debug");
+        // let _ = main_vm_entry_point(&mut cs_owned, circuit_input.clone(), &round_function, geometry.cycles_per_vm_snapshot as usize);
+        // println!("Synthesis for debug is done");
+        // let _ = cs_owned.pad_and_shrink();
+
+        // let _ = cs_owned.prove_one_shot::<
+        //     GoldilocksExt2,
+        //     GoldilocksPoisedonTranscript,
+        //     GoldilocksPoseidonSponge<AbsorbtionModeOverwrite>,
+        //     Blake2s256,
+        // >(&worker, quotient_lde_degree, prover_config.clone(), ());
+        
         let setup_cs = CSReferenceImplementation::<
             GoldilocksField,
             P,
@@ -434,20 +490,16 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
             _,
         >::new_for_geometry(cs_geometry, 1 << 26, 1<<20);
         let mut cs_owned = configure_cs::<P, SetupCSConfig>(setup_cs);
+        let mut setup_input = circuit_input.clone();
+        setup_input.witness_oracle = VmWitnessOracle::<GoldilocksField>::default();
         // create setup
         println!("Start synthesis for setup");
         let _ = main_vm_entry_point(&mut cs_owned, circuit_input.clone(), &round_function, geometry.cycles_per_vm_snapshot as usize);
         println!("Synthesis for setup is done");
         dbg!(cs_owned.next_available_row());
-        cs_owned.pad_and_shrink();
+        let (_, padding_hint) = cs_owned.pad_and_shrink();
         cs_owned.print_gate_stats();
-
-        let quotient_lde_degree = 8;
-        let fri_lde_degree = 2;
-        let cap_size = 16;
-        
-        use boojum::worker::Worker;
-        let worker = Worker::new_with_num_threads(8);
+    
         let (
             base_setup,
             setup,
@@ -456,6 +508,14 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
             vars_hint,
             wits_hint
         ) = cs_owned.get_full_setup::<GoldilocksPoseidonSponge<AbsorbtionModeOverwrite>>(&worker, quotient_lde_degree, cap_size);
+        
+        // for (column, (a, b)) in vars_hint.maps.iter().zip(reference_vars_hint.maps.iter()).enumerate() {
+        //     for (row, (a, b)) in a.iter().zip(b.iter()).enumerate() {
+        //         if a != b {
+        //             panic!("Different at column {} row {}: reference is {:?}, setup is {:?}", column, row, b, a);
+        //         }
+        //     }
+        // }
 
         let proving_cs = CSReferenceImplementation::<
             GoldilocksField,
@@ -470,22 +530,33 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         println!("Start synthesis for proving");
         let _ = main_vm_entry_point(&mut cs_owned, circuit_input.clone(), &round_function, geometry.cycles_per_vm_snapshot as usize);
         dbg!(now.elapsed());
-        println!("Synthesis for setup is done");
-        dbg!(cs_owned.next_available_row());
-        cs_owned.pad_and_shrink();
-
-        use boojum::field::goldilocks::GoldilocksExt2;
-        use boojum::cs::implementations::transcript::GoldilocksPoisedonTranscript;
-        use boojum::algebraic_props::sponge::GoldilocksPoseidonSponge;
-        use boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
-        use boojum::blake2::Blake2s256;
+        println!("Synthesis for proving is done");
+        cs_owned.pad_and_shrink_using_hint(&padding_hint);
 
         println!("Proving");
         let now = std::time::Instant::now();
+
+        // let (quick_vars, quick_wits) = cs_owned.dump_variables_set();
+        // for (idx, (a, b)) in reference_vars.iter()
+        //     .zip(quick_vars.iter()).enumerate() 
+        // {
+        //     if a != b {
+        //         panic!("Different at index {}: a = {}, b = {}", idx, a, b);
+        //     }
+        // }
+        // println!("Variables sets are equal");
+        // for (idx, (a, b)) in reference_wits.iter()
+        //     .zip(quick_wits.iter()).enumerate() 
+        // {
+        //     if a != b {
+        //         panic!("Different at index {}: a = {}, b = {}", idx, a, b);
+        //     }
+        // }
+        // println!("Witness sets are equal");
+
         let witness_set = cs_owned.take_witness_using_hints(&worker, &vars_hint, &wits_hint);
 
-        let mut prover_config = ProofConfig::default();
-        prover_config.lde_factor = fri_lde_degree;
+        // reference_witness.pretty_compare(&witness_set);
 
         let proof = cs_owned.prove_cpu_basic::<
             GoldilocksExt2,
@@ -505,6 +576,45 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
 
         dbg!(now.elapsed());
         println!("Proving is done");
+
+        {
+            use boojum::cs::implementations::verifier::Verifier;
+
+            let cs = Verifier::new_for_verification_key(&vk);
+            let cs = BooleanConstraintGate::configure_for_cs(cs, GatePlacementStrategy::UseSpecializedColumns { num_repetitions: 1, share_constants: false });
+            // let cs = U8x4FMAGate::configure_for_cs(cs, GatePlacementStrategy::UseSpecializedColumns { num_repetitions: 2, share_constants: false });
+    
+            // let cs = cs.allow_lookup(
+            //     boojum::cs::LookupParameters::TableIdAsConstant { width: 3, share_table_id: true }
+            // );
+            // let cs = BooleanConstraintGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = U8x4FMAGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            
+            let cs = ConstantsAllocatorGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = PoseidonGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = DotProductGate::<4>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = ZeroCheckGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns, false);
+            let cs = FmaGateInBaseFieldWithoutConstant::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = UIntXAddGate::<32>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = UIntXAddGate::<16>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = UIntXAddGate::<8>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = SelectionGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = ParallelSelectionGate::<4>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = PublicInputGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = ReductionGate::<_, 4>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+    
+            let is_valid = cs.verify::<
+                GoldilocksPoisedonTranscript,
+                GoldilocksExt2,
+                Blake2s256,
+            >(
+                (),
+                &vk,
+                &proof,
+            );
+
+            assert!(is_valid);
+        }
     }
 
     
