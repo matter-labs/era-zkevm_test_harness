@@ -190,8 +190,8 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
     use crate::toolset::GeometryConfig;
 
     let geometry = GeometryConfig {
-        cycles_per_vm_snapshot: 5,
-        // cycles_per_vm_snapshot: 5000,
+        // cycles_per_vm_snapshot: 5,
+        cycles_per_vm_snapshot: 5000,
         limit_for_code_decommitter_sorter: 16,
         cycles_per_log_demuxer: 8,
         cycles_per_storage_sorter: 4,
