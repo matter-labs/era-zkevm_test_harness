@@ -4,7 +4,7 @@ use boojum::gadgets::traits::allocatable::CSAllocatable;
 use derivative::Derivative;
 use boojum::algebraic_props::round_function::{AlgebraicRoundFunction, absorb_multiple_rounds, AbsorbtionModeOverwrite};
 use boojum::gadgets::poseidon::CircuitRoundFunction;
-use boojum::zksync::base_structures::vm_state::{QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH};
+use zkevm_circuits::base_structures::vm_state::{QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH};
 use boojum::gadgets::u256::decompose_u256_as_u32x8;
 use boojum::gadgets::u160::decompose_address_as_u32x5;
 

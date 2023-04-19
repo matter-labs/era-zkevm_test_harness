@@ -40,7 +40,7 @@ pub fn event_comparison_key(query: &LogQuery) -> Key<2> {
 
 // use sync_vm::glue::storage_validity_by_grand_product::{EXTENDED_TIMESTAMP_ENCODING_OFFSET, EXTENDED_TIMESTAMP_ENCODING_ELEMENT, TimestampedStorageLogRecord, TimestampedStorageLogRecordWitness};
 
-use boojum::zksync::base_structures::log_query::LOG_QUERY_PACKED_WIDTH;
+use zkevm_circuits::base_structures::log_query::LOG_QUERY_PACKED_WIDTH;
 
 impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, LOG_QUERY_PACKED_WIDTH> for LogQuery {
     fn encoding_witness(&self) -> [F; LOG_QUERY_PACKED_WIDTH] {
@@ -336,8 +336,8 @@ pub type LogQueueState<F> = QueueIntermediateStates<F, QUEUE_STATE_WIDTH, FULL_S
 // pub type LogWithExtendedEnumerationQueueState<E> = QueueIntermediateStates<E, 3, 3>;
 
 pub fn log_query_into_circuit_log_query_witness<F: SmallField>(query: &LogQuery) 
-    -> <boojum::zksync::base_structures::log_query::LogQuery<F> as CSAllocatable<F>>::Witness {
-    use boojum::zksync::base_structures::log_query::LogQueryWitness;
+    -> <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocatable<F>>::Witness {
+    use zkevm_circuits::base_structures::log_query::LogQueryWitness;
 
     LogQueryWitness {
         address: query.address,
@@ -355,7 +355,7 @@ pub fn log_query_into_circuit_log_query_witness<F: SmallField>(query: &LogQuery)
 }
 
 impl<F: SmallField> CircuitEquivalentReflection<F> for LogQuery {
-    type Destination = boojum::zksync::base_structures::log_query::LogQuery<F>;
+    type Destination = zkevm_circuits::base_structures::log_query::LogQuery<F>;
     fn reflect(&self) -> <Self::Destination as CSAllocatable<F>>::Witness {
         log_query_into_circuit_log_query_witness(self)
     }

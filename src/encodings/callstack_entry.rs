@@ -20,7 +20,7 @@ pub struct CallstackEntryRollbackState<F: SmallField> {
     pub rollback_queue_segment_length: u32,
 }
 
-use boojum::zksync::base_structures::vm_state::saved_context::EXECUTION_CONTEXT_RECORD_ENCODING_WIDTH;
+use zkevm_circuits::base_structures::vm_state::saved_context::EXECUTION_CONTEXT_RECORD_ENCODING_WIDTH;
 
 impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, EXECUTION_CONTEXT_RECORD_ENCODING_WIDTH> for ExtendedCallstackEntry<F> {
     fn encoding_witness(&self) -> [F; EXECUTION_CONTEXT_RECORD_ENCODING_WIDTH] {

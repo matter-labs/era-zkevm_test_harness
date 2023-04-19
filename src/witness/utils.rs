@@ -2,8 +2,8 @@ use boojum::gadgets::queue::QueueStateWitness;
 use boojum::gadgets::queue::QueueTailState;
 use boojum::gadgets::queue::QueueTailStateWitness;
 use boojum::gadgets::traits::encodable::CircuitEncodable;
-use boojum::zksync::base_structures::vm_state::GlobalContextWitness;
-use boojum::zksync::base_structures::vm_state::VmLocalStateWitness;
+use zkevm_circuits::base_structures::vm_state::GlobalContextWitness;
+use zkevm_circuits::base_structures::vm_state::VmLocalStateWitness;
 use zk_evm::aux_structures::LogQuery;
 use crate::encodings::log_query::LogQueueState;
 use crate::encodings::log_query::LogQueueSimulator;
@@ -11,7 +11,7 @@ use boojum::field::SmallField;
 use boojum::algebraic_props::round_function::AlgebraicRoundFunction;
 use boojum::gadgets::poseidon::CircuitRoundFunction;
 use boojum::gadgets::queue::QueueState;
-use boojum::zksync::base_structures::vm_state::{QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH};
+use zkevm_circuits::base_structures::vm_state::{QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH};
 
 pub fn log_queries_into_states<
     F: SmallField,
@@ -188,7 +188,7 @@ pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
     aux_params: &VmInCircuitAuxilaryParameters<F>,
 ) -> VmLocalStateWitness<F> {
     use boojum::gadgets::traits::allocatable::CSAllocatable;
-    use boojum::zksync::base_structures::vm_state::VmLocalState;
+    use zkevm_circuits::base_structures::vm_state::VmLocalState;
 
     let mut hidden_fsm = VmLocalState::placeholder_witness();
     // depth and state encoding
@@ -240,7 +240,7 @@ pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
     hidden_fsm.callstack.current_context.saved_context.reverted_queue_tail = aux_params.current_frame_rollback_queue_tail;
     hidden_fsm.callstack.current_context.saved_context.reverted_queue_segment_len = aux_params.current_frame_rollback_queue_segment_length;
 
-    use boojum::zksync::base_structures::vm_state::ArithmeticFlagsPortWitness;
+    use zkevm_circuits::base_structures::vm_state::ArithmeticFlagsPortWitness;
 
     // arithmetic flags
     hidden_fsm.flags = ArithmeticFlagsPortWitness {
@@ -284,8 +284,8 @@ pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
 }
 
 use crate::witness::oracle::VmInstanceWitness;
-use boojum::zksync::main_vm::witness_oracle::WitnessOracle;
-use boojum::zksync::fsm_input_output::circuit_inputs::main_vm::VmCircuitWitness;
+use zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
+use zkevm_circuits::fsm_input_output::circuit_inputs::main_vm::VmCircuitWitness;
 
 pub fn vm_instance_witness_to_circuit_formal_input<F: SmallField, O: WitnessOracle<F>>(
     witness: VmInstanceWitness<F, O>,
@@ -317,7 +317,7 @@ pub fn vm_instance_witness_to_circuit_formal_input<F: SmallField, O: WitnessOrac
     );
 
     use boojum::gadgets::traits::allocatable::CSAllocatable;
-    use boojum::zksync::fsm_input_output::circuit_inputs::main_vm::*;
+    use zkevm_circuits::fsm_input_output::circuit_inputs::main_vm::*;
 
     let mut observable_input = VmInputData::placeholder_witness();
     if is_first {

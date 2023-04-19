@@ -21,6 +21,7 @@ resolver = "2"
 [dependencies]
 zk_evm = {path = "../zk_evm"}
 boojum = {path = "../boojum"}
+zkevm_circuits = {path = "../zkevm_circuits"}
 # zkevm-assembly = {path = "../zkEVM-assembly"}
 
 zkevm-assembly = {git = "https://github.com/matter-labs/zkEVM-assembly.git", branch = "v1.3.1"}

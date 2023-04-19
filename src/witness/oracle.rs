@@ -10,8 +10,8 @@ use crate::toolset::GeometryConfig;
 use crate::witness::tracer::{WitnessTracer, QueryMarker};
 use boojum::field::SmallField;
 use boojum::implementations::poseidon_goldilocks::PoseidonGoldilocks;
-use boojum::zksync::base_structures::vm_state::{QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH, GlobalContextWitness};
-use boojum::zksync::main_vm::main_vm_entry_point;
+use zkevm_circuits::base_structures::vm_state::{QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH, GlobalContextWitness};
+use zkevm_circuits::main_vm::main_vm_entry_point;
 use derivative::Derivative;
 use num_bigint::BigUint;
 use rayon::slice::ParallelSliceMut;
@@ -32,7 +32,7 @@ use super::callstack_handler::*;
 use smallvec::SmallVec;
 use super::utils::*;
 use boojum::gadgets::queue::{QueueState, QueueStateWitness, QueueTailStateWitness};
-use boojum::zksync::main_vm::witness_oracle::WitnessOracle;
+use zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
 use boojum::gadgets::poseidon::CircuitRoundFunction;
 use boojum::algebraic_props::round_function::AlgebraicRoundFunction;
 use boojum::gadgets::traits::allocatable::CSAllocatable;
@@ -1119,11 +1119,11 @@ pub fn create_artifacts_from_tracer<
 }
 
 use crate::INITIAL_MONOTONIC_CYCLE_COUNTER;
-use boojum::zksync::main_vm::witness_oracle::MemoryWitness;
-use boojum::zksync::base_structures::memory_query::MemoryQueryWitness;
-use boojum::zksync::base_structures::log_query::LogQueryWitness;
-use boojum::zksync::base_structures::vm_state::saved_context::ExecutionContextRecordWitness;
-use boojum::zksync::base_structures::decommit_query::DecommitQueryWitness;
+use zkevm_circuits::main_vm::witness_oracle::MemoryWitness;
+use zkevm_circuits::base_structures::memory_query::MemoryQueryWitness;
+use zkevm_circuits::base_structures::log_query::LogQueryWitness;
+use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecordWitness;
+use zkevm_circuits::base_structures::decommit_query::DecommitQueryWitness;
 
 impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
     fn get_memory_witness_for_read(
@@ -1501,7 +1501,7 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
 
             (witness, new_state)
         } else {
-            use boojum::zksync::base_structures::vm_state::saved_context::ExecutionContextRecord;
+            use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
 
             (
                 ExecutionContextRecord::placeholder_witness(),

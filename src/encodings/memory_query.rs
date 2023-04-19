@@ -20,7 +20,7 @@ pub fn comparison_key(query: &MemoryQuery) -> Key<2> {
     Key(le_words)
 }
 
-use boojum::zksync::base_structures::memory_query::MEMORY_QUERY_PACKED_WIDTH;
+use zkevm_circuits::base_structures::memory_query::MEMORY_QUERY_PACKED_WIDTH;
 
 impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, MEMORY_QUERY_PACKED_WIDTH> for MemoryQuery {
     fn encoding_witness(&self) -> [F; MEMORY_QUERY_PACKED_WIDTH] {
@@ -129,9 +129,9 @@ pub type MemoryQueueSimulator<E> = FullWidthQueueSimulator<E, MemoryQuery, 8, FU
 pub type MemoryQueueState<E> = FullWidthQueueIntermediateStates<E, FULL_SPONGE_QUEUE_STATE_WIDTH, 1>;
 
 impl<F: SmallField> CircuitEquivalentReflection<F> for MemoryQuery {
-    type Destination = boojum::zksync::base_structures::memory_query::MemoryQuery<F>;
+    type Destination = zkevm_circuits::base_structures::memory_query::MemoryQuery<F>;
     fn reflect(&self) -> <Self::Destination as CSAllocatable<F>>::Witness {
-        use boojum::zksync::base_structures::memory_query::MemoryQueryWitness;
+        use zkevm_circuits::base_structures::memory_query::MemoryQueryWitness;
 
         MemoryQueryWitness {
             timestamp: self.timestamp.0,

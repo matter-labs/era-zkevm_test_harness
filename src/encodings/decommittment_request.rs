@@ -1,7 +1,7 @@
 use zk_evm::aux_structures::DecommittmentQuery;
 use super::*;
 
-use boojum::zksync::base_structures::decommit_query::DECOMMIT_QUERY_PACKED_WIDTH;
+use zkevm_circuits::base_structures::decommit_query::DECOMMIT_QUERY_PACKED_WIDTH;
 
 impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, DECOMMIT_QUERY_PACKED_WIDTH> for DecommittmentQuery {
     fn encoding_witness(&self) -> [F; DECOMMIT_QUERY_PACKED_WIDTH] {
@@ -66,9 +66,9 @@ pub type DecommittmentQueueSimulator<F> = FullWidthQueueSimulator<F, Decommittme
 pub type DecommittmentQueueState<F> = FullWidthQueueIntermediateStates<F, FULL_SPONGE_QUEUE_STATE_WIDTH, 1>;
 
 impl<F: SmallField> CircuitEquivalentReflection<F> for DecommittmentQuery {
-    type Destination = boojum::zksync::base_structures::decommit_query::DecommitQuery<F>;
+    type Destination = zkevm_circuits::base_structures::decommit_query::DecommitQuery<F>;
     fn reflect(&self) -> <Self::Destination as CSAllocatable<F>>::Witness {
-        use boojum::zksync::base_structures::decommit_query::DecommitQueryWitness;
+        use zkevm_circuits::base_structures::decommit_query::DecommitQueryWitness;
 
         DecommitQueryWitness {
             timestamp: self.timestamp.0,
