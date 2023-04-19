@@ -334,8 +334,10 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
             let cs = SelectionGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
             let cs = ParallelSelectionGate::<4>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
             let cs = PublicInputGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
-            let mut cs_owned = ReductionGate::<_, 4>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
-    
+            let cs = ReductionGate::<_, 4>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let cs = NopGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let mut cs_owned = cs.freeze();
+
             use zkevm_circuits::tables::*;
             use boojum::gadgets::tables::binop_table::*;
             let table = create_binop_table();
@@ -512,8 +514,11 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
             let cs = ParallelSelectionGate::<4>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
             let cs = PublicInputGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
             let cs = ReductionGate::<_, 4>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
-    
-            let is_valid = cs.verify::<
+            let cs = NopGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+
+            let verifier = cs.freeze();
+
+            let is_valid = verifier.verify::<
                 GoldilocksPoisedonTranscript,
                 Blake2s256,
             >(
@@ -645,8 +650,10 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
             let cs = ParallelSelectionGate::<4>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
             let cs = PublicInputGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
             let cs = ReductionGate::<_, 4>::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
-    
-            let is_valid = cs.verify::<
+            let cs = NopGate::configure_for_cs(cs, GatePlacementStrategy::UseGeneralPurposeColumns);
+            let verifier = cs.freeze();
+
+            let is_valid = verifier.verify::<
                 GoldilocksPoisedonTranscript,
                 Blake2s256,
             >(
