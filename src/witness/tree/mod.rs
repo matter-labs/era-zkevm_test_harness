@@ -357,7 +357,7 @@ impl<
     }
 }
 
-use blake2::{Blake2s256, Digest};
+use crate::blake2::{Blake2s256, Digest};
 
 impl BinaryHasher<32> for Blake2s256 {
     fn new() -> Self {
@@ -382,8 +382,7 @@ impl BinaryHasher<32> for Blake2s256 {
     }
 }
 
-
-use sha3::Keccak256;
+use crate::sha3::Keccak256;
 
 impl BinaryHasher<32> for Keccak256 {
     fn new() -> Self {

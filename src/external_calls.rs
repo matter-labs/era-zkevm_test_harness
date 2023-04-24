@@ -13,7 +13,7 @@ use zk_evm::GenericNoopTracer;
 use crate::witness::oracle::create_artifacts_from_tracer;
 use crate::witness::tree::ZKSyncTestingTree;
 // use crate::witness::full_block_artifact::BlockBasicCircuits;
-use blake2::Blake2s256;
+use crate::blake2::Blake2s256;
 use crate::witness::tree::ZkSyncStorageLeaf;
 use crate::witness::tree::BinarySparseStorageTree;
 // use crate::witness::full_block_artifact::BlockBasicCircuitsPublicInputs;

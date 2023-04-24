@@ -15,6 +15,7 @@ use zk_evm::bytecode_to_code_hash;
 use zk_evm::aux_structures::LogQuery;
 use crate::witness::tree::ZkSyncStorageLeaf;
 use std::collections::HashMap;
+use crate::blake2::Blake2s256;
 
 const ACCOUNT_CODE_STORAGE_ADDRESS: Address = H160([
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,

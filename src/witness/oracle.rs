@@ -193,7 +193,7 @@ struct FlattenedLogQueueIndexer<F: SmallField>{
 }
 
 use crate::witness::tree::*;
-use blake2::Blake2s256;
+use crate::blake2::Blake2s256;
 
 pub fn create_artifacts_from_tracer<
     F: SmallField,
@@ -1508,6 +1508,15 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
                 [F::ZERO; 12],
             )
         }
+    }
+    fn report_new_callstack_frame(
+        &mut self,
+        new_record: &ExecutionContextRecordWitness<F>,
+        new_depth: u32,
+        is_call: bool,
+        execute: bool,
+    ) {
+        todo!()
     }
     fn get_decommittment_request_suggested_page(
         &mut self,

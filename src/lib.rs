@@ -31,7 +31,9 @@
 
 #![allow(unused_imports)]
 
-pub use blake2::Blake2s256;
+pub use zk_evm::blake2;
+pub use zk_evm::sha2;
+pub use zk_evm::sha3;
 
 pub mod encodings;
 pub mod entry_point;
