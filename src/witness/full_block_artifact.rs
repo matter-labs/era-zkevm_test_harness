@@ -19,6 +19,10 @@ use zk_evm::precompiles::keccak256::Keccak256RoundWitness;
 use zk_evm::precompiles::sha256::Sha256RoundWitness;
 use tracing;
 use boojum::field::SmallField;
+use zkevm_circuits::demux_log_queue::input::LogDemuxerCircuitInstanceWitness;
+use zkevm_circuits::sha256_round_function::input::Sha256RoundFunctionCircuitInstanceWitness;
+use zkevm_circuits::keccak256_round_function::input::Keccak256RoundFunctionCircuitInstanceWitness;
+use zkevm_circuits::ecrecover::EcrecoverCircuitInstanceWitness;
 
 #[derive(Derivative)]
 #[derivative(Clone, Default(bound = ""))]
@@ -119,8 +123,8 @@ pub struct FullBlockArtifacts<F: SmallField> {
     // // processed code decommitter circuits, as well as sorting circuit (1)
     // pub code_decommitter_circuits_data: Vec<CodeDecommitterCircuitInstanceWitness<F>>,
     // pub decommittments_deduplicator_circuits_data: Vec<CodeDecommittmentsDeduplicatorInstanceWitness<F>>,
-    // //
-    // pub log_demuxer_circuit_data: Vec<LogDemuxerCircuitInstanceWitness<F>>,
+    //
+    pub log_demuxer_circuit_data: Vec<LogDemuxerCircuitInstanceWitness<F>>,
     // //
     // pub storage_deduplicator_circuit_data: Vec<StorageDeduplicatorInstanceWitness<F>>,
     // pub events_deduplicator_circuit_data: Vec<EventsDeduplicatorInstanceWitness<F>>,
@@ -130,12 +134,12 @@ pub struct FullBlockArtifacts<F: SmallField> {
     // pub repeated_writes_pubdata_hasher_circuit_data: Vec<PubdataHasherInstanceWitness<E, 2, 40, RepeatedStorageWriteData<F>>>,
     // //
     // pub rollup_storage_application_circuit_data: Vec<StorageApplicationCircuitInstanceWitness<F>>,
-    // // 
-    // pub keccak256_circuits_data: Vec<Keccak256RoundFunctionInstanceWitness<F>>,
-    // // 
-    // pub sha256_circuits_data: Vec<Sha256RoundFunctionCircuitInstanceWitness<F>>,
-    // //
-    // pub ecrecover_circuits_data: Vec<EcrecoverCircuitInstanceWitness<F>>,
+    // 
+    pub keccak256_circuits_data: Vec<Keccak256RoundFunctionCircuitInstanceWitness<F>>,
+    // 
+    pub sha256_circuits_data: Vec<Sha256RoundFunctionCircuitInstanceWitness<F>>,
+    //
+    pub ecrecover_circuits_data: Vec<EcrecoverCircuitInstanceWitness<F>>,
     // //
     // pub l1_messages_linear_hash_data: Vec<PubdataHasherInstanceWitness<E, 5, 88, <LogQuery as CircuitEquivalentReflection<F>>::Destination>>,
     // pub l1_messages_merklizer_data: Vec<MessagesMerklizerInstanceWitness<E, 5, 88, <LogQuery as CircuitEquivalentReflection<F>>::Destination>>,
@@ -192,7 +196,6 @@ impl<F: SmallField> FullBlockArtifacts<F> {
                 unsorted_decommittment_requests_with_data.push((*decommittment_request, data));
             }
 
-            // internally parallelizable by the factor of 3
             for (cycle, decommittment_request, _) in self.all_decommittment_queries.iter() {
                 // sponge
                 let (_old_tail, intermediate_info) = unsorted_decommittment_queue_simulator
@@ -206,8 +209,8 @@ impl<F: SmallField> FullBlockArtifacts<F> {
 
         // ----------------------------
 
-        // // direct VM related part is done, other subcircuit's functionality is moved to other functions
-        // // that should properly do sorts and memory writes
+        // direct VM related part is done, other subcircuit's functionality is moved to other functions
+        // that should properly do sorts and memory writes
 
         // use crate::witness::individual_circuits::decommit_code::compute_decommitter_circuit_snapshots;
 
@@ -222,57 +225,57 @@ impl<F: SmallField> FullBlockArtifacts<F> {
         // self.code_decommitter_circuits_data = code_decommitter_circuits_data;
         // self.decommittments_deduplicator_circuits_data = vec![decommittments_deduplicator_witness];
 
-        // // demux log queue
-        // use crate::witness::individual_circuits::log_demux::compute_logs_demux;
+        // demux log queue
+        use crate::witness::individual_circuits::log_demux::compute_logs_demux;
 
-        // tracing::debug!("Running log demux simulation");
+        tracing::debug!("Running log demux simulation");
 
-        // let log_demuxer_witness = compute_logs_demux(
-        //     self,
-        //     geometry.cycles_per_log_demuxer as usize,
-        //     round_function
-        // );
+        let log_demuxer_witness = compute_logs_demux(
+            self,
+            geometry.cycles_per_log_demuxer as usize,
+            round_function
+        );
 
-        // self.log_demuxer_circuit_data = log_demuxer_witness;
+        self.log_demuxer_circuit_data = log_demuxer_witness;
 
-        // // keccak precompile
+        // keccak precompile
 
-        // use crate::witness::individual_circuits::keccak256_round_function::keccak256_decompose_into_per_circuit_witness;
+        use crate::witness::individual_circuits::keccak256_round_function::keccak256_decompose_into_per_circuit_witness;
 
-        // tracing::debug!("Running keccak simulation");
+        tracing::debug!("Running keccak simulation");
 
-        // let keccak256_circuits_data = keccak256_decompose_into_per_circuit_witness(
-        //     self,
-        //     geometry.cycles_per_keccak256_circuit as usize,
-        //     round_function
-        // );
-        // self.keccak256_circuits_data = keccak256_circuits_data;
+        let keccak256_circuits_data = keccak256_decompose_into_per_circuit_witness(
+            self,
+            geometry.cycles_per_keccak256_circuit as usize,
+            round_function
+        );
+        self.keccak256_circuits_data = keccak256_circuits_data;
 
-        // // sha256 precompile
+        // sha256 precompile
 
-        // use crate::witness::individual_circuits::sha256_round_function::sha256_decompose_into_per_circuit_witness;
+        use crate::witness::individual_circuits::sha256_round_function::sha256_decompose_into_per_circuit_witness;
 
-        // tracing::debug!("Running sha256 simulation");
+        tracing::debug!("Running sha256 simulation");
 
-        // let sha256_circuits_data = sha256_decompose_into_per_circuit_witness(
-        //     self,
-        //     geometry.cycles_per_sha256_circuit as usize,
-        //     round_function
-        // );
-        // self.sha256_circuits_data = sha256_circuits_data;
+        let sha256_circuits_data = sha256_decompose_into_per_circuit_witness(
+            self,
+            geometry.cycles_per_sha256_circuit as usize,
+            round_function
+        );
+        self.sha256_circuits_data = sha256_circuits_data;
 
-        // // ecrecover precompile
+        // ecrecover precompile
 
-        // use crate::witness::individual_circuits::ecrecover::ecrecover_decompose_into_per_circuit_witness;
+        use crate::witness::individual_circuits::ecrecover::ecrecover_decompose_into_per_circuit_witness;
 
-        // tracing::debug!("Running ecrecover simulation");
+        tracing::debug!("Running ecrecover simulation");
 
-        // let ecrecover_circuits_data = ecrecover_decompose_into_per_circuit_witness(
-        //     self,
-        //     geometry.cycles_per_ecrecover_circuit as usize,
-        //     round_function
-        // );
-        // self.ecrecover_circuits_data = ecrecover_circuits_data;
+        let ecrecover_circuits_data = ecrecover_decompose_into_per_circuit_witness(
+            self,
+            geometry.cycles_per_ecrecover_circuit as usize,
+            round_function
+        );
+        self.ecrecover_circuits_data = ecrecover_circuits_data;
 
         // // we are done with a memory and can do the processing and breaking of the logical arguments into individual circits
 
@@ -289,7 +292,7 @@ impl<F: SmallField> FullBlockArtifacts<F> {
 
         // self.ram_permutation_circuits_data = ram_permutation_circuits_data;
 
-        // // now completely parallel process to reconstruct the states, with internally parallelism in each round function
+        // now completely parallel process to reconstruct the states, with internally parallelism in each round function
 
         // use crate::witness::individual_circuits::storage_sort_dedup::compute_storage_dedup_and_sort;
 
@@ -365,7 +368,7 @@ impl<F: SmallField> FullBlockArtifacts<F> {
 
         // self.l1_messages_merklizer_data = vec![l1_messages_merklizer_data];
 
-        // // process the storage application
+        // process the storage application
 
         // // we can quickly determine states witness
 
