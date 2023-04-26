@@ -1,3 +1,4 @@
+use boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
 use boojum::gadgets::queue::QueueStateWitness;
 use boojum::gadgets::queue::QueueTailState;
 use boojum::gadgets::queue::QueueTailStateWitness;
@@ -359,4 +360,205 @@ pub fn vm_instance_witness_to_circuit_formal_input<F: SmallField, O: WitnessOrac
         },
         witness_oracle,
     }
+}
+
+pub fn produce_fs_challenges<
+    F: SmallField,
+    R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+    const N: usize,
+    const NUM_CHALLENGES: usize,
+    const NUM_REPETITIONS: usize,
+>(
+    unsorted_tail: QueueTailStateWitness<F, N>,
+    sorted_tail: QueueTailStateWitness<F, N>,
+    round_function: &R
+) -> [[F; NUM_CHALLENGES]; NUM_REPETITIONS] {
+    let mut fs_input = vec![];
+    fs_input.extend_from_slice(&unsorted_tail.tail);
+    fs_input.push(F::from_u64_with_reduction(unsorted_tail.length as u64));
+    fs_input.extend_from_slice(&sorted_tail.tail);
+    fs_input.push(F::from_u64_with_reduction(sorted_tail.length as u64));
+
+    let mut state = R::initial_state();
+    R::specialize_for_len(fs_input.len() as u32, &mut state);
+    let mut it = fs_input.array_chunks::<8>();
+    for chunk in &mut it {
+        R::absorb_into_state::<AbsorbtionModeOverwrite>(&mut state, chunk);
+        R::round_function(&mut state);
+    }
+
+    let remainder = it.remainder();
+    if remainder.len() != 0 {
+        let mut padded_chunk = [F::ZERO; 8];
+        padded_chunk[..remainder.len()].copy_from_slice(remainder);
+        R::absorb_into_state::<AbsorbtionModeOverwrite>(&mut state, &padded_chunk);
+        R::round_function(&mut state);
+    }
+
+    // now get as many as necessary
+    let max_to_take = 8;
+    let mut can_take = max_to_take;
+
+    let mut result = [[F::ONE; NUM_CHALLENGES]; NUM_REPETITIONS];
+
+    for dst in result.iter_mut() {
+        for dst in dst.iter_mut().skip(1) {
+            if can_take == 0 {
+                R::round_function(&mut state);
+                can_take = max_to_take;
+            }
+            let el = state[max_to_take - can_take];
+            can_take -= 1;
+            *dst = el;
+        }
+    }
+
+    result
+}
+
+const PARALLELIZATION_CHUNK_SIZE: usize = 1 << 16;
+
+pub(crate) fn compute_grand_product_chains<F: SmallField, const N: usize, const M: usize>(
+    lhs_contributions: &Vec<[F; N]>,
+    rhs_contributions: &Vec<[F; N]>,
+    challenges: &[F; M],
+) -> (Vec<F>, Vec<F>) {
+    assert_eq!(N+1, M);
+    let mut lhs_grand_product_chain: Vec<F> = vec![F::ZERO; lhs_contributions.len()];
+    let mut rhs_grand_product_chain: Vec<F> = vec![F::ZERO; rhs_contributions.len()];
+
+    let challenges: [F; M] = *challenges;
+
+    use rayon::prelude::*;
+
+    lhs_grand_product_chain.par_chunks_mut(PARALLELIZATION_CHUNK_SIZE).zip(lhs_contributions.par_chunks(PARALLELIZATION_CHUNK_SIZE)).for_each(
+        |(dst, src)| {
+            let mut grand_product = F::ONE;
+            for (dst, src) in dst.iter_mut().zip(src.iter()) {
+                let mut acc = challenges[M-1];
+
+                debug_assert_eq!(challenges[..(M-1)].len(), src.len());
+
+                for (a, b) in src.iter().zip(challenges[..(M-1)].iter()) {
+                    let mut tmp = *a;
+                    tmp.mul_assign(b);
+                    acc.add_assign(&tmp);
+                }
+
+                grand_product.mul_assign(&acc);
+    
+                *dst = grand_product;
+            }
+        }
+    );
+
+    rhs_grand_product_chain.par_chunks_mut(PARALLELIZATION_CHUNK_SIZE).zip(rhs_contributions.par_chunks(PARALLELIZATION_CHUNK_SIZE)).for_each(
+        |(dst, src)| {
+            let mut grand_product = F::ONE;
+            for (dst, src) in dst.iter_mut().zip(src.iter()) {
+                let mut acc = challenges[M-1];
+
+                debug_assert_eq!(challenges[..(M-1)].len(), src.len());
+
+                for (a, b) in src.iter().zip(challenges[..(M-1)].iter()) {
+                    let mut tmp = *a;
+                    tmp.mul_assign(b);
+                    acc.add_assign(&tmp);
+                }
+
+                grand_product.mul_assign(&acc);
+    
+                *dst = grand_product;
+            }
+        }
+    );
+
+    // elementwise products are done, now must fold
+
+    let mut lhs_intermediates: Vec<F> = lhs_grand_product_chain.par_chunks(PARALLELIZATION_CHUNK_SIZE).map(
+        |slice: &[F]| {
+            *slice.last().unwrap()
+        }
+    ).collect();
+
+    let mut rhs_intermediates: Vec<F> = rhs_grand_product_chain.par_chunks(PARALLELIZATION_CHUNK_SIZE).map(
+        |slice: &[F]| {
+            *slice.last().unwrap()
+        }
+    ).collect();
+
+    assert_eq!(lhs_intermediates.len(), lhs_grand_product_chain.chunks(PARALLELIZATION_CHUNK_SIZE).len());
+    assert_eq!(rhs_intermediates.len(), rhs_grand_product_chain.chunks(PARALLELIZATION_CHUNK_SIZE).len());
+
+    // accumulate intermediate products
+    // we should multiply element [1] by element [0],
+    // element [2] by [0] * [1],
+    // etc
+    let mut acc_lhs = F::ONE;
+    for el in lhs_intermediates.iter_mut() {
+        let tmp = *el;
+        el.mul_assign(&acc_lhs);
+        acc_lhs.mul_assign(&tmp);
+    }
+
+    let mut acc_rhs = F::ONE;
+    for el in rhs_intermediates.iter_mut() {
+        let tmp = *el;
+        el.mul_assign(&acc_rhs);
+        acc_rhs.mul_assign(&tmp);
+    }
+
+    match (lhs_intermediates.last(), rhs_intermediates.last()) {
+        (Some(lhs), Some(rhs)) => {
+            assert_eq!(lhs, rhs);
+        },
+        (None, None) => {
+        },
+        _ => unreachable!(),
+    }
+
+    lhs_grand_product_chain.par_chunks_mut(PARALLELIZATION_CHUNK_SIZE).skip(1).zip(lhs_intermediates.par_chunks(1)).for_each(
+        |(dst, src)| {
+            let src = src[0];
+            for dst in dst.iter_mut() {
+                dst.mul_assign(&src);
+            }
+        }
+    );
+
+    rhs_grand_product_chain.par_chunks_mut(PARALLELIZATION_CHUNK_SIZE).skip(1).zip(rhs_intermediates.par_chunks(1)).for_each(
+        |(dst, src)| {
+            let src = src[0];
+            for dst in dst.iter_mut() {
+                dst.mul_assign(&src);
+            }
+        }
+    );
+
+    // sanity check
+    match (lhs_grand_product_chain.last(), rhs_grand_product_chain.last()) {
+        (Some(lhs), Some(rhs)) => {
+            assert_eq!(lhs, rhs);
+        },
+        (None, None) => {
+        },
+        _ => unreachable!(),
+    }
+
+    (lhs_grand_product_chain, rhs_grand_product_chain)
+}
+
+pub fn transpose_chunks<T: Clone>(
+    original: &Vec<Vec<T>>,
+    chunk_size: usize,
+) -> Vec<Vec<&[T]>> {
+    let capacity = original[0].chunks(chunk_size).len();
+    let mut transposed = vec![Vec::with_capacity(original.len()); capacity];
+    for outer in original.iter() {
+        for (dst, chunk) in transposed.iter_mut().zip(outer.chunks(chunk_size)) {
+            dst.push(chunk);
+        }
+    }
+
+    transposed
 }

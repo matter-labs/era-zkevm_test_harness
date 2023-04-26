@@ -62,7 +62,7 @@ impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, DECOMMIT_QUERY_PACKED_WI
     }
 }
 
-pub type DecommittmentQueueSimulator<F> = FullWidthQueueSimulator<F, DecommittmentQuery, 8, FULL_SPONGE_QUEUE_STATE_WIDTH, 1>;
+pub type DecommittmentQueueSimulator<F> = FullWidthQueueSimulator<F, DecommittmentQuery, DECOMMIT_QUERY_PACKED_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH, 1>;
 pub type DecommittmentQueueState<F> = FullWidthQueueIntermediateStates<F, FULL_SPONGE_QUEUE_STATE_WIDTH, 1>;
 
 impl<F: SmallField> CircuitEquivalentReflection<F> for DecommittmentQuery {

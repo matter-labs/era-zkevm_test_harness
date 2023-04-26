@@ -38,8 +38,6 @@ pub fn event_comparison_key(query: &LogQuery) -> Key<2> {
     Key(le_words)
 }
 
-// use sync_vm::glue::storage_validity_by_grand_product::{EXTENDED_TIMESTAMP_ENCODING_OFFSET, EXTENDED_TIMESTAMP_ENCODING_ELEMENT, TimestampedStorageLogRecord, TimestampedStorageLogRecordWitness};
-
 use zkevm_circuits::base_structures::log_query::LOG_QUERY_PACKED_WIDTH;
 
 impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, LOG_QUERY_PACKED_WIDTH> for LogQuery {
@@ -329,11 +327,11 @@ impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, LOG_QUERY_PACKED_WIDTH> 
 //     }
 // }
 
-pub type LogQueueSimulator<F> = QueueSimulator<F, LogQuery, QUEUE_STATE_WIDTH, LOG_QUERY_PACKED_WIDTH, 3>;
-pub type LogQueueState<F> = QueueIntermediateStates<F, QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH, 3>;
+use zkevm_circuits::base_structures::log_query::LOG_QUERY_ABSORBTION_ROUNDS;
 
-// pub type LogWithExtendedEnumerationQueueSimulator<E> = QueueSimulator<E, LogQueryWithExtendedEnumeration, 5, 3>;
-// pub type LogWithExtendedEnumerationQueueState<E> = QueueIntermediateStates<E, 3, 3>;
+pub type LogQueueSimulator<F> = QueueSimulator<F, LogQuery, QUEUE_STATE_WIDTH, LOG_QUERY_PACKED_WIDTH, LOG_QUERY_ABSORBTION_ROUNDS>;
+pub type LogQueueState<F> = QueueIntermediateStates<F, QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH, LOG_QUERY_ABSORBTION_ROUNDS>;
+
 
 pub fn log_query_into_circuit_log_query_witness<F: SmallField>(query: &LogQuery) 
     -> <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocatable<F>>::Witness {

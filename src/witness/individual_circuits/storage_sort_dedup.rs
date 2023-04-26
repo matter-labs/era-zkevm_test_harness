@@ -1,29 +1,5 @@
-use num_bigint::BigUint;
-use sync_vm::franklin_crypto::plonk::circuit::utils::u128_to_fe;
-use sync_vm::glue::code_unpacker_sha256::memory_query_updated::RawMemoryQuery;
-use sync_vm::glue::code_unpacker_sha256::input::*;
-use sync_vm::glue::optimizable_queue::FixedWidthEncodingGenericQueueWitness;
-use sync_vm::inputs::ClosedFormInputWitness;
-use sync_vm::scheduler::queues::DecommitQueryWitness;
-use sync_vm::scheduler::queues::FixedWidthEncodingGenericQueueState;
-use sync_vm::utils::u64_to_fe;
-use zk_evm::aux_structures::*;
 use super::*;
-use crate::encodings::OutOfCircuitFixedLengthEncodable;
-use crate::encodings::log_query::LogQueueSimulator;
-use crate::encodings::memory_query::MemoryQueueSimulator;
-use crate::utils::biguint_from_u256;
 use std::cmp::Ordering;
-use crate::bellman::Engine;
-use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
-use crate::witness::full_block_artifact::FullBlockArtifacts;
-use rayon::prelude::*;
-use crate::ff::Field;
-use zk_evm::aux_structures::MemoryIndex;
-use zk_evm::aux_structures::MemoryQuery;
-use sync_vm::glue::storage_validity_by_grand_product::input::StorageDeduplicatorInstanceWitness;
-use crate::encodings::log_query::log_query_into_storage_record_witness;
-use crate::encodings::log_query::*;
 
 pub fn compute_storage_dedup_and_sort<
     F: SmallField,
