@@ -1,7 +1,9 @@
 use super::*;
 use zk_evm::aux_structures::MemoryQuery;
 
-pub fn sorting_key(query: &MemoryQuery) -> Key<3> {
+use zkevm_circuits::ram_permutation::input::{RAM_SORTING_KEY_LENGTH, RAM_FULL_KEY_LENGTH};
+
+pub fn sorting_key(query: &MemoryQuery) -> Key<RAM_SORTING_KEY_LENGTH> {
     let le_words = [
         query.timestamp.0,
         query.location.index.0,
@@ -11,7 +13,7 @@ pub fn sorting_key(query: &MemoryQuery) -> Key<3> {
     Key(le_words)
 }
 
-pub fn comparison_key(query: &MemoryQuery) -> Key<2> {
+pub fn comparison_key(query: &MemoryQuery) -> Key<RAM_FULL_KEY_LENGTH> {
     let le_words = [
         query.location.index.0,
         query.location.page.0,

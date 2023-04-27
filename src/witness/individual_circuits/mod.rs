@@ -12,11 +12,13 @@ use std::collections::VecDeque;
 use zkevm_circuits::fsm_input_output::*;
 use boojum::gadgets::traits::allocatable::CSAllocatable;
 use crate::encodings::log_query_into_circuit_log_query_witness;
+use zkevm_circuits::base_structures::vm_state::{QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH};
+use zkevm_circuits::DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS;
 
-// pub mod ram_permutation;
+pub mod ram_permutation;
 // pub mod decommit_code;
 pub mod log_demux;
-// pub mod storage_sort_dedup;
+pub mod storage_sort_dedup;
 pub mod events_sort_dedup;
 // pub mod get_storage_application_pubdata;
 // pub mod data_hasher_and_merklizer;

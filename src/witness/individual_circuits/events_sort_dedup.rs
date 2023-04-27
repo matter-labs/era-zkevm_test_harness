@@ -68,8 +68,6 @@ R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
         round_function
     );
 
-    let mut challenges = vec![];
-
     assert_eq!(unsorted_simulator_final_state.tail.length, intermediate_sorted_simulator_final_state.tail.length);
 
     let lhs_contributions: Vec<_> = unsorted_simulator.witness.iter().map(|el| el.0).collect();
@@ -80,7 +78,7 @@ R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
     let mut lhs_grand_product_chains = vec![];
     let mut rhs_grand_product_chains = vec![];
 
-    for idx in 0..2 {
+    for idx in 0..DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS {
         let (lhs_grand_product_chain, rhs_grand_product_chain) =
             compute_grand_product_chains::<F, LOG_QUERY_PACKED_WIDTH, {LOG_QUERY_PACKED_WIDTH + 1}>(&lhs_contributions, &rhs_contributions, &challenges[idx]);
 

@@ -1,15 +1,26 @@
 use super::*;
 use std::cmp::Ordering;
+use zkevm_circuits::storage_validity_by_grand_product::input::*;
+use crate::encodings::LogWithExtendedEnumerationQueueSimulator;
+use crate::encodings::LogQueueSimulator;
+use zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
+use zkevm_circuits::base_structures::log_query::{LOG_QUERY_PACKED_WIDTH, LOG_QUERY_ABSORBTION_ROUNDS};
+use crate::encodings::LogQueryWithExtendedEnumeration;
+use crate::encodings::OutOfCircuitFixedLengthEncodable;
+use zkevm_circuits::DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS;
+use crate::encodings::CircuitEquivalentReflection;
 
 pub fn compute_storage_dedup_and_sort<
-    F: SmallField,
-    R: CircuitArithmeticRoundFunction<E, 2, 3>
+F: SmallField,
+R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
-    artifacts: &mut FullBlockArtifacts<E>,
+    artifacts: &mut FullBlockArtifacts<F>,
     per_circuit_capacity: usize,
     round_function: &R,
-) -> Vec<StorageDeduplicatorInstanceWitness<E>> {
+) -> Vec<StorageDeduplicatorInstanceWitness<F>> {
     // TODO: handle a case if no storage accesses exist
+
+    const SHARD_ID_TO_PROCEED: u8 = 0; // rollup shard ID
 
     // first we sort the storage log (only storage now) by composite key
 
@@ -31,8 +42,6 @@ pub fn compute_storage_dedup_and_sort<
         intermediate_sorted_log_simulator_states.push(intermediate_state);
     }
     
-    use sync_vm::glue::storage_validity_by_grand_product::TimestampedStorageLogRecordWitness;
-
     let unsorted_simulator_final_state = take_queue_state_from_simulator(&artifacts.demuxed_rollup_storage_queue_simulator);
 
     let intermediate_sorted_log_simulator_final_state = take_queue_state_from_simulator(&intermediate_sorted_log_simulator);
@@ -47,31 +56,16 @@ pub fn compute_storage_dedup_and_sort<
 
     // now we should chunk it by circuits but briefly simulating their logic
 
-    let mut challenges = vec![];
-
-    let mut fs_input = vec![];
-    fs_input.push(unsorted_simulator_final_state.tail_state);
-    fs_input.push(u64_to_fe(unsorted_simulator_final_state.num_items as u64));
-    fs_input.push(intermediate_sorted_log_simulator_final_state.tail_state);
-    fs_input.push(u64_to_fe(intermediate_sorted_log_simulator_final_state.num_items as u64));
-
-    let sequence_of_states = round_function.simulate_absorb_multiple_rounds_into_empty_with_specialization(&fs_input);
-    let final_state = sequence_of_states.last().unwrap().1;
-
-    // manually unroll to get irreducible over every challenge
-    challenges.push(final_state[0]);
-    challenges.push(final_state[1]);
-    let final_state = round_function.simulate_round_function(final_state);
-    challenges.push(final_state[0]);
-    challenges.push(final_state[1]);
-    let final_state = round_function.simulate_round_function(final_state);
-    challenges.push(final_state[0]);
-    challenges.push(final_state[1]);
+    let challenges = produce_fs_challenges::<F, R, QUEUE_STATE_WIDTH, {LOG_QUERY_PACKED_WIDTH + 1}, 2>(
+        unsorted_simulator_final_state.tail.clone(),
+        intermediate_sorted_log_simulator_final_state.tail.clone(),
+        round_function
+    );
 
     // since encodings of the elements provide all the information necessary to perform soring argument,
     // we use them naively
 
-    assert_eq!(unsorted_simulator_final_state.num_items, intermediate_sorted_log_simulator_final_state.num_items);
+    assert_eq!(unsorted_simulator_final_state.tail.length, intermediate_sorted_log_simulator_final_state.tail.length);
 
     let lhs_contributions: Vec<_> = artifacts.demuxed_rollup_storage_queries.iter().enumerate()
         .map(|(idx, el)| {
@@ -80,7 +74,7 @@ pub fn compute_storage_dedup_and_sort<
                 extended_timestamp: idx as u32
             };
 
-            <LogQueryWithExtendedEnumeration as OutOfCircuitFixedLengthEncodable<E, 5>>::encoding_witness(&extended_query)
+            <LogQueryWithExtendedEnumeration as OutOfCircuitFixedLengthEncodable<F, LOG_QUERY_PACKED_WIDTH>>::encoding_witness(&extended_query)
         }).collect();
 
     // let lhs_contributions: Vec<_> = artifacts.demuxed_rollup_storage_queue_simulator.witness.iter().map(|el| el.0).collect();
@@ -90,25 +84,32 @@ pub fn compute_storage_dedup_and_sort<
 
     // compute chains themselves
 
-    use crate::witness::individual_circuits::ram_permutation::compute_grand_product_chains;
+    let mut lhs_grand_product_chains = vec![];
+    let mut rhs_grand_product_chains = vec![];
 
-    let (lhs_grand_product_chain, rhs_grand_product_chain) = compute_grand_product_chains::<E, 5, 6>(
-        &lhs_contributions,
-        &rhs_contributions,
-        challenges
-    );
+    for idx in 0..DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS {
+        let (lhs_grand_product_chain, rhs_grand_product_chain) =
+            compute_grand_product_chains::<F, LOG_QUERY_PACKED_WIDTH, {LOG_QUERY_PACKED_WIDTH + 1}>(&lhs_contributions, &rhs_contributions, &challenges[idx]);
+
+        assert_eq!(lhs_grand_product_chain.len(), artifacts.demuxed_rollup_storage_queue_simulator.witness.len());
+        assert_eq!(rhs_grand_product_chain.len(), intermediate_sorted_log_simulator.witness.len());
+
+        lhs_grand_product_chains.push(lhs_grand_product_chain);
+        rhs_grand_product_chains.push(rhs_grand_product_chain);
+    }
+
+    let transposed_lhs_chains = transpose_chunks(&lhs_grand_product_chains, per_circuit_capacity);
+    let transposed_rhs_chains = transpose_chunks(&rhs_grand_product_chains, per_circuit_capacity);
+
 
     // now we need to split them into individual circuits
     // splitting is not extra hard here, we walk over iterator over everything and save states on checkpoints
 
-    assert_eq!(lhs_grand_product_chain.len(), artifacts.demuxed_rollup_storage_queue_simulator.witness.len());
-    assert_eq!(lhs_grand_product_chain.len(), intermediate_sorted_log_simulator.witness.len());
+
     
     // --------------------
 
     // in general we have everything ready, just form the witness
-    use sync_vm::glue::storage_validity_by_grand_product::input::*;
-    use sync_vm::traits::CSWitnessable;
 
     // as usual we simulate logic of the circuit and chunk. It's a little less convenient here than in RAM since we
     // have to chunk based on 2 queues, but also guess the result of the 3rd queue, but managable
@@ -118,8 +119,8 @@ pub fn compute_storage_dedup_and_sort<
 
     let it = artifacts.demuxed_rollup_storage_queue_states.chunks(per_circuit_capacity)
             .zip(intermediate_sorted_log_simulator_states.chunks(per_circuit_capacity))
-            .zip(lhs_grand_product_chain.chunks(per_circuit_capacity))
-            .zip(rhs_grand_product_chain.chunks(per_circuit_capacity))
+            .zip(transposed_lhs_chains.into_iter())
+            .zip(transposed_rhs_chains.into_iter())
             .zip(artifacts.demuxed_rollup_storage_queue_simulator.witness.as_slices().0.chunks(per_circuit_capacity))
             .zip(intermediate_sorted_log_simulator.witness.as_slices().0.chunks(per_circuit_capacity));
 
@@ -129,15 +130,14 @@ pub fn compute_storage_dedup_and_sort<
     let num_circuits = it.len();
     let mut results = vec![];
 
-    let mut current_lhs_product = F::zero();
-    let mut current_rhs_product = F::zero();
-    let mut previous_packed_key = [F::zero(); 2];
+    let mut current_lhs_product = [F::ONE; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS];
+    let mut current_rhs_product = [F::ONE; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS];
+    let mut previous_comparison_key = [0u32; PACKED_KEY_LENGTH];
     let mut previous_key = U256::zero();
     let mut previous_timestamp = 0u32;
     let mut cycle_idx = 0u32;
     use crate::ethereum_types::Address;
     let mut previous_address = Address::default();
-    let mut previous_shard_id = 0u8;
 
     use crate::ethereum_types::U256;
 
@@ -152,27 +152,22 @@ pub fn compute_storage_dedup_and_sort<
 
     for (idx, (((((unsorted_sponge_states, sorted_sponge_states), lhs_grand_product), rhs_grand_product), unsorted_states), sorted_states)) in it.enumerate() {
         // we need witnesses to pop elements from the front of the queue
-        use sync_vm::scheduler::queues::FixedWidthEncodingSpongeLikeQueueWitness;
 
-        let unsorted_queue_witness: VecDeque<_> = unsorted_states.iter().map(|(encoding, old_tail, element)| {
-            let as_storage_log = log_query_into_storage_record_witness(element);
+        let unsorted_queue_witness: VecDeque<_> = unsorted_states.iter().map(|(_encoding, old_tail, element)| {
+            let as_storage_log = element.reflect();
 
-            (*encoding, as_storage_log, *old_tail)
+            (as_storage_log, *old_tail)
         }).collect();
 
-        let unsorted_witness = FixedWidthEncodingGenericQueueWitness {
-            wit: unsorted_queue_witness
-        };
+        let unsorted_witness = CircuitQueueRawWitness::<F, zkevm_circuits::base_structures::log_query::LogQuery<F>, 4, LOG_QUERY_PACKED_WIDTH> { elements: unsorted_queue_witness };
 
-        let intermediate_sorted_queue_witness: VecDeque<_> = sorted_states.iter().map(|(encoding, old_tail, element)| {
+        let intermediate_sorted_queue_witness: VecDeque<_> = sorted_states.iter().map(|(_encoding, old_tail, element)| {
             let as_timestamped_storage_witness = log_query_into_timestamped_storage_record_witness(element);
 
-            (*encoding, as_timestamped_storage_witness, *old_tail)
+            (as_timestamped_storage_witness, *old_tail)
         }).collect();
 
-        let intermediate_sorted_queue_witness = FixedWidthEncodingGenericQueueWitness {
-            wit: intermediate_sorted_queue_witness
-        };
+        let intermediate_sorted_queue_witness = CircuitQueueRawWitness::<F, zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord<F>, 4, LOG_QUERY_PACKED_WIDTH> { elements: intermediate_sorted_queue_witness };
 
         // now we need to have final grand product value that will also become an input for the next circuit
 
@@ -182,15 +177,14 @@ pub fn compute_storage_dedup_and_sort<
         let last_unsorted_state = unsorted_sponge_states.last().unwrap().clone();
         let last_sorted_state = sorted_sponge_states.last().unwrap().clone();
 
-        let accumulated_lhs = *lhs_grand_product.last().unwrap();
-        let accumulated_rhs = *rhs_grand_product.last().unwrap();
+        let accumulated_lhs: [F; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS] = lhs_grand_product.last().unwrap().to_vec().try_into().unwrap();
+        let accumulated_rhs: [F; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS] = rhs_grand_product.last().unwrap().to_vec().try_into().unwrap();
 
         let last_sorted_query = &sorted_states.last().unwrap().2;
         use crate::encodings::log_query::*;
-        let last_packed_key = comparison_key::<E>(&last_sorted_query.raw_query);
+        let last_comparison_key = comparison_key(&last_sorted_query.raw_query);
         let last_key = last_sorted_query.raw_query.key;
         let last_address = last_sorted_query.raw_query.address;
-        let last_shard_id = last_sorted_query.raw_query.shard_id;
         let last_timestamp = last_sorted_query.extended_timestamp;
 
         // simulate the logic 
@@ -200,7 +194,6 @@ pub fn compute_storage_dedup_and_sort<
             new_this_cell_current_value,
             new_this_cell_current_depth,
         ) = {
-            let mut current_shard_id = previous_shard_id;
             let mut current_address = previous_address;
             let mut current_key = previous_key;
             let mut new_this_cell_has_explicit_read_and_rollback_depth_zero = this_cell_has_explicit_read_and_rollback_depth_zero;
@@ -236,8 +229,7 @@ pub fn compute_storage_dedup_and_sort<
                 } else {
                     // main cycle
 
-                    let same_cell = current_shard_id == item.raw_query.shard_id
-                        && current_address == item.raw_query.address
+                    let same_cell = current_address == item.raw_query.address
                         && current_key == item.raw_query.key;
 
                     if same_cell {
@@ -268,7 +260,7 @@ pub fn compute_storage_dedup_and_sort<
                                     // the claim of initial value and do not overwrite,
                                     // then we are consistent
                                     assert!(next_query.rw_flag == false);
-                                    assert!(next_query.shard_id == current_shard_id);
+                                    assert!(next_query.shard_id == SHARD_ID_TO_PROCEED);
                                     assert!(next_query.address == current_address);
                                     assert!(next_query.key == current_key);
                                     assert!(next_query.read_value == new_this_cell_current_value);
@@ -276,7 +268,7 @@ pub fn compute_storage_dedup_and_sort<
                                 } else {
                                     // plain write
                                     assert!(next_query.rw_flag == true);
-                                    assert!(next_query.shard_id == current_shard_id);
+                                    assert!(next_query.shard_id == SHARD_ID_TO_PROCEED);
                                     assert!(next_query.address == current_address);
                                     assert!(next_query.key == current_key);
                                     assert!(next_query.read_value == new_this_cell_base_value);
@@ -296,7 +288,7 @@ pub fn compute_storage_dedup_and_sort<
                                 // protective read
                                 if let Some(next_query) = deduplicated_queries_it.next() {
                                     assert!(next_query.rw_flag == false);
-                                    assert!(next_query.shard_id == current_shard_id);
+                                    assert!(next_query.shard_id == SHARD_ID_TO_PROCEED);
                                     assert!(next_query.address == current_address);
                                     assert!(next_query.key == current_key);
                                     assert!(next_query.read_value == new_this_cell_base_value);
@@ -330,7 +322,6 @@ pub fn compute_storage_dedup_and_sort<
                 }
 
                 // always update keys
-                current_shard_id = item.raw_query.shard_id;
                 current_address = item.raw_query.address;
                 current_key = item.raw_query.key;
 
@@ -342,14 +333,14 @@ pub fn compute_storage_dedup_and_sort<
                             if new_this_cell_current_value == new_this_cell_base_value {
                                 // protective read
                                 assert!(next_query.rw_flag == false);
-                                assert!(next_query.shard_id == current_shard_id);
+                                assert!(next_query.shard_id == SHARD_ID_TO_PROCEED);
                                 assert!(next_query.address == current_address);
                                 assert!(next_query.key == current_key);
                                 assert!(next_query.read_value == new_this_cell_current_value);
                                 assert!(next_query.written_value == new_this_cell_current_value);
                             } else {
                                 assert!(next_query.rw_flag == true);
-                                assert!(next_query.shard_id == current_shard_id);
+                                assert!(next_query.shard_id == SHARD_ID_TO_PROCEED);
                                 assert!(next_query.address == current_address);
                                 assert!(next_query.key == current_key);
                                 assert!(next_query.read_value == new_this_cell_base_value);
@@ -362,7 +353,7 @@ pub fn compute_storage_dedup_and_sort<
                                 // protective read
                                 let next_query = deduplicated_queries_it.next().unwrap();
                                 assert!(next_query.rw_flag == false);
-                                assert!(next_query.shard_id == current_shard_id);
+                                assert!(next_query.shard_id == SHARD_ID_TO_PROCEED);
                                 assert!(next_query.address == current_address);
                                 assert!(next_query.key == current_key);
                                 assert!(next_query.read_value == new_this_cell_base_value);
@@ -382,10 +373,10 @@ pub fn compute_storage_dedup_and_sort<
             )
         };
 
-        use sync_vm::traits::CSWitnessable;
-        let placeholder_witness = FixedWidthEncodingGenericQueueState::placeholder_witness();
+        use boojum::gadgets::queue::QueueState;
+        let placeholder_witness = QueueState::<F, QUEUE_STATE_WIDTH>::placeholder_witness();
 
-        let (current_unsorted_queue_state, current_intermediate_sorted_queue_state) = results.last().map(|el: &StorageDeduplicatorInstanceWitness<E>| {
+        let (current_unsorted_queue_state, current_intermediate_sorted_queue_state) = results.last().map(|el: &StorageDeduplicatorInstanceWitness<F>| {
             let tmp = &el.closed_form_input.hidden_fsm_output;
 
             (tmp.current_unsorted_queue_state.clone(), tmp.current_intermediate_sorted_queue_state.clone())
@@ -397,16 +388,16 @@ pub fn compute_storage_dedup_and_sort<
 
         // we use current final state as the intermediate head
         let mut final_unsorted_state = transform_queue_state(last_unsorted_state);
-        final_unsorted_state.head_state = final_unsorted_state.tail_state;
-        final_unsorted_state.tail_state = unsorted_simulator_final_state.tail_state;
-        final_unsorted_state.num_items = unsorted_simulator_final_state.num_items - final_unsorted_state.num_items;
+        final_unsorted_state.head = final_unsorted_state.tail.tail;
+        final_unsorted_state.tail.tail = unsorted_simulator_final_state.tail.tail;
+        final_unsorted_state.tail.length = unsorted_simulator_final_state.tail.length - final_unsorted_state.tail.length;
 
         let mut final_intermediate_sorted_state = transform_queue_state(last_sorted_state);
-        final_intermediate_sorted_state.head_state = last_sorted_state.tail;
-        final_intermediate_sorted_state.tail_state = intermediate_sorted_log_simulator_final_state.tail_state;
-        final_intermediate_sorted_state.num_items = intermediate_sorted_log_simulator_final_state.num_items - last_sorted_state.num_items;
+        final_intermediate_sorted_state.head = last_sorted_state.tail;
+        final_intermediate_sorted_state.tail.tail = intermediate_sorted_log_simulator_final_state.tail.tail;
+        final_intermediate_sorted_state.tail.length = intermediate_sorted_log_simulator_final_state.tail.length - last_sorted_state.num_items;
 
-        assert_eq!(final_unsorted_state.num_items, final_intermediate_sorted_state.num_items);
+        assert_eq!(final_unsorted_state.tail.length, final_intermediate_sorted_state.tail.length);
 
         let final_cycle_idx = cycle_idx + per_circuit_capacity as u32;
 
@@ -414,13 +405,12 @@ pub fn compute_storage_dedup_and_sort<
 
         let mut instance_witness = StorageDeduplicatorInstanceWitness {
             closed_form_input: ClosedFormInputWitness {
-                _marker_e: (),
                 start_flag: is_first,
                 completion_flag: is_last,
                 observable_input: StorageDeduplicatorInputDataWitness {
+                    shard_id_to_process: SHARD_ID_TO_PROCEED,
                     unsorted_log_queue_state: unsorted_simulator_final_state.clone(),
                     intermediate_sorted_queue_state: intermediate_sorted_log_simulator_final_state.clone(),
-                    _marker: std::marker::PhantomData,
                 },
                 observable_output: StorageDeduplicatorOutputData::placeholder_witness(),
                 hidden_fsm_input: StorageDeduplicatorFSMInputOutputWitness {
@@ -430,16 +420,14 @@ pub fn compute_storage_dedup_and_sort<
                     current_intermediate_sorted_queue_state,
                     current_final_sorted_queue_state: current_final_sorted_queue_state.clone(),
                     cycle_idx: cycle_idx,
-                    previous_packed_key,
-                    previous_key: biguint_from_u256(previous_key),
-                    previous_address: u160_from_address(previous_address),
+                    previous_key: previous_key,
+                    previous_address: previous_address,
                     previous_timestamp,
-                    previous_shard_id,
+                    previous_packed_key: previous_comparison_key,
                     this_cell_has_explicit_read_and_rollback_depth_zero,
-                    this_cell_base_value: biguint_from_u256(this_cell_base_value),
-                    this_cell_current_value: biguint_from_u256(this_cell_current_value),
+                    this_cell_base_value: this_cell_base_value,
+                    this_cell_current_value: this_cell_current_value,
                     this_cell_current_depth,
-                    _marker: std::marker::PhantomData,
                 },
                 hidden_fsm_output: StorageDeduplicatorFSMInputOutputWitness {
                     lhs_accumulator: accumulated_lhs,
@@ -448,32 +436,28 @@ pub fn compute_storage_dedup_and_sort<
                     current_intermediate_sorted_queue_state: final_intermediate_sorted_state,
                     current_final_sorted_queue_state: last_final_sorted_queue_state.clone(),
                     cycle_idx: final_cycle_idx,
-                    previous_packed_key: last_packed_key,
-                    previous_key: biguint_from_u256(last_key),
-                    previous_address: u160_from_address(last_address),
+                    previous_packed_key: last_comparison_key.0,
+                    previous_key: last_key,
+                    previous_address: last_address,
                     previous_timestamp: last_timestamp,
-                    previous_shard_id: last_shard_id,
                     this_cell_has_explicit_read_and_rollback_depth_zero: new_this_cell_has_explicit_read_and_rollback_depth_zero,
-                    this_cell_base_value: biguint_from_u256(new_this_cell_base_value),
-                    this_cell_current_value: biguint_from_u256(new_this_cell_current_value),
+                    this_cell_base_value: new_this_cell_base_value,
+                    this_cell_current_value: new_this_cell_current_value,
                     this_cell_current_depth: new_this_cell_current_depth,
-                    _marker: std::marker::PhantomData,
                 },
-                _marker: std::marker::PhantomData,
             },
             unsorted_queue_witness: unsorted_witness,
             intermediate_sorted_queue_witness: intermediate_sorted_queue_witness,
         };
 
-        assert_eq!(instance_witness.unsorted_queue_witness.wit.len(), instance_witness.intermediate_sorted_queue_witness.wit.len());
+        assert_eq!(instance_witness.unsorted_queue_witness.elements.len(), instance_witness.intermediate_sorted_queue_witness.elements.len());
 
         if sorted_states.len() % per_circuit_capacity != 0 {
             assert!(is_last);
             // circuit does padding, so all previous values must be reset
-            instance_witness.closed_form_input.hidden_fsm_output.previous_packed_key = [F::zero(); 2];
-            instance_witness.closed_form_input.hidden_fsm_output.previous_key = BigUint::from(0u64);
-            instance_witness.closed_form_input.hidden_fsm_output.previous_address = u160_from_address(Address::default());
-            instance_witness.closed_form_input.hidden_fsm_output.previous_shard_id = 0u8;
+            instance_witness.closed_form_input.hidden_fsm_output.previous_packed_key = [0u32; PACKED_KEY_LENGTH];
+            instance_witness.closed_form_input.hidden_fsm_output.previous_key = U256::zero();
+            instance_witness.closed_form_input.hidden_fsm_output.previous_address = Address::default();
             instance_witness.closed_form_input.hidden_fsm_output.previous_timestamp = 0u32;
             instance_witness.closed_form_input.hidden_fsm_output.this_cell_has_explicit_read_and_rollback_depth_zero = false;
         }
@@ -481,11 +465,10 @@ pub fn compute_storage_dedup_and_sort<
         current_lhs_product = accumulated_lhs;
         current_rhs_product = accumulated_rhs;
 
-        previous_packed_key = last_packed_key;
+        previous_comparison_key = last_comparison_key.0;
         previous_key = last_key;
         previous_timestamp = last_timestamp;
         previous_address = last_address;
-        previous_shard_id = last_shard_id;
 
         this_cell_has_explicit_read_and_rollback_depth_zero = new_this_cell_has_explicit_read_and_rollback_depth_zero;
         this_cell_base_value = new_this_cell_base_value;

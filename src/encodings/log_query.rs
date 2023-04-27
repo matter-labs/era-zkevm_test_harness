@@ -5,7 +5,9 @@ use crate::witness::sort_storage_access::LogQueryLikeWithExtendedEnumeration;
 
 use super::*;
 
-pub fn comparison_key<F: SmallField>(query: &LogQuery) -> Key<14> {
+use zkevm_circuits::storage_validity_by_grand_product::input::PACKED_KEY_LENGTH;
+
+pub fn comparison_key(query: &LogQuery) -> Key<PACKED_KEY_LENGTH> {
     let key = decompose_u256_as_u32x8(query.key);
     let address = decompose_address_as_u32x5(query.address);
 
@@ -23,15 +25,13 @@ pub fn comparison_key<F: SmallField>(query: &LogQuery) -> Key<14> {
         address[2],
         address[3],
         address[4],
-        query.shard_id as u32,
     ];
 
     Key(le_words)
 }
 
-pub fn event_comparison_key(query: &LogQuery) -> Key<2> {
+pub fn event_comparison_key(query: &LogQuery) -> Key<1> {
     let le_words = [
-        query.rollback as u32,
         query.timestamp.0,
     ];
 
@@ -303,34 +303,35 @@ impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, LOG_QUERY_PACKED_WIDTH> 
     }
 }
 
-// pub type LogQueryWithExtendedEnumeration = LogQueryLikeWithExtendedEnumeration<LogQuery>;
+pub type LogQueryWithExtendedEnumeration = LogQueryLikeWithExtendedEnumeration<LogQuery>;
 
-// impl<F: SmallField> OutOfCircuitFixedLengthEncodable<E, 5> for LogQueryWithExtendedEnumeration {
-//     fn encoding_witness(&self) -> [<E>::Fr; 5] {
-//         let shifts = compute_shifts::<F>();
+impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, LOG_QUERY_PACKED_WIDTH> for LogQueryWithExtendedEnumeration {
+    fn encoding_witness(&self) -> [F; LOG_QUERY_PACKED_WIDTH] {
+        let LogQueryWithExtendedEnumeration {
+            raw_query,
+            extended_timestamp
+        } = self;
 
-//         let LogQueryWithExtendedEnumeration {
-//             raw_query,
-//             extended_timestamp
-//         } = self;
+        let mut result = <LogQuery as OutOfCircuitFixedLengthEncodable<F, LOG_QUERY_PACKED_WIDTH>>::encoding_witness(raw_query);
+        use zkevm_circuits::storage_validity_by_grand_product::EXTENDED_TIMESTAMP_ENCODING_OFFSET;
 
-//         let mut result = <LogQuery as OutOfCircuitFixedLengthEncodable<E, 5>>::encoding_witness(raw_query);
-
-//         let mut shift = EXTENDED_TIMESTAMP_ENCODING_OFFSET;
-//         scale_and_accumulate::<E, _>(&mut result[EXTENDED_TIMESTAMP_ENCODING_ELEMENT], *extended_timestamp, &shifts, shift);
-//         shift += 32;
-//         assert!(shift <= F::CAPACITY as usize);
-
-//         // dbg!(&result);
+        let mut shift = EXTENDED_TIMESTAMP_ENCODING_OFFSET;
+        use zkevm_circuits::storage_validity_by_grand_product::EXTENDED_TIMESTAMP_ENCODING_ELEMENT;
+        scale_and_accumulate::<F, _>(&mut result[EXTENDED_TIMESTAMP_ENCODING_ELEMENT], *extended_timestamp, shift);
+        shift += 32;
+        assert!(shift <= F::CAPACITY_BITS as usize);
         
-//         result
-//     }
-// }
+        result
+    }
+}
 
 use zkevm_circuits::base_structures::log_query::LOG_QUERY_ABSORBTION_ROUNDS;
 
 pub type LogQueueSimulator<F> = QueueSimulator<F, LogQuery, QUEUE_STATE_WIDTH, LOG_QUERY_PACKED_WIDTH, LOG_QUERY_ABSORBTION_ROUNDS>;
 pub type LogQueueState<F> = QueueIntermediateStates<F, QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH, LOG_QUERY_ABSORBTION_ROUNDS>;
+
+pub type LogWithExtendedEnumerationQueueSimulator<F> = QueueSimulator<F, LogQueryWithExtendedEnumeration, QUEUE_STATE_WIDTH, LOG_QUERY_PACKED_WIDTH, LOG_QUERY_ABSORBTION_ROUNDS>;
+// pub type LogQueueState<F> = QueueIntermediateStates<F, QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH, LOG_QUERY_ABSORBTION_ROUNDS>;
 
 
 pub fn log_query_into_circuit_log_query_witness<F: SmallField>(query: &LogQuery) 
@@ -356,6 +357,24 @@ impl<F: SmallField> CircuitEquivalentReflection<F> for LogQuery {
     type Destination = zkevm_circuits::base_structures::log_query::LogQuery<F>;
     fn reflect(&self) -> <Self::Destination as CSAllocatable<F>>::Witness {
         log_query_into_circuit_log_query_witness(self)
+    }
+}
+
+pub fn log_query_into_timestamped_storage_record_witness<F: SmallField>(
+    query: &LogQueryWithExtendedEnumeration
+) -> <zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord<F> as CSAllocatable<F>>::Witness {
+    use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecordWitness;
+
+    TimestampedStorageLogRecordWitness {
+        record: log_query_into_circuit_log_query_witness(&query.raw_query),
+        timestamp: query.extended_timestamp,
+    }
+}
+
+impl<F: SmallField> CircuitEquivalentReflection<F> for LogQueryWithExtendedEnumeration {
+    type Destination = zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord<F>;
+    fn reflect(&self) -> <Self::Destination as CSAllocatable<F>>::Witness {
+        log_query_into_timestamped_storage_record_witness(self)
     }
 }
 
@@ -392,12 +411,3 @@ impl BytesSerializable<88> for LogQuery {
         result
     }
 }
-
-// pub fn log_query_into_timestamped_storage_record_witness<F: SmallField>(query: &LogQueryWithExtendedEnumeration) -> <TimestampedStorageLogRecord<E> as CSWitnessable<E>>::Witness {
-//     use sync_vm::scheduler::queues::StorageLogRecordWitness;
-
-//     TimestampedStorageLogRecordWitness {
-//         record: log_query_into_storage_record_witness(&query.raw_query),
-//         timestamp: query.extended_timestamp,
-//     }
-// }
