@@ -44,8 +44,10 @@ pub struct FullBlockArtifacts<F: SmallField> {
     pub sorted_decommittment_queries: Vec<DecommittmentQuery>,
     pub deduplicated_decommittment_queries: Vec<DecommittmentQuery>,
     pub all_decommittment_queue_states: Vec<(u32, DecommittmentQueueState<F>)>,
-    pub sorted_decommittment_queue_states: Vec<DecommittmentQueueState<F>>,
+
+    pub deduplicated_decommittment_queue_simulator: DecommittmentQueueSimulator<F>,
     pub deduplicated_decommittment_queue_states: Vec<DecommittmentQueueState<F>>,
+    pub deduplicated_decommit_requests_with_data: Vec<(DecommittmentQuery, Vec<U256>)>,
     // log queue
     pub original_log_queue: Vec<(u32, LogQuery)>,
     pub original_log_queue_simulator: LogQueueSimulator<F>,
