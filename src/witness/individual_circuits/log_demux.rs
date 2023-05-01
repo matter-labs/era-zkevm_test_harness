@@ -5,7 +5,7 @@ use zkevm_circuits::base_structures::log_query::*;
 /// Take a storage log, output logs separately for events, l1 messages, storage, etc
 pub fn compute_logs_demux<
 F: SmallField,
-R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     artifacts: &mut FullBlockArtifacts<F>,
     per_circuit_capacity: usize,

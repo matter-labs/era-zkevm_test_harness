@@ -11,7 +11,7 @@ use zk_evm::zkevm_opcode_defs::BOOTLOADER_HEAP_PAGE;
 
 pub fn compute_ram_circuit_snapshots<
 F: SmallField,
-R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     artifacts: &mut FullBlockArtifacts<F>,
     round_function: &R,

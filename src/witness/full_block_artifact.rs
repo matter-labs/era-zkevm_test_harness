@@ -23,6 +23,13 @@ use zkevm_circuits::demux_log_queue::input::LogDemuxerCircuitInstanceWitness;
 use zkevm_circuits::sha256_round_function::input::Sha256RoundFunctionCircuitInstanceWitness;
 use zkevm_circuits::keccak256_round_function::input::Keccak256RoundFunctionCircuitInstanceWitness;
 use zkevm_circuits::ecrecover::EcrecoverCircuitInstanceWitness;
+use boojum::gadgets::poseidon::BuildableCircuitRoundFunction;
+use zkevm_circuits::ram_permutation::input::RamPermutationCircuitInstanceWitness;
+use zkevm_circuits::code_unpacker_sha256::input::CodeDecommitterCircuitInstanceWitness;
+use zkevm_circuits::sort_decommittment_requests::input::CodeDecommittmentsDeduplicatorInstanceWitness;
+use zkevm_circuits::storage_validity_by_grand_product::input::StorageDeduplicatorInstanceWitness;
+use zkevm_circuits::log_sorter::input::EventsDeduplicatorInstanceWitness;
+
 
 #[derive(Derivative)]
 #[derivative(Clone, Default(bound = ""))]
@@ -120,17 +127,17 @@ pub struct FullBlockArtifacts<F: SmallField> {
     pub ecrecover_memory_queries: Vec<MemoryQuery>,
     pub ecrecover_memory_states: Vec<MemoryQueueState<F>>,
 
-    // // processed RAM circuit information
-    // pub ram_permutation_circuits_data: Vec<RamPermutationCircuitInstanceWitness<F>>,
-    // // processed code decommitter circuits, as well as sorting circuit (1)
-    // pub code_decommitter_circuits_data: Vec<CodeDecommitterCircuitInstanceWitness<F>>,
-    // pub decommittments_deduplicator_circuits_data: Vec<CodeDecommittmentsDeduplicatorInstanceWitness<F>>,
+    // processed RAM circuit information
+    pub ram_permutation_circuits_data: Vec<RamPermutationCircuitInstanceWitness<F>>,
+    // processed code decommitter circuits, as well as sorting circuit
+    pub code_decommitter_circuits_data: Vec<CodeDecommitterCircuitInstanceWitness<F>>,
+    pub decommittments_deduplicator_circuits_data: Vec<CodeDecommittmentsDeduplicatorInstanceWitness<F>>,
     //
     pub log_demuxer_circuit_data: Vec<LogDemuxerCircuitInstanceWitness<F>>,
-    // //
-    // pub storage_deduplicator_circuit_data: Vec<StorageDeduplicatorInstanceWitness<F>>,
-    // pub events_deduplicator_circuit_data: Vec<EventsDeduplicatorInstanceWitness<F>>,
-    // pub l1_messages_deduplicator_circuit_data: Vec<EventsDeduplicatorInstanceWitness<F>>,
+    // IO related circuits
+    pub storage_deduplicator_circuit_data: Vec<StorageDeduplicatorInstanceWitness<F>>,
+    pub events_deduplicator_circuit_data: Vec<EventsDeduplicatorInstanceWitness<F>>,
+    pub l1_messages_deduplicator_circuit_data: Vec<EventsDeduplicatorInstanceWitness<F>>,
     // //
     // pub initial_writes_pubdata_hasher_circuit_data: Vec<PubdataHasherInstanceWitness<E, 3, 64, InitialStorageWriteData<F>>>,
     // pub repeated_writes_pubdata_hasher_circuit_data: Vec<PubdataHasherInstanceWitness<E, 2, 40, RepeatedStorageWriteData<F>>>,
@@ -154,7 +161,7 @@ use boojum::gadgets::poseidon::CircuitRoundFunction;
 
 impl<F: SmallField> FullBlockArtifacts<F> {
     pub fn process<
-    R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+    R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
     >(
         &mut self, 
         round_function: &R, 
@@ -186,26 +193,6 @@ impl<F: SmallField> FullBlockArtifacts<F> {
         {
             assert_eq!(self.all_memory_queries_accumulated.len(), self.all_memory_queue_states.len());
             assert_eq!(self.all_memory_queries_accumulated.len(), self.memory_queue_simulator.num_items as usize);
-
-            let start_idx_for_memory_accumulator = self.all_memory_queue_states.len();
-
-            // we produce witness for two circuits at once
-
-            let mut unsorted_decommittment_queue_simulator = DecommittmentQueueSimulator::<F>::empty();
-            let mut unsorted_decommittment_requests_with_data = vec![];
-            for (_cycle, decommittment_request, writes) in self.all_decommittment_queries.iter_mut() {
-                let data = std::mem::replace(writes, vec![]);
-                unsorted_decommittment_requests_with_data.push((*decommittment_request, data));
-            }
-
-            for (cycle, decommittment_request, _) in self.all_decommittment_queries.iter() {
-                // sponge
-                let (_old_tail, intermediate_info) = unsorted_decommittment_queue_simulator
-                    .push_and_output_intermediate_data(*decommittment_request, round_function);
-
-                    self.all_decommittment_queue_states
-                    .push((*cycle, intermediate_info));
-            }
         }
 
 
@@ -214,18 +201,29 @@ impl<F: SmallField> FullBlockArtifacts<F> {
         // direct VM related part is done, other subcircuit's functionality is moved to other functions
         // that should properly do sorts and memory writes
 
-        // use crate::witness::individual_circuits::decommit_code::compute_decommitter_circuit_snapshots;
+        use crate::witness::individual_circuits::sort_decommit_requests::compute_decommitts_sorter_circuit_snapshots;
 
-        // tracing::debug!("Running code decommittments sorter and decommitter simulation");
+        tracing::debug!("Running code decommittments sorter simulation");
 
-        // let (code_decommitter_circuits_data, decommittments_deduplicator_witness) = compute_decommitter_circuit_snapshots(
-        //     self,
-        //     round_function,
-        //     geometry.cycles_per_code_decommitter as usize,
-        // );
+        let decommittments_deduplicator_witness = compute_decommitts_sorter_circuit_snapshots(
+            self,
+            round_function,
+            geometry.cycles_code_decommitter_sorter as usize,
+        );
 
-        // self.code_decommitter_circuits_data = code_decommitter_circuits_data;
-        // self.decommittments_deduplicator_circuits_data = vec![decommittments_deduplicator_witness];
+        self.decommittments_deduplicator_circuits_data = decommittments_deduplicator_witness;
+
+        use crate::witness::individual_circuits::decommit_code::compute_decommitter_circuit_snapshots;
+
+        tracing::debug!("Running code code decommitter simulation");
+
+        let code_decommitter_circuits_data = compute_decommitter_circuit_snapshots(
+            self,
+            round_function,
+            geometry.cycles_per_code_decommitter as usize,
+        );
+
+        self.code_decommitter_circuits_data = code_decommitter_circuits_data;
 
         // demux log queue
         use crate::witness::individual_circuits::log_demux::compute_logs_demux;
@@ -279,63 +277,63 @@ impl<F: SmallField> FullBlockArtifacts<F> {
         );
         self.ecrecover_circuits_data = ecrecover_circuits_data;
 
-        // // we are done with a memory and can do the processing and breaking of the logical arguments into individual circits
+        // we are done with a memory and can do the processing and breaking of the logical arguments into individual circits
 
-        // use crate::witness::individual_circuits::ram_permutation::compute_ram_circuit_snapshots;
+        use crate::witness::individual_circuits::ram_permutation::compute_ram_circuit_snapshots;
 
-        // tracing::debug!("Running RAM permutation simulation");
+        tracing::debug!("Running RAM permutation simulation");
 
-        // let ram_permutation_circuits_data = compute_ram_circuit_snapshots(
-        //     self,
-        //     round_function,
-        //     num_non_deterministic_heap_queries,
-        //     geometry.cycles_per_ram_permutation as usize,
-        // );
+        let ram_permutation_circuits_data = compute_ram_circuit_snapshots(
+            self,
+            round_function,
+            num_non_deterministic_heap_queries,
+            geometry.cycles_per_ram_permutation as usize,
+        );
 
-        // self.ram_permutation_circuits_data = ram_permutation_circuits_data;
+        self.ram_permutation_circuits_data = ram_permutation_circuits_data;
 
         // now completely parallel process to reconstruct the states, with internally parallelism in each round function
 
-        // use crate::witness::individual_circuits::storage_sort_dedup::compute_storage_dedup_and_sort;
+        use crate::witness::individual_circuits::storage_sort_dedup::compute_storage_dedup_and_sort;
 
-        // tracing::debug!("Running storage deduplication simulation");
+        tracing::debug!("Running storage deduplication simulation");
 
-        // let storage_deduplicator_circuit_data = compute_storage_dedup_and_sort(
-        //     self,
-        //     geometry.cycles_per_storage_sorter as usize,
-        //     round_function
-        // );
-        // self.storage_deduplicator_circuit_data = storage_deduplicator_circuit_data;
+        let storage_deduplicator_circuit_data = compute_storage_dedup_and_sort(
+            self,
+            geometry.cycles_per_storage_sorter as usize,
+            round_function
+        );
+        self.storage_deduplicator_circuit_data = storage_deduplicator_circuit_data;
 
-        // use crate::witness::individual_circuits::events_sort_dedup::compute_events_dedup_and_sort;
+        use crate::witness::individual_circuits::events_sort_dedup::compute_events_dedup_and_sort;
 
-        // tracing::debug!("Running events deduplication simulation");
+        tracing::debug!("Running events deduplication simulation");
 
-        // let events_deduplicator_circuit_data = compute_events_dedup_and_sort(
-        //     &self.demuxed_event_queries,
-        //     &mut self.deduplicated_event_queries,
-        //     &self.demuxed_events_queue_simulator,
-        //     &self.demuxed_event_queue_states,
-        //     &mut self.deduplicated_event_queue_simulator,
-        //     geometry.cycles_per_events_or_l1_messages_sorter as usize,
-        //     round_function
-        // );
+        let events_deduplicator_circuit_data = compute_events_dedup_and_sort(
+            &self.demuxed_event_queries,
+            &mut self.deduplicated_event_queries,
+            &self.demuxed_events_queue_simulator,
+            &self.demuxed_event_queue_states,
+            &mut self.deduplicated_event_queue_simulator,
+            geometry.cycles_per_events_or_l1_messages_sorter as usize,
+            round_function
+        );
 
-        // self.events_deduplicator_circuit_data = events_deduplicator_circuit_data;
+        self.events_deduplicator_circuit_data = events_deduplicator_circuit_data;
 
-        // tracing::debug!("Running L1 messages deduplication simulation");
+        tracing::debug!("Running L1 messages deduplication simulation");
 
-        // let l1_messages_deduplicator_circuit_data = compute_events_dedup_and_sort(
-        //     &self.demuxed_to_l1_queries,
-        //     &mut self.deduplicated_to_l1_queries,
-        //     &self.demuxed_to_l1_queue_simulator,
-        //     &self.demuxed_to_l1_queue_states,
-        //     &mut self.deduplicated_to_l1_queue_simulator,
-        //     geometry.cycles_per_events_or_l1_messages_sorter as usize,
-        //     round_function
-        // );
+        let l1_messages_deduplicator_circuit_data = compute_events_dedup_and_sort(
+            &self.demuxed_to_l1_queries,
+            &mut self.deduplicated_to_l1_queries,
+            &self.demuxed_to_l1_queue_simulator,
+            &self.demuxed_to_l1_queue_states,
+            &mut self.deduplicated_to_l1_queue_simulator,
+            geometry.cycles_per_events_or_l1_messages_sorter as usize,
+            round_function
+        );
 
-        // self.l1_messages_deduplicator_circuit_data = l1_messages_deduplicator_circuit_data;
+        self.l1_messages_deduplicator_circuit_data = l1_messages_deduplicator_circuit_data;
 
         // // compute flattened hash of all messages
 
@@ -413,7 +411,7 @@ use boojum::gadgets::traits::allocatable::*;
 #[serde(bound = "")]
 pub struct BlockBasicCircuits<
     F: SmallField,
-    R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
+    R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
 > 
     where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <zkevm_circuits::base_structures::memory_query::MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
@@ -421,13 +419,14 @@ pub struct BlockBasicCircuits<
     [(); <boojum::gadgets::u256::UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <boojum::gadgets::u256::UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN + 1]:,
     [(); <zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
 {
     // main VM circuit. Many of them
     pub main_vm_circuits: Vec<VMMainCircuit<F, VmWitnessOracle<F>, R>>,
-    // // code decommittments sorter is only 1 circuit per block
-    // pub code_decommittments_sorter_circuit: CodeDecommittsSorterCircuit<F>,
-    // // few code decommitters: code hash -> memory
-    // pub code_decommitter_circuits: Vec<CodeDecommitterCircuit<F>>,
+    // code decommittments sorters
+    pub code_decommittments_sorter_circuits: Vec<CodeDecommittsSorterCircuit<F, R>>,
+    // few code decommitters: code hash -> memory
+    pub code_decommitter_circuits: Vec<CodeDecommitterCircuit<F, R>>,
     // demux logs to get precompiles for RAM too
     pub log_demux_circuits: Vec<LogDemuxerCircuit<F, R>>,
     // process precompiles
@@ -437,80 +436,91 @@ pub struct BlockBasicCircuits<
     pub sha256_precompile_circuits: Vec<Sha256RoundFunctionCircuit<F, R>>,
     // ecrecover
     pub ecrecover_precompile_circuits: Vec<ECRecoverFunctionCircuit<F, R>>,
-    // // when it's all done we prove the memory validity and finish with it
-    // pub ram_permutation_circuits: Vec<RAMPermutationCircuit<F>>,
-    // // sort storage changes
-    // pub storage_sorter_circuits: Vec<StorageSorterCircuit<F>>,
+    // when it's all done we prove the memory validity and finish with it
+    pub ram_permutation_circuits: Vec<RAMPermutationCircuit<F, R>>,
+    // sort storage changes
+    pub storage_sorter_circuits: Vec<StorageSorterCircuit<F, R>>,
     // apply them
     pub storage_application_circuits: Vec<StorageApplicationCircuit<F, R>>,
     // // rehash initial writes
     // pub initial_writes_hasher_circuit: InitialStorageWritesPubdataHasherCircuit<F>,
     // // rehash repeated writes
     // pub repeated_writes_hasher_circuit: RepeatedStorageWritesPubdataHasherCircuit<F>,
-    // // sort and dedup events
-    // pub events_sorter_circuits: Vec<EventsSorterCircuit<F>>,
-    // // sort and dedup L1 messages
-    // pub l1_messages_sorter_circuits: Vec<L1MessagesSorterCircuit<F>>,
+    // sort and dedup events
+    pub events_sorter_circuits: Vec<EventsSorterCircuit<F, R>>,
+    // sort and dedup L1 messages
+    pub l1_messages_sorter_circuits: Vec<L1MessagesSorterCircuit<F, R>>,
     // // hash l1 messages into pubdata
     // pub l1_messages_pubdata_hasher_circuit: L1MessagesHasherCircuit<F>,
     // // merklize L1 message
     // pub l1_messages_merklizer_circuit: L1MessagesMerklizerCircuit<F>
 }
 
-// impl<F: SmallField> BlockBasicCircuits<F> {
-//     pub fn into_flattened_set(self) -> Vec<ZkSyncCircuit<E, VmWitnessOracle<F>>> {
-//         let BlockBasicCircuits { 
-//             main_vm_circuits, 
-//             code_decommittments_sorter_circuit, 
-//             code_decommitter_circuits, 
-//             log_demux_circuits, 
-//             keccak_precompile_circuits, 
-//             sha256_precompile_circuits, 
-//             ecrecover_precompile_circuits, 
-//             ram_permutation_circuits, 
-//             storage_sorter_circuits, 
-//             storage_application_circuits, 
-//             initial_writes_hasher_circuit, 
-//             repeated_writes_hasher_circuit, 
-//             events_sorter_circuits, 
-//             l1_messages_sorter_circuits, 
-//             l1_messages_pubdata_hasher_circuit,
-//             l1_messages_merklizer_circuit 
-//         } = self;
+impl<
+F: SmallField,
+R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
+> BlockBasicCircuits<F, R> 
+where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <zkevm_circuits::base_structures::memory_query::MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <zkevm_circuits::base_structures::decommit_query::DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <boojum::gadgets::u256::UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <boojum::gadgets::u256::UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN + 1]:,
+    [(); <zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+{
+    pub fn into_flattened_set(self) -> Vec<ZkSyncBaseLayerCircuit<F, VmWitnessOracle<F>, R>> {
+        let BlockBasicCircuits { 
+            main_vm_circuits, 
+            code_decommittments_sorter_circuits, 
+            code_decommitter_circuits, 
+            log_demux_circuits, 
+            keccak_precompile_circuits, 
+            sha256_precompile_circuits, 
+            ecrecover_precompile_circuits, 
+            ram_permutation_circuits, 
+            storage_sorter_circuits, 
+            storage_application_circuits, 
+            // initial_writes_hasher_circuit, 
+            // repeated_writes_hasher_circuit, 
+            events_sorter_circuits, 
+            l1_messages_sorter_circuits, 
+            // l1_messages_pubdata_hasher_circuit,
+            // l1_messages_merklizer_circuit 
+        } = self;
 
-//         let mut result = vec![];
-//         result.extend(main_vm_circuits.into_iter().map(|el| ZkSyncCircuit::MainVM(el)));
+        let mut result = vec![];
+        result.extend(main_vm_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuit::MainVM(el)));
 
-//         result.push(ZkSyncCircuit::CodeDecommittmentsSorter(code_decommittments_sorter_circuit));
+        result.extend(code_decommittments_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(el)));
 
-//         result.extend(code_decommitter_circuits.into_iter().map(|el| ZkSyncCircuit::CodeDecommitter(el)));
+        result.extend(code_decommitter_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuit::CodeDecommitter(el)));
 
-//         result.extend(log_demux_circuits.into_iter().map(|el| ZkSyncCircuit::LogDemuxer(el)));
+        result.extend(log_demux_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuit::LogDemuxer(el)));
 
-//         result.extend(keccak_precompile_circuits.into_iter().map(|el| ZkSyncCircuit::KeccakRoundFunction(el)));
-//         result.extend(sha256_precompile_circuits.into_iter().map(|el| ZkSyncCircuit::Sha256RoundFunction(el)));
-//         result.extend(ecrecover_precompile_circuits.into_iter().map(|el| ZkSyncCircuit::ECRecover(el)));
+        result.extend(keccak_precompile_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuit::KeccakRoundFunction(el)));
+        result.extend(sha256_precompile_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuit::Sha256RoundFunction(el)));
+        result.extend(ecrecover_precompile_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuit::ECRecover(el)));
 
-//         result.extend(ram_permutation_circuits.into_iter().map(|el| ZkSyncCircuit::RAMPermutation(el)));
+        result.extend(ram_permutation_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuit::RAMPermutation(el)));
         
-//         result.extend(storage_sorter_circuits.into_iter().map(|el| ZkSyncCircuit::StorageSorter(el)));
+        result.extend(storage_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuit::StorageSorter(el)));
 
-//         result.extend(storage_application_circuits.into_iter().map(|el| ZkSyncCircuit::StorageApplication(el)));
+        result.extend(storage_application_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuit::StorageApplication(el)));
 
-//         result.push(ZkSyncCircuit::InitialWritesPubdataHasher(initial_writes_hasher_circuit));
-//         result.push(ZkSyncCircuit::RepeatedWritesPubdataHasher(repeated_writes_hasher_circuit));
+        // result.push(ZkSyncBaseLayerCircuit::InitialWritesPubdataHasher(initial_writes_hasher_circuit));
+        // result.push(ZkSyncBaseLayerCircuit::RepeatedWritesPubdataHasher(repeated_writes_hasher_circuit));
 
-//         result.extend(events_sorter_circuits.into_iter().map(|el| ZkSyncCircuit::EventsSorter(el)));
+        result.extend(events_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuit::EventsSorter(el)));
         
-//         result.extend(l1_messages_sorter_circuits.into_iter().map(|el| ZkSyncCircuit::L1MessagesSorter(el)));
+        result.extend(l1_messages_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuit::L1MessagesSorter(el)));
         
-//         result.push(ZkSyncCircuit::L1MessagesPubdataHasher(l1_messages_pubdata_hasher_circuit));
+        // result.push(ZkSyncBaseLayerCircuit::L1MessagesPubdataHasher(l1_messages_pubdata_hasher_circuit));
 
-//         result.push(ZkSyncCircuit::L1MessagesMerklier(l1_messages_merklizer_circuit));
+        // result.push(ZkSyncBaseLayerCircuit::L1MessagesMerklier(l1_messages_merklizer_circuit));
 
-//         result
-//     }
-// }
+        result
+    }
+}
 
 use zkevm_circuits::fsm_input_output::circuit_inputs::INPUT_OUTPUT_COMMITMENT_LENGTH;
 
@@ -520,10 +530,10 @@ use zkevm_circuits::fsm_input_output::circuit_inputs::INPUT_OUTPUT_COMMITMENT_LE
 pub struct BlockBasicCircuitsPublicInputs<F: SmallField> {
     // main VM circuit. Many of them
     pub main_vm_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
-    // // code decommittments sorter
-    // pub code_decommittments_sorter_circuit: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
-    // // few code decommitters: code hash -> memory
-    // pub code_decommitter_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
+    // code decommittments sorter
+    pub code_decommittments_sorter_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
+    // few code decommitters: code hash -> memory
+    pub code_decommitter_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
     // demux logs to get precompiles for RAM too
     pub log_demux_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
     // process precompiles
@@ -533,79 +543,78 @@ pub struct BlockBasicCircuitsPublicInputs<F: SmallField> {
     pub sha256_precompile_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
     // ecrecover
     pub ecrecover_precompile_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
-    // // when it's all done we prove the memory validity and finish with it
-    // pub ram_permutation_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
-    // // sort storage changes
-    // pub storage_sorter_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
+    // when it's all done we prove the memory validity and finish with it
+    pub ram_permutation_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
+    // sort storage changes
+    pub storage_sorter_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
     // apply them
     pub storage_application_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
     // // rehash initial writes
     // pub initial_writes_hasher_circuit: F,
     // // rehash repeated writes
     // pub repeated_writes_hasher_circuit: F,
-    // // sort and dedup events
-    // pub events_sorter_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
-    // // sort and dedup L1 messages
-    // pub l1_messages_sorter_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
+    // sort and dedup events
+    pub events_sorter_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
+    // sort and dedup L1 messages
+    pub l1_messages_sorter_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
     // // hash l1 messages into pubdata
     // pub l1_messages_pubdata_hasher_circuit: F,
     // // merklize L1 message
     // pub l1_messages_merklizer_circuit: F,
 }
 
-// impl<F: SmallField> BlockBasicCircuitsPublicInputs<F> {
-//     pub fn into_flattened_set(self) -> Vec<F> {
-//         let BlockBasicCircuitsPublicInputs { 
-//             main_vm_circuits, 
-//             code_decommittments_sorter_circuit, 
-//             code_decommitter_circuits, 
-//             log_demux_circuits, 
-//             keccak_precompile_circuits, 
-//             sha256_precompile_circuits, 
-//             ecrecover_precompile_circuits, 
-//             ram_permutation_circuits, 
-//             storage_sorter_circuits, 
-//             storage_application_circuits, 
-//             initial_writes_hasher_circuit, 
-//             repeated_writes_hasher_circuit, 
-//             events_sorter_circuits, 
-//             l1_messages_sorter_circuits, 
-//             l1_messages_pubdata_hasher_circuit,
-//             l1_messages_merklizer_circuit 
-//         } = self;
+impl<F: SmallField> BlockBasicCircuitsPublicInputs<F> {
+    pub fn into_flattened_set(self) -> Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]> {
+        let BlockBasicCircuitsPublicInputs { 
+            main_vm_circuits, 
+            code_decommittments_sorter_circuits, 
+            code_decommitter_circuits, 
+            log_demux_circuits, 
+            keccak_precompile_circuits, 
+            sha256_precompile_circuits, 
+            ecrecover_precompile_circuits, 
+            ram_permutation_circuits, 
+            storage_sorter_circuits, 
+            storage_application_circuits, 
+            // initial_writes_hasher_circuit, 
+            // repeated_writes_hasher_circuit, 
+            events_sorter_circuits, 
+            l1_messages_sorter_circuits, 
+            // l1_messages_pubdata_hasher_circuit,
+            // l1_messages_merklizer_circuit 
+        } = self;
 
-//         use ff::Field;
+        let mut result = vec![];
+        result.extend(main_vm_circuits);
 
-//         let mut result = vec![];
-//         result.extend(main_vm_circuits);
+        result.extend(code_decommittments_sorter_circuits);
 
-//         result.push(code_decommittments_sorter_circuit);
+        result.extend(code_decommitter_circuits);
 
-//         result.extend(code_decommitter_circuits);
+        result.extend(log_demux_circuits);
 
-//         result.extend(log_demux_circuits);
+        result.extend(keccak_precompile_circuits);
+        result.extend(sha256_precompile_circuits);
+        result.extend(ecrecover_precompile_circuits);
 
-//         result.extend(keccak_precompile_circuits);
-//         result.extend(sha256_precompile_circuits);
-//         result.extend(ecrecover_precompile_circuits);
+        result.extend(ram_permutation_circuits);
 
-//         result.extend(ram_permutation_circuits);
+        result.extend(storage_sorter_circuits);
 
-//         result.extend(storage_sorter_circuits);
+        result.extend(storage_application_circuits);
 
-//         result.extend(storage_application_circuits);
+        // result.push(initial_writes_hasher_circuit);
+        // result.push(repeated_writes_hasher_circuit);
 
-//         result.push(initial_writes_hasher_circuit);
-//         result.push(repeated_writes_hasher_circuit);
-//         result.extend(events_sorter_circuits);
-//         result.extend(l1_messages_sorter_circuits);
+        result.extend(events_sorter_circuits);
+        result.extend(l1_messages_sorter_circuits);
 
-//         result.push(l1_messages_pubdata_hasher_circuit);
-//         result.push(l1_messages_merklizer_circuit);
+        // result.push(l1_messages_pubdata_hasher_circuit);
+        // result.push(l1_messages_merklizer_circuit);
 
-//         result
-//     }
-// }
+        result
+    }
+}
 
 use zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
 

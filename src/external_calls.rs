@@ -28,13 +28,14 @@ use crate::witness::oracle::VmInstanceWitness;
 use crate::witness::oracle::VmWitnessOracle;
 use crate::witness::full_block_artifact::FullBlockArtifacts;
 use boojum::gadgets::traits::allocatable::*;
+use boojum::gadgets::poseidon::BuildableCircuitRoundFunction;
 
 /// This is a testing interface that basically will
 /// setup the environment and will run out-of-circuit and then in-circuit
 /// and perform intermediate tests
 pub fn run<
     F: SmallField,
-    R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
+    R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
     S: Storage
 >(
     caller: Address, // for real block must be zero
@@ -57,6 +58,7 @@ pub fn run<
     [(); <boojum::gadgets::u256::UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <boojum::gadgets::u256::UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN + 1]:,
     [(); <zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
 {
 // ) -> (BlockBasicCircuits<GoldilocksField>, BlockBasicCircuitsPublicInputs<GoldilocksField>, SchedulerCircuitInstanceWitness<GoldilocksField>) {
 // ) -> (Vec<VmInstanceWitness<F, VmWitnessOracle<F>>>, FullBlockArtifacts<F>) {

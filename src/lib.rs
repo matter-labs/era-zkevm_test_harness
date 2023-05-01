@@ -29,6 +29,7 @@
 #![feature(iter_array_chunks)]
 #![feature(iter_next_chunk)]
 #![feature(associated_type_defaults)]
+#![feature(return_position_impl_trait_in_trait)]
 
 #![allow(unused_imports)]
 

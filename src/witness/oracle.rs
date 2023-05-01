@@ -36,6 +36,7 @@ use zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
 use boojum::gadgets::poseidon::CircuitRoundFunction;
 use boojum::algebraic_props::round_function::AlgebraicRoundFunction;
 use boojum::gadgets::traits::allocatable::CSAllocatable;
+use boojum::gadgets::poseidon::BuildableCircuitRoundFunction;
 
 use zk_evm::zkevm_opcode_defs::system_params::{
     KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
@@ -199,7 +200,7 @@ use crate::blake2::Blake2s256;
 
 pub fn create_artifacts_from_tracer<
     F: SmallField,
-    R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+    R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     tracer: WitnessTracer,
     round_function: &R,

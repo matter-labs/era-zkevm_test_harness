@@ -13,7 +13,7 @@ use rayon::prelude::*;
 
 pub fn compute_events_dedup_and_sort<
 F: SmallField,
-R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     unsorted_queries: &Vec<LogQuery>,
     target_deduplicated_queries: &mut Vec<LogQuery>,
@@ -406,7 +406,7 @@ pub fn sort_and_dedup_events_log(sorted_history: Vec<LogQuery>) -> Vec<LogQuery>
 // For server side use convenience
 pub fn simulate_events_log_for_commitment<
     F: SmallField,
-    R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,  
+    R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,  
 >(
     history: Vec<LogQuery>, 
     round_function: &R,

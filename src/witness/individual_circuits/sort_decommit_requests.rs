@@ -18,11 +18,11 @@ use crate::encodings::CircuitEquivalentReflection;
 
 pub fn compute_decommitts_sorter_circuit_snapshots<
 F: SmallField,
-R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     artifacts: &mut FullBlockArtifacts<F>,
     round_function: &R,
-    dedublicator_circuit_capacity: usize,
+    deduplicator_circuit_capacity: usize,
 ) -> Vec<CodeDecommittmentsDeduplicatorInstanceWitness<F>> {
     assert_eq!(
         artifacts.all_memory_queries_accumulated.len(),
@@ -42,7 +42,6 @@ R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 
     let mut unsorted_decommittment_queue_simulator = DecommittmentQueueSimulator::<F>::empty();
     let mut sorted_decommittment_queue_simulator = DecommittmentQueueSimulator::<F>::empty();
-    let mut deduplicated_decommittment_queue_simulator = DecommittmentQueueSimulator::<F>::empty();
 
     // sort decommittment requests
 
@@ -54,7 +53,7 @@ R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
         unsorted_decommittment_requests_with_data.push((*decommittment_request, data));
     }
 
-    let num_circuits = (artifacts.all_decommittment_queries.len() + dedublicator_circuit_capacity - 1) / dedublicator_circuit_capacity;
+    let num_circuits = (artifacts.all_decommittment_queries.len() + deduplicator_circuit_capacity - 1) / deduplicator_circuit_capacity;
 
     // internally parallelizable by the factor of 3
     for (cycle, decommittment_request, _) in artifacts.all_decommittment_queries.iter() {
@@ -79,25 +78,27 @@ R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
     // let mut deduplicated_decommit_requests_with_data = vec![];
 
     let mut counter = 0;
-    let mut dedublicated_intermediate_states = vec![];
+    let mut deduplicated_intermediate_states = vec![];
     let mut previous_packed_keys = vec![];
     let mut previous_records = vec![];
     let mut first_encountered_timestamps = vec![];
     let mut first_encountered_timestamp = 0;
-    let mut previous_deduplicated_decommittment_queue_simulator = deduplicated_decommittment_queue_simulator.clone();
+    let mut previous_deduplicated_decommittment_queue_simulator_state = take_sponge_like_queue_state_from_simulator(&artifacts.deduplicated_decommittment_queue_simulator);
 
     let num_items = sorted_decommittment_requests_with_data.len();
 
     for (idx, (query, writes)) in sorted_decommittment_requests_with_data.into_iter().enumerate() {
         let last = idx == num_items - 1;
         if query.is_fresh {
+            assert!(writes.len() > 0);
+
             first_encountered_timestamp = query.timestamp.0;
 
             // and sorted request
             artifacts.deduplicated_decommittment_queries.push(query);
 
-            previous_deduplicated_decommittment_queue_simulator = deduplicated_decommittment_queue_simulator.clone();
-            let (_old_tail, intermediate_info) = deduplicated_decommittment_queue_simulator
+            previous_deduplicated_decommittment_queue_simulator_state = take_sponge_like_queue_state_from_simulator(&artifacts.deduplicated_decommittment_queue_simulator);
+            let (_old_tail, intermediate_info) = artifacts.deduplicated_decommittment_queue_simulator
                 .push_and_output_intermediate_data(query, round_function);
 
             artifacts.deduplicated_decommittment_queue_states.push(intermediate_info);
@@ -113,13 +114,13 @@ R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 
         counter += 1;
 
-        if counter == dedublicator_circuit_capacity {
+        if counter == deduplicator_circuit_capacity {
             counter = 0;
 
             if last {
-                dedublicated_intermediate_states.push(take_sponge_like_queue_state_from_simulator(&deduplicated_decommittment_queue_simulator));
+                deduplicated_intermediate_states.push(take_sponge_like_queue_state_from_simulator(&artifacts.deduplicated_decommittment_queue_simulator));
             } else {
-                dedublicated_intermediate_states.push(take_sponge_like_queue_state_from_simulator(&previous_deduplicated_decommittment_queue_simulator));
+                deduplicated_intermediate_states.push(previous_deduplicated_decommittment_queue_simulator_state.clone());
             }
 
             let record = sorted_decommittment_queue_simulator.witness.pop_back().unwrap();
@@ -134,7 +135,7 @@ R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
         }
     }
     if counter > 0 {
-        dedublicated_intermediate_states.push(take_sponge_like_queue_state_from_simulator(&deduplicated_decommittment_queue_simulator));
+        deduplicated_intermediate_states.push(take_sponge_like_queue_state_from_simulator(&artifacts.deduplicated_decommittment_queue_simulator));
 
         previous_packed_keys.push([0u32; PACKED_KEY_LENGTH]);
         previous_records.push(DecommitQuery::<F>::placeholder_witness());
@@ -161,7 +162,7 @@ R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
     let mut output_passthrough_data =
         CodeDecommittmentsDeduplicatorOutputData::<F>::placeholder_witness();
     output_passthrough_data.final_queue_state =
-        take_sponge_like_queue_state_from_simulator(&deduplicated_decommittment_queue_simulator);
+        take_sponge_like_queue_state_from_simulator(&artifacts.deduplicated_decommittment_queue_simulator);
 
 
     // now we should chunk it by circuits but briefly simulating their logic
@@ -202,18 +203,20 @@ R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
         rhs_grand_product_chains.push(rhs_grand_product_chain);
     }
 
+    dbg!(lhs_grand_product_chains.len());
+    dbg!(lhs_grand_product_chains[0].len());
 
     // now we need to split them into individual circuits
     // splitting is not extra hard here, we walk over iterator over everything and save states on checkpoints
 
     let num_items = unsorted_decommittment_queue_simulator.num_items;
+
     let mut input_products = [F::ONE; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS];
     let mut input_products_snapshots = vec![];
     let mut input_witness = vec![];
     let mut input_witness_chunk = VecDeque::new();
     let mut unsorted_intermediate_states = vec![];
-    let mut i = 0;
-    for _ in 0..num_items {
+    for i in 0..num_items {
         let (encoding, old_tail, element) = unsorted_decommittment_queue_simulator.witness.front().unwrap();
 
         let wit = DecommitQueryWitness {
@@ -226,22 +229,21 @@ R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
         input_witness_chunk.push_back((*encoding, wit, *old_tail));
 
         unsorted_decommittment_queue_simulator.pop_and_output_intermediate_data(round_function);
-        if input_witness_chunk.len() == dedublicator_circuit_capacity {
+        if input_witness_chunk.len() == deduplicator_circuit_capacity {
             let completed_chunk = std::mem::replace(&mut input_witness_chunk, VecDeque::new());
             for j in 0..DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS {
-                input_products[j] = lhs_grand_product_chains[j][i];
+                input_products[j] = lhs_grand_product_chains[j][i as usize];
             }
             input_witness.push(completed_chunk);
             input_products_snapshots.push(input_products);
             unsorted_intermediate_states.push(take_sponge_like_queue_state_from_simulator(&unsorted_decommittment_queue_simulator));
         }
-
-        i += 1;
     }
     if input_witness_chunk.len() > 0 {
+        dbg!(&input_witness_chunk.len());
         input_witness.push(input_witness_chunk);
         for j in 0..DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS {
-            input_products[j] = lhs_grand_product_chains[j][i];
+            input_products[j] = *lhs_grand_product_chains[j].last().unwrap();
         }
         input_products_snapshots.push(input_products);
         unsorted_intermediate_states.push(take_sponge_like_queue_state_from_simulator(&unsorted_decommittment_queue_simulator));
@@ -253,8 +255,7 @@ R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
     let mut sorted_witness = vec![];
     let mut sorted_witness_chunk = VecDeque::new();
     let mut sorted_intermediate_states = vec![];
-    let mut i = 0;
-    for _ in 0..num_items {
+    for i in 0..num_items {
         let (encoding, old_tail, element) = sorted_decommittment_queue_simulator.witness.front().unwrap();
         let wit = DecommitQueryWitness {
             code_hash: element.hash,
@@ -266,22 +267,20 @@ R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
         sorted_witness_chunk.push_back((*encoding, wit, *old_tail));
 
         sorted_decommittment_queue_simulator.pop_and_output_intermediate_data(round_function);
-        if sorted_witness_chunk.len() == dedublicator_circuit_capacity {
+        if sorted_witness_chunk.len() == deduplicator_circuit_capacity {
             let completed_chunk = std::mem::replace(&mut sorted_witness_chunk, VecDeque::new());
             sorted_witness.push(completed_chunk);
             for j in 0..DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS {
-                sorted_products[j] = rhs_grand_product_chains[j][i];
+                sorted_products[j] = rhs_grand_product_chains[j][i as usize];
             }
             sorted_products_snapshots.push(sorted_products);
             sorted_intermediate_states.push(take_sponge_like_queue_state_from_simulator(&sorted_decommittment_queue_simulator));
         }
-
-        i += 1;
     }
     if sorted_witness_chunk.len() > 0 {
         sorted_witness.push(sorted_witness_chunk);
         for j in 0..DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS {
-            sorted_products[j] = rhs_grand_product_chains[j][i];
+            sorted_products[j] = *rhs_grand_product_chains[j].last().unwrap();
         }
         sorted_products_snapshots.push(sorted_products);
         sorted_intermediate_states.push(take_sponge_like_queue_state_from_simulator(&sorted_decommittment_queue_simulator));
@@ -321,7 +320,7 @@ R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
         current_witness.closed_form_input.hidden_fsm_output = CodeDecommittmentsDeduplicatorFSMInputOutputWitness {
             initial_queue_state: unsorted_intermediate_states[i].clone(),
             sorted_queue_state: sorted_intermediate_states[i].clone(),
-            final_queue_state: dedublicated_intermediate_states[i].clone(),
+            final_queue_state: deduplicated_intermediate_states[i].clone(),
 
             lhs_accumulator: input_products_snapshots[i], 
             rhs_accumulator: sorted_products_snapshots[i],

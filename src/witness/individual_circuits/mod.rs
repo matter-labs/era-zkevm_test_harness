@@ -14,6 +14,7 @@ use boojum::gadgets::traits::allocatable::CSAllocatable;
 use crate::encodings::log_query_into_circuit_log_query_witness;
 use zkevm_circuits::base_structures::vm_state::{QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH};
 use zkevm_circuits::DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS;
+use boojum::gadgets::poseidon::BuildableCircuitRoundFunction;
 
 pub mod ram_permutation;
 pub mod decommit_code;

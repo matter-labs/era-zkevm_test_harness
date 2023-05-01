@@ -2,11 +2,15 @@ use super::*;
 use boojum::field::SmallField;
 
 pub mod run_manually;
-// pub mod complex_tests;
+pub mod complex_tests;
 pub mod simple_tests;
 
 
+use boojum::field::goldilocks::MixedGL;
+use boojum::worker::Worker;
 use zk_evm::testing::storage::InMemoryStorage;
+use crate::abstract_zksync_circuit::concrete_circuits::ZkSyncBaseLayerCircuit;
+use crate::witness::oracle::VmWitnessOracle;
 use crate::witness::tree::BinarySparseStorageTree;
 use crate::ethereum_types::U256;
 use crate::ethereum_types::Address;
@@ -16,6 +20,8 @@ use zk_evm::aux_structures::LogQuery;
 use crate::witness::tree::ZkSyncStorageLeaf;
 use std::collections::HashMap;
 use crate::blake2::Blake2s256;
+use boojum::cs::traits::circuit::Circuit;
+use crate::abstract_zksync_circuit::ZkSyncUniformSynthesisFunction;
 
 const ACCOUNT_CODE_STORAGE_ADDRESS: Address = H160([
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -68,4 +74,55 @@ pub(crate) fn save_predeployed_contracts(storage: &mut InMemoryStorage, tree: &m
 
         tree.insert_leaf(&index, leaf);
     }
+}
+
+pub(crate) fn base_test_circuit(
+    circuit: ZkSyncBaseLayerCircuit<GoldilocksField, VmWitnessOracle<GoldilocksField>, ZkSyncDefaultRoundFunction>
+) {
+    use boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
+    use boojum::config::DevCSConfig;
+    use boojum::cs::cs_builder::new_cs_builder;
+
+    type P = GoldilocksField;
+    // type P = MixedGL;
+
+    let worker = Worker::new();
+
+    let geometry = circuit.geometry();
+    let (max_trace_len, num_vars) = circuit.size_hint();
+
+    let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
+        geometry, 
+        num_vars.unwrap(), 
+        max_trace_len.unwrap(),
+    );
+    let builder = new_cs_builder::<_, GoldilocksField>(builder_impl);
+
+    match circuit {
+        ZkSyncBaseLayerCircuit::MainVM(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            let _ = cs.pad_and_shrink();
+            let is_satisfied = cs.check_if_satisfied(&worker);
+            assert!(is_satisfied);
+        },
+        _ => {
+            todo!()
+        },
+        // ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {inner.size_hint()},
+        // ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {inner.size_hint()},
+        // ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {inner.size_hint()},
+        // ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {inner.size_hint()},
+        // ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {inner.size_hint()},
+        // ZkSyncBaseLayerCircuit::ECRecover(inner) => {inner.size_hint()},
+        // ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {inner.size_hint()},
+        // ZkSyncBaseLayerCircuit::StorageSorter(inner) => {inner.size_hint()},
+        // ZkSyncBaseLayerCircuit::StorageApplication(inner) => {inner.size_hint()},
+        // ZkSyncBaseLayerCircuit::EventsSorter(inner) => {inner.size_hint()},
+        // ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {inner.size_hint()},
+    }
+
+
 }

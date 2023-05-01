@@ -12,7 +12,7 @@ use crate::encodings::CircuitEquivalentReflection;
 
 pub fn compute_storage_dedup_and_sort<
 F: SmallField,
-R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     artifacts: &mut FullBlockArtifacts<F>,
     per_circuit_capacity: usize,

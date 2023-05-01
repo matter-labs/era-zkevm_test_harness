@@ -18,12 +18,11 @@ use zkevm_circuits::base_structures::decommit_query::DecommitQueryWitness;
 
 pub fn compute_decommitter_circuit_snapshots<
 F: SmallField,
-R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     artifacts: &mut FullBlockArtifacts<F>,
     round_function: &R,
     decommiter_circuit_capacity: usize,
-    dedublicator_circuit_capacity: usize,
 ) -> Vec<CodeDecommitterCircuitInstanceWitness<F>> {
     assert_eq!(
         artifacts.all_memory_queries_accumulated.len(),
@@ -107,6 +106,16 @@ R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 
     let mut current_decommittment_requests_queue_simulator =
         artifacts.deduplicated_decommittment_queue_simulator.clone();
+
+    assert_eq!(
+        artifacts.deduplicated_decommit_requests_with_data.len(),
+        artifacts.deduplicated_decommittment_queue_states.len(),
+    );
+
+    assert_eq!(
+        artifacts.deduplicated_decommit_requests_with_data.len(),
+        artifacts.deduplicated_decommittment_queue_simulator.witness.len(),
+    );
 
     let mut it = artifacts.deduplicated_decommit_requests_with_data
         .drain(..)
@@ -207,6 +216,7 @@ R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
                 let (((_query, memory_data), _state), wit) = it.next().unwrap();
                 let _ = current_decommittment_requests_queue_simulator
                     .pop_and_output_intermediate_data(round_function);
+                assert!(memory_data.len() > 0);
                 current_memory_data = memory_data;
 
                 // fill the witness
@@ -306,7 +316,12 @@ R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
                         raw_state[0] = 0;
                         let word = recompose_u256_as_u32x8(raw_state);
 
-                        assert_eq!(fsm_internals.hash_to_compare_against, word);
+                        assert!(
+                            fsm_internals.hash_to_compare_against == word,
+                            "Hash in FSM is 0x{:064x}, while hash in simulator is 0x{:064x}",
+                            fsm_internals.hash_to_compare_against,
+                            word,
+                        );
 
                         if it.peek().is_none() {
                             fsm_state = DecommitterState::Done;

@@ -17,7 +17,7 @@ pub enum Keccak256PrecompileState {
 
 pub fn keccak256_decompose_into_per_circuit_witness<
 F: SmallField,
-R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     artifacts: &mut FullBlockArtifacts<F>,
     num_rounds_per_circuit: usize,

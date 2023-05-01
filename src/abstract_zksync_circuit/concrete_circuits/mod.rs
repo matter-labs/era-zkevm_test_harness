@@ -4,21 +4,28 @@ use boojum::field::goldilocks::{GoldilocksField, GoldilocksExt2};
 use zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
 use crate::Poseidon2Goldilocks;
 use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
+use zkevm_circuits::tables::*;
+use boojum::gadgets::tables::binop_table::*;
+use boojum::cs::gates::*;
+use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord;
+use boojum::gadgets::poseidon::BuildableCircuitRoundFunction;
 
 use super::*;
 
+pub const TARGET_CIRCUIT_TRACE_LENGTH: usize = 1 << 20;
+
 // should follow in the same sequence as we will logically process sequences
 pub mod vm_main;
-// pub mod sort_code_decommits;
-// pub mod code_decommitter;
+pub mod sort_code_decommits;
+pub mod code_decommitter;
 pub mod log_demux;
 pub mod keccak256_round_function;
 pub mod sha256_round_function;
 pub mod ecrecover;
-// pub mod ram_permutation;
-// pub mod storage_sort_dedup;
+pub mod ram_permutation;
+pub mod storage_sort_dedup;
 pub mod storage_apply;
-// pub mod events_sort_dedup;
+pub mod events_sort_dedup;
 // pub mod l1_messages_sort_dedup; // equal to one 
 // pub mod l1_messages_merklize;
 // pub mod storage_initial_writes_pubdata_hasher;
@@ -30,17 +37,19 @@ pub mod storage_apply;
 
 // pub mod scheduler;
 
+
+
 pub use self::vm_main::VmMainInstanceSynthesisFunction;
-// pub use self::sort_code_decommits::CodeDecommittmentsSorterSynthesisFunction;
-// pub use self::code_decommitter::CodeDecommitterInstanceSynthesisFunction;
+pub use self::sort_code_decommits::CodeDecommittmentsSorterSynthesisFunction;
+pub use self::code_decommitter::CodeDecommitterInstanceSynthesisFunction;
 pub use self::log_demux::LogDemuxInstanceSynthesisFunction;
 pub use self::keccak256_round_function::Keccak256RoundFunctionInstanceSynthesisFunction;
 pub use self::sha256_round_function::Sha256RoundFunctionInstanceSynthesisFunction;
 pub use self::ecrecover::ECRecoverFunctionInstanceSynthesisFunction;
-// pub use self::ram_permutation::RAMPermutationInstanceSynthesisFunction;
-// pub use self::storage_sort_dedup::StorageSortAndDedupInstanceSynthesisFunction;
+pub use self::ram_permutation::RAMPermutationInstanceSynthesisFunction;
+pub use self::storage_sort_dedup::StorageSortAndDedupInstanceSynthesisFunction;
 pub use self::storage_apply::StorageApplicationInstanceSynthesisFunction;
-// pub use self::events_sort_dedup::EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction;
+pub use self::events_sort_dedup::EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction;
 // pub use self::l1_messages_merklize::MessagesMerklizerInstanceSynthesisFunction;
 // pub use self::storage_initial_writes_pubdata_hasher::StorageInitialWritesRehasherInstanceSynthesisFunction;
 // pub use self::storage_repeated_writes_pubdata_hasher::StorageRepeatedWritesRehasherInstanceSynthesisFunction;
@@ -55,17 +64,18 @@ pub use self::storage_apply::StorageApplicationInstanceSynthesisFunction;
 // will take care of particular synthesis function. There is already an implementation of Circuit<F> for ZkSyncUniformCircuitCircuitInstance,
 // so as soon as the structure is instantiated it is ready for proving
 pub type VMMainCircuit<F, W, R> = ZkSyncUniformCircuitCircuitInstance<F, VmMainInstanceSynthesisFunction<F, W, R>>; 
-// pub type CodeDecommittsSorterCircuit<F> = ZkSyncUniformCircuitCircuitInstance<F, CodeDecommittmentsSorterSynthesisFunction>;
-// pub type CodeDecommitterCircuit<F> = ZkSyncUniformCircuitCircuitInstance<F, CodeDecommitterInstanceSynthesisFunction>;
+pub type CodeDecommittsSorterCircuit<F, R> = ZkSyncUniformCircuitCircuitInstance<F, CodeDecommittmentsSorterSynthesisFunction<F, R>>;
+pub type CodeDecommitterCircuit<F, R> = ZkSyncUniformCircuitCircuitInstance<F, CodeDecommitterInstanceSynthesisFunction<F, R>>;
 pub type LogDemuxerCircuit<F, R> = ZkSyncUniformCircuitCircuitInstance<F, LogDemuxInstanceSynthesisFunction<F, R>>;
 pub type Keccak256RoundFunctionCircuit<F, R> = ZkSyncUniformCircuitCircuitInstance<F, Keccak256RoundFunctionInstanceSynthesisFunction<F, R>>;
 pub type Sha256RoundFunctionCircuit<F, R> = ZkSyncUniformCircuitCircuitInstance<F, Sha256RoundFunctionInstanceSynthesisFunction<F, R>>;
 pub type ECRecoverFunctionCircuit<F, R> = ZkSyncUniformCircuitCircuitInstance<F, ECRecoverFunctionInstanceSynthesisFunction<F, R>>;
-// pub type RAMPermutationCircuit<F> = ZkSyncUniformCircuitCircuitInstance<F, RAMPermutationInstanceSynthesisFunction>;
-// pub type StorageSorterCircuit<F> = ZkSyncUniformCircuitCircuitInstance<F, StorageSortAndDedupInstanceSynthesisFunction>;
+pub type RAMPermutationCircuit<F, R> = ZkSyncUniformCircuitCircuitInstance<F, RAMPermutationInstanceSynthesisFunction<F, R>>;
+pub type StorageSorterCircuit<F, R> = ZkSyncUniformCircuitCircuitInstance<F, StorageSortAndDedupInstanceSynthesisFunction<F, R>>;
 pub type StorageApplicationCircuit<F, R> = ZkSyncUniformCircuitCircuitInstance<F, StorageApplicationInstanceSynthesisFunction<F, R>>;
-// pub type EventsSorterCircuit<F> = ZkSyncUniformCircuitCircuitInstance<F, EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction>;
-// pub type L1MessagesSorterCircuit<F> = ZkSyncUniformCircuitCircuitInstance<F, EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction>;
+pub type EventsSorterCircuit<F, R> = ZkSyncUniformCircuitCircuitInstance<F, EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction<F, R>>;
+pub type L1MessagesSorterCircuit<F, R> = ZkSyncUniformCircuitCircuitInstance<F, EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction<F, R>>;
+
 // pub type L1MessagesMerklizerCircuit<F> = ZkSyncUniformCircuitCircuitInstance<F, MessagesMerklizerInstanceSynthesisFunction>;
 // pub type InitialStorageWritesPubdataHasherCircuit<F> = ZkSyncUniformCircuitCircuitInstance<F, StorageInitialWritesRehasherInstanceSynthesisFunction>;
 // pub type RepeatedStorageWritesPubdataHasherCircuit<F> = ZkSyncUniformCircuitCircuitInstance<F, StorageRepeatedWritesRehasherInstanceSynthesisFunction>;
@@ -76,16 +86,13 @@ pub type StorageApplicationCircuit<F, R> = ZkSyncUniformCircuitCircuitInstance<F
 
 // pub type SchedulerCircuit<F> = ZkSyncUniformCircuitCircuitInstance<F, SchedulerInstanceSynthesisFunction>;
 
-/// NOTE: It DOES implement Circuit<F>, but one would need to load the
-/// setup for it's INNER contents somehow, so do NOT synthesise it directly
-/// unless you know what you are doing!
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone(bound = ""))]
 #[serde(bound = "")]
-pub enum ZkSyncCircuit<
+pub enum ZkSyncBaseLayerCircuit<
     F: SmallField, 
     W: WitnessOracle<F>,
-    R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
+    R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
 >  
     where [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
@@ -93,101 +100,100 @@ pub enum ZkSyncCircuit<
     [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN + 1]:,
     [(); <ExecutionContextRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <TimestampedStorageLogRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
 {
     // Scheduler(SchedulerCircuit<F>),
     // NodeAggregation(NodeAggregationCircuit<F>),
     // LeafAggregation(LeafAggregationCircuit<F>),
     MainVM(VMMainCircuit<F, W, R>),
-    // CodeDecommittmentsSorter(CodeDecommittsSorterCircuit<F>),
-    // CodeDecommitter(CodeDecommitterCircuit<F>),
+    CodeDecommittmentsSorter(CodeDecommittsSorterCircuit<F, R>),
+    CodeDecommitter(CodeDecommitterCircuit<F, R>),
     LogDemuxer(LogDemuxerCircuit<F, R>),
     KeccakRoundFunction(Keccak256RoundFunctionCircuit<F, R>),
     Sha256RoundFunction(Sha256RoundFunctionCircuit<F, R>),
     ECRecover(ECRecoverFunctionCircuit<F, R>),
-    // RAMPermutation(RAMPermutationCircuit<F>),
-    // StorageSorter(StorageSorterCircuit<F>),
+    RAMPermutation(RAMPermutationCircuit<F, R>),
+    StorageSorter(StorageSorterCircuit<F, R>),
     StorageApplication(StorageApplicationCircuit<F, R>),
-    // EventsSorter(EventsSorterCircuit<F>),
-    // L1MessagesSorter(L1MessagesSorterCircuit<F>),
+    EventsSorter(EventsSorterCircuit<F, R>),
+    L1MessagesSorter(L1MessagesSorterCircuit<F, R>),
+
     // L1MessagesMerklier(L1MessagesMerklizerCircuit<F>),
     // InitialWritesPubdataHasher(InitialStorageWritesPubdataHasherCircuit<F>),
     // RepeatedWritesPubdataHasher(RepeatedStorageWritesPubdataHasherCircuit<F>),
     // L1MessagesPubdataHasher(L1MessagesHasherCircuit<F>),
 }
 
-// impl<F: SmallField,  W: WitnessOracle<F>> Circuit<F> for ZkSyncCircuit<F, W> {
-//     type MainGate = SelectorOptimizedWidth4MainGateWithDNext;
-//     // always two gates
-//     fn declare_used_gates() -> Result<Vec<Box<dyn GateInternal<F>>>, SynthesisError> {
-//         Ok(
-//             vec![
-//                 Self::MainGate::default().into_internal(),
-//                 Rescue5CustomGate::default().into_internal()
-//             ]
-//         )
-//     }
-//     fn synthesize<CS: ConstraintSystem<F>>(&self, cs: &mut CS) -> Result<(), SynthesisError> {
-//         match &self {
-//             ZkSyncCircuit::Scheduler(inner) => {inner.synthesize(cs)},
-//             ZkSyncCircuit::LeafAggregation(inner) => {inner.synthesize(cs)},
-//             ZkSyncCircuit::NodeAggregation(inner) => {inner.synthesize(cs)},
-//             ZkSyncCircuit::MainVM(inner) => {inner.synthesize(cs)},
-//             ZkSyncCircuit::CodeDecommittmentsSorter(inner) => {inner.synthesize(cs)},
-//             ZkSyncCircuit::CodeDecommitter(inner) => {inner.synthesize(cs)},
-//             ZkSyncCircuit::LogDemuxer(inner) => {inner.synthesize(cs)},
-//             ZkSyncCircuit::KeccakRoundFunction(inner) => {inner.synthesize(cs)},
-//             ZkSyncCircuit::Sha256RoundFunction(inner) => {inner.synthesize(cs)},
-//             ZkSyncCircuit::ECRecover(inner) => {inner.synthesize(cs)},
-//             ZkSyncCircuit::RAMPermutation(inner) => {inner.synthesize(cs)},
-//             ZkSyncCircuit::StorageSorter(inner) => {inner.synthesize(cs)},
-//             ZkSyncCircuit::StorageApplication(inner) => {inner.synthesize(cs)},
-//             ZkSyncCircuit::EventsSorter(inner) => {inner.synthesize(cs)},
-//             ZkSyncCircuit::L1MessagesSorter(inner) => {inner.synthesize(cs)},
-//             ZkSyncCircuit::L1MessagesMerklier(inner) => {inner.synthesize(cs)},
-//             ZkSyncCircuit::InitialWritesPubdataHasher(inner) => {inner.synthesize(cs)},
-//             ZkSyncCircuit::RepeatedWritesPubdataHasher(inner) => {inner.synthesize(cs)},
-//             ZkSyncCircuit::L1MessagesPubdataHasher(inner) => {inner.synthesize(cs)},
-//         }
-//     }
-// }
-
-// use sync_vm::*;
-
 impl<
     F: SmallField, 
     W: WitnessOracle<F>,
-    R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
-> ZkSyncCircuit<F, W, R>  
+    R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
+> ZkSyncBaseLayerCircuit<F, W, R>  
     where [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN + 1]:,
     [(); <ExecutionContextRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <TimestampedStorageLogRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
 {
-    // pub fn short_description(&self) -> &'static str {
-    //     match &self {
-    //         ZkSyncCircuit::Scheduler(..) => "Scheduler",
-    //         ZkSyncCircuit::LeafAggregation(..) => "Leaf aggregation",
-    //         ZkSyncCircuit::NodeAggregation(..) => "Node aggregation",
-    //         ZkSyncCircuit::MainVM(..) => "Main VM",
-    //         ZkSyncCircuit::CodeDecommittmentsSorter(..) => "Decommitts sorter",
-    //         ZkSyncCircuit::CodeDecommitter(..) => "Code decommitter",
-    //         ZkSyncCircuit::LogDemuxer(..) => "Log demuxer",
-    //         ZkSyncCircuit::KeccakRoundFunction(..) => "Keccak",
-    //         ZkSyncCircuit::Sha256RoundFunction(..) => "SHA256",
-    //         ZkSyncCircuit::ECRecover(..) => "ECRecover",
-    //         ZkSyncCircuit::RAMPermutation(..) => "RAM permutation",
-    //         ZkSyncCircuit::StorageSorter(..) => "Storage sorter",
-    //         ZkSyncCircuit::StorageApplication(..) => "Storage application",
-    //         ZkSyncCircuit::EventsSorter(..) => "Events sorter",
-    //         ZkSyncCircuit::L1MessagesSorter(..) => "L1 messages sorter",
-    //         ZkSyncCircuit::L1MessagesMerklier(..) => "L1 messages merklizer",
-    //         ZkSyncCircuit::InitialWritesPubdataHasher(..) => "Initial writes pubdata rehasher",
-    //         ZkSyncCircuit::RepeatedWritesPubdataHasher(..) => "Repeated writes pubdata rehasher",
-    //         ZkSyncCircuit::L1MessagesPubdataHasher(..) => "L1 messages rehasher",
-    //     }
-    // }
+    pub fn short_description(&self) -> &'static str {
+        match &self {
+            // ZkSyncBaseLayerCircuit::Scheduler(..) => "Scheduler",
+            // ZkSyncBaseLayerCircuit::LeafAggregation(..) => "Leaf aggregation",
+            // ZkSyncBaseLayerCircuit::NodeAggregation(..) => "Node aggregation",
+            ZkSyncBaseLayerCircuit::MainVM(..) => "Main VM",
+            ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(..) => "Decommitts sorter",
+            ZkSyncBaseLayerCircuit::CodeDecommitter(..) => "Code decommitter",
+            ZkSyncBaseLayerCircuit::LogDemuxer(..) => "Log demuxer",
+            ZkSyncBaseLayerCircuit::KeccakRoundFunction(..) => "Keccak",
+            ZkSyncBaseLayerCircuit::Sha256RoundFunction(..) => "SHA256",
+            ZkSyncBaseLayerCircuit::ECRecover(..) => "ECRecover",
+            ZkSyncBaseLayerCircuit::RAMPermutation(..) => "RAM permutation",
+            ZkSyncBaseLayerCircuit::StorageSorter(..) => "Storage sorter",
+            ZkSyncBaseLayerCircuit::StorageApplication(..) => "Storage application",
+            ZkSyncBaseLayerCircuit::EventsSorter(..) => "Events sorter",
+            ZkSyncBaseLayerCircuit::L1MessagesSorter(..) => "L1 messages sorter",
+            // ZkSyncBaseLayerCircuit::L1MessagesMerklier(..) => "L1 messages merklizer",
+            // ZkSyncBaseLayerCircuit::InitialWritesPubdataHasher(..) => "Initial writes pubdata rehasher",
+            // ZkSyncBaseLayerCircuit::RepeatedWritesPubdataHasher(..) => "Repeated writes pubdata rehasher",
+            // ZkSyncBaseLayerCircuit::L1MessagesPubdataHasher(..) => "L1 messages rehasher",
+        }
+    }
+
+    pub fn size_hint(&self) -> (Option<usize>, Option<usize>) {
+        match &self {
+            ZkSyncBaseLayerCircuit::MainVM(inner) => {inner.size_hint()},
+            ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {inner.size_hint()},
+            ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {inner.size_hint()},
+            ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {inner.size_hint()},
+            ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {inner.size_hint()},
+            ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {inner.size_hint()},
+            ZkSyncBaseLayerCircuit::ECRecover(inner) => {inner.size_hint()},
+            ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {inner.size_hint()},
+            ZkSyncBaseLayerCircuit::StorageSorter(inner) => {inner.size_hint()},
+            ZkSyncBaseLayerCircuit::StorageApplication(inner) => {inner.size_hint()},
+            ZkSyncBaseLayerCircuit::EventsSorter(inner) => {inner.size_hint()},
+            ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {inner.size_hint()},
+        }
+    }
+
+    pub fn geometry(&self) -> CSGeometry {
+        match &self {
+            ZkSyncBaseLayerCircuit::MainVM(inner) => {inner.geometry()},
+            ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {inner.geometry()},
+            ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {inner.geometry()},
+            ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {inner.geometry()},
+            ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {inner.geometry()},
+            ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {inner.geometry()},
+            ZkSyncBaseLayerCircuit::ECRecover(inner) => {inner.geometry()},
+            ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {inner.geometry()},
+            ZkSyncBaseLayerCircuit::StorageSorter(inner) => {inner.geometry()},
+            ZkSyncBaseLayerCircuit::StorageApplication(inner) => {inner.geometry()},
+            ZkSyncBaseLayerCircuit::EventsSorter(inner) => {inner.geometry()},
+            ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {inner.geometry()},
+        }
+    }
 
     // pub fn debug_witness(&self) {
     //     match &self {
@@ -279,7 +285,7 @@ use crate::ZkSyncDefaultRoundFunction;
 #[serde(bound = "")]
 pub struct ZkSyncProofBaseLayerProof {
     pub proof: ZkSyncBaseProof,
-    pub over_circuit: ZkSyncCircuit<GoldilocksField, VmWitnessOracle<GoldilocksField>, ZkSyncDefaultRoundFunction>,
+    pub over_circuit: ZkSyncBaseLayerCircuit<GoldilocksField, VmWitnessOracle<GoldilocksField>, ZkSyncDefaultRoundFunction>,
 }
 
 impl ZkSyncProofBaseLayerProof {

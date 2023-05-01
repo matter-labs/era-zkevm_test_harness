@@ -1,3 +1,5 @@
+use boojum::cs::CSGeometry;
+use boojum::gadgets::traits::witnessable::WitnessHookable;
 use boojum::implementations::poseidon2::Poseidon2Goldilocks;
 use crossbeam::atomic::AtomicCell;
 use boojum::field::SmallField;
@@ -12,30 +14,31 @@ use zkevm_circuits::base_structures::memory_query::MemoryQuery;
 use boojum::gadgets::traits::allocatable::*;
 use boojum::gadgets::u256::UInt256;
 use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
+use boojum::cs::*;
+use boojum::cs::cs_builder::*;
+use boojum::gadgets::poseidon::BuildableCircuitRoundFunction;
+use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord;
 
 pub mod concrete_circuits;
 
-pub trait ZkSyncUniformSynthesisFunction<F: SmallField>: Clone 
-where [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN + 1]: 
-{ 
-    type Witness: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned;
+pub trait ZkSyncUniformSynthesisFunction<F: SmallField>: Clone + serde::Serialize + serde::de::DeserializeOwned { 
+    type Witness: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned + std::default::Default;
     type Config: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned;
-    type RoundFunction: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>;
+    type RoundFunction: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned;
 
     fn description() -> String;
 
-    // fn get_setup_function_dyn<
-    //     'a, 
-    //     CS: ConstraintSystem<F> + 'a,
-    // >() -> Box<dyn FnOnce(&mut CS) -> () + 'a> {
-    //     Box::new(|_| {
-    //         Ok(())
-    //     })
-    // }
+    fn geometry() -> CSGeometry;
+
+    fn size_hint() -> (Option<usize>, Option<usize>) {
+        (Some(1 << 20), Some(1 << 26))
+    }
+
+    fn add_tables<CS: ConstraintSystem<F>>(cs: &mut CS);
+
+    fn configure_builder<T: CsBuilderImpl<F, T>, GC: GateConfigurationHolder<F>, TB: StaticToolboxHolder>(
+        builder: CsBuilder<T, F, GC, TB>
+    ) -> CsBuilder<T, F, impl GateConfigurationHolder<F>, impl StaticToolboxHolder>;
 
     fn get_synthesis_function_dyn<
         'a, 
@@ -48,12 +51,7 @@ where [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
 pub struct ZkSyncUniformCircuitCircuitInstance<
     F: SmallField,
     S: ZkSyncUniformSynthesisFunction<F>,
-> where [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN + 1]: 
-{
+> {
     #[serde(serialize_with = "serialize_atomic_cell")]
     #[serde(deserialize_with = "deserialize_atomic_cell")]
     pub witness: AtomicCell<Option<S::Witness>>,
@@ -66,17 +64,12 @@ pub struct ZkSyncUniformCircuitCircuitInstance<
     #[serde(bound(deserialize = "S::RoundFunction: serde::de::DeserializeOwned"))]
     pub round_function: std::sync::Arc<S::RoundFunction>,
 
-    pub expected_public_input: Option<F>,
+    pub expected_public_input: Option<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
 }
 
-impl<F: SmallField, S: ZkSyncUniformSynthesisFunction<F>> ZkSyncUniformCircuitCircuitInstance<F, S> 
-where [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN + 1]:  
+impl<F: SmallField, S: ZkSyncUniformSynthesisFunction<F>> ZkSyncUniformCircuitCircuitInstance<F, S>  
 {
-    pub fn new(witness: Option<S::Witness>, config: S::Config, round_function: S::RoundFunction, expected_public_input: Option<F>) -> Self {
+    pub fn new(witness: Option<S::Witness>, config: S::Config, round_function: S::RoundFunction, expected_public_input: Option<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>) -> Self {
         Self { witness: AtomicCell::new(witness), config: std::sync::Arc::new(config), round_function: std::sync::Arc::new(round_function), expected_public_input }
     }
 
@@ -132,13 +125,7 @@ fn deserialize_arc<'de, D, T: serde::Deserialize<'de>>(deserializer: D) -> Resul
 impl<
     F: SmallField, 
     S: ZkSyncUniformSynthesisFunction<F>,
-> Clone for ZkSyncUniformCircuitCircuitInstance<F, S> 
-where [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN + 1]: 
-{ 
+> Clone for ZkSyncUniformCircuitCircuitInstance<F, S> { 
     fn clone(&self) -> Self {
         let wit = self.witness.take();
         let ww = wit.clone();
@@ -153,39 +140,49 @@ where [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     }
 }
 
+use boojum::cs::traits::circuit::Circuit;
 
-// impl<
-//     F: SmallField, 
-//     S: ZkSyncUniformSynthesisFunction<E>,
-// > Circuit<E> for ZkSyncUniformCircuitCircuitInstance<E, S> {
-//     type MainGate = SelectorOptimizedWidth4MainGateWithDNext;
-//     // always two gates
-//     fn declare_used_gates() -> Result<Vec<Box<dyn GateInternal<E>>>, SynthesisError> {
-//         Ok(
-//             vec![
-//                 Self::MainGate::default().into_internal(),
-//                 Rescue5CustomGate::default().into_internal()
-//             ]
-//         )
-//     }
-//     fn synthesize<CS: ConstraintSystem<E>>(&self, cs: &mut CS) -> Result<(), SynthesisError> {
-//         let witness = self.witness.take();
-//         let ww = witness.clone();
-//         self.witness.store(witness);
-//         let config: S::Config = (*self.config).clone();
-//         let round_function = &*self.round_function;
-//         let setup_fn = S::get_setup_function_dyn();
-//         let synthesis_fn = S::get_synthesis_function_dyn();
-//         // let synthesis_fn = S::get_synthesis_function();
-//         setup_fn(cs)?;
-//         let public_input_var = synthesis_fn(cs, ww, round_function, config)?;
+impl<
+    F: SmallField,
+    S: ZkSyncUniformSynthesisFunction<F>,
+> Circuit<F> for ZkSyncUniformCircuitCircuitInstance<F, S> 
+{
+    fn add_tables<CS: ConstraintSystem<F>>(&self, cs: &mut CS) {
+        S::add_tables(cs);
+    }
 
-//         if let Some(expected_input) = self.expected_public_input.as_ref() {
-//             if let Some(wit_value) = public_input_var.get_value() {
-//                 assert_eq!(*expected_input, wit_value, "we expected public input to be {}, but circuit returned {}", expected_input, wit_value);
-//             }
-//         }
+    fn configure_builder<T: CsBuilderImpl<F, T>, GC: GateConfigurationHolder<F>, TB: StaticToolboxHolder>(
+        &self,
+        builder: CsBuilder<T, F, GC, TB>
+    ) -> CsBuilder<T, F, impl GateConfigurationHolder<F>, impl StaticToolboxHolder> {
+        S::configure_builder(builder)
+    }
 
-//         Ok(())
-//     }
-// }
+    fn geometry(&self) -> CSGeometry {
+        S::geometry()
+    }
+
+    fn size_hint(&self) -> (Option<usize>, Option<usize>) {
+        S::size_hint()
+    }
+
+    fn synthesize_into_cs<CS: ConstraintSystem<F>>(self, cs: &mut CS) {
+        let witness = self.witness.take();
+        let ww = witness.unwrap_or_default();
+        let config: S::Config = (*self.config).clone();
+        let round_function = &*self.round_function;
+        let synthesis_fn = S::get_synthesis_function_dyn();
+        let public_input_var = (synthesis_fn)(cs, ww, round_function, config);
+
+        if let Some(expected_input) = self.expected_public_input.as_ref() {
+            if let Some(wit_value) = public_input_var.witness_hook(&*cs)() {
+                assert_eq!(
+                    *expected_input, wit_value, 
+                    "we expected public input to be {:?}, but circuit returned {:?}", 
+                    expected_input, 
+                    wit_value
+                );
+            }
+        }
+    }
+}
