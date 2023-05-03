@@ -314,7 +314,12 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
                     if *num_rounds_left == 0 {
                         let mut raw_state = transmute_state(internal_state.clone());
                         raw_state[0] = 0;
-                        let word = recompose_u256_as_u32x8(raw_state);
+                        let mut buffer = [0u8; 32];
+                        for (dst, src) in buffer.array_chunks_mut::<4>().zip(raw_state.iter()) {
+                            *dst = src.to_be_bytes();
+                        }
+                        
+                        let word = U256::from_big_endian(&buffer);
 
                         assert!(
                             fsm_internals.hash_to_compare_against == word,

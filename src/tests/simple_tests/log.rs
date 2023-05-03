@@ -14,6 +14,8 @@ fn test_out_of_ergs_l1_message() {
         add 10000, r0, r1
         add 1000, r0, r10
         sstore r1, r10
+        event r1, r10
+        to_l1 r1, r10
         context.set_ergs_per_pubdata r10
         near_call r1, @inner, @handler
         context.ergs_left r15

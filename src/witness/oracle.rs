@@ -98,19 +98,6 @@ pub struct StorageLogDetailedState<F: SmallField> {
     pub rollback_length: u32,
 }
 
-// impl<F: SmallField> Default for StorageLogDetailedState<F> {
-//     fn default() -> Self {
-//         Self { 
-//             frame_idx: 0,
-//             forward_tail: [F::ZERO; QUEUE_STATE_WIDTH],
-//             forward_length: 0,
-//             rollback_head: [F::ZERO; QUEUE_STATE_WIDTH],
-//             rollback_tail: [F::ZERO; QUEUE_STATE_WIDTH],
-//             rollback_length: 0,
-//         }
-//     }
-// }
-
 #[derive(Derivative)]
 #[derivative(Clone(bound = ""), Debug)]
 pub struct VmInCircuitAuxilaryParameters<F: SmallField> {
@@ -1161,7 +1148,7 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
             assert_eq!(
                 timestamp,
                 query.timestamp.0,
-                "invalid memory access location at cycle {:?}: VM asks at timestamp {}, witness has timestamp {}. Page = {}, index = {}, query = {:?}",
+                "invalid memory access location at cycle {:?}: VM asks at timestamp {}, witness has timestamp {}. VM reads page = {}, index = {}, witness query = {:?}",
                 _cycle,
                 timestamp,
                 query.timestamp.0,
@@ -1460,8 +1447,8 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
             } = internediate_info;
 
             assert!(
-                !is_push,
-                "divergence at callstack pop at cycle {}: POP in circuit, but got PUSH of \n{:?}\n in oracle",
+                is_push == false,
+                "divergence at callstack pop at cycle {}: POP in circuit, but we expect PUSH of \n{:?}\n in oracle",
                 _cycle_idx,
                 &extended_entry,
             );
@@ -1525,7 +1512,7 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
     fn report_new_callstack_frame(
         &mut self,
         new_record: &ExecutionContextRecordWitness<F>,
-        new_depth: u32,
+        _new_depth: u32,
         is_call: bool,
         execute: bool,
     ) {

@@ -52,12 +52,6 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
     }
 
     let intermediate_sorted_simulator_final_state = take_queue_state_from_simulator(&intermediate_sorted_simulator);
-    // let sorted_queue_witness: VecDeque<_> = intermediate_sorted_simulator.witness.into_iter().map(|(encoding, old_tail, el)| {
-    //     let transformed_query = log_query_into_storage_record_witness(&el);
-
-    //     (encoding, transformed_query, old_tail)
-    // }).collect();
-
     let sorted_queries = sort_and_dedup_events_log(sorted_queries);
 
     let unsorted_simulator_final_state = take_queue_state_from_simulator(unsorted_simulator);
@@ -97,6 +91,14 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 
     let transposed_lhs_chains = transpose_chunks(&lhs_grand_product_chains, per_circuit_capacity);
     let transposed_rhs_chains = transpose_chunks(&rhs_grand_product_chains, per_circuit_capacity);
+
+    assert!(unsorted_simulator_states.len() > 0);
+    assert!(unsorted_simulator_states.chunks(per_circuit_capacity).len() > 0);
+    assert_eq!(unsorted_simulator_states.chunks(per_circuit_capacity).len(), intermediate_sorted_log_simulator_states.chunks(per_circuit_capacity).len());
+    assert_eq!(unsorted_simulator_states.chunks(per_circuit_capacity).len(), transposed_lhs_chains.len());
+    assert_eq!(unsorted_simulator_states.chunks(per_circuit_capacity).len(), transposed_rhs_chains.len());
+    assert_eq!(unsorted_simulator_states.chunks(per_circuit_capacity).len(), unsorted_simulator.witness.as_slices().0.chunks(per_circuit_capacity).len());
+    assert_eq!(unsorted_simulator_states.chunks(per_circuit_capacity).len(), intermediate_sorted_simulator.witness.as_slices().0.chunks(per_circuit_capacity).len());
 
     let it = unsorted_simulator_states.chunks(per_circuit_capacity)
         .zip(intermediate_sorted_log_simulator_states.chunks(per_circuit_capacity))
@@ -169,8 +171,8 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
         let last_unsorted_state = unsorted_sponge_states.last().unwrap().clone();
         let last_sorted_state = sorted_sponge_states.last().unwrap().clone();
 
-        let accumulated_lhs: [F; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS] = lhs_grand_product.last().unwrap().to_vec().try_into().unwrap();
-        let accumulated_rhs: [F; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS] = rhs_grand_product.last().unwrap().to_vec().try_into().unwrap();
+        let accumulated_lhs: [F; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS] = lhs_grand_product.iter().map(|el| *el.last().unwrap()).collect::<Vec<_>>().try_into().unwrap();
+        let accumulated_rhs: [F; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS] = rhs_grand_product.iter().map(|el| *el.last().unwrap()).collect::<Vec<_>>().try_into().unwrap();
 
         // simulate the logic 
         let (
@@ -316,6 +318,8 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 
         results.push(instance_witness);
     }
+
+    assert!(results.len() > 0);
 
     assert!(deduplicated_queries_it.next().is_none());
 

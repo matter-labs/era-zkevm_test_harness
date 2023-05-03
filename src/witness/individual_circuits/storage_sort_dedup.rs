@@ -177,8 +177,8 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
         let last_unsorted_state = unsorted_sponge_states.last().unwrap().clone();
         let last_sorted_state = sorted_sponge_states.last().unwrap().clone();
 
-        let accumulated_lhs: [F; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS] = lhs_grand_product.last().unwrap().to_vec().try_into().unwrap();
-        let accumulated_rhs: [F; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS] = rhs_grand_product.last().unwrap().to_vec().try_into().unwrap();
+        let accumulated_lhs: [F; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS] = lhs_grand_product.iter().map(|el| *el.last().unwrap()).collect::<Vec<_>>().try_into().unwrap();
+        let accumulated_rhs: [F; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS] = rhs_grand_product.iter().map(|el| *el.last().unwrap()).collect::<Vec<_>>().try_into().unwrap();
 
         let last_sorted_query = &sorted_states.last().unwrap().2;
         use crate::encodings::log_query::*;

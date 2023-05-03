@@ -39,9 +39,9 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 
     fn geometry() -> CSGeometry {
         CSGeometry { 
-            num_columns_under_copy_permutation: 60, 
+            num_columns_under_copy_permutation: 140, 
             num_witness_columns: 0, 
-            num_constant_columns: 4, 
+            num_constant_columns: 8, 
             max_allowed_constraint_degree: 8,
         }
     }
@@ -101,7 +101,11 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
         let shifts_table = create_shift_to_num_converter_table::<F>();
         cs.add_lookup_table::<BitshiftTable, 3>(shifts_table);
 
-        let uma_unaligned_access_table = create_integer_to_bitmask_table::<F>(
+        // let uma_unaligned_access_table = create_integer_to_bitmask_table::<F>(
+        //     5,
+        //     UMA_SHIFT_TO_BITMASK_TABLE_NAME
+        // );
+        let uma_unaligned_access_table = create_integer_set_ith_bit_table::<F>(
             5,
             UMA_SHIFT_TO_BITMASK_TABLE_NAME
         );

@@ -106,19 +106,19 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     use crate::toolset::GeometryConfig;
 
     let geometry = GeometryConfig {
-        // cycles_per_vm_snapshot: 16, // 24, 26
-        cycles_per_vm_snapshot: 1024,
+        cycles_per_vm_snapshot: 128,
+        // cycles_per_vm_snapshot: 1024,
         cycles_per_ram_permutation: 1024,
         cycles_per_code_decommitter: 256,
         cycles_per_storage_application: 2,
         cycles_per_keccak256_circuit: 7,
         cycles_per_sha256_circuit: 7,
         cycles_per_ecrecover_circuit: 2,
-
         cycles_code_decommitter_sorter: 512,
         cycles_per_log_demuxer: 16,
         cycles_per_storage_sorter: 16,
         cycles_per_events_or_l1_messages_sorter: 4,
+
         limit_for_initial_writes_pubdata_hasher: 16,
         limit_for_repeated_writes_pubdata_hasher: 16,
         limit_for_l1_messages_merklizer: 32,
@@ -253,6 +253,16 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     for (idx, (el, input_value)) in basic_block_circuits.clone().into_flattened_set().into_iter().zip(basic_block_circuits_inputs.clone().into_flattened_set().into_iter()).enumerate() {
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
+        match &el {
+            ZkSyncBaseLayerCircuit::MainVM(inner) => {
+                let witness = inner.clone_witness().unwrap();
+                dbg!(witness.closed_form_input.start_flag);
+                // dbg!(witness.closed_form_input.hidden_fsm_input);
+            },
+            _ => {
+                todo!()
+            }
+        }
 
         base_test_circuit(el);
     }

@@ -1,4 +1,15 @@
 use boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
+use boojum::config::DevCSConfig;
+use boojum::cs::CSGeometry;
+use boojum::cs::GateConfigurationHolder;
+use boojum::cs::StaticToolboxHolder;
+use boojum::cs::gates::BooleanConstraintGate;
+use boojum::cs::gates::ConstantsAllocatorGate;
+use boojum::cs::gates::FmaGateInBaseFieldWithoutConstant;
+use boojum::cs::gates::ReductionGate;
+use boojum::cs::gates::SelectionGate;
+use boojum::cs::implementations::reference_cs::CSReferenceImplementation;
+use boojum::cs::traits::cs::ConstraintSystem;
 use boojum::gadgets::queue::QueueStateWitness;
 use boojum::gadgets::queue::QueueTailState;
 use boojum::gadgets::queue::QueueTailStateWitness;
@@ -6,6 +17,7 @@ use boojum::gadgets::traits::encodable::CircuitEncodable;
 use zkevm_circuits::base_structures::vm_state::GlobalContextWitness;
 use zkevm_circuits::base_structures::vm_state::VmLocalStateWitness;
 use zk_evm::aux_structures::LogQuery;
+use zkevm_circuits::fsm_input_output::circuit_inputs::INPUT_OUTPUT_COMMITMENT_LENGTH;
 use crate::encodings::log_query::LogQueueState;
 use crate::encodings::log_query::LogQueueSimulator;
 use boojum::field::SmallField;
@@ -123,60 +135,97 @@ pub fn transform_queue_witness<
 }
 
 use zk_evm::aux_structures::MemoryQuery;
-use num_bigint::BigUint;
+use boojum::gadgets::traits::allocatable::*;
+use boojum::gadgets::poseidon::BuildableCircuitRoundFunction;
+use boojum::gadgets::traits::encodable::CircuitVarLengthEncodable;
+use boojum::gadgets::traits::witnessable::WitnessHookable;
+use zkevm_circuits::fsm_input_output::*;
 
-// pub fn simulate_public_input_value_from_witness<
-//     T: std::fmt::Debug + CSAllocatable<Bn256> + CircuitVariableLengthEncodableExt<Bn256>, 
-//     IN: std::fmt::Debug + CSAllocatable<Bn256> + CircuitVariableLengthEncodableExt<Bn256>,
-//     OUT: std::fmt::Debug + CSAllocatable<Bn256> + CircuitVariableLengthEncodableExt<Bn256>
-// >(
-//     input_witness: ClosedFormInputWitness<Bn256, T, IN, OUT>, 
-// ) -> (<Bn256 as ScalarEngine>::Fr, ClosedFormInputCompactFormWitness<Bn256>)
-//     where <T as CSWitnessable<Bn256>>::Witness: serde::Serialize + serde::de::DeserializeOwned,
-//         <IN as CSWitnessable<Bn256>>::Witness: serde::Serialize + serde::de::DeserializeOwned,
-//         <OUT as CSWitnessable<Bn256>>::Witness: serde::Serialize + serde::de::DeserializeOwned
-// {
-//     use sync_vm::testing::create_test_artifacts_with_optimized_gate;
-//     use sync_vm::inputs::ClosedFormInput;
-//     use cratFanklin_crypto::plonk::circuit::tables::inscribe_default_range_table_for_bit_width_over_first_three_columns;
+pub fn create_cs_for_witness_generation<
+F: SmallField,
+R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
+>() -> CSReferenceImplementation<F, F, DevCSConfig, impl GateConfigurationHolder<F>, impl StaticToolboxHolder> {
+    // create temporary cs, and allocate in full
 
-//     // allocate in full
-//     let (mut cs, round_function, _) = create_test_artifacts_with_optimized_gate();
-//     use sync_vm::vm::VM_BITWISE_LOGICAL_OPS_TABLE_NAME;
-//     use sync_vm::vm::tables::BitwiseLogicTable;
-//     use crate::bellman::plonk::better_better_cs::cs::LookupTableApplication;
-//     use crate::bellman::plonk::better_better_cs::data_structures::PolyIdentifier;
+    let geometry = CSGeometry {
+        num_columns_under_copy_permutation: 140,
+        num_witness_columns: 0,
+        num_constant_columns: 8,
+        max_allowed_constraint_degree: 8
+    };
+    let max_trace_len = 1 << 20;
+    let num_vars = 1 << 24;
 
-//     let columns3 = vec![
-//         PolyIdentifier::VariablesPolynomial(0), 
-//         PolyIdentifier::VariablesPolynomial(1), 
-//         PolyIdentifier::VariablesPolynomial(2)
-//     ];
+    let max_trace_len = 1 << 23;
+    let num_vars = 1 << 27;
 
-//     use crate::bellman::plonk::better_better_cs::cs::ConstraintSystem;
+    use boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
+    use boojum::config::DevCSConfig;
+
+    let builder_impl = CsReferenceImplementationBuilder::<F, F, DevCSConfig>::new(
+        geometry, 
+        num_vars, 
+        max_trace_len,
+    );
+    let builder = boojum::cs::cs_builder::new_cs_builder::<_, F>(builder_impl);
+    let builder = builder.allow_lookup(
+        boojum::cs::LookupParameters::UseSpecializedColumnsWithTableIdAsConstant { 
+            width: 3, 
+            num_repetitions: 1, 
+            share_table_id: true
+        }
+    );
+
+    let builder = ConstantsAllocatorGate::configure_builder(builder, boojum::cs::GatePlacementStrategy::UseGeneralPurposeColumns);
+    let builder = R::configure_builder(builder, boojum::cs::GatePlacementStrategy::UseGeneralPurposeColumns);
+    let builder = FmaGateInBaseFieldWithoutConstant::configure_builder(builder, boojum::cs::GatePlacementStrategy::UseGeneralPurposeColumns);
+    let builder = BooleanConstraintGate::configure_builder(builder, boojum::cs::GatePlacementStrategy::UseGeneralPurposeColumns);
+    let builder = ReductionGate::<F, 4>::configure_builder(builder, boojum::cs::GatePlacementStrategy::UseGeneralPurposeColumns);
+    let builder = SelectionGate::configure_builder(builder, boojum::cs::GatePlacementStrategy::UseGeneralPurposeColumns);
+
+    let mut cs = builder.build(());
+
+    use boojum::gadgets::tables::*;
+    use boojum::cs::traits::cs::ConstraintSystem;
+
+    let table = create_binop_table();
+    cs.add_lookup_table::<BinopTable, 3>(table);
+
+    cs
+}
+
+pub fn simulate_public_input_value_from_witness<
+    F: SmallField,
+    CS: ConstraintSystem<F>,
+    R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
+    T: Clone + std::fmt::Debug + CSAllocatable<F> + CircuitVarLengthEncodable<F> + WitnessHookable<F>,
+    IN: Clone + std::fmt::Debug + CSAllocatable<F> + CircuitVarLengthEncodable<F> + WitnessHookable<F>,
+    OUT: Clone + std::fmt::Debug + CSAllocatable<F> + CircuitVarLengthEncodable<F> + WitnessHookable<F>,
+>(
+    cs: &mut CS,
+    input_witness: ClosedFormInputWitness<F, T, IN, OUT>, 
+    round_function: &R,
+) -> ([F; INPUT_OUTPUT_COMMITMENT_LENGTH], ClosedFormInputCompactFormWitness<F>)
+where
+    <T as CSAllocatable<F>>::Witness: serde::Serialize + serde::de::DeserializeOwned + Eq,
+    <IN as CSAllocatable<F>>::Witness: serde::Serialize + serde::de::DeserializeOwned + Eq,
+    <OUT as CSAllocatable<F>>::Witness: serde::Serialize + serde::de::DeserializeOwned + Eq,
+{
+    // allocate in full
     
-//     if cs.get_table(VM_BITWISE_LOGICAL_OPS_TABLE_NAME).is_err() {
-//         let name = VM_BITWISE_LOGICAL_OPS_TABLE_NAME;
-//         let bitwise_logic_table = LookupTableApplication::new(
-//             name, BitwiseLogicTable::new(&name, 8), columns3.clone(), None, true
-//         );
-//         cs.add_table(bitwise_logic_table).unwrap();
-//     };
-//     inscribe_default_range_table_for_bit_width_over_first_three_columns(&mut cs, 16).unwrap();
+    let full_input = ClosedFormInput::allocate(cs, input_witness);
+    // compute the compact form
+    let compact_form = ClosedFormInputCompactForm::from_full_form(cs, &full_input, round_function);
+    // compute the encoding and committment of compact form
+    let compact_form_witness = compact_form.witness_hook(&*cs)().unwrap();
 
-//     let full_input = ClosedFormInput::alloc_from_witness(&mut cs, Some(input_witness)).unwrap();
-//     // compute the compact form
-//     use sync_vm::inputs::ClosedFormInputCompactForm;
-//     let compact_form = ClosedFormInputCompactForm::from_full_form(&mut cs, &full_input, &round_function).unwrap();
-//     // compute the encoding and committment of compact form
-//     let compact_form_witness = compact_form.create_witness().unwrap();
-//     // dbg!(&compact_form_witness);
+    // dbg!(&compact_form_witness);
 
-//     use sync_vm::glue::optimizable_queue::commit_encodable_item;
-//     let public_input = commit_encodable_item(&mut cs, &compact_form, &round_function).unwrap();
+    let input_commitment = commit_variable_length_encodable_item(cs, &compact_form, round_function);
+    let public_input = input_commitment.witness_hook(&*cs)().unwrap();
 
-//     (public_input.get_value().unwrap(), compact_form_witness)
-// }
+    (public_input, compact_form_witness)
+}
 
 // use crate::witness::oracle::VmInstanceWitness;
 // use sync_vm::vm::vm_cycle::witness_oracle::WitnessOracle;
@@ -267,6 +316,7 @@ pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
     hidden_fsm.previous_code_page = vm_state.previous_code_memory_page.0;
     hidden_fsm.previous_super_pc = vm_state.previous_super_pc;
     hidden_fsm.ergs_per_pubdata_byte = vm_state.current_ergs_per_pubdata_byte;
+    hidden_fsm.pending_exception = vm_state.pending_exception;
 
     hidden_fsm.context_composite_u128 = [
         vm_state.context_u128_register as u32,

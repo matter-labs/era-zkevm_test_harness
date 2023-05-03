@@ -203,9 +203,6 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
         rhs_grand_product_chains.push(rhs_grand_product_chain);
     }
 
-    dbg!(lhs_grand_product_chains.len());
-    dbg!(lhs_grand_product_chains[0].len());
-
     // now we need to split them into individual circuits
     // splitting is not extra hard here, we walk over iterator over everything and save states on checkpoints
 
@@ -240,7 +237,6 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
         }
     }
     if input_witness_chunk.len() > 0 {
-        dbg!(&input_witness_chunk.len());
         input_witness.push(input_witness_chunk);
         for j in 0..DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS {
             input_products[j] = *lhs_grand_product_chains[j].last().unwrap();

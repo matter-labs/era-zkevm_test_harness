@@ -404,7 +404,7 @@ fn encode_kecca256_inner_state(state: [u64; 25]) -> [[[u8; 8]; 5]; 5] {
 }
 
 fn buffer_to_bytes(buffer: &zk_evm::precompiles::keccak256::Buffer) -> [u8; zkevm_circuits::keccak256_round_function::BYTES_BUFFER_SIZE] {
-    assert_eq!(zkevm_circuits::keccak256_round_function::BYTES_BUFFER_SIZE, buffer.words.len());
+    assert_eq!(zkevm_circuits::keccak256_round_function::BUFFER_SIZE_IN_U64_WORDS, buffer.words.len());
 
     let mut result = [0u8; zkevm_circuits::keccak256_round_function::BYTES_BUFFER_SIZE];
     for (dst, src) in result.array_chunks_mut::<8>().zip(buffer.words.iter()) {

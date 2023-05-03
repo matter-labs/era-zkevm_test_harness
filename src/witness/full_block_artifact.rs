@@ -413,7 +413,7 @@ pub struct BlockBasicCircuits<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
 > 
-    where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <zkevm_circuits::base_structures::memory_query::MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <zkevm_circuits::base_structures::decommit_query::DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <boojum::gadgets::u256::UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
@@ -625,7 +625,7 @@ pub struct BlockBasicCircuitsPublicCompactFormsWitnesses<F: SmallField> {
     // main VM circuit. Many of them
     pub main_vm_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
     // code decommittments sorter
-    pub code_decommittments_sorter_circuit: ClosedFormInputCompactFormWitness<F>,
+    pub code_decommittments_sorter_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
     // few code decommitters: code hash -> memory
     pub code_decommitter_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
     // demux logs to get precompiles for RAM too
@@ -657,56 +657,55 @@ pub struct BlockBasicCircuitsPublicCompactFormsWitnesses<F: SmallField> {
     // pub l1_messages_merklizer_circuit: ClosedFormInputCompactFormWitness<F>,
 }
 
-// impl<F: SmallField> BlockBasicCircuitsPublicCompactFormsWitnesses<F> {
-//     pub fn into_flattened_set(self) -> Vec<ClosedFormInputCompactFormWitness<F>> {
-//         let BlockBasicCircuitsPublicCompactFormsWitnesses { 
-//             main_vm_circuits, 
-//             code_decommittments_sorter_circuit, 
-//             code_decommitter_circuits, 
-//             log_demux_circuits, 
-//             keccak_precompile_circuits, 
-//             sha256_precompile_circuits, 
-//             ecrecover_precompile_circuits, 
-//             ram_permutation_circuits, 
-//             storage_sorter_circuits, 
-//             storage_application_circuits, 
-//             initial_writes_hasher_circuit, 
-//             repeated_writes_hasher_circuit, 
-//             events_sorter_circuits, 
-//             l1_messages_sorter_circuits, 
-//             l1_messages_pubdata_hasher_circuit,
-//             l1_messages_merklizer_circuit 
-//         } = self;
+impl<F: SmallField> BlockBasicCircuitsPublicCompactFormsWitnesses<F> {
+    pub fn into_flattened_set(self) -> Vec<ClosedFormInputCompactFormWitness<F>> {
+        let BlockBasicCircuitsPublicCompactFormsWitnesses { 
+            main_vm_circuits, 
+            code_decommittments_sorter_circuits, 
+            code_decommitter_circuits, 
+            log_demux_circuits, 
+            keccak_precompile_circuits, 
+            sha256_precompile_circuits, 
+            ecrecover_precompile_circuits, 
+            ram_permutation_circuits, 
+            storage_sorter_circuits, 
+            storage_application_circuits, 
+            // initial_writes_hasher_circuit, 
+            // repeated_writes_hasher_circuit, 
+            events_sorter_circuits, 
+            l1_messages_sorter_circuits, 
+            // l1_messages_pubdata_hasher_circuit,
+            // l1_messages_merklizer_circuit 
+        } = self;
 
-//         use sync_vm::traits::CSWitnessable;
+        let mut result = vec![];
+        result.extend(main_vm_circuits);
 
-//         let mut result = vec![];
-//         result.extend(main_vm_circuits);
+        result.extend(code_decommittments_sorter_circuits);
 
-//         result.push(code_decommittments_sorter_circuit);
+        result.extend(code_decommitter_circuits);
 
-//         result.extend(code_decommitter_circuits);
+        result.extend(log_demux_circuits);
 
-//         result.extend(log_demux_circuits);
+        result.extend(keccak_precompile_circuits);
+        result.extend(sha256_precompile_circuits);
+        result.extend(ecrecover_precompile_circuits);
 
-//         result.extend(keccak_precompile_circuits);
-//         result.extend(sha256_precompile_circuits);
-//         result.extend(ecrecover_precompile_circuits);
+        result.extend(ram_permutation_circuits);
 
-//         result.extend(ram_permutation_circuits);
+        result.extend(storage_sorter_circuits);
 
-//         result.extend(storage_sorter_circuits);
+        result.extend(storage_application_circuits);
 
-//         result.extend(storage_application_circuits);
+        // result.push(initial_writes_hasher_circuit);
+        // result.push(repeated_writes_hasher_circuit);
 
-//         result.push(initial_writes_hasher_circuit);
-//         result.push(repeated_writes_hasher_circuit);
-//         result.extend(events_sorter_circuits);
-//         result.extend(l1_messages_sorter_circuits);
+        result.extend(events_sorter_circuits);
+        result.extend(l1_messages_sorter_circuits);
 
-//         result.push(l1_messages_pubdata_hasher_circuit);
-//         result.push(l1_messages_merklizer_circuit);
+        // result.push(l1_messages_pubdata_hasher_circuit);
+        // result.push(l1_messages_merklizer_circuit);
 
-//         result
-//     }
-// }
+        result
+    }
+}

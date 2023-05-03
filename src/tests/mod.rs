@@ -108,21 +108,104 @@ pub(crate) fn base_test_circuit(
             let is_satisfied = cs.check_if_satisfied(&worker);
             assert!(is_satisfied);
         },
-        _ => {
-            todo!()
+        ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            let _ = cs.pad_and_shrink();
+            let is_satisfied = cs.check_if_satisfied(&worker);
+            assert!(is_satisfied);
         },
-        // ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {inner.size_hint()},
-        // ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {inner.size_hint()},
-        // ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {inner.size_hint()},
-        // ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {inner.size_hint()},
-        // ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {inner.size_hint()},
-        // ZkSyncBaseLayerCircuit::ECRecover(inner) => {inner.size_hint()},
-        // ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {inner.size_hint()},
-        // ZkSyncBaseLayerCircuit::StorageSorter(inner) => {inner.size_hint()},
-        // ZkSyncBaseLayerCircuit::StorageApplication(inner) => {inner.size_hint()},
-        // ZkSyncBaseLayerCircuit::EventsSorter(inner) => {inner.size_hint()},
-        // ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {inner.size_hint()},
+        ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            let _ = cs.pad_and_shrink();
+            let is_satisfied = cs.check_if_satisfied(&worker);
+            assert!(is_satisfied);
+        },
+        ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            let _ = cs.pad_and_shrink();
+            let is_satisfied = cs.check_if_satisfied(&worker);
+            assert!(is_satisfied);
+        },
+        ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            let _ = cs.pad_and_shrink();
+            let is_satisfied = cs.check_if_satisfied(&worker);
+            assert!(is_satisfied);
+        },
+        ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            let _ = cs.pad_and_shrink();
+            let is_satisfied = cs.check_if_satisfied(&worker);
+            assert!(is_satisfied);
+        },
+        ZkSyncBaseLayerCircuit::ECRecover(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            let _ = cs.pad_and_shrink();
+            let is_satisfied = cs.check_if_satisfied(&worker);
+            assert!(is_satisfied);
+        },
+        ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            let _ = cs.pad_and_shrink();
+            let is_satisfied = cs.check_if_satisfied(&worker);
+            assert!(is_satisfied);
+        },
+        ZkSyncBaseLayerCircuit::StorageSorter(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            let _ = cs.pad_and_shrink();
+            let is_satisfied = cs.check_if_satisfied(&worker);
+            assert!(is_satisfied);
+        },
+        ZkSyncBaseLayerCircuit::StorageApplication(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            let _ = cs.pad_and_shrink();
+            let is_satisfied = cs.check_if_satisfied(&worker);
+            assert!(is_satisfied);
+        },
+        ZkSyncBaseLayerCircuit::EventsSorter(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            let _ = cs.pad_and_shrink();
+            let is_satisfied = cs.check_if_satisfied(&worker);
+            assert!(is_satisfied);
+        },
+        ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            let _ = cs.pad_and_shrink();
+            let is_satisfied = cs.check_if_satisfied(&worker);
+            assert!(is_satisfied);
+        },
     }
-
-
 }

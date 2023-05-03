@@ -202,11 +202,8 @@ pub fn run<
             num_non_deterministic_heap_queries
         );
 
-    todo!();
+    assert!(artifacts.special_initial_decommittment_queries.len() == 1);
 
-    // return (instance_oracles, artifacts)
-
-    // assert!(artifacts.special_initial_decommittment_queries.len() == 1);
     // use sync_vm::scheduler::queues::SpongeLikeQueueStateWitness;
     // let memory_state_after_bootloader_heap_writes = if num_non_deterministic_heap_queries == 0 {
     //     // empty
@@ -222,17 +219,18 @@ pub fn run<
     //     }
     // };
     
-    // use crate::witness::postprocessing::create_leaf_level_circuits_and_scheduler_witness;
+    use crate::witness::postprocessing::create_leaf_level_circuits_and_scheduler_witness;
 
-    // let (basic_circuits, basic_circuits_inputs, compact_form_witnesses) = create_leaf_level_circuits_and_scheduler_witness(
-    //     zk_porter_is_available,
-    //     default_aa_code_hash,
-    //     instance_oracles,
-    //     artifacts,
-    //     geometry
-    // );
+    let (basic_circuits, basic_circuits_inputs, compact_form_witnesses) = create_leaf_level_circuits_and_scheduler_witness(
+        zk_porter_is_available,
+        default_aa_code_hash,
+        instance_oracles,
+        artifacts,
+        geometry,
+        &round_function
+    );
 
-    // (basic_circuits, basic_circuits_inputs)
+    return (basic_circuits, basic_circuits_inputs)
 
     // let scheduler_circuit_witness = {
     //     use sync_vm::circuit_structures::bytes32::Bytes32Witness;
