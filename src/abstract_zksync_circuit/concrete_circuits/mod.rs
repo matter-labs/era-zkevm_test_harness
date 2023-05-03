@@ -5,7 +5,7 @@ use zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
 use crate::Poseidon2Goldilocks;
 use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
 use zkevm_circuits::tables::*;
-use boojum::gadgets::tables::binop_table::*;
+use boojum::gadgets::tables::*;
 use boojum::cs::gates::*;
 use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord;
 use boojum::gadgets::poseidon::BuildableCircuitRoundFunction;

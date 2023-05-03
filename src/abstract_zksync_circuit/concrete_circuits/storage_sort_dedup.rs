@@ -36,9 +36,9 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 
     fn geometry() -> CSGeometry {
         CSGeometry { 
-            num_columns_under_copy_permutation: 60, 
+            num_columns_under_copy_permutation: 140, 
             num_witness_columns: 0, 
-            num_constant_columns: 4, 
+            num_constant_columns: 8, 
             max_allowed_constraint_degree: 8,
         }
     }
@@ -54,19 +54,15 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
         builder: CsBuilder<T, F, GC, TB>
     ) -> CsBuilder<T, F, impl GateConfigurationHolder<F>, impl StaticToolboxHolder> {
         let builder = builder.allow_lookup(
-            boojum::cs::LookupParameters::UseSpecializedColumnsWithTableIdAsConstant { width: 3, num_repetitions: 2, share_table_id: true }
+            boojum::cs::LookupParameters::UseSpecializedColumnsWithTableIdAsConstant { width: 1, num_repetitions: 8, share_table_id: true }
         );
 
         let builder = ConstantsAllocatorGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
         let builder = BooleanConstraintGate::configure_builder(builder, GatePlacementStrategy::UseSpecializedColumns { num_repetitions: 1, share_constants: false });
-        let builder = U8x4FMAGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
         let builder = R::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let builder = DotProductGate::<4>::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
         let builder = ZeroCheckGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns, false);
         let builder = FmaGateInBaseFieldWithoutConstant::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
         let builder = UIntXAddGate::<32>::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let builder = UIntXAddGate::<16>::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let builder = UIntXAddGate::<8>::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
         let builder = SelectionGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
         let builder = ParallelSelectionGate::<4>::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
         let builder = PublicInputGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
@@ -77,7 +73,8 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
     }
 
     fn add_tables<CS: ConstraintSystem<F>>(cs: &mut CS) {
-        
+        let table = create_range_check_table::<F, 8>();
+        cs.add_lookup_table::<RangeCheckTable<8>, 1>(table);
     }
 
     fn get_synthesis_function_dyn<

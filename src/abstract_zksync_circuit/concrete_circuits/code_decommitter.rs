@@ -35,9 +35,9 @@ where [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
 
     fn geometry() -> CSGeometry {
         CSGeometry { 
-            num_columns_under_copy_permutation: 60, 
+            num_columns_under_copy_permutation: 140, 
             num_witness_columns: 0, 
-            num_constant_columns: 4, 
+            num_constant_columns: 8, 
             max_allowed_constraint_degree: 8,
         }
     }
@@ -53,7 +53,7 @@ where [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
         builder: CsBuilder<T, F, GC, TB>
     ) -> CsBuilder<T, F, impl GateConfigurationHolder<F>, impl StaticToolboxHolder> {
         let builder = builder.allow_lookup(
-            boojum::cs::LookupParameters::UseSpecializedColumnsWithTableIdAsConstant { width: 3, num_repetitions: 2, share_table_id: true }
+            boojum::cs::LookupParameters::UseSpecializedColumnsWithTableIdAsConstant { width: 3, num_repetitions: 4, share_table_id: true }
         );
 
         let builder = ConstantsAllocatorGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
@@ -76,7 +76,8 @@ where [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     }
 
     fn add_tables<CS: ConstraintSystem<F>>(cs: &mut CS) {
-        
+        let table = create_range_check_table::<F, 8>();
+        cs.add_lookup_table::<RangeCheckTable<8>, 1>(table);
     }
 
     fn get_synthesis_function_dyn<

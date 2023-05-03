@@ -255,9 +255,15 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         println!("Doing {}: {}", idx, descr);
         match &el {
             ZkSyncBaseLayerCircuit::MainVM(inner) => {
+                continue;
+                // let witness = inner.clone_witness().unwrap();
+                // dbg!(witness.closed_form_input.start_flag);
+                // dbg!(witness.closed_form_input.hidden_fsm_input);
+            },
+            ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {
                 let witness = inner.clone_witness().unwrap();
                 dbg!(witness.closed_form_input.start_flag);
-                // dbg!(witness.closed_form_input.hidden_fsm_input);
+                dbg!(witness.closed_form_input.completion_flag);
             },
             _ => {
                 todo!()
