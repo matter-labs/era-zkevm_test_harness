@@ -110,7 +110,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         // cycles_per_vm_snapshot: 1024,
         cycles_per_ram_permutation: 1024,
         cycles_per_code_decommitter: 256,
-        cycles_per_storage_application: 2,
+        cycles_per_storage_application: 4,
         cycles_per_keccak256_circuit: 7,
         cycles_per_sha256_circuit: 7,
         cycles_per_ecrecover_circuit: 2,
@@ -254,7 +254,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
         match &el {
-            ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {
+            ZkSyncBaseLayerCircuit::StorageApplication(inner) => {
                 let witness = inner.clone_witness().unwrap();
                 dbg!(witness.closed_form_input.start_flag);
                 dbg!(witness.closed_form_input.completion_flag);

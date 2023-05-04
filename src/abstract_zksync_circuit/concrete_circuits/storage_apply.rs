@@ -62,7 +62,7 @@ where [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
         let builder = ZeroCheckGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns, false);
         let builder = FmaGateInBaseFieldWithoutConstant::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
         let builder = UIntXAddGate::<32>::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let builder = UIntXAddGate::<16>::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
+        let builder = U32TriAddCarryAsChunkGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
         let builder = SelectionGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
         let builder = ParallelSelectionGate::<4>::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
         let builder = PublicInputGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
@@ -87,6 +87,8 @@ where [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
         cs.add_lookup_table::<ByteSplitTable<3>, 3>(table);
         let table = create_byte_split_table::<F, 4>();
         cs.add_lookup_table::<ByteSplitTable<4>, 3>(table);
+        let table = create_byte_split_table::<F, 7>();
+        cs.add_lookup_table::<ByteSplitTable<7>, 3>(table);
     }
 
     fn get_synthesis_function_dyn<

@@ -29,6 +29,7 @@ use zkevm_circuits::code_unpacker_sha256::input::CodeDecommitterCircuitInstanceW
 use zkevm_circuits::sort_decommittment_requests::input::CodeDecommittmentsDeduplicatorInstanceWitness;
 use zkevm_circuits::storage_validity_by_grand_product::input::StorageDeduplicatorInstanceWitness;
 use zkevm_circuits::log_sorter::input::EventsDeduplicatorInstanceWitness;
+use zkevm_circuits::storage_application::input::StorageApplicationCircuitInstanceWitness;
 
 
 #[derive(Derivative)]
@@ -83,8 +84,8 @@ pub struct FullBlockArtifacts<F: SmallField> {
     pub demuxed_ecrecover_queue_simulator: LogQueueSimulator<F>,
     pub demuxed_ecrecover_queue_states: Vec<LogQueueState<F>>,
 
-    // sorted and deduplicated log-like queues for ones that support reverts
-    // sorted
+    // // sorted and deduplicated log-like queues for ones that support reverts
+    // // sorted
     // pub _sorted_rollup_storage_queries: Vec<LogQuery>,
     // pub _sorted_rollup_storage_queue_states: Vec<LogQueueState<F>>,
     // pub _sorted_porter_storage_queries: Vec<LogQuery>,
@@ -141,8 +142,8 @@ pub struct FullBlockArtifacts<F: SmallField> {
     // //
     // pub initial_writes_pubdata_hasher_circuit_data: Vec<PubdataHasherInstanceWitness<E, 3, 64, InitialStorageWriteData<F>>>,
     // pub repeated_writes_pubdata_hasher_circuit_data: Vec<PubdataHasherInstanceWitness<E, 2, 40, RepeatedStorageWriteData<F>>>,
-    // //
-    // pub rollup_storage_application_circuit_data: Vec<StorageApplicationCircuitInstanceWitness<F>>,
+    //
+    pub rollup_storage_application_circuit_data: Vec<StorageApplicationCircuitInstanceWitness<F>>,
     // 
     pub keccak256_circuits_data: Vec<Keccak256RoundFunctionCircuitInstanceWitness<F>>,
     // 
@@ -385,17 +386,17 @@ impl<F: SmallField> FullBlockArtifacts<F> {
         // self.initial_writes_pubdata_hasher_circuit_data = vec![initial];
         // self.repeated_writes_pubdata_hasher_circuit_data = vec![repeated];
 
-        // // and do the actual storage application
-        // use crate::witness::individual_circuits::storage_application::decompose_into_storage_application_witnesses;
+        // and do the actual storage application
+        use crate::witness::individual_circuits::storage_application::decompose_into_storage_application_witnesses;
 
-        // let rollup_storage_application_circuit_data = decompose_into_storage_application_witnesses(
-        //     self,
-        //     tree,
-        //     round_function,
-        //     geometry.cycles_per_storage_application as usize
-        // );
+        let rollup_storage_application_circuit_data = decompose_into_storage_application_witnesses(
+            self,
+            tree,
+            round_function,
+            geometry.cycles_per_storage_application as usize
+        );
 
-        // self.rollup_storage_application_circuit_data = rollup_storage_application_circuit_data;
+        self.rollup_storage_application_circuit_data = rollup_storage_application_circuit_data;
 
         self.is_processed = true;
     }

@@ -52,7 +52,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
         l1_messages_deduplicator_circuit_data,
         // initial_writes_pubdata_hasher_circuit_data,
         // repeated_writes_pubdata_hasher_circuit_data,
-        // rollup_storage_application_circuit_data,
+        rollup_storage_application_circuit_data,
         keccak256_circuits_data,
         sha256_circuits_data,
         ecrecover_circuits_data,
@@ -411,34 +411,36 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
     let mut storage_application_circuits = vec![];
     let mut storage_application_circuits_inputs = vec![];
     let mut storage_application_circuits_compact_forms_witnesses = vec![];
-    // let num_instances = rollup_storage_application_circuit_data.len();
-    // let mut observable_input = None;
-    // for (instance_idx, mut circuit_input) in rollup_storage_application_circuit_data.into_iter().enumerate() {
-    //     let is_first = instance_idx == 0;
-    //     let _is_last = instance_idx == num_instances - 1;
+    let num_instances = rollup_storage_application_circuit_data.len();
+    let mut observable_input = None;
+    for (instance_idx, mut circuit_input) in rollup_storage_application_circuit_data.into_iter().enumerate() {
+        let is_first = instance_idx == 0;
+        let _is_last = instance_idx == num_instances - 1;
 
-    //     if observable_input.is_none() {
-    //         assert!(is_first);
-    //         observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
-    //     } else {
-    //         circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
-    //     }
+        if observable_input.is_none() {
+            assert!(is_first);
+            observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
+        } else {
+            circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
+        }
 
-    //     let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
-    //         circuit_input.closed_form_input.clone(),
-    //     );
+        let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
+            &mut cs_for_witness_generation,
+            circuit_input.closed_form_input.clone(),
+            &*round_function,
+        );
 
-    //     let instance = StorageApplicationCircuit {
-    //         witness: AtomicCell::new(Some(circuit_input)),
-    //         config: Arc::new(geometry.cycles_per_storage_application as usize),
-    //         round_function: round_function.clone(),
-    //         expected_public_input: Some(proof_system_input),
-    //     };
+        let instance = StorageApplicationCircuit {
+            witness: AtomicCell::new(Some(circuit_input)),
+            config: Arc::new(geometry.cycles_per_storage_application as usize),
+            round_function: round_function.clone(),
+            expected_public_input: Some(proof_system_input),
+        };
 
-    //     storage_application_circuits.push(instance);
-    //     storage_application_circuits_inputs.push(proof_system_input);
-    //     storage_application_circuits_compact_forms_witnesses.push(compact_form_witness);
-    // }
+        storage_application_circuits.push(instance);
+        storage_application_circuits_inputs.push(proof_system_input);
+        storage_application_circuits_compact_forms_witnesses.push(compact_form_witness);
+    }
 
     // // initial writes rehasher
 

@@ -16,6 +16,13 @@ pub fn biguint_from_u256(value: U256) -> BigUint {
     result
 }
 
+pub fn u64_as_u32_le(value: u64) -> [u32; 2] {
+    [
+        value as u32,
+        (value >> 32) as u32,
+    ]
+}
+
 pub fn u128_as_u32_le(value: u128) -> [u32; 4] {
     [
         value as u32,
