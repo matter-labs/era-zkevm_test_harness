@@ -56,7 +56,7 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 
     // now we should chunk it by circuits but briefly simulating their logic
 
-    let challenges = produce_fs_challenges::<F, R, QUEUE_STATE_WIDTH, {LOG_QUERY_PACKED_WIDTH + 1}, 2>(
+    let challenges = produce_fs_challenges::<F, R, QUEUE_STATE_WIDTH, {LOG_QUERY_PACKED_WIDTH + 1}, DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS>(
         unsorted_simulator_final_state.tail.clone(),
         intermediate_sorted_log_simulator_final_state.tail.clone(),
         round_function
@@ -104,7 +104,6 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 
     // now we need to split them into individual circuits
     // splitting is not extra hard here, we walk over iterator over everything and save states on checkpoints
-
 
     
     // --------------------

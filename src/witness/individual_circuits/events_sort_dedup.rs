@@ -56,7 +56,7 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 
     let unsorted_simulator_final_state = take_queue_state_from_simulator(unsorted_simulator);
 
-    let challenges = produce_fs_challenges::<F, R, QUEUE_STATE_WIDTH, {LOG_QUERY_PACKED_WIDTH + 1}, 2>(
+    let challenges = produce_fs_challenges::<F, R, QUEUE_STATE_WIDTH, {LOG_QUERY_PACKED_WIDTH + 1}, DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS>(
         take_queue_state_from_simulator(&unsorted_simulator).tail,
         take_queue_state_from_simulator(&intermediate_sorted_simulator).tail,
         round_function
