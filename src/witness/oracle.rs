@@ -1248,6 +1248,15 @@ use sync_vm::vm::vm_state::saved_contract_context::ExecutionContextRecordWitness
 use crate::INITIAL_MONOTONIC_CYCLE_COUNTER;
 
 impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
+    fn report_new_callstack_frame(
+        &mut self,
+        new_callstack: &ExecutionContextRecord<E>,
+        new_depth: UInt32<E>,
+        is_call: &Boolean,
+        execute: &Boolean,
+    ) {
+        todo!();
+    }
     fn get_memory_witness_for_read(
         &mut self,
         timestamp: UInt32<E>,
