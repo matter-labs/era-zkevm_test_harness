@@ -34,9 +34,9 @@ impl<
 
     fn geometry() -> CSGeometry {
         CSGeometry { 
-            num_columns_under_copy_permutation: 60, 
+            num_columns_under_copy_permutation: 80, 
             num_witness_columns: 0, 
-            num_constant_columns: 4, 
+            num_constant_columns: 8, 
             max_allowed_constraint_degree: 8,
         }
     }
@@ -52,31 +52,41 @@ impl<
         builder: CsBuilder<T, F, GC, TB>
     ) -> CsBuilder<T, F, impl GateConfigurationHolder<F>, impl StaticToolboxHolder> {
         let builder = builder.allow_lookup(
-            LookupParameters::UseSpecializedColumnsWithTableIdAsConstant { 
-                width: 3, 
-                num_repetitions: 8, 
-                share_table_id: true 
-            }
+            boojum::cs::LookupParameters::UseSpecializedColumnsWithTableIdAsConstant { width: 3, num_repetitions: 16, share_table_id: true }
         );
-        let builder = R::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
+
         let builder = ConstantsAllocatorGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
+        let builder = BooleanConstraintGate::configure_builder(builder, GatePlacementStrategy::UseSpecializedColumns { num_repetitions: 1, share_constants: false });
+
+        let builder = ZeroCheckGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns, false);
         let builder = FmaGateInBaseFieldWithoutConstant::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let builder = ReductionGate::<F, 4>::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-        // let owned_cs = ReductionGate::<F, 4>::configure_for_cs(owned_cs, GatePlacementStrategy::UseSpecializedColumns { num_repetitions: 8, share_constants: true });
-        let builder = BooleanConstraintGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
         let builder = UIntXAddGate::<32>::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
         let builder = UIntXAddGate::<16>::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let builder = SelectionGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let builder = ZeroCheckGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns, false);
         let builder = DotProductGate::<4>::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-        // let owned_cs = DotProductGate::<4>::configure_for_cs(owned_cs, GatePlacementStrategy::UseSpecializedColumns { num_repetitions: 1, share_constants: true });
+        let builder = SelectionGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
+        let builder = ParallelSelectionGate::<4>::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
+        let builder = PublicInputGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
+        let builder = ReductionGate::<_, 4>::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
         let builder = NopGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
 
         builder
     }
 
     fn add_tables<CS: ConstraintSystem<F>>(cs: &mut CS) {
-        
+        let table = create_xor8_table();
+        cs.add_lookup_table::<Xor8Table, 3>(table);
+
+        let table = create_and8_table();
+        cs.add_lookup_table::<And8Table, 3>(table);
+
+        let table = create_byte_split_table::<F, 1>();
+        cs.add_lookup_table::<ByteSplitTable<1>, 3>(table);
+        let table = create_byte_split_table::<F, 2>();
+        cs.add_lookup_table::<ByteSplitTable<2>, 3>(table);
+        let table = create_byte_split_table::<F, 3>();
+        cs.add_lookup_table::<ByteSplitTable<3>, 3>(table);
+        let table = create_byte_split_table::<F, 4>();
+        cs.add_lookup_table::<ByteSplitTable<4>, 3>(table);
     }
 
     fn get_synthesis_function_dyn<

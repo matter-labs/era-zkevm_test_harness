@@ -34,9 +34,9 @@ where [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
 
     fn geometry() -> CSGeometry {
         CSGeometry { 
-            num_columns_under_copy_permutation: 60, 
+            num_columns_under_copy_permutation: 120, 
             num_witness_columns: 0, 
-            num_constant_columns: 4, 
+            num_constant_columns: 8, 
             max_allowed_constraint_degree: 8,
         }
     }
@@ -52,30 +52,42 @@ where [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
         builder: CsBuilder<T, F, GC, TB>
     ) -> CsBuilder<T, F, impl GateConfigurationHolder<F>, impl StaticToolboxHolder> {
         let builder = builder.allow_lookup(
-            boojum::cs::LookupParameters::UseSpecializedColumnsWithTableIdAsConstant { width: 3, num_repetitions: 2, share_table_id: true }
+            LookupParameters::UseSpecializedColumnsWithTableIdAsConstant { 
+                width: 4, 
+                num_repetitions: 8, 
+                share_table_id: true 
+            }
         );
-
         let builder = ConstantsAllocatorGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
         let builder = BooleanConstraintGate::configure_builder(builder, GatePlacementStrategy::UseSpecializedColumns { num_repetitions: 1, share_constants: false });
-        let builder = U8x4FMAGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let builder = R::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let builder = DotProductGate::<4>::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let builder = ZeroCheckGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns, false);
         let builder = FmaGateInBaseFieldWithoutConstant::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let builder = UIntXAddGate::<32>::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let builder = UIntXAddGate::<16>::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let builder = UIntXAddGate::<8>::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
+        let builder = ReductionGate::<F, 4>::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
         let builder = SelectionGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
         let builder = ParallelSelectionGate::<4>::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
         let builder = PublicInputGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let builder = ReductionGate::<_, 4>::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
+        let builder = UIntXAddGate::<32>::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
+        let builder = ZeroCheckGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns, false);
+
         let builder = NopGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
 
         builder
     }
 
     fn add_tables<CS: ConstraintSystem<F>>(cs: &mut CS) {
-        
+        let table = create_tri_xor_table();
+        cs.add_lookup_table::<TriXor4Table, 4>(table);
+
+        let table = create_ch4_table();
+        cs.add_lookup_table::<Ch4Table, 4>(table);
+
+        let table = create_maj4_table();
+        cs.add_lookup_table::<Maj4Table, 4>(table);
+
+        let table = create_4bit_chunk_split_table::<F, 1>();
+        cs.add_lookup_table::<Split4BitChunkTable<1>, 4>(table);
+
+        let table = create_4bit_chunk_split_table::<F, 2>();
+        cs.add_lookup_table::<Split4BitChunkTable<2>, 4>(table);
     }
 
     fn get_synthesis_function_dyn<

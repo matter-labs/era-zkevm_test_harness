@@ -90,6 +90,12 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
     assert!(artifacts.memory_queue_simulator.witness.as_slices().1.is_empty());
     assert!(sorted_memory_queries_simulator.witness.as_slices().1.is_empty());
 
+    assert_eq!(artifacts.all_memory_queue_states.chunks(per_circuit_capacity).len(), artifacts.sorted_memory_queue_states.chunks(per_circuit_capacity).len());
+    assert_eq!(artifacts.all_memory_queue_states.chunks(per_circuit_capacity).len(), transposed_lhs_chains.len());
+    assert_eq!(artifacts.all_memory_queue_states.chunks(per_circuit_capacity).len(), transposed_rhs_chains.len());
+    assert_eq!(artifacts.all_memory_queue_states.chunks(per_circuit_capacity).len(), artifacts.memory_queue_simulator.witness.as_slices().0.chunks(per_circuit_capacity).len());
+    assert_eq!(artifacts.all_memory_queue_states.chunks(per_circuit_capacity).len(), sorted_memory_queries_simulator.witness.as_slices().0.chunks(per_circuit_capacity).len());
+
     let it = artifacts.all_memory_queue_states.chunks(per_circuit_capacity)
             .zip(artifacts.sorted_memory_queue_states.chunks(per_circuit_capacity))
             .zip(transposed_lhs_chains.into_iter())

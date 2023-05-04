@@ -185,9 +185,9 @@ pub fn sha256_decompose_into_per_circuit_witness<
             let mut block = [0u8; 64];
 
             // we have two reads
-            for (query_index, read) in round.reads.into_iter().enumerate() {
+            for (dst, read) in block.array_chunks_mut::<32>().zip(round.reads.into_iter()) {
                 let data = read.value;
-                data.to_big_endian(&mut block[32*query_index..32*(query_index+1)]);
+                data.to_big_endian(dst);
                 let read_query = memory_queries_it.next().unwrap();
                 assert_eq!(read, read_query);
                 memory_reads_per_request.push(read_query.value);

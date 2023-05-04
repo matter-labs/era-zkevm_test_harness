@@ -393,11 +393,13 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 }
 
 fn encode_kecca256_inner_state(state: [u64; 25]) -> [[[u8; 8]; 5]; 5] {
+    // we need to transpose
     let mut result = [[[0u8; 8]; 5]; 5];
-    for (dst, src) in result.iter_mut().zip(state.array_chunks::<5>()) {
-        for (dst, src) in dst.iter_mut().zip(src.iter()) {
-            *dst = src.to_le_bytes();
-        }
+    for (idx, src) in state.iter().enumerate() {
+        let i = idx % 5;
+        let j = idx / 5;
+        let dst = &mut result[i][j];
+        *dst = src.to_le_bytes();
     }
 
     result

@@ -214,8 +214,10 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
                 internal_state = Sha256::default();
 
                 let (((_query, memory_data), _state), wit) = it.next().unwrap();
-                let _ = current_decommittment_requests_queue_simulator
+                let (_el, _intermediate_info) = current_decommittment_requests_queue_simulator
                     .pop_and_output_intermediate_data(round_function);
+                debug_assert_eq!(_query, _el);
+
                 assert!(memory_data.len() > 0);
                 current_memory_data = memory_data;
 

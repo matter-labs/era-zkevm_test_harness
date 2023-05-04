@@ -372,7 +372,7 @@ impl<
         const CW: usize,
     >(
         &mut self,
-        round_function: &R,
+        _round_function: &R,
     ) -> (
         I,
         FullWidthQueueIntermediateStates<F, SW, ROUNDS>,

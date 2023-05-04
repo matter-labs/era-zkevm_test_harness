@@ -108,7 +108,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     let geometry = GeometryConfig {
         cycles_per_vm_snapshot: 128,
         // cycles_per_vm_snapshot: 1024,
-        cycles_per_ram_permutation: 1024,
+        cycles_per_ram_permutation: 16,
         cycles_per_code_decommitter: 256,
         cycles_per_storage_application: 2,
         cycles_per_keccak256_circuit: 7,
@@ -254,19 +254,13 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
         match &el {
-            ZkSyncBaseLayerCircuit::MainVM(inner) => {
-                continue;
-                // let witness = inner.clone_witness().unwrap();
-                // dbg!(witness.closed_form_input.start_flag);
-                // dbg!(witness.closed_form_input.hidden_fsm_input);
-            },
-            ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {
+            ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {
                 let witness = inner.clone_witness().unwrap();
                 dbg!(witness.closed_form_input.start_flag);
                 dbg!(witness.closed_form_input.completion_flag);
             },
             _ => {
-                todo!()
+                continue;
             }
         }
 
