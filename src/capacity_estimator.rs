@@ -60,7 +60,7 @@ pub(crate) fn compute_size_inner<
             let _ = SF::synthesize_into_cs_inner(&mut cs, witness, &round_function, config);
 
             cs.print_gate_stats();
-            
+
             let (max_trace_len, _) = cs.pad_and_shrink();
 
             max_trace_len
@@ -69,7 +69,8 @@ pub(crate) fn compute_size_inner<
 
         match join_result {
             Ok(max_trace_len) => {
-                if max_trace_len <= (1 << max_trace_len_log_2) {
+                println!("Size {} requires {} rows", next_size, max_trace_len);
+                if max_trace_len <= (1 << (max_trace_len_log_2-1)) {
                     size = next_size;
                     next_size *= 2;
                 } else {
@@ -85,6 +86,12 @@ pub(crate) fn compute_size_inner<
                         size = next_size;
                         break
                     }
+                    let mut next_size_binsearch = (next_size - size) / 2 + next_size;
+                    if next_size_binsearch == next_size {
+                        next_size_binsearch += 1;
+                    }
+                    size = next_size;
+                    next_size = next_size_binsearch;
                 }
             },
             Err(_e) => {
@@ -120,7 +127,7 @@ mod test {
             SF::geometry(),
             20,
             Some(28),
-            Some(1024),
+            Some(2048),
             |x: usize| {
                 x
             },
