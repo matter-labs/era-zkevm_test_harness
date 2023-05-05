@@ -91,6 +91,17 @@ where [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
         cs.add_lookup_table::<ByteSplitTable<7>, 3>(table);
     }
 
+    fn synthesize_into_cs_inner<
+        CS: ConstraintSystem<F>,
+    >(
+        cs: &mut CS, 
+        witness: Self::Witness, 
+        round_function: &Self::RoundFunction,
+        config: Self::Config,
+    ) -> [Num<F>; INPUT_OUTPUT_COMMITMENT_LENGTH] {
+        storage_applicator_entry_point(cs, witness, round_function, config)
+    }
+
     fn get_synthesis_function_dyn<
         'a,
         CS: ConstraintSystem<F> + 'a,

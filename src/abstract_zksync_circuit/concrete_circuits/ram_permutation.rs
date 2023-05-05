@@ -75,6 +75,17 @@ where [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
         cs.add_lookup_table::<RangeCheckTable<8>, 1>(table);
     }
 
+    fn synthesize_into_cs_inner<
+        CS: ConstraintSystem<F>,
+    >(
+        cs: &mut CS, 
+        witness: Self::Witness, 
+        round_function: &Self::RoundFunction,
+        config: Self::Config,
+    ) -> [Num<F>; INPUT_OUTPUT_COMMITMENT_LENGTH] {
+        ram_permutation_entry_point(cs, witness, round_function, config)
+    }
+
     fn get_synthesis_function_dyn<
         'a,
         CS: ConstraintSystem<F> + 'a,

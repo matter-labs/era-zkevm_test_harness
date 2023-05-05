@@ -75,6 +75,17 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
         cs.add_lookup_table::<RangeCheckTable<8>, 1>(table);
     }
 
+    fn synthesize_into_cs_inner<
+        CS: ConstraintSystem<F>,
+    >(
+        cs: &mut CS, 
+        witness: Self::Witness, 
+        round_function: &Self::RoundFunction,
+        config: Self::Config,
+    ) -> [Num<F>; INPUT_OUTPUT_COMMITMENT_LENGTH] {
+        demultiplex_storage_logs_enty_point(cs, witness, round_function, config)
+    }
+
     fn get_synthesis_function_dyn<
         'a,
         CS: ConstraintSystem<F> + 'a,

@@ -40,10 +40,22 @@ pub trait ZkSyncUniformSynthesisFunction<F: SmallField>: Clone + serde::Serializ
         builder: CsBuilder<T, F, GC, TB>
     ) -> CsBuilder<T, F, impl GateConfigurationHolder<F>, impl StaticToolboxHolder>;
 
+    fn synthesize_into_cs_inner<
+        CS: ConstraintSystem<F>,
+    >(
+        cs: &mut CS, 
+        witness: Self::Witness, 
+        round_function: &Self::RoundFunction,
+        config: Self::Config,
+    ) -> [Num<F>; INPUT_OUTPUT_COMMITMENT_LENGTH];
+
     fn get_synthesis_function_dyn<
         'a, 
         CS: ConstraintSystem<F> + 'a,
-    >() -> Box<dyn FnOnce(&mut CS, Self::Witness, &Self::RoundFunction, Self::Config) -> [Num<F>; INPUT_OUTPUT_COMMITMENT_LENGTH] + 'a>;
+    >() -> Box<dyn FnOnce(&mut CS, Self::Witness, &Self::RoundFunction, Self::Config) -> [Num<F>; INPUT_OUTPUT_COMMITMENT_LENGTH] + 'a>
+    where Self: 'a {
+        Box::new(Self::synthesize_into_cs_inner)
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -171,8 +183,10 @@ impl<
         let ww = witness.unwrap_or_default();
         let config: S::Config = (*self.config).clone();
         let round_function = &*self.round_function;
-        let synthesis_fn = S::get_synthesis_function_dyn();
-        let public_input_var = (synthesis_fn)(cs, ww, round_function, config);
+        // let synthesis_fn = S::get_synthesis_function_dyn();
+        // let public_input_var = (synthesis_fn)(cs, ww, round_function, config);
+
+        let public_input_var = S::synthesize_into_cs_inner(cs, ww, round_function, config);
 
         if let Some(expected_input) = self.expected_public_input.as_ref() {
             if let Some(wit_value) = public_input_var.witness_hook(&*cs)() {

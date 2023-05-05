@@ -89,6 +89,17 @@ impl<
         cs.add_lookup_table::<ByteSplitTable<4>, 3>(table);
     }
 
+    fn synthesize_into_cs_inner<
+        CS: ConstraintSystem<F>,
+    >(
+        cs: &mut CS, 
+        witness: Self::Witness, 
+        round_function: &Self::RoundFunction,
+        config: Self::Config,
+    ) -> [Num<F>; INPUT_OUTPUT_COMMITMENT_LENGTH] {
+        ecrecover_function_entry_point(cs, witness, round_function, config)
+    }
+
     fn get_synthesis_function_dyn<
         'a,
         CS: ConstraintSystem<F> + 'a,

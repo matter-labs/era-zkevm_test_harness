@@ -101,10 +101,6 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
         let shifts_table = create_shift_to_num_converter_table::<F>();
         cs.add_lookup_table::<BitshiftTable, 3>(shifts_table);
 
-        // let uma_unaligned_access_table = create_integer_to_bitmask_table::<F>(
-        //     5,
-        //     UMA_SHIFT_TO_BITMASK_TABLE_NAME
-        // );
         let uma_unaligned_access_table = create_integer_set_ith_bit_table::<F>(
             5,
             UMA_SHIFT_TO_BITMASK_TABLE_NAME
@@ -113,6 +109,17 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 
         let uma_ptr_read_cleanup_table = create_uma_ptr_read_bitmask_table::<F>();
         cs.add_lookup_table::<UMAPtrReadCleanupTable, 3>(uma_ptr_read_cleanup_table);
+    }
+
+    fn synthesize_into_cs_inner<
+        CS: ConstraintSystem<F>,
+    >(
+        cs: &mut CS, 
+        witness: Self::Witness, 
+        round_function: &Self::RoundFunction,
+        config: Self::Config,
+    ) -> [Num<F>; INPUT_OUTPUT_COMMITMENT_LENGTH] {
+        main_vm_entry_point(cs, witness, round_function, config)
     }
 
     fn get_synthesis_function_dyn<
