@@ -52,6 +52,7 @@ use self::utils::*;
 
 pub mod external_calls;
 pub mod toolset;
+pub mod capacity_estimator;
 
 pub mod abstract_zksync_circuit;
 // pub mod circuit_limit_estimator;
