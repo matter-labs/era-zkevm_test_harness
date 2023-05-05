@@ -37,7 +37,7 @@ where [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
         CSGeometry { 
             num_columns_under_copy_permutation: 120, 
             num_witness_columns: 0, 
-            num_constant_columns: 8, 
+            num_constant_columns: 4, 
             max_allowed_constraint_degree: 8,
         }
     }

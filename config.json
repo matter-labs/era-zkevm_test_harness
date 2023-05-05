@@ -1,0 +1,17 @@
+{
+  "cycles_per_vm_snapshot": 5756,
+  "cycles_per_log_demuxer": 62576,
+  "cycles_per_storage_sorter": 25436,
+  "cycles_per_events_or_l1_messages_sorter": 31287,
+  "cycles_per_ram_permutation": 76561,
+  "cycles_code_decommitter_sorter": 63122,
+  "cycles_per_code_decommitter": 2114,
+  "cycles_per_storage_application": 33,
+  "cycles_per_keccak256_circuit": 646,
+  "cycles_per_sha256_circuit": 2063,
+  "cycles_per_ecrecover_circuit": 2,
+  "limit_for_l1_messages_pudata_hasher": 0,
+  "limit_for_l1_messages_merklizer": 0,
+  "limit_for_initial_writes_pubdata_hasher": 0,
+  "limit_for_repeated_writes_pubdata_hasher": 0
+}

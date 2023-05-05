@@ -20,7 +20,7 @@ pub struct ProvingToolset<S: Storage> {
 
 use derivative::Derivative;
 
-#[derive(Derivative)]
+#[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone, Copy, Debug, Default, Hash)]
 pub struct GeometryConfig {
     pub cycles_per_vm_snapshot: u32,

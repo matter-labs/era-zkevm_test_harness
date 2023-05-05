@@ -14,15 +14,13 @@ pub(crate) fn compute_size_inner<
 >(
     geometry: CSGeometry,
     max_trace_len_log_2: usize,
-    max_variables_hint_log_2: Option<usize>,
     start_hint: Option<usize>,
     config_fn: F,
-    optional_circuit_limit_generation_mode_fn: Option<fn(usize) -> usize>,
 ) -> usize 
     where SF: Send + 'static,
         SF::Config: Send + 'static,
 {
-    let max_variables_hint_log_2 = max_variables_hint_log_2.unwrap_or(30);
+    println!("Will try to estimate capacity for {}", std::any::type_name::<SF>());
     let start_size = start_hint.unwrap_or(1024);
 
     // kind-of binary search
@@ -32,7 +30,11 @@ pub(crate) fn compute_size_inner<
 
     loop {
         // we just try to make one
-        println!("Trying for size {}", next_size);
+        println!("Trying size {} for circuit {}", next_size, std::any::type_name::<SF>());
+
+        if size == next_size {
+            break;
+        }
 
         let config = (config_fn)(next_size);
 
@@ -45,7 +47,7 @@ pub(crate) fn compute_size_inner<
         
             let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, SetupCSConfig>::new(
                 geometry, 
-                1 << max_variables_hint_log_2, 
+                1, // resolver is inactive in this mode
                 1 << max_trace_len_log_2,
             );
             let builder = new_cs_builder::<_, GoldilocksField>(builder_impl);
@@ -79,6 +81,9 @@ pub(crate) fn compute_size_inner<
                     }
 
                     if size + 1 == next_size {
+                        // small step
+                        size = next_size;
+                        next_size += 1;
                         continue;
                     }
 
@@ -86,6 +91,7 @@ pub(crate) fn compute_size_inner<
                         size = next_size;
                         break
                     }
+
                     let mut next_size_binsearch = (next_size - size) / 2 + next_size;
                     if next_size_binsearch == next_size {
                         next_size_binsearch += 1;
@@ -98,6 +104,9 @@ pub(crate) fn compute_size_inner<
                 if next_size == start_size {
                     panic!("Initial search point is too large");
                 }
+                if next_size == size + 1 {
+                    break;
+                }
                 // println!("Error in synthesis occured");
                 let next_size_binsearch = (next_size - size) / 2 + size;
                 if next_size_binsearch == size {
@@ -106,10 +115,187 @@ pub(crate) fn compute_size_inner<
                 next_size = next_size_binsearch;
             }
         }
-
     }
 
+    println!("{} has capacity of {} cycles", std::any::type_name::<SF>(), size);
+
     size
+}
+
+pub fn main_vm_capacity() -> usize {
+    type SF = VmMainInstanceSynthesisFunction<GoldilocksField, VmWitnessOracle<GoldilocksField>, ZkSyncDefaultRoundFunction>;
+
+    compute_size_inner::<
+        SF,
+        _,
+    > (
+        SF::geometry(),
+        20,
+        Some(5500),
+        |x: usize| {
+            x
+        },
+    )
+}
+
+pub fn code_decommittments_sorter_capacity() -> usize {
+    type SF = CodeDecommittmentsSorterSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+
+    compute_size_inner::<
+        SF,
+        _,
+    > (
+        SF::geometry(),
+        20,
+        Some(40000),
+        |x: usize| {
+            x
+        },
+    )
+}
+
+pub fn code_decommitter_capacity() -> usize {
+    type SF = CodeDecommitterInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+
+    compute_size_inner::<
+        SF,
+        _,
+    > (
+        SF::geometry(),
+        20,
+        Some(2048),
+        |x: usize| {
+            x
+        },
+    )
+}
+
+pub fn log_demuxer_capacity() -> usize {
+    type SF = LogDemuxInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+
+    compute_size_inner::<
+        SF,
+        _,
+    > (
+        SF::geometry(),
+        20,
+        Some(40000),
+        |x: usize| {
+            x
+        },
+    )
+}
+
+pub fn keccak256_rf_capacity() -> usize {
+    type SF = Keccak256RoundFunctionInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+
+    compute_size_inner::<
+        SF,
+        _,
+    > (
+        SF::geometry(),
+        20,
+        Some(512),
+        |x: usize| {
+            x
+        },
+    )
+}
+
+pub fn sha256_rf_capacity() -> usize {
+    type SF = Sha256RoundFunctionInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+
+    compute_size_inner::<
+        SF,
+        _,
+    > (
+        SF::geometry(),
+        20,
+        Some(2048),
+        |x: usize| {
+            x
+        },
+    )
+}
+
+pub fn ecrecover_capacity() -> usize {
+    type SF = ECRecoverFunctionInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+
+    compute_size_inner::<
+        SF,
+        _,
+    > (
+        SF::geometry(),
+        20,
+        Some(2),
+        |x: usize| {
+            x
+        },
+    )
+}
+
+pub fn ram_permutation_capacity() -> usize {
+    type SF = RAMPermutationInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+
+    compute_size_inner::<
+        SF,
+        _,
+    > (
+        SF::geometry(),
+        20,
+        Some(70000),
+        |x: usize| {
+            x
+        },
+    )
+}
+
+pub fn event_sorter_capacity() -> usize {
+    type SF = EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+
+    compute_size_inner::<
+        SF,
+        _,
+    > (
+        SF::geometry(),
+        20,
+        Some(20000),
+        |x: usize| {
+            x
+        },
+    )
+}
+
+pub fn storage_sorter_capacity() -> usize {
+    type SF = StorageSortAndDedupInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+
+    compute_size_inner::<
+        SF,
+        _,
+    > (
+        SF::geometry(),
+        20,
+        Some(22000),
+        |x: usize| {
+            x
+        },
+    )
+}
+
+pub fn storage_application_capacity() -> usize {
+    type SF = StorageApplicationInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+
+    compute_size_inner::<
+        SF,
+        _,
+    > (
+        SF::geometry(),
+        20,
+        Some(32),
+        |x: usize| {
+            x
+        },
+    )
 }
 
 #[cfg(test)]
@@ -117,24 +303,10 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_vm_size_estimation() {
-        type SF = VmMainInstanceSynthesisFunction<GoldilocksField, VmWitnessOracle<GoldilocksField>, ZkSyncDefaultRoundFunction>;
+    fn test_size_estimation() {
+        let size = storage_application_capacity();
 
-        let size = compute_size_inner::<
-            SF,
-            _,
-        > (
-            SF::geometry(),
-            20,
-            Some(28),
-            Some(2048),
-            |x: usize| {
-                x
-            },
-            None,
-        );
-
-        println!("Size for VM = {}", size)
+        println!("Size = {}", size)
     }
 
 }
