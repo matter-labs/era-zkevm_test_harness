@@ -23,9 +23,42 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
     per_circuit_capacity: usize,
     round_function: &R,
 ) -> Vec<EventsDeduplicatorInstanceWitness<F>> {
-    // parallelizable 
-    
-    // have to manually unroll, otherwise borrow checker will complain
+    // trivial case if nothing to process
+
+    if unsorted_queries.is_empty() {
+        // return singe dummy witness
+        use boojum::gadgets::queue::QueueState;
+
+        let initial_fsm_state = EventsDeduplicatorFSMInputOutput::<F>::placeholder_witness();
+
+        assert_eq!(take_queue_state_from_simulator(&unsorted_simulator), QueueState::placeholder_witness());
+
+        let mut passthrough_input = EventsDeduplicatorInputData::placeholder_witness();
+        passthrough_input.initial_log_queue_state = take_queue_state_from_simulator(&unsorted_simulator);
+        passthrough_input.intermediate_sorted_queue_state = QueueState::placeholder_witness();
+
+        let final_fsm_state = EventsDeduplicatorFSMInputOutput::<F>::placeholder_witness();
+
+        let mut passthrough_output = EventsDeduplicatorOutputData::placeholder_witness();
+        passthrough_output.final_queue_state = QueueState::placeholder_witness();
+
+        let wit = EventsDeduplicatorInstanceWitness {
+            closed_form_input: EventsDeduplicatorInputOutputWitness {
+                start_flag: true,
+                completion_flag: true,
+                observable_input: passthrough_input,
+                observable_output: passthrough_output,
+                hidden_fsm_input: initial_fsm_state.clone(),
+                hidden_fsm_output: final_fsm_state.clone(),
+            },
+            initial_queue_witness: CircuitQueueRawWitness { elements: VecDeque::new() },
+            intermediate_sorted_queue_witness: CircuitQueueRawWitness { elements: VecDeque::new() },
+        };
+
+        return vec![wit];
+    }
+
+    // parallelizable between events and L2 to L1 messages
 
     // first we sort the storage log (only storage now) by composite key
 

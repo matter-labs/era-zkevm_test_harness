@@ -33,10 +33,7 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
         artifacts.memory_queue_simulator.num_items as usize
     );
 
-    // let start_idx_for_memory_accumulator = artifacts.all_memory_queue_states.len();
-
-    // let initial_memory_queue_state =
-    //     take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
+    assert!(artifacts.all_decommittment_queries.len() > 0, "VM should have made some code decommits");
 
     // we produce witness for two circuits at once
 

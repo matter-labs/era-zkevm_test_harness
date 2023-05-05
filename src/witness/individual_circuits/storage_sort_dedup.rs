@@ -18,9 +18,43 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
     per_circuit_capacity: usize,
     round_function: &R,
 ) -> Vec<StorageDeduplicatorInstanceWitness<F>> {
-    // TODO: handle a case if no storage accesses exist
+    // trivial case if nothing to process
 
     const SHARD_ID_TO_PROCEED: u8 = 0; // rollup shard ID
+
+    if artifacts.demuxed_rollup_storage_queries.is_empty() {
+        // return singe dummy witness
+        use boojum::gadgets::queue::QueueState;
+
+        let initial_fsm_state = StorageDeduplicatorFSMInputOutput::<F>::placeholder_witness();
+
+        assert_eq!(take_queue_state_from_simulator(&artifacts.demuxed_rollup_storage_queue_simulator), QueueState::placeholder_witness());
+
+        let mut passthrough_input = StorageDeduplicatorInputData::placeholder_witness();
+        passthrough_input.shard_id_to_process = SHARD_ID_TO_PROCEED;
+        passthrough_input.unsorted_log_queue_state = take_queue_state_from_simulator(&artifacts.demuxed_rollup_storage_queue_simulator);
+        passthrough_input.intermediate_sorted_queue_state = QueueState::placeholder_witness();
+
+        let final_fsm_state = StorageDeduplicatorFSMInputOutput::<F>::placeholder_witness();
+
+        let mut passthrough_output = StorageDeduplicatorOutputData::placeholder_witness();
+        passthrough_output.final_sorted_queue_state = QueueState::placeholder_witness();
+
+        let wit = StorageDeduplicatorInstanceWitness {
+            closed_form_input: StorageDeduplicatorInputOutputWitness {
+                start_flag: true,
+                completion_flag: true,
+                observable_input: passthrough_input,
+                observable_output: passthrough_output,
+                hidden_fsm_input: initial_fsm_state.clone(),
+                hidden_fsm_output: final_fsm_state.clone(),
+            },
+            unsorted_queue_witness: CircuitQueueRawWitness { elements: VecDeque::new() },
+            intermediate_sorted_queue_witness: CircuitQueueRawWitness { elements: VecDeque::new() },
+        };
+
+        return vec![wit];
+    }
 
     // first we sort the storage log (only storage now) by composite key
 
@@ -35,7 +69,7 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 
     artifacts.deduplicated_rollup_storage_queries = deduplicated_rollup_storage_queries;
 
-    let mut intermediate_sorted_log_simulator = LogWithExtendedEnumerationQueueSimulator::empty();
+    let mut intermediate_sorted_log_simulator = LogWithExtendedEnumerationQueueSimulator::<F>::empty();
     let mut intermediate_sorted_log_simulator_states = Vec::with_capacity(sorted_storage_queries_with_extra_timestamp.len());
     for el in sorted_storage_queries_with_extra_timestamp.iter() {
         let (_, intermediate_state) = intermediate_sorted_log_simulator.push_and_output_intermediate_data(el.clone(), round_function);
@@ -48,7 +82,7 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 
     // now just implement the logic to sort and deduplicate
 
-    let mut result_queue_simulator = LogQueueSimulator::empty();
+    let mut result_queue_simulator = LogQueueSimulator::<F>::empty();
 
     // compute sequence of states for grand product accumulation
 

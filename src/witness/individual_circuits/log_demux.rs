@@ -11,10 +11,39 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
     per_circuit_capacity: usize,
     round_function: &R,
 ) -> Vec<LogDemuxerCircuitInstanceWitness<F>> {
+    // trivial empty case
+    if artifacts.original_log_queue_simulator.witness.as_slices().0.is_empty() {
+        // return singe dummy witness
+        use boojum::gadgets::queue::QueueState;
+
+        let initial_fsm_state = LogDemuxerFSMInputOutput::<F>::placeholder_witness();
+
+        assert_eq!(take_queue_state_from_simulator(&artifacts.original_log_queue_simulator), QueueState::placeholder_witness());
+
+        let mut passthrough_input = LogDemuxerInputData::placeholder_witness();
+        passthrough_input.initial_log_queue_state = QueueState::placeholder_witness();
+
+        let final_fsm_state = LogDemuxerFSMInputOutput::<F>::placeholder_witness();
+
+        let passthrough_output = LogDemuxerOutputData::placeholder_witness();
+
+        let wit = LogDemuxerCircuitInstanceWitness {
+            closed_form_input: LogDemuxerInputOutputWitness {
+                start_flag: true,
+                completion_flag: true,
+                observable_input: passthrough_input,
+                observable_output: passthrough_output,
+                hidden_fsm_input: initial_fsm_state.clone(),
+                hidden_fsm_output: final_fsm_state.clone(),
+            },
+            initial_queue_witness: CircuitQueueRawWitness { elements: VecDeque::new() },
+        };
+
+        return vec![wit];
+    }
+
     // parallelizable 
     
-    // have to manually unroll, otherwise borrow checker will complain
-
     assert!(artifacts.original_log_queue_simulator.witness.as_slices().1.is_empty());
     let input_queue_witness = &artifacts.original_log_queue_simulator.witness.as_slices().0;
     let mut states_iter = artifacts.original_log_queue_states.iter();
@@ -139,7 +168,7 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
         let input_witness: VecDeque<_> = artifacts.original_log_queue_simulator.witness.iter()
             .skip(state_idx)
             .take(input_chunk.len())
-            .map(|(encoding, old_tail, element)| {
+            .map(|(_encoding, old_tail, element)| {
     
             (log_query_into_circuit_log_query_witness(element), *old_tail)
         }).collect();
