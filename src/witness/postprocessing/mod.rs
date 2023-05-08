@@ -9,6 +9,7 @@ use crate::toolset::GeometryConfig;
 use crate::ethereum_types::U256;
 use crate::witness::full_block_artifact::BlockBasicCircuitsPublicCompactFormsWitnesses;
 use crate::abstract_zksync_circuit::concrete_circuits::*;
+use crate::witness::utils::*;
 
 use std::sync::Arc;
 use boojum::algebraic_props::round_function;
@@ -73,7 +74,12 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
     use crate::witness::utils::simulate_public_input_value_from_witness;
     use crate::witness::utils::create_cs_for_witness_generation;
 
-    let mut cs_for_witness_generation = create_cs_for_witness_generation::<F, R>();
+    let mut cs_for_witness_generation = create_cs_for_witness_generation::<F, R>(
+        TRACE_LEN_LOG_2_FOR_CALCULATION,
+        MAX_VARS_LOG_2_FOR_CALCULATION,
+    );
+
+    let mut cycles_used: usize = 0;
 
     // VM
 
@@ -105,6 +111,14 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
             circuit_input.closed_form_input.clone(),
             &*round_function,
         );
+
+        cycles_used += 1;
+        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            cs_for_witness_generation = create_cs_for_witness_generation(
+                TRACE_LEN_LOG_2_FOR_CALCULATION, 
+                MAX_VARS_LOG_2_FOR_CALCULATION,
+            );
+        }
 
         let instance = VMMainCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
@@ -142,6 +156,14 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
             &*round_function,
         );
 
+        cycles_used += 1;
+        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            cs_for_witness_generation = create_cs_for_witness_generation(
+                TRACE_LEN_LOG_2_FOR_CALCULATION, 
+                MAX_VARS_LOG_2_FOR_CALCULATION,
+            );
+        }
+
         let instance = CodeDecommittsSorterCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
             config: Arc::new(geometry.cycles_per_code_decommitter as usize),
@@ -177,6 +199,14 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
             circuit_input.closed_form_input.clone(),
             &*round_function,
         );
+
+        cycles_used += 1;
+        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            cs_for_witness_generation = create_cs_for_witness_generation(
+                TRACE_LEN_LOG_2_FOR_CALCULATION, 
+                MAX_VARS_LOG_2_FOR_CALCULATION,
+            );
+        }
 
         let instance = CodeDecommitterCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
@@ -214,6 +244,14 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
             &*round_function,
         );
 
+        cycles_used += 1;
+        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            cs_for_witness_generation = create_cs_for_witness_generation(
+                TRACE_LEN_LOG_2_FOR_CALCULATION, 
+                MAX_VARS_LOG_2_FOR_CALCULATION,
+            );
+        }
+
         let instance = LogDemuxerCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
             config: Arc::new(geometry.cycles_per_log_demuxer as usize),
@@ -249,6 +287,14 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
             circuit_input.closed_form_input.clone(),
             &*round_function,
         );
+
+        cycles_used += 1;
+        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            cs_for_witness_generation = create_cs_for_witness_generation(
+                TRACE_LEN_LOG_2_FOR_CALCULATION, 
+                MAX_VARS_LOG_2_FOR_CALCULATION,
+            );
+        }
 
         let instance = Keccak256RoundFunctionCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
@@ -286,6 +332,14 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
             &*round_function,
         );
 
+        cycles_used += 1;
+        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            cs_for_witness_generation = create_cs_for_witness_generation(
+                TRACE_LEN_LOG_2_FOR_CALCULATION, 
+                MAX_VARS_LOG_2_FOR_CALCULATION,
+            );
+        }
+
         let instance = Sha256RoundFunctionCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
             config: Arc::new(geometry.cycles_per_sha256_circuit as usize),
@@ -321,6 +375,14 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
             circuit_input.closed_form_input.clone(),
             &*round_function,
         );
+
+        cycles_used += 1;
+        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            cs_for_witness_generation = create_cs_for_witness_generation(
+                TRACE_LEN_LOG_2_FOR_CALCULATION, 
+                MAX_VARS_LOG_2_FOR_CALCULATION,
+            );
+        }
 
         let instance = ECRecoverFunctionCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
@@ -358,6 +420,14 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
             &*round_function,
         );
 
+        cycles_used += 1;
+        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            cs_for_witness_generation = create_cs_for_witness_generation(
+                TRACE_LEN_LOG_2_FOR_CALCULATION, 
+                MAX_VARS_LOG_2_FOR_CALCULATION,
+            );
+        }
+
         let instance = RAMPermutationCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
             config: Arc::new(geometry.cycles_per_ram_permutation as usize),
@@ -394,6 +464,14 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
             &*round_function,
         );
 
+        cycles_used += 1;
+        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            cs_for_witness_generation = create_cs_for_witness_generation(
+                TRACE_LEN_LOG_2_FOR_CALCULATION, 
+                MAX_VARS_LOG_2_FOR_CALCULATION,
+            );
+        }
+
         let instance = StorageSorterCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
             config: Arc::new(geometry.cycles_per_storage_sorter as usize),
@@ -429,6 +507,14 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
             circuit_input.closed_form_input.clone(),
             &*round_function,
         );
+
+        cycles_used += 1;
+        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            cs_for_witness_generation = create_cs_for_witness_generation(
+                TRACE_LEN_LOG_2_FOR_CALCULATION, 
+                MAX_VARS_LOG_2_FOR_CALCULATION,
+            );
+        }
 
         let instance = StorageApplicationCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
@@ -504,6 +590,14 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
             &*round_function,
         );
 
+        cycles_used += 1;
+        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            cs_for_witness_generation = create_cs_for_witness_generation(
+                TRACE_LEN_LOG_2_FOR_CALCULATION, 
+                MAX_VARS_LOG_2_FOR_CALCULATION,
+            );
+        }
+
         let instance = EventsSorterCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
             config: Arc::new(geometry.cycles_per_events_or_l1_messages_sorter as usize),
@@ -539,6 +633,14 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
             circuit_input.closed_form_input.clone(),
             &*round_function,
         );
+
+        cycles_used += 1;
+        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            cs_for_witness_generation = create_cs_for_witness_generation(
+                TRACE_LEN_LOG_2_FOR_CALCULATION, 
+                MAX_VARS_LOG_2_FOR_CALCULATION,
+            );
+        }
 
         let instance = L1MessagesSorterCircuit {
             witness: AtomicCell::new(Some(circuit_input)),

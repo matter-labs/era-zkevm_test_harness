@@ -13,6 +13,8 @@ use crate::ethereum_types::*;
 use crate::witness::oracle::create_artifacts_from_tracer;
 use crate::witness::oracle::VmWitnessOracle;
 use crate::witness::utils::*;
+use boojum::cs::implementations::pow::NoPow;
+use boojum::cs::implementations::prover::ProofConfig;
 use zk_evm::abstractions::*;
 use zk_evm::aux_structures::DecommittmentQuery;
 use zk_evm::aux_structures::*;
@@ -106,7 +108,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     use crate::toolset::GeometryConfig;
 
     let geometry = GeometryConfig {
-        cycles_per_vm_snapshot: 128,
+        cycles_per_vm_snapshot: 1,
         // cycles_per_vm_snapshot: 1024,
         cycles_per_ram_permutation: 1024,
         cycles_per_code_decommitter: 256,
@@ -124,6 +126,8 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         limit_for_l1_messages_merklizer: 32,
         limit_for_l1_messages_pudata_hasher: 32,
     };
+
+    let geometry = crate::geometry_config::get_geometry_config();
 
     let mut storage_impl = InMemoryStorage::new();
     let mut tree = ZKSyncTestingTree::empty();
@@ -192,21 +196,6 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
 
     let _num_vm_circuits = basic_block_circuits.main_vm_circuits.len();
 
-    // let sponge_params = bn254_rescue_params();
-    // let rns_params = get_prefered_rns_params();
-    // let transcript_params = (&sponge_params, &rns_params);
-
-    // use sync_vm::recursion::get_prefered_hash_params;
-
-    // let aggregation_params = AggregationParameters::<_, GenericTranscriptGadget<_, _, 2, 3>, _, 2, 3> {
-    //     base_placeholder_point: get_base_placeholder_point_for_accumulators(),
-    //     // hash_params: get_prefered_hash_params(),
-    //     hash_params: sponge_params.clone(),
-    //     transcript_params: sponge_params.clone(),
-    // };
-
-    // use sync_vm::recursion::RescueTranscriptForRecursion;
-
     // // verification keys for basic circuits
 
     // let mut unique_set = vec![];
@@ -251,11 +240,11 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     // let mut skip = true;
 
     for (idx, (el, input_value)) in basic_block_circuits.clone().into_flattened_set().into_iter().zip(basic_block_circuits_inputs.clone().into_flattened_set().into_iter()).enumerate() {
+        continue;
+
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
-        if idx < 134 {
-            continue;
-        }
+
         // match &el {
         //     ZkSyncBaseLayerCircuit::StorageApplication(inner) => {
         //         let witness = inner.clone_witness().unwrap();
@@ -268,6 +257,63 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         // }
 
         base_test_circuit(el);
+    }
+
+    let worker = Worker::new_with_num_threads(8);
+
+    for (idx, (el, input_value)) in basic_block_circuits.clone().into_flattened_set().into_iter().zip(basic_block_circuits_inputs.clone().into_flattened_set().into_iter()).enumerate() {
+        let descr = el.short_description();
+        println!("Doing {}: {}", idx, descr);
+
+        if idx != 0 {
+            panic!();
+        }
+
+        let (
+            setup_base,
+            setup,
+            vk,
+            setup_tree,
+            vars_hint,
+            wits_hint,
+            finalization_hint
+        ) = create_base_layer_setup_data(el.clone(), &worker, BASE_LAYER_FRI_LDE_FACTOR, BASE_LAYER_CAP_SIZE);
+
+        dbg!(&vk);
+
+        let proof_config = ProofConfig {
+            fri_lde_factor: BASE_LAYER_FRI_LDE_FACTOR,
+            merkle_tree_cap_size: BASE_LAYER_CAP_SIZE,
+            fri_folding_schedule: None,
+            security_level: 100,
+            pow_bits: 0
+        };
+
+        println!("Proving!");
+        let now = std::time::Instant::now();
+
+        let proof = prove_base_layer_circuit::<NoPow>(
+            el.clone(), 
+            &worker, 
+            proof_config, 
+            &setup_base, 
+            &setup, 
+            &setup_tree, 
+            &vk, 
+            &vars_hint, 
+            &wits_hint, 
+            &finalization_hint
+        );
+
+        println!("Proving is DONE, taken {:?}", now.elapsed());
+
+        let is_valid = verify_base_layer_proof::<NoPow>(
+            &el, 
+            &proof, 
+            &vk
+        );
+
+        assert!(is_valid);
     }
 
     // for (idx, (el, input_value)) in basic_block_circuits.clone().into_flattened_set().into_iter().zip(basic_block_circuits_inputs.clone().into_flattened_set()).enumerate() {

@@ -1,5 +1,6 @@
 use boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
 use boojum::config::DevCSConfig;
+use boojum::config::ProvingCSConfig;
 use boojum::cs::CSGeometry;
 use boojum::cs::GateConfigurationHolder;
 use boojum::cs::StaticToolboxHolder;
@@ -141,33 +142,37 @@ use boojum::gadgets::traits::encodable::CircuitVarLengthEncodable;
 use boojum::gadgets::traits::witnessable::WitnessHookable;
 use zkevm_circuits::fsm_input_output::*;
 
+pub const TRACE_LEN_LOG_2_FOR_CALCULATION: usize = 20;
+pub const MAX_VARS_LOG_2_FOR_CALCULATION: usize = 26;
+pub const CYCLES_PER_SCRATCH_SPACE: usize = 256;
+
+
 pub fn create_cs_for_witness_generation<
 F: SmallField,
 R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
->() -> CSReferenceImplementation<F, F, DevCSConfig, impl GateConfigurationHolder<F>, impl StaticToolboxHolder> {
+>(
+    max_trace_len_log_2: usize,
+    max_vars_log_2: usize,
+) -> CSReferenceImplementation<F, F, ProvingCSConfig, impl GateConfigurationHolder<F>, impl StaticToolboxHolder> {
     // create temporary cs, and allocate in full
 
     let geometry = CSGeometry {
         num_columns_under_copy_permutation: 140,
         num_witness_columns: 0,
-        num_constant_columns: 8,
+        num_constant_columns: 4,
         max_allowed_constraint_degree: 8
     };
-    let max_trace_len = 1 << 20;
-    let num_vars = 1 << 24;
-
-    let max_trace_len = 1 << 23;
-    let num_vars = 1 << 27;
+    let max_trace_len = 1 << max_trace_len_log_2;
+    let num_vars = 1 << max_vars_log_2;
 
     use boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
-    use boojum::config::DevCSConfig;
 
-    let builder_impl = CsReferenceImplementationBuilder::<F, F, DevCSConfig>::new(
+    let builder_impl = CsReferenceImplementationBuilder::<F, F, ProvingCSConfig>::new(
         geometry, 
         num_vars, 
         max_trace_len,
     );
-    let builder = boojum::cs::cs_builder::new_cs_builder::<_, F>(builder_impl);
+    let builder = boojum::cs::cs_builder::new_builder::<_, F>(builder_impl);
     let builder = builder.allow_lookup(
         boojum::cs::LookupParameters::UseSpecializedColumnsWithTableIdAsConstant { 
             width: 3, 

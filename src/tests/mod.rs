@@ -81,7 +81,7 @@ pub(crate) fn base_test_circuit(
 ) {
     use boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
     use boojum::config::DevCSConfig;
-    use boojum::cs::cs_builder::new_cs_builder;
+    use boojum::cs::cs_builder::new_builder;
 
     type P = GoldilocksField;
     // type P = MixedGL;
@@ -96,7 +96,7 @@ pub(crate) fn base_test_circuit(
         num_vars.unwrap(), 
         max_trace_len.unwrap(),
     );
-    let builder = new_cs_builder::<_, GoldilocksField>(builder_impl);
+    let builder = new_builder::<_, GoldilocksField>(builder_impl);
 
     match circuit {
         ZkSyncBaseLayerCircuit::MainVM(inner) => {

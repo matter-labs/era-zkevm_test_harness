@@ -199,11 +199,12 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         cycles_per_ram_permutation: 4,
         cycles_per_code_decommitter: 4,
         cycles_per_storage_application: 2,
-        limit_for_initial_writes_pubdata_hasher: 16,
-        limit_for_repeated_writes_pubdata_hasher: 16,
         cycles_per_keccak256_circuit: 1,
         cycles_per_sha256_circuit: 1,
         cycles_per_ecrecover_circuit: 1,
+        
+        limit_for_initial_writes_pubdata_hasher: 16,
+        limit_for_repeated_writes_pubdata_hasher: 16,
         limit_for_l1_messages_merklizer: 8,
         limit_for_l1_messages_pudata_hasher: 8,
     };

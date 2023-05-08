@@ -1,20 +1,12 @@
 use std::ops::Add;
 
 use crate::witness::tree::BinaryHasher;
+use boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
+use boojum::cs::implementations::setup::FinalizationHintsForProver;
+use boojum::field::goldilocks::GoldilocksExt2;
 use num_bigint::BigUint;
 use zk_evm::{address_to_u256, ethereum_types::*};
-
-pub fn biguint_from_u256(value: U256) -> BigUint {
-    let mut result = BigUint::from(value.0[3]);
-    result <<= 64u32;
-    result += BigUint::from(value.0[2]);
-    result <<= 64u32;
-    result += BigUint::from(value.0[1]);
-    result <<= 64u32;
-    result += BigUint::from(value.0[0]);
-
-    result
-}
+use boojum::config::*;
 
 pub fn u64_as_u32_le(value: u64) -> [u32; 2] {
     [
@@ -31,24 +23,6 @@ pub fn u128_as_u32_le(value: u128) -> [u32; 4] {
         (value >> 96) as u32,
     ]
 }
-
-// pub fn address_to_fe<F: PrimeField>(value: Address) -> F {
-//     let value = address_to_u256(&value);
-//     u256_to_fe::<F>(value)
-// }
-
-// pub fn u256_to_fe<F: PrimeField>(value: U256) -> F {
-//     let num_bits = value.bits();
-//     assert!(num_bits <= F::CAPACITY as usize);
-
-//     let mut repr = F::zero().into_repr();
-//     repr.as_mut()[0] = value.0[0];
-//     repr.as_mut()[1] = value.0[1];
-//     repr.as_mut()[2] = value.0[2];
-//     repr.as_mut()[3] = value.0[3];
-
-//     F::from_repr(repr).unwrap()
-// }
 
 pub fn calldata_to_aligned_data(calldata: &Vec<u8>) -> Vec<U256> {
     if calldata.len() == 0 {
@@ -148,4 +122,772 @@ pub fn binary_merklize_set<
     let root = previous_layer_hashes[0];
 
     root
+}
+
+use crate::GoldilocksField;
+use crate::witness::oracle::VmWitnessOracle;
+use crate::abstract_zksync_circuit::concrete_circuits::ZkSyncBaseLayerCircuit;
+use crate::ZkSyncDefaultRoundFunction;
+use boojum::worker::Worker;
+use std::alloc::Global;
+use boojum::cs::implementations::polynomial_storage::*;
+use boojum::cs::implementations::verifier::*;
+use boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
+use boojum::cs::oracle::merkle_tree::*;
+use boojum::cs::implementations::hints::*;
+
+pub const BASE_LAYER_FRI_LDE_FACTOR: usize = 2;
+pub const BASE_LAYER_CAP_SIZE: usize = 32;
+
+type F = GoldilocksField;
+type P = boojum::field::goldilocks::MixedGL;
+type H = GoldilocksPoseidon2Sponge<AbsorbtionModeOverwrite>;
+
+pub fn create_base_layer_setup_data(
+    circuit: ZkSyncBaseLayerCircuit<GoldilocksField, VmWitnessOracle<GoldilocksField>, ZkSyncDefaultRoundFunction>,
+    worker: &Worker,
+    fri_lde_factor: usize,
+    merkle_tree_cap_size: usize,
+) -> (
+    SetupBaseStorage<F, P, Global, Global>,
+    SetupStorage<F, P, Global, Global>, 
+    VerificationKey<F, H>, 
+    MerkleTreeWithCap<F, H>,
+    DenseVariablesCopyHint,
+    DenseWitnessCopyHint,
+    FinalizationHintsForProver,
+){
+    use boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
+    use boojum::config::DevCSConfig;
+    use boojum::cs::cs_builder::new_builder;
+    use boojum::cs::traits::circuit::Circuit;
+
+    let geometry = circuit.geometry();
+    let (max_trace_len, num_vars) = circuit.size_hint();
+
+    let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, SetupCSConfig>::new(
+        geometry, 
+        num_vars.unwrap(), 
+        max_trace_len.unwrap(),
+    );
+    let builder = new_builder::<_, GoldilocksField>(builder_impl);
+
+    match circuit {
+        ZkSyncBaseLayerCircuit::MainVM(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            let (_, finalization_hint) = cs.pad_and_shrink();
+            let (            
+                setup_base,
+                setup,
+                vk,
+                setup_tree,
+                vars_hint,
+                witness_hints
+            ) = cs.get_full_setup(
+                worker,
+                fri_lde_factor,
+                merkle_tree_cap_size,
+            );
+
+            (
+                setup_base,
+                setup,
+                vk,
+                setup_tree,
+                vars_hint,
+                witness_hints,
+                finalization_hint
+            )
+        },
+        ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            let (_, finalization_hint) = cs.pad_and_shrink();
+            let (            
+                setup_base,
+                setup,
+                vk,
+                setup_tree,
+                vars_hint,
+                witness_hints
+            ) = cs.get_full_setup(
+                worker,
+                fri_lde_factor,
+                merkle_tree_cap_size,
+            );
+
+            (
+                setup_base,
+                setup,
+                vk,
+                setup_tree,
+                vars_hint,
+                witness_hints,
+                finalization_hint
+            )
+        },
+        ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            let (_, finalization_hint) = cs.pad_and_shrink();
+            let (            
+                setup_base,
+                setup,
+                vk,
+                setup_tree,
+                vars_hint,
+                witness_hints
+            ) = cs.get_full_setup(
+                worker,
+                fri_lde_factor,
+                merkle_tree_cap_size,
+            );
+
+            (
+                setup_base,
+                setup,
+                vk,
+                setup_tree,
+                vars_hint,
+                witness_hints,
+                finalization_hint
+            )
+        },
+        ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            let (_, finalization_hint) = cs.pad_and_shrink();
+            let (            
+                setup_base,
+                setup,
+                vk,
+                setup_tree,
+                vars_hint,
+                witness_hints
+            ) = cs.get_full_setup(
+                worker,
+                fri_lde_factor,
+                merkle_tree_cap_size,
+            );
+
+            (
+                setup_base,
+                setup,
+                vk,
+                setup_tree,
+                vars_hint,
+                witness_hints,
+                finalization_hint
+            )
+        },
+        ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            let (_, finalization_hint) = cs.pad_and_shrink();
+            let (            
+                setup_base,
+                setup,
+                vk,
+                setup_tree,
+                vars_hint,
+                witness_hints
+            ) = cs.get_full_setup(
+                worker,
+                fri_lde_factor,
+                merkle_tree_cap_size,
+            );
+
+            (
+                setup_base,
+                setup,
+                vk,
+                setup_tree,
+                vars_hint,
+                witness_hints,
+                finalization_hint
+            )
+        },
+        ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            let (_, finalization_hint) = cs.pad_and_shrink();
+            let (            
+                setup_base,
+                setup,
+                vk,
+                setup_tree,
+                vars_hint,
+                witness_hints
+            ) = cs.get_full_setup(
+                worker,
+                fri_lde_factor,
+                merkle_tree_cap_size,
+            );
+
+            (
+                setup_base,
+                setup,
+                vk,
+                setup_tree,
+                vars_hint,
+                witness_hints,
+                finalization_hint
+            )
+        },
+        ZkSyncBaseLayerCircuit::ECRecover(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            let (_, finalization_hint) = cs.pad_and_shrink();
+            let (            
+                setup_base,
+                setup,
+                vk,
+                setup_tree,
+                vars_hint,
+                witness_hints
+            ) = cs.get_full_setup(
+                worker,
+                fri_lde_factor,
+                merkle_tree_cap_size,
+            );
+
+            (
+                setup_base,
+                setup,
+                vk,
+                setup_tree,
+                vars_hint,
+                witness_hints,
+                finalization_hint
+            )
+        },
+        ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            let (_, finalization_hint) = cs.pad_and_shrink();
+            let (            
+                setup_base,
+                setup,
+                vk,
+                setup_tree,
+                vars_hint,
+                witness_hints
+            ) = cs.get_full_setup(
+                worker,
+                fri_lde_factor,
+                merkle_tree_cap_size,
+            );
+
+            (
+                setup_base,
+                setup,
+                vk,
+                setup_tree,
+                vars_hint,
+                witness_hints,
+                finalization_hint
+            )
+        },
+        ZkSyncBaseLayerCircuit::StorageSorter(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            let (_, finalization_hint) = cs.pad_and_shrink();
+            let (            
+                setup_base,
+                setup,
+                vk,
+                setup_tree,
+                vars_hint,
+                witness_hints
+            ) = cs.get_full_setup(
+                worker,
+                fri_lde_factor,
+                merkle_tree_cap_size,
+            );
+
+            (
+                setup_base,
+                setup,
+                vk,
+                setup_tree,
+                vars_hint,
+                witness_hints,
+                finalization_hint
+            )
+        },
+        ZkSyncBaseLayerCircuit::StorageApplication(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            let (_, finalization_hint) = cs.pad_and_shrink();
+            let (            
+                setup_base,
+                setup,
+                vk,
+                setup_tree,
+                vars_hint,
+                witness_hints
+            ) = cs.get_full_setup(
+                worker,
+                fri_lde_factor,
+                merkle_tree_cap_size,
+            );
+
+            (
+                setup_base,
+                setup,
+                vk,
+                setup_tree,
+                vars_hint,
+                witness_hints,
+                finalization_hint
+            )
+        },
+        ZkSyncBaseLayerCircuit::EventsSorter(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            let (_, finalization_hint) = cs.pad_and_shrink();
+            let (            
+                setup_base,
+                setup,
+                vk,
+                setup_tree,
+                vars_hint,
+                witness_hints
+            ) = cs.get_full_setup(
+                worker,
+                fri_lde_factor,
+                merkle_tree_cap_size,
+            );
+
+            (
+                setup_base,
+                setup,
+                vk,
+                setup_tree,
+                vars_hint,
+                witness_hints,
+                finalization_hint
+            )
+        },
+        ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            let (_, finalization_hint) = cs.pad_and_shrink();
+            let (            
+                setup_base,
+                setup,
+                vk,
+                setup_tree,
+                vars_hint,
+                witness_hints
+            ) = cs.get_full_setup(
+                worker,
+                fri_lde_factor,
+                merkle_tree_cap_size,
+            );
+
+            (
+                setup_base,
+                setup,
+                vk,
+                setup_tree,
+                vars_hint,
+                witness_hints,
+                finalization_hint
+            )
+        },
+    }
+}
+
+use boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
+use boojum::cs::implementations::prover::ProofConfig;
+use boojum::cs::implementations::proof::Proof;
+
+type TR = GoldilocksPoisedon2Transcript;
+type EXT = GoldilocksExt2;
+
+use boojum::cs::implementations::pow::PoWRunner;
+
+pub fn prove_base_layer_circuit<
+    POW: PoWRunner
+>
+(
+    circuit: ZkSyncBaseLayerCircuit<GoldilocksField, VmWitnessOracle<GoldilocksField>, ZkSyncDefaultRoundFunction>,
+    worker: &Worker,
+    proof_config: ProofConfig,
+    setup_base: &SetupBaseStorage<F, P>, 
+    setup: &SetupStorage<F, P>, 
+    setup_tree: &MerkleTreeWithCap<F, H, Global, Global>, 
+    vk: &VerificationKey<F, H>,
+    vars_hint: &DenseVariablesCopyHint,
+    wits_hint: &DenseWitnessCopyHint,
+    finalization_hint: &FinalizationHintsForProver,
+) -> Proof<F, H, EXT> {
+    use boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
+    use boojum::cs::cs_builder::new_builder;
+    use boojum::cs::traits::circuit::Circuit;
+
+    let geometry = circuit.geometry();
+    let (max_trace_len, num_vars) = circuit.size_hint();
+
+    let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, ProvingCSConfig>::new(
+        geometry, 
+        num_vars.unwrap(), 
+        max_trace_len.unwrap(),
+    );
+    let builder = new_builder::<_, GoldilocksField>(builder_impl);
+
+    match circuit {
+        ZkSyncBaseLayerCircuit::MainVM(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            cs.pad_and_shrink_using_hint(finalization_hint);
+            cs.prove_from_precomputations::<EXT, TR, H, POW>(
+                proof_config,
+                setup_base,
+                setup,
+                setup_tree,
+                vk,
+                vars_hint,
+                wits_hint,
+                (),
+                worker,
+            )
+        },
+        ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            cs.pad_and_shrink_using_hint(finalization_hint);
+            cs.prove_from_precomputations::<EXT, TR, H, POW>(
+                proof_config,
+                setup_base,
+                setup,
+                setup_tree,
+                vk,
+                vars_hint,
+                wits_hint,
+                (),
+                worker,
+            )
+        },
+        ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            cs.pad_and_shrink_using_hint(finalization_hint);
+            cs.prove_from_precomputations::<EXT, TR, H, POW>(
+                proof_config,
+                setup_base,
+                setup,
+                setup_tree,
+                vk,
+                vars_hint,
+                wits_hint,
+                (),
+                worker,
+            )
+        },
+        ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            cs.pad_and_shrink_using_hint(finalization_hint);
+            cs.prove_from_precomputations::<EXT, TR, H, POW>(
+                proof_config,
+                setup_base,
+                setup,
+                setup_tree,
+                vk,
+                vars_hint,
+                wits_hint,
+                (),
+                worker,
+            )
+        },
+        ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            cs.pad_and_shrink_using_hint(finalization_hint);
+            cs.prove_from_precomputations::<EXT, TR, H, POW>(
+                proof_config,
+                setup_base,
+                setup,
+                setup_tree,
+                vk,
+                vars_hint,
+                wits_hint,
+                (),
+                worker,
+            )
+        },
+        ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            cs.pad_and_shrink_using_hint(finalization_hint);
+            cs.prove_from_precomputations::<EXT, TR, H, POW>(
+                proof_config,
+                setup_base,
+                setup,
+                setup_tree,
+                vk,
+                vars_hint,
+                wits_hint,
+                (),
+                worker,
+            )
+        },
+        ZkSyncBaseLayerCircuit::ECRecover(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            cs.pad_and_shrink_using_hint(finalization_hint);
+            cs.prove_from_precomputations::<EXT, TR, H, POW>(
+                proof_config,
+                setup_base,
+                setup,
+                setup_tree,
+                vk,
+                vars_hint,
+                wits_hint,
+                (),
+                worker,
+            )
+        },
+        ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            cs.pad_and_shrink_using_hint(finalization_hint);
+            cs.prove_from_precomputations::<EXT, TR, H, POW>(
+                proof_config,
+                setup_base,
+                setup,
+                setup_tree,
+                vk,
+                vars_hint,
+                wits_hint,
+                (),
+                worker,
+            )
+        },
+        ZkSyncBaseLayerCircuit::StorageSorter(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            cs.pad_and_shrink_using_hint(finalization_hint);
+            cs.prove_from_precomputations::<EXT, TR, H, POW>(
+                proof_config,
+                setup_base,
+                setup,
+                setup_tree,
+                vk,
+                vars_hint,
+                wits_hint,
+                (),
+                worker,
+            )
+        },
+        ZkSyncBaseLayerCircuit::StorageApplication(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            cs.pad_and_shrink_using_hint(finalization_hint);
+            cs.prove_from_precomputations::<EXT, TR, H, POW>(
+                proof_config,
+                setup_base,
+                setup,
+                setup_tree,
+                vk,
+                vars_hint,
+                wits_hint,
+                (),
+                worker,
+            )
+        },
+        ZkSyncBaseLayerCircuit::EventsSorter(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            cs.pad_and_shrink_using_hint(finalization_hint);
+            cs.prove_from_precomputations::<EXT, TR, H, POW>(
+                proof_config,
+                setup_base,
+                setup,
+                setup_tree,
+                vk,
+                vars_hint,
+                wits_hint,
+                (),
+                worker,
+            )
+        },
+        ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {
+            let builder = inner.configure_builder(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs);
+            cs.pad_and_shrink_using_hint(finalization_hint);
+            cs.prove_from_precomputations::<EXT, TR, H, POW>(
+                proof_config,
+                setup_base,
+                setup,
+                setup_tree,
+                vk,
+                vars_hint,
+                wits_hint,
+                (),
+                worker,
+            )
+        },
+    }
+}
+
+pub fn verify_base_layer_proof<
+    POW: PoWRunner
+>
+(
+    circuit: &ZkSyncBaseLayerCircuit<GoldilocksField, VmWitnessOracle<GoldilocksField>, ZkSyncDefaultRoundFunction>,
+    proof: &Proof<F, H, EXT>,
+    vk: &VerificationKey<F, H>,
+) -> bool {
+    use boojum::cs::implementations::convenience::verify_circuit;
+
+    match circuit {
+        ZkSyncBaseLayerCircuit::MainVM(inner) => {
+            verify_circuit::<F, _, EXT, TR, H, POW>(
+                inner,
+                proof,
+                vk,
+                ()
+            )
+        },
+        ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {
+            verify_circuit::<F, _, EXT, TR, H, POW>(
+                inner,
+                proof,
+                vk,
+                ()
+            )
+        },
+        ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {
+            verify_circuit::<F, _, EXT, TR, H, POW>(
+                inner,
+                proof,
+                vk,
+                ()
+            )
+        },
+        ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {
+            verify_circuit::<F, _, EXT, TR, H, POW>(
+                inner,
+                proof,
+                vk,
+                ()
+            )
+        },
+        ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {
+            verify_circuit::<F, _, EXT, TR, H, POW>(
+                inner,
+                proof,
+                vk,
+                ()
+            )
+        },
+        ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {
+            verify_circuit::<F, _, EXT, TR, H, POW>(
+                inner,
+                proof,
+                vk,
+                ()
+            )
+        },
+        ZkSyncBaseLayerCircuit::ECRecover(inner) => {
+            verify_circuit::<F, _, EXT, TR, H, POW>(
+                inner,
+                proof,
+                vk,
+                ()
+            )
+        },
+        ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {
+            verify_circuit::<F, _, EXT, TR, H, POW>(
+                inner,
+                proof,
+                vk,
+                ()
+            )
+        },
+        ZkSyncBaseLayerCircuit::StorageSorter(inner) => {
+            verify_circuit::<F, _, EXT, TR, H, POW>(
+                inner,
+                proof,
+                vk,
+                ()
+            )
+        },
+        ZkSyncBaseLayerCircuit::StorageApplication(inner) => {
+            verify_circuit::<F, _, EXT, TR, H, POW>(
+                inner,
+                proof,
+                vk,
+                ()
+            )
+        },
+        ZkSyncBaseLayerCircuit::EventsSorter(inner) => {
+            verify_circuit::<F, _, EXT, TR, H, POW>(
+                inner,
+                proof,
+                vk,
+                ()
+            )
+        },
+        ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {
+            verify_circuit::<F, _, EXT, TR, H, POW>(
+                inner,
+                proof,
+                vk,
+                ()
+            )
+        },
+    }
 }

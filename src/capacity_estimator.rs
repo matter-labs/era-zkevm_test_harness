@@ -41,7 +41,7 @@ pub(crate) fn compute_size_inner<
         let join_result = std::thread::spawn(move || {
             use boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
             use boojum::config::SetupCSConfig;
-            use boojum::cs::cs_builder::new_cs_builder;
+            use boojum::cs::cs_builder::new_builder;
         
             type P = GoldilocksField;
         
@@ -50,7 +50,7 @@ pub(crate) fn compute_size_inner<
                 1, // resolver is inactive in this mode
                 1 << max_trace_len_log_2,
             );
-            let builder = new_cs_builder::<_, GoldilocksField>(builder_impl);
+            let builder = new_builder::<_, GoldilocksField>(builder_impl);
     
             let witness = SF::Witness::default();
             let round_function = ZkSyncDefaultRoundFunction::default();
