@@ -11,7 +11,6 @@ use boojum::cs::implementations::prover::ProofConfig;
 use boojum::cs::toolboxes::gate_config::{GatePlacementStrategy, NoGates};
 use boojum::cs::traits::cs::ConstraintSystem;
 use boojum::field::traits::field_like::TrivialContext;
-use boojum::implementations::poseidon_goldilocks::PoseidonGoldilocks;
 use zkevm_circuits::base_structures::vm_state::GlobalContextWitness;
 use zkevm_circuits::main_vm::main_vm_entry_point;
 use zk_evm::abstractions::*;
@@ -255,6 +254,7 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
 
     let flattened = basic_block_circuits.into_flattened_set();
     for el in flattened.into_iter() {
+        println!("Doing {} circuit", el.short_description());
         base_test_circuit(el);
     }
 

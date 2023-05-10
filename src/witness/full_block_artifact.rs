@@ -23,7 +23,7 @@ use zkevm_circuits::demux_log_queue::input::LogDemuxerCircuitInstanceWitness;
 use zkevm_circuits::sha256_round_function::input::Sha256RoundFunctionCircuitInstanceWitness;
 use zkevm_circuits::keccak256_round_function::input::Keccak256RoundFunctionCircuitInstanceWitness;
 use zkevm_circuits::ecrecover::EcrecoverCircuitInstanceWitness;
-use boojum::gadgets::poseidon::BuildableCircuitRoundFunction;
+use boojum::gadgets::traits::round_function::*;
 use zkevm_circuits::ram_permutation::input::RamPermutationCircuitInstanceWitness;
 use zkevm_circuits::code_unpacker_sha256::input::CodeDecommitterCircuitInstanceWitness;
 use zkevm_circuits::sort_decommittment_requests::input::CodeDecommittmentsDeduplicatorInstanceWitness;
@@ -158,7 +158,6 @@ pub struct FullBlockArtifacts<F: SmallField> {
 use crate::witness::tree::*;
 use blake2::Blake2s256;
 use boojum::algebraic_props::round_function::AlgebraicRoundFunction;
-use boojum::gadgets::poseidon::CircuitRoundFunction;
 
 impl<F: SmallField> FullBlockArtifacts<F> {
     pub fn process<

@@ -3,7 +3,7 @@ use boojum::gadgets::traits::witnessable::WitnessHookable;
 use boojum::implementations::poseidon2::Poseidon2Goldilocks;
 use crossbeam::atomic::AtomicCell;
 use boojum::field::SmallField;
-use boojum::gadgets::poseidon::CircuitRoundFunction;
+use boojum::gadgets::traits::round_function::*;
 use boojum::algebraic_props::round_function::AlgebraicRoundFunction;
 use boojum::cs::traits::cs::ConstraintSystem;
 use zkevm_circuits::base_structures::decommit_query::DecommitQuery;
@@ -16,7 +16,6 @@ use boojum::gadgets::u256::UInt256;
 use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
 use boojum::cs::*;
 use boojum::cs::cs_builder::*;
-use boojum::gadgets::poseidon::BuildableCircuitRoundFunction;
 use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord;
 
 pub mod concrete_circuits;

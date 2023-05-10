@@ -279,8 +279,6 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
             finalization_hint
         ) = create_base_layer_setup_data(el.clone(), &worker, BASE_LAYER_FRI_LDE_FACTOR, BASE_LAYER_CAP_SIZE);
 
-        dbg!(&vk);
-
         let proof_config = ProofConfig {
             fri_lde_factor: BASE_LAYER_FRI_LDE_FACTOR,
             merkle_tree_cap_size: BASE_LAYER_CAP_SIZE,
@@ -314,6 +312,12 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         );
 
         assert!(is_valid);
+
+        let mut vk_file = std::fs::File::create("vk.json").unwrap();
+        serde_json::ser::to_writer(&mut vk_file, &vk).unwrap();
+
+        let mut proof_file = std::fs::File::create("proof.json").unwrap();
+        serde_json::ser::to_writer(&mut proof_file, &proof).unwrap();
     }
 
     // for (idx, (el, input_value)) in basic_block_circuits.clone().into_flattened_set().into_iter().zip(basic_block_circuits_inputs.clone().into_flattened_set()).enumerate() {

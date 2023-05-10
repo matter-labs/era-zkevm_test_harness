@@ -23,7 +23,7 @@ use crate::encodings::log_query::LogQueueState;
 use crate::encodings::log_query::LogQueueSimulator;
 use boojum::field::SmallField;
 use boojum::algebraic_props::round_function::AlgebraicRoundFunction;
-use boojum::gadgets::poseidon::CircuitRoundFunction;
+use boojum::gadgets::traits::round_function::*;
 use boojum::gadgets::queue::QueueState;
 use zkevm_circuits::base_structures::vm_state::{QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH};
 
@@ -137,7 +137,6 @@ pub fn transform_queue_witness<
 
 use zk_evm::aux_structures::MemoryQuery;
 use boojum::gadgets::traits::allocatable::*;
-use boojum::gadgets::poseidon::BuildableCircuitRoundFunction;
 use boojum::gadgets::traits::encodable::CircuitVarLengthEncodable;
 use boojum::gadgets::traits::witnessable::WitnessHookable;
 use zkevm_circuits::fsm_input_output::*;

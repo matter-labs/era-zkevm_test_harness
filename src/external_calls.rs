@@ -1,6 +1,6 @@
 use crate::{ethereum_types::{Address, U256}, utils::calldata_to_aligned_data};
 use crate::toolset::GeometryConfig;
-use boojum::{field::{SmallField, goldilocks::GoldilocksField}, implementations::poseidon_goldilocks::PoseidonGoldilocks};
+use boojum::{field::{SmallField, goldilocks::GoldilocksField}};
 use zk_evm::abstractions::Storage;
 use crate::toolset::create_tools;
 use zk_evm::contract_bytecode_to_words;
@@ -19,8 +19,8 @@ use crate::witness::tree::BinarySparseStorageTree;
 use crate::witness::full_block_artifact::BlockBasicCircuitsPublicInputs;
 use ::tracing;
 use boojum::algebraic_props::round_function::AlgebraicRoundFunction;
-use boojum::gadgets::poseidon::CircuitRoundFunction;
 use crate::ZkSyncDefaultRoundFunction;
+use boojum::gadgets::traits::round_function::BuildableCircuitRoundFunction;
 
 pub const SCHEDULER_TIMESTAMP: u32 = 1;
 
@@ -28,7 +28,6 @@ use crate::witness::oracle::VmInstanceWitness;
 use crate::witness::oracle::VmWitnessOracle;
 use crate::witness::full_block_artifact::FullBlockArtifacts;
 use boojum::gadgets::traits::allocatable::*;
-use boojum::gadgets::poseidon::BuildableCircuitRoundFunction;
 
 /// This is a testing interface that basically will
 /// setup the environment and will run out-of-circuit and then in-circuit

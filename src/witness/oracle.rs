@@ -9,7 +9,6 @@ use crate::encodings::memory_query::MemoryQueueSimulator;
 use crate::toolset::GeometryConfig;
 use crate::witness::tracer::{WitnessTracer, QueryMarker};
 use boojum::field::SmallField;
-use boojum::implementations::poseidon_goldilocks::PoseidonGoldilocks;
 use zkevm_circuits::base_structures::vm_state::{QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH, GlobalContextWitness};
 use zkevm_circuits::main_vm::main_vm_entry_point;
 use derivative::Derivative;
@@ -33,10 +32,9 @@ use smallvec::SmallVec;
 use super::utils::*;
 use boojum::gadgets::queue::{QueueState, QueueStateWitness, QueueTailStateWitness};
 use zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
-use boojum::gadgets::poseidon::CircuitRoundFunction;
 use boojum::algebraic_props::round_function::AlgebraicRoundFunction;
+use boojum::gadgets::traits::round_function::*;
 use boojum::gadgets::traits::allocatable::CSAllocatable;
-use boojum::gadgets::poseidon::BuildableCircuitRoundFunction;
 
 use zk_evm::zkevm_opcode_defs::system_params::{
     KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,

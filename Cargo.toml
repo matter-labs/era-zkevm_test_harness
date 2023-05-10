@@ -46,7 +46,8 @@ structopt = "0.3.26"
 codegen = "0.2.0"
 
 [profile.release]
-debug = true
+debug = false
+lto = false
 
 [profile.bench]
-debug = true
+debug = false

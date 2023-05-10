@@ -3,7 +3,7 @@ use boojum::field::SmallField;
 use boojum::gadgets::traits::allocatable::CSAllocatable;
 use derivative::Derivative;
 use boojum::algebraic_props::round_function::{AlgebraicRoundFunction, absorb_multiple_rounds, AbsorbtionModeOverwrite};
-use boojum::gadgets::poseidon::CircuitRoundFunction;
+use boojum::gadgets::traits::round_function::*;
 use zkevm_circuits::base_structures::vm_state::{QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH};
 use boojum::gadgets::u256::decompose_u256_as_u32x8;
 use boojum::gadgets::u160::decompose_address_as_u32x5;
@@ -186,7 +186,7 @@ impl<
 
         let mut state = R::initial_state();
         let states = absorb_multiple_rounds::<F, R, AbsorbtionModeOverwrite, AW, SW, CW, ROUNDS>(&mut state, &to_hash);
-        let new_tail = R::state_into_committment::<T>(&state);
+        let new_tail = <R as AlgebraicRoundFunction<F, AW, SW, CW>>::state_into_committment::<T>(&state);
         self.witness.push_back((encoding, old_tail, element));
 
         let states = make_round_function_pairs(
@@ -231,7 +231,7 @@ impl<
 
         let mut state = R::initial_state();
         let states = absorb_multiple_rounds::<F, R, AbsorbtionModeOverwrite, AW, SW, CW, ROUNDS>(&mut state, &to_hash);
-        let new_head = R::state_into_committment::<T>(&state);
+        let new_head = <R as AlgebraicRoundFunction<F, AW, SW, CW>>::state_into_committment::<T>(&state);
 
         let states = make_round_function_pairs(
             R::initial_state(),

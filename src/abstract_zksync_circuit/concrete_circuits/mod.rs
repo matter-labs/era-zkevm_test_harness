@@ -8,7 +8,6 @@ use zkevm_circuits::tables::*;
 use boojum::gadgets::tables::*;
 use boojum::cs::gates::*;
 use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord;
-use boojum::gadgets::poseidon::BuildableCircuitRoundFunction;
 
 use super::*;
 

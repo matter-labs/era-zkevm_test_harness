@@ -18,7 +18,7 @@ use crossbeam::atomic::AtomicCell;
 pub const L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH: bool = false;
 
 use boojum::algebraic_props::round_function::AlgebraicRoundFunction;
-use boojum::gadgets::poseidon::BuildableCircuitRoundFunction;
+use boojum::gadgets::traits::round_function::*;
 use boojum::field::SmallField;
 use boojum::gadgets::traits::allocatable::CSAllocatableExt;
 
