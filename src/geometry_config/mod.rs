@@ -8,7 +8,7 @@ use crate::toolset::GeometryConfig;
 
 pub const fn get_geometry_config() -> GeometryConfig {
     GeometryConfig {
-        cycles_per_vm_snapshot: 5756,
+        cycles_per_vm_snapshot: 5750,
         cycles_per_log_demuxer: 62576,
         cycles_per_storage_sorter: 25436,
         cycles_per_events_or_l1_messages_sorter: 31287,

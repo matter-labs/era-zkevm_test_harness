@@ -243,17 +243,17 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
 
-        match &el {
-            ZkSyncBaseLayerCircuit::StorageSorter(inner) => {
-                let witness = inner.clone_witness().unwrap();
-                dbg!(&witness.closed_form_input);
-                dbg!(witness.closed_form_input.start_flag);
-                dbg!(witness.closed_form_input.completion_flag);
-            },
-            _ => {
-                continue;
-            }
-        }
+        // match &el {
+        //     ZkSyncBaseLayerCircuit::StorageSorter(inner) => {
+        //         let witness = inner.clone_witness().unwrap();
+        //         dbg!(&witness.closed_form_input);
+        //         dbg!(witness.closed_form_input.start_flag);
+        //         dbg!(witness.closed_form_input.completion_flag);
+        //     },
+        //     _ => {
+        //         continue;
+        //     }
+        // }
 
         base_test_circuit(el);
     }
