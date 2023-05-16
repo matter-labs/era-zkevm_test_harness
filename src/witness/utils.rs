@@ -126,7 +126,7 @@ pub fn transform_queue_witness<
 >(
     witness_iter: impl Iterator<Item = &'a ([F; N], [F; QUEUE_STATE_WIDTH], I)>,
 ) -> CircuitQueueWitness<F, D, QUEUE_STATE_WIDTH, N> {
-    let wit: VecDeque<_> = witness_iter.map(|(enc, old_tail, el)| {
+    let wit: VecDeque<_> = witness_iter.map(|(_enc, old_tail, el)| {
         (el.reflect(), *old_tail)
     }).collect();
 
@@ -254,7 +254,7 @@ pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
     hidden_fsm.callstack.current_context.log_queue_forward_tail = aux_params.storage_log_queue_state.tail.tail;
     // saved part
 
-    let mut ctx = &mut hidden_fsm.callstack.current_context;
+    let ctx = &mut hidden_fsm.callstack.current_context;
     let out_of_circuit_context = &vm_state.callstack.current;
 
     // memory pages
@@ -425,7 +425,7 @@ pub fn produce_fs_challenges<
 >(
     unsorted_tail: QueueTailStateWitness<F, N>,
     sorted_tail: QueueTailStateWitness<F, N>,
-    round_function: &R
+    _round_function: &R
 ) -> [[F; NUM_CHALLENGES]; NUM_REPETITIONS] {
     let mut fs_input = vec![];
     fs_input.extend_from_slice(&unsorted_tail.tail);

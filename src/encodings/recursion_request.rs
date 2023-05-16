@@ -1,30 +1,39 @@
 use super::*;
-use num_bigint::BigUint;
+use zkevm_circuits::base_structures::recursion_query::*;
+use zkevm_circuits::fsm_input_output::circuit_inputs::INPUT_OUTPUT_COMMITMENT_LENGTH;
 
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone, Copy, Debug)]
 #[serde(bound = "")]
 pub struct RecursionRequest<F: SmallField> {
-    pub circuit_type: u8,
-    pub public_input: F,
+    pub circuit_type: F,
+    pub public_input: [F; INPUT_OUTPUT_COMMITMENT_LENGTH],
 }
 
-impl<F: SmallField> OutOfCircuitFixedLengthEncodable<E, 2> for RecursionRequest<E> {
-    fn encoding_witness(&self) -> [<E>::Fr; 2] {
-        let shifts = compute_shifts::<F>();
-
-        let mut lc = F::zero();
-        let mut shift = 0;
-        scale_and_accumulate::<E, _>(&mut lc, self.circuit_type, &shifts, shift);
-        shift += 8;
-        assert!(shift <= F::CAPACITY as usize);
-        let el0 = lc;
-
-        let el1 = self.public_input;
-
-        [el0, el1]
+impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, RECURSION_QUERY_PACKED_WIDTH> for RecursionRequest<F> {
+    fn encoding_witness(&self) -> [F; RECURSION_QUERY_PACKED_WIDTH] {
+        [
+            self.circuit_type,
+            self.public_input[0],
+            self.public_input[1],
+            self.public_input[2],
+            self.public_input[3],
+            F::ZERO,
+            F::ZERO,
+            F::ZERO,
+        ]
     }
 }
 
-pub type RecursionQueueSimulator<E> = QueueSimulator<E, RecursionRequest<E>, 2, 2>;
-pub type RecursionQueueState<E> = QueueIntermediateStates<E, 3, 2>;
+impl<F: SmallField> CircuitEquivalentReflection<F> for RecursionRequest<F> {
+    type Destination = zkevm_circuits::base_structures::recursion_query::RecursionQuery<F>;
+    fn reflect(&self) -> <Self::Destination as CSAllocatable<F>>::Witness {
+        zkevm_circuits::base_structures::recursion_query::RecursionQueryWitness {
+            circuit_type: self.circuit_type,
+            input_commitment: self.public_input,
+        }
+    }
+}
+
+pub type RecursionQueueSimulator<F> = FullWidthQueueSimulator<F, RecursionRequest<F>, RECURSION_QUERY_PACKED_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH, 1>;
+pub type RecursionQueueState<F> = FullWidthQueueIntermediateStates<F, FULL_SPONGE_QUEUE_STATE_WIDTH, 1>;

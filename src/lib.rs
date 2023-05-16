@@ -32,6 +32,7 @@
 #![feature(return_position_impl_trait_in_trait)]
 
 #![allow(unused_imports)]
+#![allow(clippy::drop_ref)]
 
 use boojum::field::goldilocks::GoldilocksField;
 use boojum::implementations::poseidon2::Poseidon2Goldilocks;

@@ -25,7 +25,7 @@ pub mod ram_permutation;
 pub mod storage_sort_dedup;
 pub mod storage_apply;
 pub mod events_sort_dedup;
-// pub mod l1_messages_sort_dedup; // equal to one 
+// pub mod l1_messages_sort_dedup; // equal to one above
 // pub mod l1_messages_merklize;
 // pub mod storage_initial_writes_pubdata_hasher;
 // pub mod storage_repeated_writes_pubdata_hasher;

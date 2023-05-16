@@ -127,8 +127,8 @@ impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, MEMORY_QUERY_PACKED_WIDT
     }
 }
 
-pub type MemoryQueueSimulator<E> = FullWidthQueueSimulator<E, MemoryQuery, 8, FULL_SPONGE_QUEUE_STATE_WIDTH, 1>;
-pub type MemoryQueueState<E> = FullWidthQueueIntermediateStates<E, FULL_SPONGE_QUEUE_STATE_WIDTH, 1>;
+pub type MemoryQueueSimulator<F> = FullWidthQueueSimulator<F, MemoryQuery, MEMORY_QUERY_PACKED_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH, 1>;
+pub type MemoryQueueState<F> = FullWidthQueueIntermediateStates<F, FULL_SPONGE_QUEUE_STATE_WIDTH, 1>;
 
 impl<F: SmallField> CircuitEquivalentReflection<F> for MemoryQuery {
     type Destination = zkevm_circuits::base_structures::memory_query::MemoryQuery<F>;

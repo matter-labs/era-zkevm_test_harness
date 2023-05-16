@@ -127,6 +127,8 @@ pub fn sort_storage_access_queries<L: LogQueryLike>(unsorted_storage_queries: &[
             break;
         }
 
+        // need it to remove "peek"'s mutable borrow
+        #[allow(suspicious_double_ref_op)]
         let candidate = it.peek().unwrap().clone();
 
         let subit = it.clone().take_while(|el| {
