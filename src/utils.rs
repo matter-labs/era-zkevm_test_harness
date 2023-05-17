@@ -172,35 +172,14 @@ pub fn create_base_layer_setup_data(
     );
     let builder = new_builder::<_, GoldilocksField>(builder_impl);
 
-    match circuit {
+    let (mut cs, finalization_hint) = match circuit {
         ZkSyncBaseLayerCircuit::MainVM(inner) => {
             let builder = inner.configure_builder(builder);
             let mut cs = builder.build(());
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             let (_, finalization_hint) = cs.pad_and_shrink();
-            let (            
-                setup_base,
-                setup,
-                vk,
-                setup_tree,
-                vars_hint,
-                witness_hints
-            ) = cs.get_full_setup(
-                worker,
-                fri_lde_factor,
-                merkle_tree_cap_size,
-            );
-
-            (
-                setup_base,
-                setup,
-                vk,
-                setup_tree,
-                vars_hint,
-                witness_hints,
-                finalization_hint
-            )
+            (cs.into_assembly(), finalization_hint)
         },
         ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {
             let builder = inner.configure_builder(builder);
@@ -208,28 +187,7 @@ pub fn create_base_layer_setup_data(
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             let (_, finalization_hint) = cs.pad_and_shrink();
-            let (            
-                setup_base,
-                setup,
-                vk,
-                setup_tree,
-                vars_hint,
-                witness_hints
-            ) = cs.get_full_setup(
-                worker,
-                fri_lde_factor,
-                merkle_tree_cap_size,
-            );
-
-            (
-                setup_base,
-                setup,
-                vk,
-                setup_tree,
-                vars_hint,
-                witness_hints,
-                finalization_hint
-            )
+            (cs.into_assembly(), finalization_hint)
         },
         ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {
             let builder = inner.configure_builder(builder);
@@ -237,28 +195,7 @@ pub fn create_base_layer_setup_data(
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             let (_, finalization_hint) = cs.pad_and_shrink();
-            let (            
-                setup_base,
-                setup,
-                vk,
-                setup_tree,
-                vars_hint,
-                witness_hints
-            ) = cs.get_full_setup(
-                worker,
-                fri_lde_factor,
-                merkle_tree_cap_size,
-            );
-
-            (
-                setup_base,
-                setup,
-                vk,
-                setup_tree,
-                vars_hint,
-                witness_hints,
-                finalization_hint
-            )
+            (cs.into_assembly(), finalization_hint)
         },
         ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {
             let builder = inner.configure_builder(builder);
@@ -266,28 +203,7 @@ pub fn create_base_layer_setup_data(
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             let (_, finalization_hint) = cs.pad_and_shrink();
-            let (            
-                setup_base,
-                setup,
-                vk,
-                setup_tree,
-                vars_hint,
-                witness_hints
-            ) = cs.get_full_setup(
-                worker,
-                fri_lde_factor,
-                merkle_tree_cap_size,
-            );
-
-            (
-                setup_base,
-                setup,
-                vk,
-                setup_tree,
-                vars_hint,
-                witness_hints,
-                finalization_hint
-            )
+            (cs.into_assembly(), finalization_hint)
         },
         ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {
             let builder = inner.configure_builder(builder);
@@ -295,28 +211,7 @@ pub fn create_base_layer_setup_data(
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             let (_, finalization_hint) = cs.pad_and_shrink();
-            let (            
-                setup_base,
-                setup,
-                vk,
-                setup_tree,
-                vars_hint,
-                witness_hints
-            ) = cs.get_full_setup(
-                worker,
-                fri_lde_factor,
-                merkle_tree_cap_size,
-            );
-
-            (
-                setup_base,
-                setup,
-                vk,
-                setup_tree,
-                vars_hint,
-                witness_hints,
-                finalization_hint
-            )
+            (cs.into_assembly(), finalization_hint)
         },
         ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {
             let builder = inner.configure_builder(builder);
@@ -324,28 +219,7 @@ pub fn create_base_layer_setup_data(
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             let (_, finalization_hint) = cs.pad_and_shrink();
-            let (            
-                setup_base,
-                setup,
-                vk,
-                setup_tree,
-                vars_hint,
-                witness_hints
-            ) = cs.get_full_setup(
-                worker,
-                fri_lde_factor,
-                merkle_tree_cap_size,
-            );
-
-            (
-                setup_base,
-                setup,
-                vk,
-                setup_tree,
-                vars_hint,
-                witness_hints,
-                finalization_hint
-            )
+            (cs.into_assembly(), finalization_hint)
         },
         ZkSyncBaseLayerCircuit::ECRecover(inner) => {
             let builder = inner.configure_builder(builder);
@@ -353,28 +227,7 @@ pub fn create_base_layer_setup_data(
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             let (_, finalization_hint) = cs.pad_and_shrink();
-            let (            
-                setup_base,
-                setup,
-                vk,
-                setup_tree,
-                vars_hint,
-                witness_hints
-            ) = cs.get_full_setup(
-                worker,
-                fri_lde_factor,
-                merkle_tree_cap_size,
-            );
-
-            (
-                setup_base,
-                setup,
-                vk,
-                setup_tree,
-                vars_hint,
-                witness_hints,
-                finalization_hint
-            )
+            (cs.into_assembly(), finalization_hint)
         },
         ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {
             let builder = inner.configure_builder(builder);
@@ -382,28 +235,7 @@ pub fn create_base_layer_setup_data(
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             let (_, finalization_hint) = cs.pad_and_shrink();
-            let (            
-                setup_base,
-                setup,
-                vk,
-                setup_tree,
-                vars_hint,
-                witness_hints
-            ) = cs.get_full_setup(
-                worker,
-                fri_lde_factor,
-                merkle_tree_cap_size,
-            );
-
-            (
-                setup_base,
-                setup,
-                vk,
-                setup_tree,
-                vars_hint,
-                witness_hints,
-                finalization_hint
-            )
+            (cs.into_assembly(), finalization_hint)
         },
         ZkSyncBaseLayerCircuit::StorageSorter(inner) => {
             let builder = inner.configure_builder(builder);
@@ -411,28 +243,7 @@ pub fn create_base_layer_setup_data(
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             let (_, finalization_hint) = cs.pad_and_shrink();
-            let (            
-                setup_base,
-                setup,
-                vk,
-                setup_tree,
-                vars_hint,
-                witness_hints
-            ) = cs.get_full_setup(
-                worker,
-                fri_lde_factor,
-                merkle_tree_cap_size,
-            );
-
-            (
-                setup_base,
-                setup,
-                vk,
-                setup_tree,
-                vars_hint,
-                witness_hints,
-                finalization_hint
-            )
+            (cs.into_assembly(), finalization_hint)
         },
         ZkSyncBaseLayerCircuit::StorageApplication(inner) => {
             let builder = inner.configure_builder(builder);
@@ -440,28 +251,7 @@ pub fn create_base_layer_setup_data(
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             let (_, finalization_hint) = cs.pad_and_shrink();
-            let (            
-                setup_base,
-                setup,
-                vk,
-                setup_tree,
-                vars_hint,
-                witness_hints
-            ) = cs.get_full_setup(
-                worker,
-                fri_lde_factor,
-                merkle_tree_cap_size,
-            );
-
-            (
-                setup_base,
-                setup,
-                vk,
-                setup_tree,
-                vars_hint,
-                witness_hints,
-                finalization_hint
-            )
+            (cs.into_assembly(), finalization_hint)
         },
         ZkSyncBaseLayerCircuit::EventsSorter(inner) => {
             let builder = inner.configure_builder(builder);
@@ -469,28 +259,7 @@ pub fn create_base_layer_setup_data(
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             let (_, finalization_hint) = cs.pad_and_shrink();
-            let (            
-                setup_base,
-                setup,
-                vk,
-                setup_tree,
-                vars_hint,
-                witness_hints
-            ) = cs.get_full_setup(
-                worker,
-                fri_lde_factor,
-                merkle_tree_cap_size,
-            );
-
-            (
-                setup_base,
-                setup,
-                vk,
-                setup_tree,
-                vars_hint,
-                witness_hints,
-                finalization_hint
-            )
+            (cs.into_assembly(), finalization_hint)
         },
         ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {
             let builder = inner.configure_builder(builder);
@@ -498,30 +267,32 @@ pub fn create_base_layer_setup_data(
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             let (_, finalization_hint) = cs.pad_and_shrink();
-            let (            
-                setup_base,
-                setup,
-                vk,
-                setup_tree,
-                vars_hint,
-                witness_hints
-            ) = cs.get_full_setup(
-                worker,
-                fri_lde_factor,
-                merkle_tree_cap_size,
-            );
-
-            (
-                setup_base,
-                setup,
-                vk,
-                setup_tree,
-                vars_hint,
-                witness_hints,
-                finalization_hint
-            )
+            (cs.into_assembly(), finalization_hint)
         },
-    }
+    };
+
+    let (            
+        setup_base,
+        setup,
+        vk,
+        setup_tree,
+        vars_hint,
+        witness_hints
+    ) = cs.get_full_setup(
+        worker,
+        fri_lde_factor,
+        merkle_tree_cap_size,
+    );
+
+    (
+        setup_base,
+        setup,
+        vk,
+        setup_tree,
+        vars_hint,
+        witness_hints,
+        finalization_hint
+    )
 }
 
 use boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
@@ -562,24 +333,14 @@ pub fn prove_base_layer_circuit<
     );
     let builder = new_builder::<_, GoldilocksField>(builder_impl);
 
-    match circuit {
+    let mut cs = match circuit {
         ZkSyncBaseLayerCircuit::MainVM(inner) => {
             let builder = inner.configure_builder(builder);
             let mut cs = builder.build(());
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             cs.pad_and_shrink_using_hint(finalization_hint);
-            cs.prove_from_precomputations::<EXT, TR, H, POW>(
-                proof_config,
-                setup_base,
-                setup,
-                setup_tree,
-                vk,
-                vars_hint,
-                wits_hint,
-                (),
-                worker,
-            )
+            cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {
             let builder = inner.configure_builder(builder);
@@ -587,17 +348,7 @@ pub fn prove_base_layer_circuit<
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             cs.pad_and_shrink_using_hint(finalization_hint);
-            cs.prove_from_precomputations::<EXT, TR, H, POW>(
-                proof_config,
-                setup_base,
-                setup,
-                setup_tree,
-                vk,
-                vars_hint,
-                wits_hint,
-                (),
-                worker,
-            )
+            cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {
             let builder = inner.configure_builder(builder);
@@ -605,17 +356,7 @@ pub fn prove_base_layer_circuit<
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             cs.pad_and_shrink_using_hint(finalization_hint);
-            cs.prove_from_precomputations::<EXT, TR, H, POW>(
-                proof_config,
-                setup_base,
-                setup,
-                setup_tree,
-                vk,
-                vars_hint,
-                wits_hint,
-                (),
-                worker,
-            )
+            cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {
             let builder = inner.configure_builder(builder);
@@ -623,17 +364,7 @@ pub fn prove_base_layer_circuit<
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             cs.pad_and_shrink_using_hint(finalization_hint);
-            cs.prove_from_precomputations::<EXT, TR, H, POW>(
-                proof_config,
-                setup_base,
-                setup,
-                setup_tree,
-                vk,
-                vars_hint,
-                wits_hint,
-                (),
-                worker,
-            )
+            cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {
             let builder = inner.configure_builder(builder);
@@ -641,17 +372,7 @@ pub fn prove_base_layer_circuit<
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             cs.pad_and_shrink_using_hint(finalization_hint);
-            cs.prove_from_precomputations::<EXT, TR, H, POW>(
-                proof_config,
-                setup_base,
-                setup,
-                setup_tree,
-                vk,
-                vars_hint,
-                wits_hint,
-                (),
-                worker,
-            )
+            cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {
             let builder = inner.configure_builder(builder);
@@ -659,17 +380,7 @@ pub fn prove_base_layer_circuit<
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             cs.pad_and_shrink_using_hint(finalization_hint);
-            cs.prove_from_precomputations::<EXT, TR, H, POW>(
-                proof_config,
-                setup_base,
-                setup,
-                setup_tree,
-                vk,
-                vars_hint,
-                wits_hint,
-                (),
-                worker,
-            )
+            cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::ECRecover(inner) => {
             let builder = inner.configure_builder(builder);
@@ -677,17 +388,7 @@ pub fn prove_base_layer_circuit<
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             cs.pad_and_shrink_using_hint(finalization_hint);
-            cs.prove_from_precomputations::<EXT, TR, H, POW>(
-                proof_config,
-                setup_base,
-                setup,
-                setup_tree,
-                vk,
-                vars_hint,
-                wits_hint,
-                (),
-                worker,
-            )
+            cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {
             let builder = inner.configure_builder(builder);
@@ -695,17 +396,7 @@ pub fn prove_base_layer_circuit<
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             cs.pad_and_shrink_using_hint(finalization_hint);
-            cs.prove_from_precomputations::<EXT, TR, H, POW>(
-                proof_config,
-                setup_base,
-                setup,
-                setup_tree,
-                vk,
-                vars_hint,
-                wits_hint,
-                (),
-                worker,
-            )
+            cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::StorageSorter(inner) => {
             let builder = inner.configure_builder(builder);
@@ -713,17 +404,7 @@ pub fn prove_base_layer_circuit<
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             cs.pad_and_shrink_using_hint(finalization_hint);
-            cs.prove_from_precomputations::<EXT, TR, H, POW>(
-                proof_config,
-                setup_base,
-                setup,
-                setup_tree,
-                vk,
-                vars_hint,
-                wits_hint,
-                (),
-                worker,
-            )
+            cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::StorageApplication(inner) => {
             let builder = inner.configure_builder(builder);
@@ -731,17 +412,7 @@ pub fn prove_base_layer_circuit<
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             cs.pad_and_shrink_using_hint(finalization_hint);
-            cs.prove_from_precomputations::<EXT, TR, H, POW>(
-                proof_config,
-                setup_base,
-                setup,
-                setup_tree,
-                vk,
-                vars_hint,
-                wits_hint,
-                (),
-                worker,
-            )
+            cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::EventsSorter(inner) => {
             let builder = inner.configure_builder(builder);
@@ -749,17 +420,7 @@ pub fn prove_base_layer_circuit<
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             cs.pad_and_shrink_using_hint(finalization_hint);
-            cs.prove_from_precomputations::<EXT, TR, H, POW>(
-                proof_config,
-                setup_base,
-                setup,
-                setup_tree,
-                vk,
-                vars_hint,
-                wits_hint,
-                (),
-                worker,
-            )
+            cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {
             let builder = inner.configure_builder(builder);
@@ -767,19 +428,22 @@ pub fn prove_base_layer_circuit<
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             cs.pad_and_shrink_using_hint(finalization_hint);
-            cs.prove_from_precomputations::<EXT, TR, H, POW>(
-                proof_config,
-                setup_base,
-                setup,
-                setup_tree,
-                vk,
-                vars_hint,
-                wits_hint,
-                (),
-                worker,
-            )
+            cs.into_assembly()
         },
-    }
+    };
+
+    cs.prove_from_precomputations::<EXT, TR, H, POW>(
+        proof_config,
+        setup_base,
+        setup,
+        setup_tree,
+        vk,
+        vars_hint,
+        wits_hint,
+        (),
+        worker,
+    )
+
 }
 
 pub fn verify_base_layer_proof<

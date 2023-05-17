@@ -98,15 +98,14 @@ pub(crate) fn base_test_circuit(
     );
     let builder = new_builder::<_, GoldilocksField>(builder_impl);
 
-    match circuit {
+    let mut cs = match circuit {
         ZkSyncBaseLayerCircuit::MainVM(inner) => {
             let builder = inner.configure_builder(builder);
             let mut cs = builder.build(());
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             let _ = cs.pad_and_shrink();
-            let is_satisfied = cs.check_if_satisfied(&worker);
-            assert!(is_satisfied);
+            cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {
             let builder = inner.configure_builder(builder);
@@ -114,8 +113,7 @@ pub(crate) fn base_test_circuit(
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             let _ = cs.pad_and_shrink();
-            let is_satisfied = cs.check_if_satisfied(&worker);
-            assert!(is_satisfied);
+            cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {
             let builder = inner.configure_builder(builder);
@@ -123,8 +121,7 @@ pub(crate) fn base_test_circuit(
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             let _ = cs.pad_and_shrink();
-            let is_satisfied = cs.check_if_satisfied(&worker);
-            assert!(is_satisfied);
+            cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {
             let builder = inner.configure_builder(builder);
@@ -132,8 +129,7 @@ pub(crate) fn base_test_circuit(
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             let _ = cs.pad_and_shrink();
-            let is_satisfied = cs.check_if_satisfied(&worker);
-            assert!(is_satisfied);
+            cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {
             let builder = inner.configure_builder(builder);
@@ -141,8 +137,7 @@ pub(crate) fn base_test_circuit(
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             let _ = cs.pad_and_shrink();
-            let is_satisfied = cs.check_if_satisfied(&worker);
-            assert!(is_satisfied);
+            cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {
             let builder = inner.configure_builder(builder);
@@ -150,8 +145,7 @@ pub(crate) fn base_test_circuit(
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             let _ = cs.pad_and_shrink();
-            let is_satisfied = cs.check_if_satisfied(&worker);
-            assert!(is_satisfied);
+            cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::ECRecover(inner) => {
             let builder = inner.configure_builder(builder);
@@ -159,8 +153,7 @@ pub(crate) fn base_test_circuit(
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             let _ = cs.pad_and_shrink();
-            let is_satisfied = cs.check_if_satisfied(&worker);
-            assert!(is_satisfied);
+            cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {
             let builder = inner.configure_builder(builder);
@@ -168,8 +161,7 @@ pub(crate) fn base_test_circuit(
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             let _ = cs.pad_and_shrink();
-            let is_satisfied = cs.check_if_satisfied(&worker);
-            assert!(is_satisfied);
+            cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::StorageSorter(inner) => {
             let builder = inner.configure_builder(builder);
@@ -177,8 +169,7 @@ pub(crate) fn base_test_circuit(
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             let _ = cs.pad_and_shrink();
-            let is_satisfied = cs.check_if_satisfied(&worker);
-            assert!(is_satisfied);
+            cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::StorageApplication(inner) => {
             let builder = inner.configure_builder(builder);
@@ -186,8 +177,7 @@ pub(crate) fn base_test_circuit(
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             let _ = cs.pad_and_shrink();
-            let is_satisfied = cs.check_if_satisfied(&worker);
-            assert!(is_satisfied);
+            cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::EventsSorter(inner) => {
             let builder = inner.configure_builder(builder);
@@ -195,8 +185,7 @@ pub(crate) fn base_test_circuit(
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             let _ = cs.pad_and_shrink();
-            let is_satisfied = cs.check_if_satisfied(&worker);
-            assert!(is_satisfied);
+            cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {
             let builder = inner.configure_builder(builder);
@@ -204,8 +193,10 @@ pub(crate) fn base_test_circuit(
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs);
             let _ = cs.pad_and_shrink();
-            let is_satisfied = cs.check_if_satisfied(&worker);
-            assert!(is_satisfied);
+            cs.into_assembly()
         },
-    }
+    };
+
+    let is_satisfied = cs.check_if_satisfied(&worker);
+    assert!(is_satisfied);
 }

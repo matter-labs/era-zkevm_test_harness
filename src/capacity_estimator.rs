@@ -61,12 +61,12 @@ pub(crate) fn compute_size_inner<
             SF::add_tables(&mut cs);
             let _ = SF::synthesize_into_cs_inner(&mut cs, witness, &round_function, config);
 
+            let (max_trace_len, _) = cs.pad_and_shrink();
+            let cs = cs.into_assembly();
+
             cs.print_gate_stats();
 
-            let (max_trace_len, _) = cs.pad_and_shrink();
-
             max_trace_len
-        
         }).join();
 
         match join_result {
