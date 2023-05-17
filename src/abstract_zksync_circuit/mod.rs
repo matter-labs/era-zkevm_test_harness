@@ -29,6 +29,8 @@ pub trait ZkSyncUniformSynthesisFunction<F: SmallField>: Clone + serde::Serializ
 
     fn geometry() -> CSGeometry;
 
+    fn lookup_parameters() -> LookupParameters;
+
     fn size_hint() -> (Option<usize>, Option<usize>) {
         (Some(1 << 20), Some(1 << 26))
     }
@@ -151,7 +153,25 @@ impl<
     }
 }
 
-use boojum::cs::traits::circuit::Circuit;
+use boojum::cs::traits::circuit::{Circuit, CircuitBuilder};
+
+impl<
+    F: SmallField,
+    S: ZkSyncUniformSynthesisFunction<F>,
+> CircuitBuilder<F> for ZkSyncUniformCircuitCircuitInstance<F, S> 
+{
+    fn geometry() -> CSGeometry {
+        S::geometry()
+    }
+    fn lookup_parameters() -> LookupParameters {
+        S::lookup_parameters()
+    }
+    fn configure_builder<T: CsBuilderImpl<F, T>, GC: GateConfigurationHolder<F>, TB: StaticToolboxHolder>(
+        builder: CsBuilder<T, F, GC, TB>
+    ) -> CsBuilder<T, F, impl GateConfigurationHolder<F>, impl StaticToolboxHolder> {
+        S::configure_builder(builder)
+    }
+}
 
 impl<
     F: SmallField,
@@ -171,6 +191,10 @@ impl<
 
     fn geometry(&self) -> CSGeometry {
         S::geometry()
+    }
+
+    fn lookup_parameters(&self) -> LookupParameters {
+        S::lookup_parameters()
     }
 
     fn size_hint(&self) -> (Option<usize>, Option<usize>) {

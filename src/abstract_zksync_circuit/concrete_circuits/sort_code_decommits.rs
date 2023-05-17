@@ -41,6 +41,14 @@ where [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
             max_allowed_constraint_degree: 8,
         }
     }
+
+    fn lookup_parameters() -> LookupParameters {
+        LookupParameters::UseSpecializedColumnsWithTableIdAsConstant { 
+            width: 1, 
+            num_repetitions: 8, 
+            share_table_id: true 
+        }
+    }
     
     fn size_hint() -> (Option<usize>, Option<usize>) {
         (
@@ -52,9 +60,7 @@ where [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     fn configure_builder<T: CsBuilderImpl<F, T>, GC: GateConfigurationHolder<F>, TB: StaticToolboxHolder>(
         builder: CsBuilder<T, F, GC, TB>
     ) -> CsBuilder<T, F, impl GateConfigurationHolder<F>, impl StaticToolboxHolder> {
-        let builder = builder.allow_lookup(
-            boojum::cs::LookupParameters::UseSpecializedColumnsWithTableIdAsConstant { width: 1, num_repetitions: 8, share_table_id: true }
-        );
+        let builder = builder.allow_lookup(Self::lookup_parameters());
 
         let builder = ConstantsAllocatorGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
         let builder = BooleanConstraintGate::configure_builder(builder, GatePlacementStrategy::UseSpecializedColumns { num_repetitions: 1, share_constants: false });
