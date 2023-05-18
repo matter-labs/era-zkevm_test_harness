@@ -8,6 +8,7 @@ use crate::ethereum_types::U256;
 use crate::toolset::GeometryConfig;
 use derivative::Derivative;
 use rayon::slice::ParallelSliceMut;
+use zkevm_circuits::scheduler::aux::NUM_CIRCUIT_TYPES_TO_SCHEDULE;
 use std::cmp::Ordering;
 use zk_evm::aux_structures::DecommittmentQuery;
 use zk_evm::aux_structures::LogQuery;
@@ -139,9 +140,6 @@ pub struct FullBlockArtifacts<F: SmallField> {
     pub storage_deduplicator_circuit_data: Vec<StorageDeduplicatorInstanceWitness<F>>,
     pub events_deduplicator_circuit_data: Vec<EventsDeduplicatorInstanceWitness<F>>,
     pub l1_messages_deduplicator_circuit_data: Vec<EventsDeduplicatorInstanceWitness<F>>,
-    // //
-    // pub initial_writes_pubdata_hasher_circuit_data: Vec<PubdataHasherInstanceWitness<E, 3, 64, InitialStorageWriteData<F>>>,
-    // pub repeated_writes_pubdata_hasher_circuit_data: Vec<PubdataHasherInstanceWitness<E, 2, 40, RepeatedStorageWriteData<F>>>,
     //
     pub rollup_storage_application_circuit_data: Vec<StorageApplicationCircuitInstanceWitness<F>>,
     // 
@@ -370,21 +368,6 @@ impl<F: SmallField> FullBlockArtifacts<F> {
 
         // process the storage application
 
-        // // we can quickly determine states witness
-
-        // use crate::witness::individual_circuits::get_storage_application_pubdata::compute_storage_application_pubdata_queues;
-
-        // let (initial, repeated) = compute_storage_application_pubdata_queues(
-        //     self,
-        //     tree,
-        //     round_function,
-        //     geometry.limit_for_initial_writes_pubdata_hasher as usize,
-        //     geometry.limit_for_repeated_writes_pubdata_hasher as usize,
-        // );
-
-        // self.initial_writes_pubdata_hasher_circuit_data = vec![initial];
-        // self.repeated_writes_pubdata_hasher_circuit_data = vec![repeated];
-
         // and do the actual storage application
         use crate::witness::individual_circuits::storage_application::decompose_into_storage_application_witnesses;
 
@@ -442,10 +425,6 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
     pub storage_sorter_circuits: Vec<StorageSorterCircuit<F, R>>,
     // apply them
     pub storage_application_circuits: Vec<StorageApplicationCircuit<F, R>>,
-    // // rehash initial writes
-    // pub initial_writes_hasher_circuit: InitialStorageWritesPubdataHasherCircuit<F>,
-    // // rehash repeated writes
-    // pub repeated_writes_hasher_circuit: RepeatedStorageWritesPubdataHasherCircuit<F>,
     // sort and dedup events
     pub events_sorter_circuits: Vec<EventsSorterCircuit<F, R>>,
     // sort and dedup L1 messages
@@ -480,8 +459,6 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
             ram_permutation_circuits, 
             storage_sorter_circuits, 
             storage_application_circuits, 
-            // initial_writes_hasher_circuit, 
-            // repeated_writes_hasher_circuit, 
             events_sorter_circuits, 
             l1_messages_sorter_circuits, 
             // l1_messages_pubdata_hasher_circuit,
@@ -506,9 +483,6 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
         result.extend(storage_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuit::StorageSorter(el)));
 
         result.extend(storage_application_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuit::StorageApplication(el)));
-
-        // result.push(ZkSyncBaseLayerCircuit::InitialWritesPubdataHasher(initial_writes_hasher_circuit));
-        // result.push(ZkSyncBaseLayerCircuit::RepeatedWritesPubdataHasher(repeated_writes_hasher_circuit));
 
         result.extend(events_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuit::EventsSorter(el)));
         
@@ -549,10 +523,6 @@ pub struct BlockBasicCircuitsPublicInputs<F: SmallField> {
     pub storage_sorter_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
     // apply them
     pub storage_application_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
-    // // rehash initial writes
-    // pub initial_writes_hasher_circuit: F,
-    // // rehash repeated writes
-    // pub repeated_writes_hasher_circuit: F,
     // sort and dedup events
     pub events_sorter_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
     // sort and dedup L1 messages
@@ -563,8 +533,10 @@ pub struct BlockBasicCircuitsPublicInputs<F: SmallField> {
     // pub l1_messages_merklizer_circuit: F,
 }
 
+use crate::encodings::recursion_request::*;
+
 impl<F: SmallField> BlockBasicCircuitsPublicInputs<F> {
-    pub fn into_flattened_set(self) -> Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]> {
+    pub fn into_flattened_set(self) -> Vec<ZkSyncBaseLayerCircuitInput<F>> {
         let BlockBasicCircuitsPublicInputs { 
             main_vm_circuits, 
             code_decommittments_sorter_circuits, 
@@ -576,8 +548,6 @@ impl<F: SmallField> BlockBasicCircuitsPublicInputs<F> {
             ram_permutation_circuits, 
             storage_sorter_circuits, 
             storage_application_circuits, 
-            // initial_writes_hasher_circuit, 
-            // repeated_writes_hasher_circuit, 
             events_sorter_circuits, 
             l1_messages_sorter_circuits, 
             // l1_messages_pubdata_hasher_circuit,
@@ -585,34 +555,67 @@ impl<F: SmallField> BlockBasicCircuitsPublicInputs<F> {
         } = self;
 
         let mut result = vec![];
-        result.extend(main_vm_circuits);
+        result.extend(main_vm_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuitInput::MainVM(el)));
 
-        result.extend(code_decommittments_sorter_circuits);
+        result.extend(code_decommittments_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuitInput::CodeDecommittmentsSorter(el)));
 
-        result.extend(code_decommitter_circuits);
+        result.extend(code_decommitter_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuitInput::CodeDecommitter(el)));
 
-        result.extend(log_demux_circuits);
+        result.extend(log_demux_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuitInput::LogDemuxer(el)));
 
-        result.extend(keccak_precompile_circuits);
-        result.extend(sha256_precompile_circuits);
-        result.extend(ecrecover_precompile_circuits);
+        result.extend(keccak_precompile_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuitInput::KeccakRoundFunction(el)));
+        result.extend(sha256_precompile_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuitInput::Sha256RoundFunction(el)));
+        result.extend(ecrecover_precompile_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuitInput::ECRecover(el)));
 
-        result.extend(ram_permutation_circuits);
+        result.extend(ram_permutation_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuitInput::RAMPermutation(el)));
 
-        result.extend(storage_sorter_circuits);
+        result.extend(storage_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuitInput::StorageSorter(el)));
 
-        result.extend(storage_application_circuits);
+        result.extend(storage_application_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuitInput::StorageApplication(el)));
 
-        // result.push(initial_writes_hasher_circuit);
-        // result.push(repeated_writes_hasher_circuit);
-
-        result.extend(events_sorter_circuits);
-        result.extend(l1_messages_sorter_circuits);
+        result.extend(events_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuitInput::EventsSorter(el)));
+        result.extend(l1_messages_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuitInput::L1MessagesSorter(el)));
 
         // result.push(l1_messages_pubdata_hasher_circuit);
         // result.push(l1_messages_merklizer_circuit);
 
         result
+    }
+
+    pub fn into_recursion_queues<
+        R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+    >(
+        self,
+        closed_forms_wits: BlockBasicCircuitsPublicCompactFormsWitnesses<F>,
+        round_function: &R,
+    ) -> [(u64, RecursionQueueSimulator<F>, Vec<ZkSyncBaseLayerClosedFormInput<F>>); NUM_CIRCUIT_TYPES_TO_SCHEDULE] {
+        let mut simulators = vec![(0u64, RecursionQueueSimulator::empty(), vec![]); NUM_CIRCUIT_TYPES_TO_SCHEDULE];
+        let flattened_set = self.into_flattened_set();
+        let wits_set = closed_forms_wits.into_flattened_set();
+        assert_eq!(flattened_set.len(), wits_set.len());
+
+        for (el, inp) in flattened_set.into_iter().zip(wits_set.into_iter()) {
+            let circuit_number = el.numeric_circuit_type();
+            assert_eq!(circuit_number, inp.numeric_circuit_type());
+            let idx = (circuit_number as usize) - 1;
+            let (id, dst_queue, dst_for_inputs) = &mut simulators[idx];
+            if *id == 0 {
+                assert_eq!(*id, circuit_number as u64);
+            } else {
+                *id = circuit_number as u64;
+            }
+
+            let recursive_request = RecursionRequest {
+                circuit_type: F::from_u64_unchecked(circuit_number as u64),
+                public_input: el.into_inner(),
+            };
+
+            let _ = dst_queue.push(recursive_request, round_function);
+
+            dst_for_inputs.push(inp);
+        }
+
+        simulators.try_into().expect("length must match")
     }
 }
 
@@ -643,10 +646,6 @@ pub struct BlockBasicCircuitsPublicCompactFormsWitnesses<F: SmallField> {
     pub storage_sorter_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
     // apply them
     pub storage_application_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
-    // // rehash initial writes
-    // pub initial_writes_hasher_circuit: ClosedFormInputCompactFormWitness<F>,
-    // // rehash repeated writes
-    // pub repeated_writes_hasher_circuit: ClosedFormInputCompactFormWitness<F>,
     // sort and dedup events
     pub events_sorter_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
     // sort and dedup L1 messages
@@ -658,7 +657,7 @@ pub struct BlockBasicCircuitsPublicCompactFormsWitnesses<F: SmallField> {
 }
 
 impl<F: SmallField> BlockBasicCircuitsPublicCompactFormsWitnesses<F> {
-    pub fn into_flattened_set(self) -> Vec<ClosedFormInputCompactFormWitness<F>> {
+    pub fn into_flattened_set(self) -> Vec<ZkSyncBaseLayerClosedFormInput<F>> {
         let BlockBasicCircuitsPublicCompactFormsWitnesses { 
             main_vm_circuits, 
             code_decommittments_sorter_circuits, 
@@ -670,8 +669,6 @@ impl<F: SmallField> BlockBasicCircuitsPublicCompactFormsWitnesses<F> {
             ram_permutation_circuits, 
             storage_sorter_circuits, 
             storage_application_circuits, 
-            // initial_writes_hasher_circuit, 
-            // repeated_writes_hasher_circuit, 
             events_sorter_circuits, 
             l1_messages_sorter_circuits, 
             // l1_messages_pubdata_hasher_circuit,
@@ -679,29 +676,26 @@ impl<F: SmallField> BlockBasicCircuitsPublicCompactFormsWitnesses<F> {
         } = self;
 
         let mut result = vec![];
-        result.extend(main_vm_circuits);
+        result.extend(main_vm_circuits.into_iter().map(|el| ZkSyncBaseLayerClosedFormInput::MainVM(el)));
 
-        result.extend(code_decommittments_sorter_circuits);
+        result.extend(code_decommittments_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerClosedFormInput::CodeDecommittmentsSorter(el)));
 
-        result.extend(code_decommitter_circuits);
+        result.extend(code_decommitter_circuits.into_iter().map(|el| ZkSyncBaseLayerClosedFormInput::CodeDecommitter(el)));
 
-        result.extend(log_demux_circuits);
+        result.extend(log_demux_circuits.into_iter().map(|el| ZkSyncBaseLayerClosedFormInput::LogDemuxer(el)));
 
-        result.extend(keccak_precompile_circuits);
-        result.extend(sha256_precompile_circuits);
-        result.extend(ecrecover_precompile_circuits);
+        result.extend(keccak_precompile_circuits.into_iter().map(|el| ZkSyncBaseLayerClosedFormInput::KeccakRoundFunction(el)));
+        result.extend(sha256_precompile_circuits.into_iter().map(|el| ZkSyncBaseLayerClosedFormInput::Sha256RoundFunction(el)));
+        result.extend(ecrecover_precompile_circuits.into_iter().map(|el| ZkSyncBaseLayerClosedFormInput::ECRecover(el)));
 
-        result.extend(ram_permutation_circuits);
+        result.extend(ram_permutation_circuits.into_iter().map(|el| ZkSyncBaseLayerClosedFormInput::RAMPermutation(el)));
 
-        result.extend(storage_sorter_circuits);
+        result.extend(storage_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerClosedFormInput::StorageSorter(el)));
 
-        result.extend(storage_application_circuits);
+        result.extend(storage_application_circuits.into_iter().map(|el| ZkSyncBaseLayerClosedFormInput::StorageApplication(el)));
 
-        // result.push(initial_writes_hasher_circuit);
-        // result.push(repeated_writes_hasher_circuit);
-
-        result.extend(events_sorter_circuits);
-        result.extend(l1_messages_sorter_circuits);
+        result.extend(events_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerClosedFormInput::EventsSorter(el)));
+        result.extend(l1_messages_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerClosedFormInput::L1MessagesSorter(el)));
 
         // result.push(l1_messages_pubdata_hasher_circuit);
         // result.push(l1_messages_merklizer_circuit);

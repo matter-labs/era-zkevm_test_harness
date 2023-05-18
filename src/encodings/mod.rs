@@ -173,7 +173,7 @@ impl<
     >(
         &mut self,
         element: I,
-        round_function: &R,
+        _round_function: &R,
     ) -> (
         [F; T],                                  // old tail
         QueueIntermediateStates<F, T, SW, ROUNDS>, // new head/tail, as well as round function ins/outs
@@ -216,7 +216,7 @@ impl<
         const CW: usize,
     >(
         &mut self,
-        round_function: &R,
+        _round_function: &R,
     ) -> (
         I,
         QueueIntermediateStates<F, T, SW, ROUNDS>,
@@ -255,6 +255,43 @@ impl<
         };
 
         (element, intermediate_info)
+    }
+
+    pub fn split_by<
+        R: CircuitRoundFunction<F, AW, SW, CW> + AlgebraicRoundFunction<F, AW, SW, CW>,
+        const AW: usize,
+        const SW: usize,
+        const CW: usize,
+    >(
+        mut self, 
+        chunk_size: usize,
+        round_function: &R,
+    ) -> Vec<Self> {
+        let mut result = vec![];
+        if self.num_items == 0 {
+            return result;
+        } else {
+            assert_eq!(self.witness.len(), self.num_items as usize);
+        }
+
+        while self.num_items > 0 {
+            let mut subqueue = Self::empty();
+            subqueue.head = self.head;
+            subqueue.tail = self.head;
+            for _ in 0..chunk_size {
+                if self.num_items == 0 {
+                    break;
+                }
+                let (el, _) = self.pop_and_output_intermediate_data(round_function);
+                subqueue.push(el, round_function);
+            }
+
+            result.push(subqueue);
+        }
+
+        assert_eq!(self.tail, result.last().unwrap().tail);
+
+        result
     }
 }
 
@@ -411,6 +448,41 @@ impl<
         (element, intermediate_info)
     }
 
+    pub fn split_by<
+        R: CircuitRoundFunction<F, AW, SW, CW> + AlgebraicRoundFunction<F, AW, SW, CW>,
+        const AW: usize,
+        const CW: usize,
+    >(
+        mut self, 
+        chunk_size: usize,
+        round_function: &R,
+    ) -> Vec<Self> {
+        let mut result = vec![];
+        if self.num_items == 0 {
+            return result;
+        } else {
+            assert_eq!(self.witness.len(), self.num_items as usize);
+        }
+
+        while self.num_items > 0 {
+            let mut subqueue = Self::empty();
+            subqueue.head = self.head;
+            subqueue.tail = self.head;
+            for _ in 0..chunk_size {
+                if self.num_items == 0 {
+                    break;
+                }
+                let (el, _) = self.pop_and_output_intermediate_data(round_function);
+                subqueue.push(el, round_function);
+            }
+
+            result.push(subqueue);
+        }
+
+        assert_eq!(self.tail, result.last().unwrap().tail);
+
+        result
+    }
 }
 
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
@@ -479,7 +551,7 @@ impl<
     >(
         &mut self,
         element: I,
-        round_function: &R,
+        _round_function: &R,
     ) -> FullWidthStackIntermediateStates<F, SW, ROUNDS> {
         assert!(N % AW == 0);
         let encoding = element.encoding_witness();
@@ -516,7 +588,7 @@ impl<
         const CW: usize,
     >(
         &mut self,
-        round_function: &R,
+        _round_function: &R,
     ) -> (I, FullWidthStackIntermediateStates<F, SW, ROUNDS>) {
         assert!(N % AW == 0);
 
@@ -622,14 +694,3 @@ pub(crate) fn linear_combination<F: SmallField>(
 
     result
 }
-
-// impl<F: SmallField> CircuitEquivalentReflection<E> for InitialStorageWrite {
-//     type Destination = InitialStorageWriteData<E>;
-//     fn reflect(&self) -> <Self::Destination as CSWitnessable<E>>::Witness {
-//         InitialStorageWriteDataWitness {
-//             key: self.key,
-//             value: self.value,
-//             _marker: std::marker::PhantomData
-//         }
-//     }
-// }

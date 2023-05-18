@@ -231,10 +231,6 @@ where
     (public_input, compact_form_witness)
 }
 
-// use crate::witness::oracle::VmInstanceWitness;
-// use sync_vm::vm::vm_cycle::witness_oracle::WitnessOracle;
-// use sync_vm::vm::vm_cycle::input::VmCircuitWitness;
-
 use crate::witness::oracle::VmInCircuitAuxilaryParameters;
 
 pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(

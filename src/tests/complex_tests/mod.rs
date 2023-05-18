@@ -1,5 +1,5 @@
-mod utils;
-mod serialize_utils;
+pub mod utils;
+pub mod serialize_utils;
 
 // pub mod invididual_debugs;
 
@@ -23,7 +23,7 @@ use zk_evm::witness_trace::VmWitnessTracer;
 use zk_evm::GenericNoopTracer;
 use zkevm_assembly::Assembly;
 use zk_evm::testing::storage::InMemoryStorage;
-use crate::toolset::create_tools;
+use crate::toolset::{create_tools, GeometryConfig};
 use utils::{read_test_artifact, TestArtifact};
 use crate::witness::tree::{ZKSyncTestingTree, BinarySparseStorageTree};
 
@@ -99,35 +99,23 @@ pub(crate) fn save_predeployed_contracts(storage: &mut InMemoryStorage, tree: &m
     }
 }
 
-fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit: usize) {
+use crate::witness::full_block_artifact::*;
+
+pub(crate) fn generate_base_layer(
+    mut test_artifact: TestArtifact, 
+    cycle_limit: usize,
+    geometry: GeometryConfig,
+) -> (
+    BlockBasicCircuits<GoldilocksField, ZkSyncDefaultRoundFunction>, 
+    BlockBasicCircuitsPublicInputs<GoldilocksField>,
+    BlockBasicCircuitsPublicCompactFormsWitnesses<GoldilocksField>,
+) {
     use zk_evm::zkevm_opcode_defs::system_params::BOOTLOADER_FORMAL_ADDRESS;
 
     let round_function = ZkSyncDefaultRoundFunction::default();
 
     use crate::external_calls::run;
     use crate::toolset::GeometryConfig;
-
-    let geometry = GeometryConfig {
-        cycles_per_vm_snapshot: 1,
-        // cycles_per_vm_snapshot: 1024,
-        cycles_per_ram_permutation: 1024,
-        cycles_per_code_decommitter: 256,
-        cycles_per_storage_application: 4,
-        cycles_per_keccak256_circuit: 7,
-        cycles_per_sha256_circuit: 7,
-        cycles_per_ecrecover_circuit: 2,
-        cycles_code_decommitter_sorter: 512,
-        cycles_per_log_demuxer: 16,
-        cycles_per_storage_sorter: 16,
-        cycles_per_events_or_l1_messages_sorter: 4,
-
-        limit_for_initial_writes_pubdata_hasher: 16,
-        limit_for_repeated_writes_pubdata_hasher: 16,
-        limit_for_l1_messages_merklizer: 32,
-        limit_for_l1_messages_pudata_hasher: 32,
-    };
-
-    let geometry = crate::geometry_config::get_geometry_config();
 
     let mut storage_impl = InMemoryStorage::new();
     let mut tree = ZKSyncTestingTree::empty();
@@ -178,7 +166,11 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
     println!("Default AA code hash 0x{:x}", default_account_codehash);
 
     // let (basic_block_circuits, basic_block_circuits_inputs, mut scheduler_partial_input) = run(
-    let (basic_block_circuits, basic_block_circuits_inputs) = run(
+    let (
+        basic_block_circuits, 
+        basic_block_circuits_inputs,
+        closed_form_inputs,
+    ) = run(
         Address::zero(),
         test_artifact.entry_point_address,
         test_artifact.entry_point_code,
@@ -192,6 +184,46 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         geometry,
         storage_impl,
         &mut tree
+    );
+
+    (basic_block_circuits, basic_block_circuits_inputs, closed_form_inputs)
+}
+
+fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: usize) {
+    use crate::external_calls::run;
+    use crate::toolset::GeometryConfig;
+
+    let geometry = GeometryConfig {
+        cycles_per_vm_snapshot: 1,
+        // cycles_per_vm_snapshot: 1024,
+        cycles_per_ram_permutation: 1024,
+        cycles_per_code_decommitter: 256,
+        cycles_per_storage_application: 4,
+        cycles_per_keccak256_circuit: 7,
+        cycles_per_sha256_circuit: 7,
+        cycles_per_ecrecover_circuit: 2,
+        cycles_code_decommitter_sorter: 512,
+        cycles_per_log_demuxer: 16,
+        cycles_per_storage_sorter: 16,
+        cycles_per_events_or_l1_messages_sorter: 4,
+
+        limit_for_initial_writes_pubdata_hasher: 16,
+        limit_for_repeated_writes_pubdata_hasher: 16,
+        limit_for_l1_messages_merklizer: 32,
+        limit_for_l1_messages_pudata_hasher: 32,
+    };
+
+    let geometry = crate::geometry_config::get_geometry_config();
+
+    // let (basic_block_circuits, basic_block_circuits_inputs, mut scheduler_partial_input) = run(
+    let (
+        basic_block_circuits, 
+        basic_block_circuits_inputs,
+        per_circuit_closed_form_inputs,
+    ) = generate_base_layer(
+        test_artifact,
+        cycle_limit,
+        geometry
     );
 
     let _num_vm_circuits = basic_block_circuits.main_vm_circuits.len();
@@ -282,7 +314,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
             fri_lde_factor: BASE_LAYER_FRI_LDE_FACTOR,
             merkle_tree_cap_size: BASE_LAYER_CAP_SIZE,
             fri_folding_schedule: None,
-            security_level: 100,
+            security_level: SECURITY_BITS_TARGET,
             pow_bits: 0
         };
 
@@ -1229,7 +1261,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
 
 //             let config = config_fn(size);
 
-//             let circuit = ZkSyncUniformCircuitCircuitInstance::<_, SF>::new(
+//             let circuit = ZkSyncUniformCircuitInstance::<_, SF>::new(
 //                 None,
 //                 config,
 //                 round_function.clone(),
@@ -1271,7 +1303,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
 
 //         let config = config_fn(cycles);
 
-//         let circuit = ZkSyncUniformCircuitCircuitInstance::<_, SF>::new(
+//         let circuit = ZkSyncUniformCircuitInstance::<_, SF>::new(
 //             None,
 //             config,
 //             round_function.clone(),
@@ -1446,7 +1478,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
 //     //         None,
 //     //     );
 
-//     //     let circuit = ZkSyncUniformCircuitCircuitInstance::<_, LeafAggregationInstanceSynthesisFunction>::new(
+//     //     let circuit = ZkSyncUniformCircuitInstance::<_, LeafAggregationInstanceSynthesisFunction>::new(
 //     //         None,
 //     //         config,
 //     //         round_function.clone(),
@@ -1520,7 +1552,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
 //     //     None,
 //     // );
 
-//     // let circuit = ZkSyncUniformCircuitCircuitInstance::<_, LeafAggregationInstanceSynthesisFunction>::new(
+//     // let circuit = ZkSyncUniformCircuitInstance::<_, LeafAggregationInstanceSynthesisFunction>::new(
 //     //     None,
 //     //     config,
 //     //     round_function.clone(),
@@ -1630,7 +1662,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
 //     //         None,
 //     //     );
 
-//     //     let circuit = ZkSyncUniformCircuitCircuitInstance::<_, NodeAggregationInstanceSynthesisFunction>::new(
+//     //     let circuit = ZkSyncUniformCircuitInstance::<_, NodeAggregationInstanceSynthesisFunction>::new(
 //     //         None,
 //     //         config,
 //     //         round_function.clone(),
@@ -1706,7 +1738,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
 //     //     None,
 //     // );
 
-//     // let circuit = ZkSyncUniformCircuitCircuitInstance::<_, NodeAggregationInstanceSynthesisFunction>::new(
+//     // let circuit = ZkSyncUniformCircuitInstance::<_, NodeAggregationInstanceSynthesisFunction>::new(
 //     //     None,
 //     //     config,
 //     //     round_function.clone(),

@@ -1,6 +1,6 @@
 use crate::{ethereum_types::{Address, U256}, utils::calldata_to_aligned_data};
 use crate::toolset::GeometryConfig;
-use boojum::{field::{SmallField, goldilocks::GoldilocksField}};
+use boojum::{field::{SmallField, goldilocks::GoldilocksField}, cs::implementations::prover::ProofConfig};
 use zk_evm::abstractions::Storage;
 use crate::toolset::create_tools;
 use zk_evm::contract_bytecode_to_words;
@@ -21,6 +21,7 @@ use ::tracing;
 use boojum::algebraic_props::round_function::AlgebraicRoundFunction;
 use crate::ZkSyncDefaultRoundFunction;
 use boojum::gadgets::traits::round_function::BuildableCircuitRoundFunction;
+use crate::witness::full_block_artifact::BlockBasicCircuitsPublicCompactFormsWitnesses;
 
 pub const SCHEDULER_TIMESTAMP: u32 = 1;
 
@@ -50,7 +51,7 @@ pub fn run<
     geometry: GeometryConfig,
     storage: S,
     tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
-) -> (BlockBasicCircuits<F, R>, BlockBasicCircuitsPublicInputs<F>) 
+) -> (BlockBasicCircuits<F, R>, BlockBasicCircuitsPublicInputs<F>, BlockBasicCircuitsPublicCompactFormsWitnesses<F>) 
     where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <zkevm_circuits::base_structures::memory_query::MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <zkevm_circuits::base_structures::decommit_query::DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
@@ -229,7 +230,7 @@ pub fn run<
         &round_function
     );
 
-    return (basic_circuits, basic_circuits_inputs)
+    return (basic_circuits, basic_circuits_inputs, compact_form_witnesses)
 
     // let scheduler_circuit_witness = {
     //     use sync_vm::circuit_structures::bytes32::Bytes32Witness;
@@ -354,7 +355,7 @@ pub fn run_with_fixed_params<S: Storage>(
 // ) {
 // ) -> (Vec<VmInstanceWitness<GoldilocksField, VmWitnessOracle<GoldilocksField>>>, FullBlockArtifacts<GoldilocksField>) {
 // ) -> (BlockBasicCircuits<Bn256>, BlockBasicCircuitsPublicInputs<Bn256>, SchedulerCircuitInstanceWitness<Bn256>) {
-) -> (BlockBasicCircuits<GoldilocksField, ZkSyncDefaultRoundFunction>, BlockBasicCircuitsPublicInputs<GoldilocksField>) {
+) -> (BlockBasicCircuits<GoldilocksField, ZkSyncDefaultRoundFunction>, BlockBasicCircuitsPublicInputs<GoldilocksField>, BlockBasicCircuitsPublicCompactFormsWitnesses<GoldilocksField>) {
 
     let round_function = ZkSyncDefaultRoundFunction::default();
 
@@ -373,4 +374,16 @@ pub fn run_with_fixed_params<S: Storage>(
         storage,
         tree,
     )
+}
+
+pub fn base_layer_proof_config() -> ProofConfig {
+    use crate::*;
+
+    ProofConfig {
+        fri_lde_factor: BASE_LAYER_FRI_LDE_FACTOR,
+        merkle_tree_cap_size: BASE_LAYER_CAP_SIZE,
+        fri_folding_schedule: None,
+        security_level: SECURITY_BITS_TARGET,
+        pow_bits: 0
+    }
 }

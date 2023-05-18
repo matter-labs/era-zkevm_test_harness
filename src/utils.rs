@@ -138,6 +138,7 @@ use boojum::cs::implementations::hints::*;
 
 pub const BASE_LAYER_FRI_LDE_FACTOR: usize = 2;
 pub const BASE_LAYER_CAP_SIZE: usize = 32;
+pub const SECURITY_BITS_TARGET: usize = 100;
 
 type F = GoldilocksField;
 type P = boojum::field::goldilocks::MixedGL;

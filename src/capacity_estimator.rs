@@ -4,7 +4,7 @@ use boojum::cs::CSGeometry;
 use boojum::field::goldilocks::GoldilocksField;
 
 use crate::ZkSyncDefaultRoundFunction;
-use crate::abstract_zksync_circuit::{ZkSyncUniformCircuitCircuitInstance, ZkSyncUniformSynthesisFunction};
+use crate::abstract_zksync_circuit::{ZkSyncUniformCircuitInstance, ZkSyncUniformSynthesisFunction};
 use crate::abstract_zksync_circuit::concrete_circuits::*;
 use crate::witness::oracle::VmWitnessOracle;
 

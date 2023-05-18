@@ -1,8 +1,8 @@
-use boojum::cs::CSGeometry;
+use boojum::cs::{CSGeometry, traits::circuit::ErasedBuilderForVerifier};
 use boojum::gadgets::traits::witnessable::WitnessHookable;
 use boojum::implementations::poseidon2::Poseidon2Goldilocks;
 use crossbeam::atomic::AtomicCell;
-use boojum::field::SmallField;
+use boojum::field::{SmallField, FieldExtension};
 use boojum::gadgets::traits::round_function::*;
 use boojum::algebraic_props::round_function::AlgebraicRoundFunction;
 use boojum::cs::traits::cs::ConstraintSystem;
@@ -19,8 +19,9 @@ use boojum::cs::cs_builder::*;
 use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord;
 
 pub mod concrete_circuits;
+pub mod recursion_layer;
 
-pub trait ZkSyncUniformSynthesisFunction<F: SmallField>: Clone + serde::Serialize + serde::de::DeserializeOwned { 
+pub trait ZkSyncUniformSynthesisFunction<F: SmallField>: 'static + Clone + serde::Serialize + serde::de::DeserializeOwned { 
     type Witness: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned + std::default::Default;
     type Config: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned;
     type RoundFunction: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned;
@@ -59,9 +60,52 @@ pub trait ZkSyncUniformSynthesisFunction<F: SmallField>: Clone + serde::Serializ
     }
 }
 
+use derivative::*;
+
+#[derive(Derivative, serde::Serialize, serde::Deserialize)]
+#[derivative(Clone(bound = ""), Debug, Default(bound = ""))]
+#[serde(bound = "")]
+pub struct ZkSyncUniformCircuitVerifierBuilder<
+    F: SmallField,
+    S: ZkSyncUniformSynthesisFunction<F>,
+> {
+    _marker: std::marker::PhantomData<(F, S)>
+}
+
+impl<
+    F: SmallField,
+    S: ZkSyncUniformSynthesisFunction<F>,
+> CircuitBuilder<F> for ZkSyncUniformCircuitVerifierBuilder<F, S> 
+{
+    fn geometry() -> CSGeometry {
+        S::geometry()
+    }
+    fn lookup_parameters() -> LookupParameters {
+        S::lookup_parameters()
+    }
+    fn configure_builder<T: CsBuilderImpl<F, T>, GC: GateConfigurationHolder<F>, TB: StaticToolboxHolder>(
+        builder: CsBuilder<T, F, GC, TB>
+    ) -> CsBuilder<T, F, impl GateConfigurationHolder<F>, impl StaticToolboxHolder> {
+        S::configure_builder(builder)
+    }
+}
+
+impl<
+    F: SmallField,
+    S: ZkSyncUniformSynthesisFunction<F>,
+>ZkSyncUniformCircuitVerifierBuilder<F, S> {
+    pub fn into_dyn_verifier_builder<EXT: FieldExtension<2, BaseField = F>>(self) -> Box<dyn ErasedBuilderForVerifier<F, EXT>> {
+        Box::new(self)
+    }
+
+    pub fn into_dyn_recursive_verifier_builder<EXT: FieldExtension<2, BaseField = F>, CS: ConstraintSystem<F> + 'static>(self) -> Box<dyn ErasedBuilderForRecursiveVerifier<F, EXT, CS>> {
+        Box::new(self)
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(bound = "")]
-pub struct ZkSyncUniformCircuitCircuitInstance<
+pub struct ZkSyncUniformCircuitInstance<
     F: SmallField,
     S: ZkSyncUniformSynthesisFunction<F>,
 > {
@@ -80,7 +124,7 @@ pub struct ZkSyncUniformCircuitCircuitInstance<
     pub expected_public_input: Option<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
 }
 
-impl<F: SmallField, S: ZkSyncUniformSynthesisFunction<F>> ZkSyncUniformCircuitCircuitInstance<F, S>  
+impl<F: SmallField, S: ZkSyncUniformSynthesisFunction<F>> ZkSyncUniformCircuitInstance<F, S>  
 {
     pub fn new(witness: Option<S::Witness>, config: S::Config, round_function: S::RoundFunction, expected_public_input: Option<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>) -> Self {
         Self { witness: AtomicCell::new(witness), config: std::sync::Arc::new(config), round_function: std::sync::Arc::new(round_function), expected_public_input }
@@ -138,7 +182,7 @@ fn deserialize_arc<'de, D, T: serde::Deserialize<'de>>(deserializer: D) -> Resul
 impl<
     F: SmallField, 
     S: ZkSyncUniformSynthesisFunction<F>,
-> Clone for ZkSyncUniformCircuitCircuitInstance<F, S> { 
+> Clone for ZkSyncUniformCircuitInstance<F, S> { 
     fn clone(&self) -> Self {
         let wit = self.witness.take();
         let ww = wit.clone();
@@ -153,30 +197,12 @@ impl<
     }
 }
 
-use boojum::cs::traits::circuit::{Circuit, CircuitBuilder};
+use boojum::cs::traits::circuit::{Circuit, CircuitBuilder, ErasedBuilderForRecursiveVerifier};
 
 impl<
     F: SmallField,
     S: ZkSyncUniformSynthesisFunction<F>,
-> CircuitBuilder<F> for ZkSyncUniformCircuitCircuitInstance<F, S> 
-{
-    fn geometry() -> CSGeometry {
-        S::geometry()
-    }
-    fn lookup_parameters() -> LookupParameters {
-        S::lookup_parameters()
-    }
-    fn configure_builder<T: CsBuilderImpl<F, T>, GC: GateConfigurationHolder<F>, TB: StaticToolboxHolder>(
-        builder: CsBuilder<T, F, GC, TB>
-    ) -> CsBuilder<T, F, impl GateConfigurationHolder<F>, impl StaticToolboxHolder> {
-        S::configure_builder(builder)
-    }
-}
-
-impl<
-    F: SmallField,
-    S: ZkSyncUniformSynthesisFunction<F>,
-> Circuit<F> for ZkSyncUniformCircuitCircuitInstance<F, S> 
+> Circuit<F> for ZkSyncUniformCircuitInstance<F, S> 
 {
     fn add_tables<CS: ConstraintSystem<F>>(&self, cs: &mut CS) {
         S::add_tables(cs);
@@ -206,8 +232,6 @@ impl<
         let ww = witness.unwrap_or_default();
         let config: S::Config = (*self.config).clone();
         let round_function = &*self.round_function;
-        // let synthesis_fn = S::get_synthesis_function_dyn();
-        // let public_input_var = (synthesis_fn)(cs, ww, round_function, config);
 
         let public_input_var = S::synthesize_into_cs_inner(cs, ww, round_function, config);
 

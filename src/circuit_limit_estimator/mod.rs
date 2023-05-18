@@ -1,6 +1,6 @@
 use std::panic;
 
-use crate::abstract_zksync_circuit::{ZkSyncUniformCircuitCircuitInstance, ZkSyncUniformSynthesisFunction};
+use crate::abstract_zksync_circuit::{ZkSyncUniformCircuitInstance, ZkSyncUniformSynthesisFunction};
 use crate::abstract_zksync_circuit::concrete_circuits::{CodeDecommitterInstanceSynthesisFunction, CodeDecommittmentsSorterSynthesisFunction, ECRecoverFunctionInstanceSynthesisFunction, EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction, Keccak256RoundFunctionInstanceSynthesisFunction, L1MessagesRehasherInstanceSynthesisFunction, LogDemuxInstanceSynthesisFunction, MessagesMerklizerInstanceSynthesisFunction, RAMPermutationInstanceSynthesisFunction, Sha256RoundFunctionInstanceSynthesisFunction, StorageApplicationInstanceSynthesisFunction, StorageInitialWritesRehasherInstanceSynthesisFunction, StorageRepeatedWritesRehasherInstanceSynthesisFunction, StorageSortAndDedupInstanceSynthesisFunction, VmMainInstanceSynthesisFunction};
 use crate::bellman::bn256::Bn256;
 use crate::bellman::plonk::better_better_cs::cs::{PlonkCsWidth4WithNextStepAndCustomGatesParams, SetupAssembly};
@@ -45,7 +45,7 @@ fn compute_inner<
 
         let config = config_fn(size);
 
-        let circuit = ZkSyncUniformCircuitCircuitInstance::<_, SF>::new(
+        let circuit = ZkSyncUniformCircuitInstance::<_, SF>::new(
             None,
             config,
             round_function.clone(),
@@ -93,7 +93,7 @@ fn compute_inner<
 
     let config = config_fn(cycles);
 
-    let circuit = ZkSyncUniformCircuitCircuitInstance::<_, SF>::new(
+    let circuit = ZkSyncUniformCircuitInstance::<_, SF>::new(
         None,
         config,
         round_function.clone(),

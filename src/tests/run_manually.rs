@@ -233,7 +233,7 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
     let round_function = ZkSyncDefaultRoundFunction::default();
 
     // let (basic_block_circuits, basic_block_circuits_inputs, scheduler_input) = run(
-    let (basic_block_circuits, basic_block_circuits_inputs) = 
+    let (basic_block_circuits, basic_block_circuits_inputs, closed_form_inputs) = 
     run(
         Address::zero(),
         *BOOTLOADER_FORMAL_ADDRESS,
