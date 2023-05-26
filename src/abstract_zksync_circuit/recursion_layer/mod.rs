@@ -272,41 +272,41 @@ impl ZkSyncRecursiveLayerCircuit {
         }
     }
 
-    pub fn into_dyn_verifier_builder<EXT: FieldExtension<2, BaseField = F>>(&self) -> Box<dyn ErasedBuilderForVerifier<F, EXT>> {
-        match &self {
-            Self::SchedulerCircuit(inner) => {todo!()},
-            Self::NodeLayerCircuit(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
-            Self::LeafLayerCircuitForMainVM(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
-            Self::LeafLayerCircuitForCodeDecommittmentsSorter(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
-            Self::LeafLayerCircuitForCodeDecommitter(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
-            Self::LeafLayerCircuitForLogDemuxer(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
-            Self::LeafLayerCircuitForKeccakRoundFunction(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
-            Self::LeafLayerCircuitForSha256RoundFunction(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
-            Self::LeafLayerCircuitForECRecover(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
-            Self::LeafLayerCircuitForRAMPermutation(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
-            Self::LeafLayerCircuitForStorageSorter(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
-            Self::LeafLayerCircuitForStorageApplication(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
-            Self::LeafLayerCircuitForEventsSorter(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
-            Self::LeafLayerCircuitForL1MessagesSorter(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
-        }
-    }
+    // pub fn into_dyn_verifier_builder<EXT: FieldExtension<2, BaseField = F>>(&self) -> Box<dyn ErasedBuilderForVerifier<F, EXT>> {
+    //     match &self {
+    //         Self::SchedulerCircuit(inner) => {todo!()},
+    //         Self::NodeLayerCircuit(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
+    //         Self::LeafLayerCircuitForMainVM(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
+    //         Self::LeafLayerCircuitForCodeDecommittmentsSorter(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
+    //         Self::LeafLayerCircuitForCodeDecommitter(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
+    //         Self::LeafLayerCircuitForLogDemuxer(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
+    //         Self::LeafLayerCircuitForKeccakRoundFunction(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
+    //         Self::LeafLayerCircuitForSha256RoundFunction(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
+    //         Self::LeafLayerCircuitForECRecover(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
+    //         Self::LeafLayerCircuitForRAMPermutation(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
+    //         Self::LeafLayerCircuitForStorageSorter(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
+    //         Self::LeafLayerCircuitForStorageApplication(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
+    //         Self::LeafLayerCircuitForEventsSorter(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
+    //         Self::LeafLayerCircuitForL1MessagesSorter(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
+    //     }
+    // }
 
-    pub fn into_dyn_recursive_verifier_builder<EXT: FieldExtension<2, BaseField = F>, CS: ConstraintSystem<F> + 'static>(&self) -> Box<dyn ErasedBuilderForRecursiveVerifier<F, EXT, CS>> {
-        match &self {
-            Self::SchedulerCircuit(inner) => {todo!()},
-            Self::NodeLayerCircuit(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-            Self::LeafLayerCircuitForMainVM(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-            Self::LeafLayerCircuitForCodeDecommittmentsSorter(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-            Self::LeafLayerCircuitForCodeDecommitter(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-            Self::LeafLayerCircuitForLogDemuxer(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-            Self::LeafLayerCircuitForKeccakRoundFunction(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-            Self::LeafLayerCircuitForSha256RoundFunction(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-            Self::LeafLayerCircuitForECRecover(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-            Self::LeafLayerCircuitForRAMPermutation(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-            Self::LeafLayerCircuitForStorageSorter(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-            Self::LeafLayerCircuitForStorageApplication(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-            Self::LeafLayerCircuitForEventsSorter(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-            Self::LeafLayerCircuitForL1MessagesSorter(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-        }
-    }
+    // pub fn into_dyn_recursive_verifier_builder<EXT: FieldExtension<2, BaseField = F>, CS: ConstraintSystem<F> + 'static>(&self) -> Box<dyn ErasedBuilderForRecursiveVerifier<F, EXT, CS>> {
+    //     match &self {
+    //         Self::SchedulerCircuit(inner) => {todo!()},
+    //         Self::NodeLayerCircuit(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
+    //         Self::LeafLayerCircuitForMainVM(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
+    //         Self::LeafLayerCircuitForCodeDecommittmentsSorter(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
+    //         Self::LeafLayerCircuitForCodeDecommitter(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
+    //         Self::LeafLayerCircuitForLogDemuxer(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
+    //         Self::LeafLayerCircuitForKeccakRoundFunction(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
+    //         Self::LeafLayerCircuitForSha256RoundFunction(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
+    //         Self::LeafLayerCircuitForECRecover(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
+    //         Self::LeafLayerCircuitForRAMPermutation(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
+    //         Self::LeafLayerCircuitForStorageSorter(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
+    //         Self::LeafLayerCircuitForStorageApplication(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
+    //         Self::LeafLayerCircuitForEventsSorter(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
+    //         Self::LeafLayerCircuitForL1MessagesSorter(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
+    //     }
+    // }
 }

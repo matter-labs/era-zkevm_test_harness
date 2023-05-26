@@ -1,5 +1,8 @@
 use super::*;
 
+use crate::witness::oracle::VmWitnessOracle;
+use crate::abstract_zksync_circuit::concrete_circuits::*;
+
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone(bound = ""), Debug, Default(bound = ""))]
 #[serde(bound = "")]
@@ -33,11 +36,11 @@ impl<
     S: ZkSyncUniformSynthesisFunction<F>,
 >ZkSyncUniformCircuitVerifierBuilder<F, S> {
     pub fn into_dyn_verifier_builder<EXT: FieldExtension<2, BaseField = F>>(self) -> Box<dyn ErasedBuilderForVerifier<F, EXT>> {
-        Box::new(self) as Box<dyn CircuitBuilder<F>> as Box<dyn ErasedBuilderForVerifier<F, EXT>>
+        Box::new(self) as Box<dyn ErasedBuilderForVerifier<F, EXT>>
     }
 
     pub fn into_dyn_recursive_verifier_builder<EXT: FieldExtension<2, BaseField = F>, CS: ConstraintSystem<F> + 'static>(self) -> Box<dyn ErasedBuilderForRecursiveVerifier<F, EXT, CS>> {
-        Box::new(self) as Box<dyn CircuitBuilder<F>> as Box<dyn ErasedBuilderForRecursiveVerifier<F, EXT, CS>>
+        Box::new(self) as Box<dyn ErasedBuilderForRecursiveVerifier<F, EXT, CS>>
     }
 }
 
@@ -199,50 +202,50 @@ where [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     }
 }
 
-impl<
-    F: SmallField, 
-    W: WitnessOracle<F>,
-    R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
-> ZkSyncBaseLayerCircuit<F, W, R>  
-    where [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN + 1]:,
-    [(); <ExecutionContextRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <TimestampedStorageLogRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-{
-    pub fn into_dyn_verifier_builder<EXT: FieldExtension<2, BaseField = F>>(&self) -> Box<dyn ErasedBuilderForVerifier<F, EXT>> {
-        match &self {
-            ZkSyncBaseLayerCircuit::MainVM(inner) => {inner.into_verifier_builder().into_dyn_verifier_builder::<EXT>()},
-            ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {inner.into_verifier_builder().into_dyn_verifier_builder::<EXT>()},
-            ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {inner.into_verifier_builder().into_dyn_verifier_builder::<EXT>()},
-            ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {inner.into_verifier_builder().into_dyn_verifier_builder::<EXT>()},
-            ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {inner.into_verifier_builder().into_dyn_verifier_builder::<EXT>()},
-            ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {inner.into_verifier_builder().into_dyn_verifier_builder::<EXT>()},
-            ZkSyncBaseLayerCircuit::ECRecover(inner) => {inner.into_verifier_builder().into_dyn_verifier_builder::<EXT>()},
-            ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {inner.into_verifier_builder().into_dyn_verifier_builder::<EXT>()},
-            ZkSyncBaseLayerCircuit::StorageSorter(inner) => {inner.into_verifier_builder().into_dyn_verifier_builder::<EXT>()},
-            ZkSyncBaseLayerCircuit::StorageApplication(inner) => {inner.into_verifier_builder().into_dyn_verifier_builder::<EXT>()},
-            ZkSyncBaseLayerCircuit::EventsSorter(inner) => {inner.into_verifier_builder().into_dyn_verifier_builder::<EXT>()},
-            ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {inner.into_verifier_builder().into_dyn_verifier_builder::<EXT>()},
-        }
-    }
+// impl<
+//     F: SmallField, 
+//     W: WitnessOracle<F>,
+//     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
+// > ZkSyncBaseLayerCircuit<F, W, R>  
+//     where [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+//     [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+//     [(); <DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+//     [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+//     [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN + 1]:,
+//     [(); <ExecutionContextRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+//     [(); <TimestampedStorageLogRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+// {
+//     pub fn into_dyn_verifier_builder<EXT: FieldExtension<2, BaseField = F>>(&self) -> Box<dyn ErasedBuilderForVerifier<F, EXT>> {
+//         match &self {
+//             ZkSyncBaseLayerCircuit::MainVM(inner) => {inner.into_verifier_builder().into_dyn_verifier_builder::<EXT>()},
+//             ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {inner.into_verifier_builder().into_dyn_verifier_builder::<EXT>()},
+//             ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {inner.into_verifier_builder().into_dyn_verifier_builder::<EXT>()},
+//             ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {inner.into_verifier_builder().into_dyn_verifier_builder::<EXT>()},
+//             ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {inner.into_verifier_builder().into_dyn_verifier_builder::<EXT>()},
+//             ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {inner.into_verifier_builder().into_dyn_verifier_builder::<EXT>()},
+//             ZkSyncBaseLayerCircuit::ECRecover(inner) => {inner.into_verifier_builder().into_dyn_verifier_builder::<EXT>()},
+//             ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {inner.into_verifier_builder().into_dyn_verifier_builder::<EXT>()},
+//             ZkSyncBaseLayerCircuit::StorageSorter(inner) => {inner.into_verifier_builder().into_dyn_verifier_builder::<EXT>()},
+//             ZkSyncBaseLayerCircuit::StorageApplication(inner) => {inner.into_verifier_builder().into_dyn_verifier_builder::<EXT>()},
+//             ZkSyncBaseLayerCircuit::EventsSorter(inner) => {inner.into_verifier_builder().into_dyn_verifier_builder::<EXT>()},
+//             ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {inner.into_verifier_builder().into_dyn_verifier_builder::<EXT>()},
+//         }
+//     }
 
-    pub fn into_dyn_recursive_verifier_builder<EXT: FieldExtension<2, BaseField = F>, CS: ConstraintSystem<F> + 'static>(&self) -> Box<dyn ErasedBuilderForRecursiveVerifier<F, EXT, CS>> {
-        match &self {
-            ZkSyncBaseLayerCircuit::MainVM(inner) => {inner.into_verifier_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-            ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {inner.into_verifier_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-            ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {inner.into_verifier_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-            ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {inner.into_verifier_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-            ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {inner.into_verifier_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-            ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {inner.into_verifier_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-            ZkSyncBaseLayerCircuit::ECRecover(inner) => {inner.into_verifier_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-            ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {inner.into_verifier_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-            ZkSyncBaseLayerCircuit::StorageSorter(inner) => {inner.into_verifier_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-            ZkSyncBaseLayerCircuit::StorageApplication(inner) => {inner.into_verifier_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-            ZkSyncBaseLayerCircuit::EventsSorter(inner) => {inner.into_verifier_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-            ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {inner.into_verifier_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-        }
-    }
-}
+//     pub fn into_dyn_recursive_verifier_builder<EXT: FieldExtension<2, BaseField = F>, CS: ConstraintSystem<F> + 'static>(&self) -> Box<dyn ErasedBuilderForRecursiveVerifier<F, EXT, CS>> {
+//         match &self {
+//             ZkSyncBaseLayerCircuit::MainVM(inner) => {inner.into_verifier_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
+//             ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {inner.into_verifier_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
+//             ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {inner.into_verifier_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
+//             ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {inner.into_verifier_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
+//             ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {inner.into_verifier_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
+//             ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {inner.into_verifier_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
+//             ZkSyncBaseLayerCircuit::ECRecover(inner) => {inner.into_verifier_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
+//             ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {inner.into_verifier_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
+//             ZkSyncBaseLayerCircuit::StorageSorter(inner) => {inner.into_verifier_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
+//             ZkSyncBaseLayerCircuit::StorageApplication(inner) => {inner.into_verifier_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
+//             ZkSyncBaseLayerCircuit::EventsSorter(inner) => {inner.into_verifier_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
+//             ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {inner.into_verifier_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
+//         }
+//     }
+// }

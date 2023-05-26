@@ -3,7 +3,6 @@ use boojum::cs::implementations::pow::NoPow;
 use derivative::*;
 use crate::ZkSyncDefaultRoundFunction;
 use crate::abstract_zksync_circuit::concrete_circuits::TARGET_CIRCUIT_TRACE_LENGTH;
-use crate::abstract_zksync_circuit::concrete_circuits::dyn_recursive_verifier_builder_for_circuit_type;
 use boojum::gadgets::recursion::recursive_tree_hasher::*;
 use boojum::gadgets::recursion::recursive_transcript::*;
 use boojum::gadgets::recursion::circuit_pow::*;

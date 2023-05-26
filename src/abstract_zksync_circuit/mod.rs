@@ -20,6 +20,7 @@ use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogReco
 
 pub mod concrete_circuits;
 // pub mod recursion_layer;
+pub mod verifier_builder;
 
 pub trait ZkSyncUniformSynthesisFunction<F: SmallField>: 'static + Clone + serde::Serialize + serde::de::DeserializeOwned { 
     type Witness: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned + std::default::Default;
