@@ -1,9 +1,4 @@
 use super::*;
-use crate::encodings::decommittment_request::DecommittmentQueueSimulator;
-use crate::encodings::decommittment_request::DecommittmentQueueState;
-use crate::encodings::log_query::LogQueueState;
-use crate::encodings::memory_query::MemoryQueueSimulator;
-use crate::encodings::memory_query::MemoryQueueState;
 use crate::ethereum_types::U256;
 use crate::toolset::GeometryConfig;
 use derivative::Derivative;
@@ -14,7 +9,6 @@ use zk_evm::aux_structures::DecommittmentQuery;
 use zk_evm::aux_structures::LogQuery;
 use zk_evm::aux_structures::MemoryIndex;
 use zk_evm::aux_structures::MemoryQuery;
-use crate::encodings::log_query::LogQueueSimulator;
 use zk_evm::precompiles::ecrecover::ECRecoverRoundWitness;
 use zk_evm::precompiles::keccak256::Keccak256RoundWitness;
 use zk_evm::precompiles::sha256::Sha256RoundWitness;
@@ -31,7 +25,13 @@ use zkevm_circuits::sort_decommittment_requests::input::CodeDecommittmentsDedupl
 use zkevm_circuits::storage_validity_by_grand_product::input::StorageDeduplicatorInstanceWitness;
 use zkevm_circuits::log_sorter::input::EventsDeduplicatorInstanceWitness;
 use zkevm_circuits::storage_application::input::StorageApplicationCircuitInstanceWitness;
-
+use circuit_definitions::circuit_definitions::base_layer::*;
+use circuit_definitions::encodings::*;
+use circuit_definitions::encodings::recursion_request::*;
+use circuit_definitions::encodings::memory_query::MemoryQueueState;
+use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
+use circuit_definitions::encodings::decommittment_request::DecommittmentQueueState;
+use circuit_definitions::encodings::decommittment_request::DecommittmentQueueSimulator;
 
 #[derive(Derivative)]
 #[derivative(Clone, Default(bound = ""))]
@@ -384,9 +384,7 @@ impl<F: SmallField> FullBlockArtifacts<F> {
     }
 }
 
-use crate::abstract_zksync_circuit::concrete_circuits::*;
-use crate::witness::oracle::VmWitnessOracle;
-
+use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use boojum::gadgets::traits::allocatable::*;
 
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
@@ -532,8 +530,6 @@ pub struct BlockBasicCircuitsPublicInputs<F: SmallField> {
     // // merklize L1 message
     // pub l1_messages_merklizer_circuit: F,
 }
-
-use crate::encodings::recursion_request::*;
 
 impl<F: SmallField> BlockBasicCircuitsPublicInputs<F> {
     pub fn into_flattened_set(self) -> Vec<ZkSyncBaseLayerCircuitInput<F>> {

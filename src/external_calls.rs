@@ -26,7 +26,7 @@ use crate::witness::full_block_artifact::BlockBasicCircuitsPublicCompactFormsWit
 pub const SCHEDULER_TIMESTAMP: u32 = 1;
 
 use crate::witness::oracle::VmInstanceWitness;
-use crate::witness::oracle::VmWitnessOracle;
+use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use crate::witness::full_block_artifact::FullBlockArtifacts;
 use boojum::gadgets::traits::allocatable::*;
 

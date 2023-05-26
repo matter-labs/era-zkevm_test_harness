@@ -1,5 +1,4 @@
 use super::*;
-use crate::encodings::decommittment_request::DecommittmentQueueSimulator;
 use std::cmp::Ordering;
 use boojum::gadgets::u256::decompose_u256_as_u32x8;
 use zk_evm::aux_structures::MemoryQuery;
@@ -14,7 +13,8 @@ use rayon::prelude::*;
 use zkevm_circuits::base_structures::decommit_query::DecommitQuery;
 use boojum::gadgets::queue::full_state_queue::FullStateCircuitQueueRawWitness;
 use zkevm_circuits::base_structures::vm_state::FULL_SPONGE_QUEUE_STATE_WIDTH;
-use crate::encodings::CircuitEquivalentReflection;
+use circuit_definitions::encodings::decommittment_request::*;
+use circuit_definitions::encodings::CircuitEquivalentReflection;
 
 pub fn compute_decommitts_sorter_circuit_snapshots<
 F: SmallField,

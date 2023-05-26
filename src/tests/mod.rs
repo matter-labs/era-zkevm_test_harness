@@ -9,8 +9,7 @@ pub mod simple_tests;
 use boojum::field::goldilocks::MixedGL;
 use boojum::worker::Worker;
 use zk_evm::testing::storage::InMemoryStorage;
-use crate::abstract_zksync_circuit::concrete_circuits::ZkSyncBaseLayerCircuit;
-use crate::witness::oracle::VmWitnessOracle;
+use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use crate::witness::tree::BinarySparseStorageTree;
 use crate::ethereum_types::U256;
 use crate::ethereum_types::Address;
@@ -21,7 +20,7 @@ use crate::witness::tree::ZkSyncStorageLeaf;
 use std::collections::HashMap;
 use crate::blake2::Blake2s256;
 use boojum::cs::traits::circuit::Circuit;
-use crate::abstract_zksync_circuit::ZkSyncUniformSynthesisFunction;
+use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit;
 
 const ACCOUNT_CODE_STORAGE_ADDRESS: Address = H160([
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -100,98 +99,98 @@ pub(crate) fn base_test_circuit(
 
     let mut cs = match circuit {
         ZkSyncBaseLayerCircuit::MainVM(inner) => {
-            let builder = inner.configure_builder(builder);
+            let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
-            inner.add_tables(&mut cs);
-            inner.synthesize_into_cs(&mut cs);
+            inner.add_tables_proxy(&mut cs);
+            inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {
-            let builder = inner.configure_builder(builder);
+            let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
-            inner.add_tables(&mut cs);
-            inner.synthesize_into_cs(&mut cs);
+            inner.add_tables_proxy(&mut cs);
+            inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {
-            let builder = inner.configure_builder(builder);
+            let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
-            inner.add_tables(&mut cs);
-            inner.synthesize_into_cs(&mut cs);
+            inner.add_tables_proxy(&mut cs);
+            inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {
-            let builder = inner.configure_builder(builder);
+            let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
-            inner.add_tables(&mut cs);
-            inner.synthesize_into_cs(&mut cs);
+            inner.add_tables_proxy(&mut cs);
+            inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {
-            let builder = inner.configure_builder(builder);
+            let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
-            inner.add_tables(&mut cs);
-            inner.synthesize_into_cs(&mut cs);
+            inner.add_tables_proxy(&mut cs);
+            inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {
-            let builder = inner.configure_builder(builder);
+            let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
-            inner.add_tables(&mut cs);
-            inner.synthesize_into_cs(&mut cs);
+            inner.add_tables_proxy(&mut cs);
+            inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::ECRecover(inner) => {
-            let builder = inner.configure_builder(builder);
+            let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
-            inner.add_tables(&mut cs);
-            inner.synthesize_into_cs(&mut cs);
+            inner.add_tables_proxy(&mut cs);
+            inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {
-            let builder = inner.configure_builder(builder);
+            let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
-            inner.add_tables(&mut cs);
-            inner.synthesize_into_cs(&mut cs);
+            inner.add_tables_proxy(&mut cs);
+            inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::StorageSorter(inner) => {
-            let builder = inner.configure_builder(builder);
+            let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
-            inner.add_tables(&mut cs);
-            inner.synthesize_into_cs(&mut cs);
+            inner.add_tables_proxy(&mut cs);
+            inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::StorageApplication(inner) => {
-            let builder = inner.configure_builder(builder);
+            let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
-            inner.add_tables(&mut cs);
-            inner.synthesize_into_cs(&mut cs);
+            inner.add_tables_proxy(&mut cs);
+            inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::EventsSorter(inner) => {
-            let builder = inner.configure_builder(builder);
+            let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
-            inner.add_tables(&mut cs);
-            inner.synthesize_into_cs(&mut cs);
+            inner.add_tables_proxy(&mut cs);
+            inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
         },
         ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {
-            let builder = inner.configure_builder(builder);
+            let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
-            inner.add_tables(&mut cs);
-            inner.synthesize_into_cs(&mut cs);
+            inner.add_tables_proxy(&mut cs);
+            inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
         },

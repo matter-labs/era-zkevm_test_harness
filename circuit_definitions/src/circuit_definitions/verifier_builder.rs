@@ -1,76 +1,22 @@
 use super::*;
 
-use crate::witness::oracle::VmWitnessOracle;
-use crate::abstract_zksync_circuit::concrete_circuits::*;
+use crate::aux_definitions::witness_oracle::VmWitnessOracle;
 
-#[derive(Derivative, serde::Serialize, serde::Deserialize)]
-#[derivative(Clone(bound = ""), Debug, Default(bound = ""))]
-#[serde(bound = "")]
-pub struct ZkSyncUniformCircuitVerifierBuilder<
-    F: SmallField,
-    S: ZkSyncUniformSynthesisFunction<F>,
-> {
-    _marker: std::marker::PhantomData<(F, S)>
-}
+use crate::circuit_definitions::base_layer::*;
+use boojum::cs::traits::circuit::CircuitBuilderProxy;
 
-impl<
-    F: SmallField,
-    S: ZkSyncUniformSynthesisFunction<F>,
-> CircuitBuilder<F> for ZkSyncUniformCircuitVerifierBuilder<F, S> 
-{
-    fn geometry() -> CSGeometry {
-        S::geometry()
-    }
-    fn lookup_parameters() -> LookupParameters {
-        S::lookup_parameters()
-    }
-    fn configure_builder<T: CsBuilderImpl<F, T>, GC: GateConfigurationHolder<F>, TB: StaticToolboxHolder>(
-        builder: CsBuilder<T, F, GC, TB>
-    ) -> CsBuilder<T, F, impl GateConfigurationHolder<F>, impl StaticToolboxHolder> {
-        S::configure_builder(builder)
-    }
-}
-
-impl<
-    F: SmallField,
-    S: ZkSyncUniformSynthesisFunction<F>,
->ZkSyncUniformCircuitVerifierBuilder<F, S> {
-    pub fn into_dyn_verifier_builder<EXT: FieldExtension<2, BaseField = F>>(self) -> Box<dyn ErasedBuilderForVerifier<F, EXT>> {
-        Box::new(self) as Box<dyn ErasedBuilderForVerifier<F, EXT>>
-    }
-
-    pub fn into_dyn_recursive_verifier_builder<EXT: FieldExtension<2, BaseField = F>, CS: ConstraintSystem<F> + 'static>(self) -> Box<dyn ErasedBuilderForRecursiveVerifier<F, EXT, CS>> {
-        Box::new(self) as Box<dyn ErasedBuilderForRecursiveVerifier<F, EXT, CS>>
-    }
-}
-
-impl<F: SmallField, S: ZkSyncUniformSynthesisFunction<F>> ZkSyncUniformCircuitInstance<F, S>  
-{
-    pub fn verifier_builder() -> ZkSyncUniformCircuitVerifierBuilder<F, S> {
-        ZkSyncUniformCircuitVerifierBuilder {
-            _marker: std::marker::PhantomData
-        }
-    }
-
-    pub fn into_verifier_builder(&self) -> ZkSyncUniformCircuitVerifierBuilder<F, S> {
-        ZkSyncUniformCircuitVerifierBuilder {
-            _marker: std::marker::PhantomData
-        }
-    }
-}
-
-pub type VMMainCircuitVerifierBuilder<F, W, R> = ZkSyncUniformCircuitVerifierBuilder<F, VmMainInstanceSynthesisFunction<F, W, R>>; 
-pub type CodeDecommittsSorterVerifierBuilder<F, R> = ZkSyncUniformCircuitVerifierBuilder<F, CodeDecommittmentsSorterSynthesisFunction<F, R>>;
-pub type CodeDecommitterVerifierBuilder<F, R> = ZkSyncUniformCircuitVerifierBuilder<F, CodeDecommitterInstanceSynthesisFunction<F, R>>;
-pub type LogDemuxerVerifierBuilder<F, R> = ZkSyncUniformCircuitVerifierBuilder<F, LogDemuxInstanceSynthesisFunction<F, R>>;
-pub type Keccak256RoundFunctionVerifierBuilder<F, R> = ZkSyncUniformCircuitVerifierBuilder<F, Keccak256RoundFunctionInstanceSynthesisFunction<F, R>>;
-pub type Sha256RoundFunctionVerifierBuilder<F, R> = ZkSyncUniformCircuitVerifierBuilder<F, Sha256RoundFunctionInstanceSynthesisFunction<F, R>>;
-pub type ECRecoverFunctionVerifierBuilder<F, R> = ZkSyncUniformCircuitVerifierBuilder<F, ECRecoverFunctionInstanceSynthesisFunction<F, R>>;
-pub type RAMPermutationVerifierBuilder<F, R> = ZkSyncUniformCircuitVerifierBuilder<F, RAMPermutationInstanceSynthesisFunction<F, R>>;
-pub type StorageSorterVerifierBuilder<F, R> = ZkSyncUniformCircuitVerifierBuilder<F, StorageSortAndDedupInstanceSynthesisFunction<F, R>>;
-pub type StorageApplicationVerifierBuilder<F, R> = ZkSyncUniformCircuitVerifierBuilder<F, StorageApplicationInstanceSynthesisFunction<F, R>>;
-pub type EventsSorterVerifierBuilder<F, R> = ZkSyncUniformCircuitVerifierBuilder<F, EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction<F, R>>;
-pub type L1MessagesSorterVerifierBuilder<F, R> = ZkSyncUniformCircuitVerifierBuilder<F, EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction<F, R>>;
+pub type VMMainCircuitVerifierBuilder<F, W, R> = CircuitBuilderProxy<F, VmMainInstanceSynthesisFunction<F, W, R>>; 
+pub type CodeDecommittsSorterVerifierBuilder<F, R> = CircuitBuilderProxy<F, CodeDecommittmentsSorterSynthesisFunction<F, R>>;
+pub type CodeDecommitterVerifierBuilder<F, R> = CircuitBuilderProxy<F, CodeDecommitterInstanceSynthesisFunction<F, R>>;
+pub type LogDemuxerVerifierBuilder<F, R> = CircuitBuilderProxy<F, LogDemuxInstanceSynthesisFunction<F, R>>;
+pub type Keccak256RoundFunctionVerifierBuilder<F, R> = CircuitBuilderProxy<F, Keccak256RoundFunctionInstanceSynthesisFunction<F, R>>;
+pub type Sha256RoundFunctionVerifierBuilder<F, R> = CircuitBuilderProxy<F, Sha256RoundFunctionInstanceSynthesisFunction<F, R>>;
+pub type ECRecoverFunctionVerifierBuilder<F, R> = CircuitBuilderProxy<F, ECRecoverFunctionInstanceSynthesisFunction<F, R>>;
+pub type RAMPermutationVerifierBuilder<F, R> = CircuitBuilderProxy<F, RAMPermutationInstanceSynthesisFunction<F, R>>;
+pub type StorageSorterVerifierBuilder<F, R> = CircuitBuilderProxy<F, StorageSortAndDedupInstanceSynthesisFunction<F, R>>;
+pub type StorageApplicationVerifierBuilder<F, R> = CircuitBuilderProxy<F, StorageApplicationInstanceSynthesisFunction<F, R>>;
+pub type EventsSorterVerifierBuilder<F, R> = CircuitBuilderProxy<F, EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction<F, R>>;
+pub type L1MessagesSorterVerifierBuilder<F, R> = CircuitBuilderProxy<F, EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction<F, R>>;
 
 
 pub fn dyn_verifier_builder_for_circuit_type<
@@ -90,46 +36,46 @@ where [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
 
     match circuit_type {
         i if i == BaseLayerCircuitType::VM as u8 => {
-            VMMainCircuitVerifierBuilder::<F, VmWitnessOracle<F>, R>::default().into_dyn_verifier_builder()
+            VMMainCircuitVerifierBuilder::<F, VmWitnessOracle<F>, R>::dyn_verifier_builder()
         },
         i if i == BaseLayerCircuitType::DecommitmentsFilter as u8 => {
-            CodeDecommittsSorterVerifierBuilder::<F, R>::default().into_dyn_verifier_builder()
+            CodeDecommittsSorterVerifierBuilder::<F, R>::dyn_verifier_builder()
         },
         i if i == BaseLayerCircuitType::Decommiter as u8 => {
-            CodeDecommitterVerifierBuilder::<F, R>::default().into_dyn_verifier_builder()
+            CodeDecommitterVerifierBuilder::<F, R>::dyn_verifier_builder()
         },
         i if i == BaseLayerCircuitType::LogDemultiplexer as u8 => {
-            LogDemuxerVerifierBuilder::<F, R>::default().into_dyn_verifier_builder()
+            LogDemuxerVerifierBuilder::<F, R>::dyn_verifier_builder()
         },
         i if i == BaseLayerCircuitType::KeccakPrecompile as u8 => {
-            Keccak256RoundFunctionVerifierBuilder::<F, R>::default().into_dyn_verifier_builder()
+            Keccak256RoundFunctionVerifierBuilder::<F, R>::dyn_verifier_builder()
         },
         i if i == BaseLayerCircuitType::Sha256Precompile as u8 => {
-            Sha256RoundFunctionVerifierBuilder::<F, R>::default().into_dyn_verifier_builder()
+            Sha256RoundFunctionVerifierBuilder::<F, R>::dyn_verifier_builder()
         },
         i if i == BaseLayerCircuitType::EcrecoverPrecompile as u8 => {
-            ECRecoverFunctionVerifierBuilder::<F, R>::default().into_dyn_verifier_builder()
+            ECRecoverFunctionVerifierBuilder::<F, R>::dyn_verifier_builder()
         },
         i if i == BaseLayerCircuitType::RamValidation as u8 => {
-            RAMPermutationVerifierBuilder::<F, R>::default().into_dyn_verifier_builder()
+            RAMPermutationVerifierBuilder::<F, R>::dyn_verifier_builder()
         },
         i if i == BaseLayerCircuitType::StorageFilter as u8 => {
-            StorageSorterVerifierBuilder::<F, R>::default().into_dyn_verifier_builder()
+            StorageSorterVerifierBuilder::<F, R>::dyn_verifier_builder()
         },
         i if i == BaseLayerCircuitType::StorageApplicator as u8 => {
-            StorageApplicationVerifierBuilder::<F, R>::default().into_dyn_verifier_builder()
+            StorageApplicationVerifierBuilder::<F, R>::dyn_verifier_builder()
         },
         i if i == BaseLayerCircuitType::EventsRevertsFilter as u8 => {
-            EventsSorterVerifierBuilder::<F, R>::default().into_dyn_verifier_builder()
+            EventsSorterVerifierBuilder::<F, R>::dyn_verifier_builder()
         },
         i if i == BaseLayerCircuitType::L1MessagesRevertsFilter as u8 => {
-            L1MessagesSorterVerifierBuilder::<F, R>::default().into_dyn_verifier_builder()
+            L1MessagesSorterVerifierBuilder::<F, R>::dyn_verifier_builder()
         },
         // i if i == BaseLayerCircuitType::VM as u8 => {
-        //     ZkSyncUniformCircuitVerifierBuilder::<F, VMMainCircuitVerifierBuilder<F, VmWitnessOracle<F>, R>>::default().into_dyn_verifier_builder()
+        //     ZkSyncUniformCircuitVerifierBuilder::<F, VMMainCircuitVerifierBuilder<F, VmWitnessOracle<F>, R>>::dyn_verifier_builder()
         // },
         // i if i == BaseLayerCircuitType::VM as u8 => {
-        //     ZkSyncUniformCircuitVerifierBuilder::<F, VMMainCircuitVerifierBuilder<F, VmWitnessOracle<F>, R>>::default().into_dyn_verifier_builder()
+        //     ZkSyncUniformCircuitVerifierBuilder::<F, VMMainCircuitVerifierBuilder<F, VmWitnessOracle<F>, R>>::dyn_verifier_builder()
         // },
         _ => {
             panic!("unknown circuit type = {}", circuit_type);
@@ -155,46 +101,46 @@ where [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
 
     match circuit_type {
         i if i == BaseLayerCircuitType::VM as u8 => {
-            VMMainCircuitVerifierBuilder::<F, VmWitnessOracle<F>, R>::default().into_dyn_recursive_verifier_builder()
+            VMMainCircuitVerifierBuilder::<F, VmWitnessOracle<F>, R>::dyn_recursive_verifier_builder()
         },
         i if i == BaseLayerCircuitType::DecommitmentsFilter as u8 => {
-            CodeDecommittsSorterVerifierBuilder::<F, R>::default().into_dyn_recursive_verifier_builder()
+            CodeDecommittsSorterVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
         },
         i if i == BaseLayerCircuitType::Decommiter as u8 => {
-            CodeDecommitterVerifierBuilder::<F, R>::default().into_dyn_recursive_verifier_builder()
+            CodeDecommitterVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
         },
         i if i == BaseLayerCircuitType::LogDemultiplexer as u8 => {
-            LogDemuxerVerifierBuilder::<F, R>::default().into_dyn_recursive_verifier_builder()
+            LogDemuxerVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
         },
         i if i == BaseLayerCircuitType::KeccakPrecompile as u8 => {
-            Keccak256RoundFunctionVerifierBuilder::<F, R>::default().into_dyn_recursive_verifier_builder()
+            Keccak256RoundFunctionVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
         },
         i if i == BaseLayerCircuitType::Sha256Precompile as u8 => {
-            Sha256RoundFunctionVerifierBuilder::<F, R>::default().into_dyn_recursive_verifier_builder()
+            Sha256RoundFunctionVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
         },
         i if i == BaseLayerCircuitType::EcrecoverPrecompile as u8 => {
-            ECRecoverFunctionVerifierBuilder::<F, R>::default().into_dyn_recursive_verifier_builder()
+            ECRecoverFunctionVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
         },
         i if i == BaseLayerCircuitType::RamValidation as u8 => {
-            RAMPermutationVerifierBuilder::<F, R>::default().into_dyn_recursive_verifier_builder()
+            RAMPermutationVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
         },
         i if i == BaseLayerCircuitType::StorageFilter as u8 => {
-            StorageSorterVerifierBuilder::<F, R>::default().into_dyn_recursive_verifier_builder()
+            StorageSorterVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
         },
         i if i == BaseLayerCircuitType::StorageApplicator as u8 => {
-            StorageApplicationVerifierBuilder::<F, R>::default().into_dyn_recursive_verifier_builder()
+            StorageApplicationVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
         },
         i if i == BaseLayerCircuitType::EventsRevertsFilter as u8 => {
-            EventsSorterVerifierBuilder::<F, R>::default().into_dyn_recursive_verifier_builder()
+            EventsSorterVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
         },
         i if i == BaseLayerCircuitType::L1MessagesRevertsFilter as u8 => {
-            L1MessagesSorterVerifierBuilder::<F, R>::default().into_dyn_recursive_verifier_builder()
+            L1MessagesSorterVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
         },
         // i if i == BaseLayerCircuitType::VM as u8 => {
-        //     ZkSyncUniformCircuitVerifierBuilder::<F, VMMainCircuitVerifierBuilder<F, VmWitnessOracle<F>, R>>::default().into_dyn_recursive_verifier_builder()
+        //     ZkSyncUniformCircuitVerifierBuilder::<F, VMMainCircuitVerifierBuilder<F, VmWitnessOracle<F>, R>>::dyn_recursive_verifier_builder()
         // },
         // i if i == BaseLayerCircuitType::VM as u8 => {
-        //     ZkSyncUniformCircuitVerifierBuilder::<F, VMMainCircuitVerifierBuilder<F, VmWitnessOracle<F>, R>>::default().into_dyn_recursive_verifier_builder()
+        //     ZkSyncUniformCircuitVerifierBuilder::<F, VMMainCircuitVerifierBuilder<F, VmWitnessOracle<F>, R>>::dyn_recursive_verifier_builder()
         // },
         _ => {
             panic!("unknown circuit type = {}", circuit_type);

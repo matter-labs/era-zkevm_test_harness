@@ -1,6 +1,4 @@
 use super::*;
-use crate::encodings::decommittment_request::DecommittmentQueueSimulator;
-use crate::encodings::memory_query::MemoryQueueSimulator;
 use crate::witness::full_block_artifact::FullBlockArtifacts;
 use boojum::gadgets::u256::recompose_u256_as_u32x8;
 use rayon::prelude::*;

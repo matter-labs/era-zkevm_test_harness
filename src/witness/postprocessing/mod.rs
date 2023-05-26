@@ -2,14 +2,14 @@ use super::*;
 use super::full_block_artifact::BlockBasicCircuitsPublicInputs;
 
 use crate::witness::oracle::VmInstanceWitness;
-use crate::witness::oracle::VmWitnessOracle;
+use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use crate::witness::full_block_artifact::FullBlockArtifacts;
 use crate::witness::full_block_artifact::BlockBasicCircuits;
 use crate::toolset::GeometryConfig;
 use crate::ethereum_types::U256;
 use crate::witness::full_block_artifact::BlockBasicCircuitsPublicCompactFormsWitnesses;
-use crate::abstract_zksync_circuit::concrete_circuits::*;
 use crate::witness::utils::*;
+use circuit_definitions::circuit_definitions::base_layer::*;
 
 use std::sync::Arc;
 use boojum::algebraic_props::round_function;

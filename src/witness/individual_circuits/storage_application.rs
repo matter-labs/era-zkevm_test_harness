@@ -6,10 +6,10 @@ use crate::witness::tree::*;
 use blake2::Blake2s256;
 use tracing;
 use crate::witness::individual_circuits::keccak256_round_function::encode_kecca256_inner_state;
-use crate::encodings::state_diff_record::StateDiffRecord;
 use zkevm_circuits::storage_application::input::*;
 use zkevm_circuits::base_structures::state_diff_record::NUM_KECCAK256_ROUNDS_PER_RECORD_ACCUMULATION;
 use boojum::gadgets::keccak256::{self};
+use circuit_definitions::encodings::state_diff_record::StateDiffRecord;
 
 use crate::sha3::Digest;
 

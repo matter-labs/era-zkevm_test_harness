@@ -5,6 +5,7 @@ use zkevm_circuits::base_structures::log_query::*;
 use derivative::*;
 use zkevm_circuits::sha256_round_function::*;
 use zk_evm::zkevm_opcode_defs::ethereum_types::U256;
+use circuit_definitions::encodings::*;
 
 #[derive(Derivative)]
 #[derivative(Clone, Copy, Debug, PartialEq, Eq)]

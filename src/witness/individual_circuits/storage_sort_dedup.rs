@@ -1,14 +1,10 @@
 use super::*;
 use std::cmp::Ordering;
 use zkevm_circuits::storage_validity_by_grand_product::input::*;
-use crate::encodings::LogWithExtendedEnumerationQueueSimulator;
-use crate::encodings::LogQueueSimulator;
 use zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
 use zkevm_circuits::base_structures::log_query::{LOG_QUERY_PACKED_WIDTH, LOG_QUERY_ABSORBTION_ROUNDS};
-use crate::encodings::LogQueryWithExtendedEnumeration;
-use crate::encodings::OutOfCircuitFixedLengthEncodable;
 use zkevm_circuits::DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS;
-use crate::encodings::CircuitEquivalentReflection;
+use circuit_definitions::encodings::*;
 
 pub fn compute_storage_dedup_and_sort<
 F: SmallField,
@@ -214,7 +210,7 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
         let accumulated_rhs: [F; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS] = rhs_grand_product.iter().map(|el| *el.last().unwrap()).collect::<Vec<_>>().try_into().unwrap();
 
         let last_sorted_query = &sorted_states.last().unwrap().2;
-        use crate::encodings::log_query::*;
+        use circuit_definitions::encodings::log_query::comparison_key;
         let last_comparison_key = comparison_key(&last_sorted_query.raw_query);
         let last_key = last_sorted_query.raw_query.key;
         let last_address = last_sorted_query.raw_query.address;

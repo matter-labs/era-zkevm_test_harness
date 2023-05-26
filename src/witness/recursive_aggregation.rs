@@ -1,7 +1,6 @@
 use boojum::{field::{goldilocks::GoldilocksExt2, U64Representable}, gadgets::{traits::allocatable::CSAllocatable, recursion::allocated_vk::AllocatedVerificationKey}, cs::traits::cs::ConstraintSystem};
 
-use crate::{abstract_zksync_circuit::{concrete_circuits::*, recursion_layer::{node_layer::ZkSyncNodeLayerRecursiveCircuit, leaf_layer::ZkSyncLeafLayerRecursiveCircuit}}, witness::utils::take_sponge_like_queue_state_from_simulator};
-use crate::encodings::CircuitEquivalentReflection;
+use crate::witness::utils::take_sponge_like_queue_state_from_simulator;
 use super::*;
 use boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
 use zkevm_circuits::recursion::{leaf_layer::input::*, VK_COMMITMENT_LENGTH};
@@ -13,9 +12,6 @@ type F = GoldilocksField;
 type EXT = GoldilocksExt2;
 type H = CircuitGoldilocksPoseidon2Sponge;
 
-use crate::encodings::recursion_request::*;
-use crate::abstract_zksync_circuit::concrete_circuits::*;
-use crate::abstract_zksync_circuit::recursion_layer::*;
 use boojum::algebraic_props::round_function::AlgebraicRoundFunction;
 use boojum::gadgets::traits::round_function::BuildableCircuitRoundFunction;
 use zkevm_circuits::fsm_input_output::commit_variable_length_encodable_item;
@@ -25,7 +21,11 @@ use zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use zkevm_circuits::recursion::leaf_layer::LeafLayerRecursionConfig;
 use crate::external_calls::base_layer_proof_config;
 use boojum::gadgets::recursion::recursive_tree_hasher::RecursiveTreeHasher;
-
+use circuit_definitions::circuit_definitions::recursion_layer::*;
+use circuit_definitions::circuit_definitions::base_layer::*;
+use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
+use circuit_definitions::circuit_definitions::recursion_layer::leaf_layer::*;
+use circuit_definitions::encodings::CircuitEquivalentReflection;
 
 pub(crate) fn compute_encodable_item_from_witness<
 T: CSAllocatable<F> + CircuitVarLengthEncodable<F>, 

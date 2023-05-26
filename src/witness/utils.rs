@@ -19,13 +19,15 @@ use zkevm_circuits::base_structures::vm_state::GlobalContextWitness;
 use zkevm_circuits::base_structures::vm_state::VmLocalStateWitness;
 use zk_evm::aux_structures::LogQuery;
 use zkevm_circuits::fsm_input_output::circuit_inputs::INPUT_OUTPUT_COMMITMENT_LENGTH;
-use crate::encodings::log_query::LogQueueState;
-use crate::encodings::log_query::LogQueueSimulator;
 use boojum::field::SmallField;
 use boojum::algebraic_props::round_function::AlgebraicRoundFunction;
 use boojum::gadgets::traits::round_function::*;
 use boojum::gadgets::queue::QueueState;
 use zkevm_circuits::base_structures::vm_state::{QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH};
+use boojum::cs::traits::gate::GatePlacementStrategy;
+use circuit_definitions::encodings::*;
+
+use super::*;
 
 pub fn log_queries_into_states<
     F: SmallField,
@@ -40,10 +42,6 @@ pub fn log_queries_into_states<
 
     result
 }
-
-use super::*;
-
-use crate::encodings::{QueueIntermediateStates};
 
 pub fn transform_queue_state<F: SmallField, const N: usize, const M: usize>(
     witness_state: QueueIntermediateStates<F, QUEUE_STATE_WIDTH, N, M>,
@@ -72,8 +70,6 @@ pub fn transform_sponge_like_queue_state<F: SmallField, const M: usize>(
 
     result
 }
-
-use crate::encodings::*;
 
 pub fn take_queue_state_from_simulator<
     F: SmallField, 
@@ -116,6 +112,8 @@ pub fn take_sponge_like_queue_state_from_simulator<
 use std::collections::VecDeque;
 use boojum::gadgets::queue::CircuitQueueWitness;
 use std::sync::RwLock;
+use circuit_definitions::encodings::CircuitEquivalentReflection;
+use circuit_definitions::encodings::OutOfCircuitFixedLengthEncodable;
 
 pub fn transform_queue_witness<
     'a, 
@@ -180,12 +178,12 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
         }
     );
 
-    let builder = ConstantsAllocatorGate::configure_builder(builder, boojum::cs::GatePlacementStrategy::UseGeneralPurposeColumns);
-    let builder = R::configure_builder(builder, boojum::cs::GatePlacementStrategy::UseGeneralPurposeColumns);
-    let builder = FmaGateInBaseFieldWithoutConstant::configure_builder(builder, boojum::cs::GatePlacementStrategy::UseGeneralPurposeColumns);
-    let builder = BooleanConstraintGate::configure_builder(builder, boojum::cs::GatePlacementStrategy::UseGeneralPurposeColumns);
-    let builder = ReductionGate::<F, 4>::configure_builder(builder, boojum::cs::GatePlacementStrategy::UseGeneralPurposeColumns);
-    let builder = SelectionGate::configure_builder(builder, boojum::cs::GatePlacementStrategy::UseGeneralPurposeColumns);
+    let builder = ConstantsAllocatorGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
+    let builder = R::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
+    let builder = FmaGateInBaseFieldWithoutConstant::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
+    let builder = BooleanConstraintGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
+    let builder = ReductionGate::<F, 4>::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
+    let builder = SelectionGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
 
     let mut cs = builder.build(());
 

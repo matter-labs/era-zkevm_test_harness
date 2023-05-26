@@ -1,15 +1,13 @@
-use crate::witness::oracle::VmWitnessOracle;
 use boojum::cs::implementations::proof::Proof;
 use boojum::cs::implementations::setup::FinalizationHintsForProver;
-use boojum::field::FieldExtension;
 use boojum::field::goldilocks::{GoldilocksField, GoldilocksExt2};
 use zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
-use crate::Poseidon2Goldilocks;
 use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
 use zkevm_circuits::tables::*;
 use boojum::gadgets::tables::*;
 use boojum::cs::gates::*;
 use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord;
+use boojum::cs::traits::gate::GatePlacementStrategy;
 
 use super::*;
 
@@ -230,7 +228,7 @@ impl<
         }
     }
 
-    pub fn size_hint(&self) -> (Option<usize>, Option<usize>) {
+    pub fn size_hint(&self) -> (Option<usize>, Option<usize>) {    
         match &self {
             ZkSyncBaseLayerCircuit::MainVM(inner) => {inner.size_hint()},
             ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {inner.size_hint()},
@@ -249,18 +247,18 @@ impl<
 
     pub fn geometry(&self) -> CSGeometry {
         match &self {
-            ZkSyncBaseLayerCircuit::MainVM(inner) => {inner.geometry()},
-            ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {inner.geometry()},
-            ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {inner.geometry()},
-            ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {inner.geometry()},
-            ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {inner.geometry()},
-            ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {inner.geometry()},
-            ZkSyncBaseLayerCircuit::ECRecover(inner) => {inner.geometry()},
-            ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {inner.geometry()},
-            ZkSyncBaseLayerCircuit::StorageSorter(inner) => {inner.geometry()},
-            ZkSyncBaseLayerCircuit::StorageApplication(inner) => {inner.geometry()},
-            ZkSyncBaseLayerCircuit::EventsSorter(inner) => {inner.geometry()},
-            ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {inner.geometry()},
+            ZkSyncBaseLayerCircuit::MainVM(inner) => {inner.geometry_proxy()},
+            ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {inner.geometry_proxy()},
+            ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {inner.geometry_proxy()},
+            ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {inner.geometry_proxy()},
+            ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {inner.geometry_proxy()},
+            ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {inner.geometry_proxy()},
+            ZkSyncBaseLayerCircuit::ECRecover(inner) => {inner.geometry_proxy()},
+            ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {inner.geometry_proxy()},
+            ZkSyncBaseLayerCircuit::StorageSorter(inner) => {inner.geometry_proxy()},
+            ZkSyncBaseLayerCircuit::StorageApplication(inner) => {inner.geometry_proxy()},
+            ZkSyncBaseLayerCircuit::EventsSorter(inner) => {inner.geometry_proxy()},
+            ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {inner.geometry_proxy()},
         }
     }
 
@@ -310,7 +308,7 @@ impl<
             // ZkSyncBaseLayerCircuit::L1MessagesPubdataHasher(..) => CircuitType::L1MessagesHasher as u8
         }
     }
-    
+
     // pub fn erase_witness(&self) {
     //     match &self {
     //         ZkSyncCircuit::Scheduler(inner) => {inner.erase_witness();},
@@ -347,7 +345,6 @@ use boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
 
 pub type BaseProofsTreeHasher = GoldilocksPoseidon2Sponge<AbsorbtionModeOverwrite>;
 pub type ZkSyncBaseProof = Proof<GoldilocksField, BaseProofsTreeHasher, GoldilocksExt2>;
-use crate::ZkSyncDefaultRoundFunction;
 
 pub type ZkSyncBaseLayerProof = ZkSyncBaseLayerStorage<ZkSyncBaseProof>;
 

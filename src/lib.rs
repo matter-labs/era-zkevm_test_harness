@@ -1,4 +1,4 @@
-#![recursion_limit = "16"]
+#![recursion_limit = "32"]
 
 #![feature(const_eval_limit)]
 #![const_eval_limit = "100000000"]
@@ -20,13 +20,12 @@ pub use zk_evm::blake2;
 pub use zk_evm::sha2;
 pub use zk_evm::sha3;
 
-// pub mod data_source;
-pub mod encodings;
+pub mod data_source;
 pub mod entry_point;
 pub mod utils;
 pub mod witness;
 pub mod geometry_config;
-// pub mod prover_utils;
+pub mod prover_utils;
 
 pub use zk_evm::ethereum_types;
 
@@ -36,7 +35,6 @@ pub mod external_calls;
 pub mod toolset;
 pub mod capacity_estimator;
 pub mod compute_setups;
-pub mod abstract_zksync_circuit;
 // pub mod circuit_limit_estimator;
 
 pub const INITIAL_MONOTONIC_CYCLE_COUNTER: u32 = 1024;

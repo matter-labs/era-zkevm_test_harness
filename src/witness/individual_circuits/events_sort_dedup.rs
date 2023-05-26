@@ -3,13 +3,12 @@ use zkevm_circuits::DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS;
 use zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
 use crate::ethereum_types::U256;
 use super::*;
-use crate::encodings::LogQueueSimulator;
-use crate::encodings::QueueIntermediateStates;
 use zkevm_circuits::base_structures::log_query::{LOG_QUERY_PACKED_WIDTH, LOG_QUERY_ABSORBTION_ROUNDS};
 use zkevm_circuits::log_sorter::input::*;
 use std::cmp::Ordering;
 use smallvec::SmallVec;
 use rayon::prelude::*;
+use circuit_definitions::encodings::*;
 
 pub fn compute_events_dedup_and_sort<
 F: SmallField,

@@ -1,6 +1,7 @@
 use super::*;
 use zkevm_circuits::demux_log_queue::input::*;
 use zkevm_circuits::base_structures::log_query::*;
+use circuit_definitions::encodings::*;
 
 /// Take a storage log, output logs separately for events, l1 messages, storage, etc
 pub fn compute_logs_demux<

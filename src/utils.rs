@@ -3,12 +3,12 @@ use std::ops::Add;
 use crate::witness::tree::BinaryHasher;
 use boojum::algebraic_props::round_function;
 use boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
-use boojum::cs::cs_builder::new_dyn_builder;
 use boojum::cs::implementations::setup::FinalizationHintsForProver;
 use boojum::field::goldilocks::GoldilocksExt2;
 use num_bigint::BigUint;
 use zk_evm::{address_to_u256, ethereum_types::*};
 use boojum::config::*;
+use circuit_definitions::encodings::BytesSerializable;
 
 pub fn u64_as_u32_le(value: u64) -> [u32; 2] {
     [
@@ -78,8 +78,6 @@ pub fn bytes_to_u128_le<const N: usize, const M: usize>(bytes: &[u8; N]) -> [u12
 
     result
 }
-
-use crate::encodings::BytesSerializable;
 
 pub fn binary_merklize_set<
     'a, 

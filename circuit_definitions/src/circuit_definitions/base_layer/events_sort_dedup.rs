@@ -1,38 +1,30 @@
-
 use derivative::*;
 
 use super::*;
+use boojum::cs::traits::circuit::CircuitBuilder;
 
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone, Copy, Debug, Default(bound = ""))]
-pub struct CodeDecommittmentsSorterSynthesisFunction<
+pub struct EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction<
 F: SmallField, 
 R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
 > {
 _marker: std::marker::PhantomData<(F, R)>
 }
 
-use zkevm_circuits::sort_decommittment_requests::input::*;
-use zkevm_circuits::sort_decommittment_requests::sort_and_deduplicate_code_decommittments_entry_point;
+use zkevm_circuits::log_sorter::input::*;
+use zkevm_circuits::log_sorter::sort_and_deduplicate_events_entry_point;
 
 impl<
 F: SmallField, 
 R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
-> ZkSyncUniformSynthesisFunction<F> for CodeDecommittmentsSorterSynthesisFunction<F, R> 
+> CircuitBuilder<F> for EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction<F, R> 
 where [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN + 1]:,
     [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:
 {
-    type Witness = CodeDecommittmentsDeduplicatorInstanceWitness<F>;
-    type Config = usize;
-    type RoundFunction = R;
-
-    fn description() -> String {
-        "Decommittment requests sorter".to_string()
-    }
-
     fn geometry() -> CSGeometry {
         CSGeometry { 
             num_columns_under_copy_permutation: 140, 
@@ -49,18 +41,11 @@ where [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
             share_table_id: true 
         }
     }
-    
-    fn size_hint() -> (Option<usize>, Option<usize>) {
-        (
-            Some(TARGET_CIRCUIT_TRACE_LENGTH),
-            Some(1 << 26)
-        )
-    }
 
     fn configure_builder<T: CsBuilderImpl<F, T>, GC: GateConfigurationHolder<F>, TB: StaticToolboxHolder>(
         builder: CsBuilder<T, F, GC, TB>
     ) -> CsBuilder<T, F, impl GateConfigurationHolder<F>, impl StaticToolboxHolder> {
-        let builder = builder.allow_lookup(Self::lookup_parameters());
+        let builder = builder.allow_lookup(<Self as CircuitBuilder<F>>::lookup_parameters());
 
         let builder = ConstantsAllocatorGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
         let builder = BooleanConstraintGate::configure_builder(builder, GatePlacementStrategy::UseSpecializedColumns { num_repetitions: 1, share_constants: false });
@@ -76,6 +61,32 @@ where [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
 
         builder
     }
+}
+
+impl<
+F: SmallField, 
+R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
+> ZkSyncUniformSynthesisFunction<F> for EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction<F, R> 
+where [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN + 1]:,
+    [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:
+{
+    type Witness = EventsDeduplicatorInstanceWitness<F>;
+    type Config = usize;
+    type RoundFunction = R;
+
+    fn description() -> String {
+        "Event/L1 messages sort and dedup".to_string()
+    }
+    
+    fn size_hint() -> (Option<usize>, Option<usize>) {
+        (
+            Some(TARGET_CIRCUIT_TRACE_LENGTH),
+            Some(1 << 26)
+        )
+    }
 
     fn add_tables<CS: ConstraintSystem<F>>(cs: &mut CS) {
         let table = create_range_check_table::<F, 8>();
@@ -90,13 +101,6 @@ where [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
         round_function: &Self::RoundFunction,
         config: Self::Config,
     ) -> [Num<F>; INPUT_OUTPUT_COMMITMENT_LENGTH] {
-        sort_and_deduplicate_code_decommittments_entry_point(cs, witness, round_function, config)
-    }
-
-    fn get_synthesis_function_dyn<
-        'a,
-        CS: ConstraintSystem<F> + 'a,
-    >() -> Box<dyn FnOnce(&mut CS, Self::Witness, &Self::RoundFunction, Self::Config) -> [Num<F>; INPUT_OUTPUT_COMMITMENT_LENGTH] + 'a> {
-        Box::new(sort_and_deduplicate_code_decommittments_entry_point)
+        sort_and_deduplicate_events_entry_point(cs, witness, round_function, config)
     }
 }

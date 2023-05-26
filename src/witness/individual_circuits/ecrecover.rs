@@ -2,6 +2,7 @@ use super::*;
 use zkevm_circuits::ecrecover::*;
 use zkevm_circuits::base_structures::log_query::*;
 use zk_evm::zkevm_opcode_defs::ethereum_types::U256;
+use circuit_definitions::encodings::*;
 
 // we want to simulate splitting of data into many separate instances of the same circuit.
 // So we basically need to reconstruct the FSM state on input/output, and passthrough data.

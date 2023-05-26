@@ -1,16 +1,15 @@
 use super::*;
-use crate::witness::oracle::VmWitnessOracle;
 use boojum::cs::implementations::proof::Proof;
 use boojum::field::FieldExtension;
 use boojum::field::goldilocks::{GoldilocksField, GoldilocksExt2};
-use zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
 use zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
-use crate::Poseidon2Goldilocks;
 use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
-use zkevm_circuits::tables::*;
-use boojum::gadgets::tables::*;
 use boojum::cs::gates::*;
 use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord;
+use boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
+use boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
+use boojum::gadgets::recursion::recursive_transcript::CircuitAlgebraicSpongeBasedTranscript;
+use boojum::cs::traits::gate::GatePlacementStrategy;
 
 pub mod leaf_layer;
 pub mod node_layer;
@@ -19,22 +18,6 @@ use self::leaf_layer::*;
 use self::node_layer::*;
 
 pub const RECURSION_ARITY: usize = 16;
-
-pub const BASE_LAYER_CIRCUIT_VM: u8 = BaseLayerCircuitType::VM as u8;
-pub const BASE_LAYER_CIRCUIT_DECOMMITS_SORTER: u8 =  BaseLayerCircuitType::DecommitmentsFilter as u8;
-pub const BASE_LAYER_CIRCUIT_DECOMMITER: u8 =  BaseLayerCircuitType::Decommiter as u8;
-pub const BASE_LAYER_CIRCUIT_LOG_DEMUXER: u8 =  BaseLayerCircuitType::LogDemultiplexer as u8;
-pub const BASE_LAYER_CIRCUIT_KECCAK256: u8 =  BaseLayerCircuitType::KeccakPrecompile as u8;
-pub const BASE_LAYER_CIRCUIT_SHA256: u8 =  BaseLayerCircuitType::Sha256Precompile as u8;
-pub const BASE_LAYER_CIRCUIT_ECRECOVER: u8 =  BaseLayerCircuitType::EcrecoverPrecompile as u8;
-pub const BASE_LAYER_CIRCUIT_RAM_PERMUTATION: u8 =  BaseLayerCircuitType::RamValidation as u8;
-pub const BASE_LAYER_CIRCUIT_STORAGE_SORTER: u8 =  BaseLayerCircuitType::StorageFilter as u8;
-pub const BASE_LAYER_CIRCUIT_STORAGE_APPLICATION: u8 =  BaseLayerCircuitType::StorageApplicator as u8;
-pub const BASE_LAYER_CIRCUIT_EVENTS_SORTER: u8 =  BaseLayerCircuitType::EventsRevertsFilter as u8;
-pub const BASE_LAYER_CIRCUIT_L1_MESSAGES_SORTER: u8 =  BaseLayerCircuitType::L1MessagesRevertsFilter as u8;
-
-type F = GoldilocksField;
-type EXT = GoldilocksExt2;
 
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone(bound = ""))]
@@ -195,6 +178,15 @@ pub type ZkSyncRecursionVerificationKey = VerificationKey<GoldilocksField, Recur
 
 pub type ZkSyncRecursionLayerVerificationKey = ZkSyncRecursionLayerStorage<ZkSyncRecursionVerificationKey>;
 
+type F = GoldilocksField;
+type P = GoldilocksField;
+type TR = GoldilocksPoisedon2Transcript;
+type R = Poseidon2Goldilocks;
+type CTR = CircuitAlgebraicSpongeBasedTranscript<GoldilocksField, 8, 12, 4, R>;
+type EXT = GoldilocksExt2;
+type H = GoldilocksPoseidon2Sponge<AbsorbtionModeOverwrite>;
+type RH = CircuitGoldilocksPoseidon2Sponge;
+
 impl ZkSyncRecursiveLayerCircuit {
     pub fn short_description(&self) -> &'static str {
         match &self {
@@ -238,75 +230,85 @@ impl ZkSyncRecursiveLayerCircuit {
         match &self {
             Self::SchedulerCircuit(inner) => {todo!()},
             Self::NodeLayerCircuit(inner) => {inner.size_hint()},
-            Self::LeafLayerCircuitForMainVM(inner) => {inner.size_hint()},
-            Self::LeafLayerCircuitForCodeDecommittmentsSorter(inner) => {inner.size_hint()},
-            Self::LeafLayerCircuitForCodeDecommitter(inner) => {inner.size_hint()},
-            Self::LeafLayerCircuitForLogDemuxer(inner) => {inner.size_hint()},
-            Self::LeafLayerCircuitForKeccakRoundFunction(inner) => {inner.size_hint()},
-            Self::LeafLayerCircuitForSha256RoundFunction(inner) => {inner.size_hint()},
-            Self::LeafLayerCircuitForECRecover(inner) => {inner.size_hint()},
-            Self::LeafLayerCircuitForRAMPermutation(inner) => {inner.size_hint()},
-            Self::LeafLayerCircuitForStorageSorter(inner) => {inner.size_hint()},
-            Self::LeafLayerCircuitForStorageApplication(inner) => {inner.size_hint()},
-            Self::LeafLayerCircuitForEventsSorter(inner) => {inner.size_hint()},
-            Self::LeafLayerCircuitForL1MessagesSorter(inner) => {inner.size_hint()},
+            Self::LeafLayerCircuitForMainVM(inner)
+            | Self::LeafLayerCircuitForCodeDecommittmentsSorter(inner)
+            | Self::LeafLayerCircuitForCodeDecommitter(inner)
+            | Self::LeafLayerCircuitForLogDemuxer(inner)
+            | Self::LeafLayerCircuitForKeccakRoundFunction(inner)
+            | Self::LeafLayerCircuitForSha256RoundFunction(inner)
+            | Self::LeafLayerCircuitForECRecover(inner)
+            | Self::LeafLayerCircuitForRAMPermutation(inner)
+            | Self::LeafLayerCircuitForStorageSorter(inner)
+            | Self::LeafLayerCircuitForStorageApplication(inner)
+            | Self::LeafLayerCircuitForEventsSorter(inner)
+            | Self::LeafLayerCircuitForL1MessagesSorter(inner) => {
+                inner.size_hint()
+            },
         }
     }
 
     pub fn geometry(&self) -> CSGeometry {
+        use boojum::cs::traits::circuit::CircuitBuilder;
+
         match &self {
-            Self::SchedulerCircuit(inner) => {todo!()},
-            Self::NodeLayerCircuit(inner) => {inner.geometry()},
-            Self::LeafLayerCircuitForMainVM(inner) => {inner.geometry()},
-            Self::LeafLayerCircuitForCodeDecommittmentsSorter(inner) => {inner.geometry()},
-            Self::LeafLayerCircuitForCodeDecommitter(inner) => {inner.geometry()},
-            Self::LeafLayerCircuitForLogDemuxer(inner) => {inner.geometry()},
-            Self::LeafLayerCircuitForKeccakRoundFunction(inner) => {inner.geometry()},
-            Self::LeafLayerCircuitForSha256RoundFunction(inner) => {inner.geometry()},
-            Self::LeafLayerCircuitForECRecover(inner) => {inner.geometry()},
-            Self::LeafLayerCircuitForRAMPermutation(inner) => {inner.geometry()},
-            Self::LeafLayerCircuitForStorageSorter(inner) => {inner.geometry()},
-            Self::LeafLayerCircuitForStorageApplication(inner) => {inner.geometry()},
-            Self::LeafLayerCircuitForEventsSorter(inner) => {inner.geometry()},
-            Self::LeafLayerCircuitForL1MessagesSorter(inner) => {inner.geometry()},
+            Self::SchedulerCircuit(..) => {todo!()},
+            Self::NodeLayerCircuit(..) => {ZkSyncNodeLayerRecursiveCircuit::geometry()},
+            Self::LeafLayerCircuitForMainVM(..)
+            | Self::LeafLayerCircuitForCodeDecommittmentsSorter(..)
+            | Self::LeafLayerCircuitForCodeDecommitter(..)
+            | Self::LeafLayerCircuitForLogDemuxer(..)
+            | Self::LeafLayerCircuitForKeccakRoundFunction(..)
+            | Self::LeafLayerCircuitForSha256RoundFunction(..)
+            | Self::LeafLayerCircuitForECRecover(..)
+            | Self::LeafLayerCircuitForRAMPermutation(..)
+            | Self::LeafLayerCircuitForStorageSorter(..)
+            | Self::LeafLayerCircuitForStorageApplication(..)
+            | Self::LeafLayerCircuitForEventsSorter(..)
+            | Self::LeafLayerCircuitForL1MessagesSorter(..) => {
+                ZkSyncLeafLayerRecursiveCircuit::geometry()
+            },
         }
     }
 
-    // pub fn into_dyn_verifier_builder<EXT: FieldExtension<2, BaseField = F>>(&self) -> Box<dyn ErasedBuilderForVerifier<F, EXT>> {
-    //     match &self {
-    //         Self::SchedulerCircuit(inner) => {todo!()},
-    //         Self::NodeLayerCircuit(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
-    //         Self::LeafLayerCircuitForMainVM(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
-    //         Self::LeafLayerCircuitForCodeDecommittmentsSorter(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
-    //         Self::LeafLayerCircuitForCodeDecommitter(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
-    //         Self::LeafLayerCircuitForLogDemuxer(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
-    //         Self::LeafLayerCircuitForKeccakRoundFunction(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
-    //         Self::LeafLayerCircuitForSha256RoundFunction(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
-    //         Self::LeafLayerCircuitForECRecover(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
-    //         Self::LeafLayerCircuitForRAMPermutation(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
-    //         Self::LeafLayerCircuitForStorageSorter(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
-    //         Self::LeafLayerCircuitForStorageApplication(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
-    //         Self::LeafLayerCircuitForEventsSorter(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
-    //         Self::LeafLayerCircuitForL1MessagesSorter(inner) => {inner.get_builder().into_dyn_verifier_builder::<EXT>()},
-    //     }
-    // }
+    pub fn into_dyn_verifier_builder(&self) -> Box<dyn boojum::cs::traits::circuit::ErasedBuilderForVerifier<F, EXT>> {
+        match &self {
+            Self::SchedulerCircuit(..) => {todo!()},
+            Self::NodeLayerCircuit(..) => {ConcreteLeafLayerCircuitBuilder::dyn_verifier_builder::<EXT>()},
+            Self::LeafLayerCircuitForMainVM(..)
+            | Self::LeafLayerCircuitForCodeDecommittmentsSorter(..)
+            | Self::LeafLayerCircuitForCodeDecommitter(..)
+            | Self::LeafLayerCircuitForLogDemuxer(..)
+            | Self::LeafLayerCircuitForKeccakRoundFunction(..)
+            | Self::LeafLayerCircuitForSha256RoundFunction(..)
+            | Self::LeafLayerCircuitForECRecover(..)
+            | Self::LeafLayerCircuitForRAMPermutation(..)
+            | Self::LeafLayerCircuitForStorageSorter(..)
+            | Self::LeafLayerCircuitForStorageApplication(..)
+            | Self::LeafLayerCircuitForEventsSorter(..)
+            | Self::LeafLayerCircuitForL1MessagesSorter(..) => {
+                ConcreteNodeLayerCircuitBuilder::dyn_verifier_builder::<EXT>()
+            }
+        }
+    }
 
-    // pub fn into_dyn_recursive_verifier_builder<EXT: FieldExtension<2, BaseField = F>, CS: ConstraintSystem<F> + 'static>(&self) -> Box<dyn ErasedBuilderForRecursiveVerifier<F, EXT, CS>> {
-    //     match &self {
-    //         Self::SchedulerCircuit(inner) => {todo!()},
-    //         Self::NodeLayerCircuit(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-    //         Self::LeafLayerCircuitForMainVM(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-    //         Self::LeafLayerCircuitForCodeDecommittmentsSorter(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-    //         Self::LeafLayerCircuitForCodeDecommitter(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-    //         Self::LeafLayerCircuitForLogDemuxer(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-    //         Self::LeafLayerCircuitForKeccakRoundFunction(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-    //         Self::LeafLayerCircuitForSha256RoundFunction(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-    //         Self::LeafLayerCircuitForECRecover(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-    //         Self::LeafLayerCircuitForRAMPermutation(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-    //         Self::LeafLayerCircuitForStorageSorter(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-    //         Self::LeafLayerCircuitForStorageApplication(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-    //         Self::LeafLayerCircuitForEventsSorter(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-    //         Self::LeafLayerCircuitForL1MessagesSorter(inner) => {inner.get_builder().into_dyn_recursive_verifier_builder::<EXT, CS>()},
-    //     }
-    // }
+    pub fn into_dyn_recursive_verifier_builder<CS: ConstraintSystem<F> + 'static>(&self) -> Box<dyn boojum::cs::traits::circuit::ErasedBuilderForRecursiveVerifier<F, EXT, CS>> {
+        match &self {
+            Self::SchedulerCircuit(..) => {todo!()},
+            Self::NodeLayerCircuit(..) => {ConcreteLeafLayerCircuitBuilder::dyn_recursive_verifier_builder::<EXT, CS>()},
+            Self::LeafLayerCircuitForMainVM(..)
+            | Self::LeafLayerCircuitForCodeDecommittmentsSorter(..)
+            | Self::LeafLayerCircuitForCodeDecommitter(..)
+            | Self::LeafLayerCircuitForLogDemuxer(..)
+            | Self::LeafLayerCircuitForKeccakRoundFunction(..)
+            | Self::LeafLayerCircuitForSha256RoundFunction(..)
+            | Self::LeafLayerCircuitForECRecover(..)
+            | Self::LeafLayerCircuitForRAMPermutation(..)
+            | Self::LeafLayerCircuitForStorageSorter(..)
+            | Self::LeafLayerCircuitForStorageApplication(..)
+            | Self::LeafLayerCircuitForEventsSorter(..)
+            | Self::LeafLayerCircuitForL1MessagesSorter(..) => {
+                ConcreteNodeLayerCircuitBuilder::dyn_recursive_verifier_builder::<EXT, CS>()
+            }
+        }
+    }
 }

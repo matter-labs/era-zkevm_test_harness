@@ -2,6 +2,7 @@ use super::*;
 use derivative::*;
 use zkevm_circuits::keccak256_round_function::{input::*, Keccak256PrecompileCallParamsWitness};
 use zkevm_circuits::base_structures::log_query::*;
+use circuit_definitions::encodings::*;
 
 #[derive(Derivative)]
 #[derivative(Clone, Copy, Debug, PartialEq, Eq)]

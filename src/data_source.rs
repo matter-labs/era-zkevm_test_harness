@@ -1,8 +1,8 @@
-use crate::abstract_zksync_circuit::{concrete_circuits::{ZkSyncBaseLayerVerificationKey, ZkSyncBaseLayerProof, ZkSyncBaseLayerFinalizationHint}, recursion_layer::{ZkSyncRecursionLayerVerificationKey, ZkSyncRecursionLayerProof, ZkSyncRecursionLayerFinalizationHint}};
-use crate::abstract_zksync_circuit::recursion_layer::ZkSyncRecursionLayerStorage;
-
 use super::*;
 use std::{fs::File, error::Error};
+
+use circuit_definitions::circuit_definitions::base_layer::*;
+use circuit_definitions::circuit_definitions::recursion_layer::*;
 
 pub type SourceResult<T> = Result<T, Box<dyn Error>>;
 

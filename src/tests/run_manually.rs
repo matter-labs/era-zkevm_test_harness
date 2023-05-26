@@ -5,10 +5,9 @@ use crate::entry_point::{create_out_of_circuit_global_context};
 
 use crate::ethereum_types::*;
 use crate::witness::oracle::create_artifacts_from_tracer;
-use crate::witness::oracle::VmWitnessOracle;
+use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use boojum::config::{SetupCSConfig, ProvingCSConfig};
 use boojum::cs::implementations::prover::ProofConfig;
-use boojum::cs::toolboxes::gate_config::{GatePlacementStrategy, NoGates};
 use boojum::cs::traits::cs::ConstraintSystem;
 use boojum::field::traits::field_like::TrivialContext;
 use zkevm_circuits::base_structures::vm_state::GlobalContextWitness;
@@ -22,6 +21,7 @@ use zk_evm::GenericNoopTracer;
 use zkevm_assembly::Assembly;
 use zk_evm::testing::storage::InMemoryStorage;
 use crate::toolset::create_tools;
+use boojum::cs::traits::gate::GatePlacementStrategy;
 
 #[test]
 fn run_and_try_create_witness() {

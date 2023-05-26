@@ -1,11 +1,11 @@
 use zk_evm::{abstractions::MemoryType, ethereum_types::U256};
 use super::*;
-use crate::encodings::memory_query::MemoryQueueSimulator;
 use std::cmp::Ordering;
 use zkevm_circuits::{ram_permutation::input::*, base_structures::memory_query::MEMORY_QUERY_PACKED_WIDTH};
 use rayon::prelude::*;
 use boojum::gadgets::queue::full_state_queue::FullStateCircuitQueueRawWitness;
-use crate::encodings::CircuitEquivalentReflection;
+use circuit_definitions::encodings::*;
+use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 
 use zk_evm::zkevm_opcode_defs::BOOTLOADER_HEAP_PAGE;
 
@@ -162,7 +162,7 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
         let accumulated_rhs: [F; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS] = rhs_grand_product.iter().map(|el| *el.last().unwrap()).collect::<Vec<_>>().try_into().unwrap();
 
         let last_sorted_query = sorted_states.last().unwrap().2;
-        use crate::encodings::memory_query::*;
+        use circuit_definitions::encodings::memory_query::*;
         let sorting_key = sorting_key(&last_sorted_query);
         let comparison_key = comparison_key(&last_sorted_query);
         let is_ptr = last_sorted_query.value_is_pointer;

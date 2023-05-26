@@ -4,9 +4,10 @@ use boojum::cs::CSGeometry;
 use boojum::field::goldilocks::GoldilocksField;
 
 use crate::ZkSyncDefaultRoundFunction;
-use crate::abstract_zksync_circuit::{ZkSyncUniformCircuitInstance, ZkSyncUniformSynthesisFunction};
-use crate::abstract_zksync_circuit::concrete_circuits::*;
-use crate::witness::oracle::VmWitnessOracle;
+use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
+use boojum::cs::traits::circuit::CircuitBuilder;
+use circuit_definitions::circuit_definitions::base_layer::*;
+use circuit_definitions::circuit_definitions::ZkSyncUniformSynthesisFunction;
 
 pub(crate) fn compute_size_inner<
     SF: ZkSyncUniformSynthesisFunction<GoldilocksField, RoundFunction = ZkSyncDefaultRoundFunction>,

@@ -6,16 +6,14 @@ pub mod serialize_utils;
 use std::collections::{HashMap, VecDeque};
 
 use super::*;
-use crate::abstract_zksync_circuit::concrete_circuits::{ZkSyncBaseLayerProof, ZkSyncBaseProof, ZkSyncBaseVerificationKey, ZkSyncBaseLayerVerificationKey, ZkSyncBaseLayerFinalizationHint};
-use crate::encodings::QueueSimulator;
 use crate::entry_point::{create_out_of_circuit_global_context};
 use crate::compute_setups::*;
 
 use crate::ethereum_types::*;
 use crate::external_calls::base_layer_proof_config;
 use crate::witness::oracle::create_artifacts_from_tracer;
-use crate::witness::oracle::VmWitnessOracle;
 use crate::witness::utils::*;
+use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use boojum::cs::implementations::pow::NoPow;
 use boojum::cs::implementations::prover::ProofConfig;
 use zk_evm::abstractions::*;
@@ -29,6 +27,9 @@ use zk_evm::testing::storage::InMemoryStorage;
 use crate::toolset::{create_tools, GeometryConfig};
 use utils::{read_test_artifact, TestArtifact};
 use crate::witness::tree::{ZKSyncTestingTree, BinarySparseStorageTree};
+use circuit_definitions::circuit_definitions::base_layer::*;
+use circuit_definitions::circuit_definitions::recursion_layer::*;
+use crate::prover_utils::*;
 
 const ACCOUNT_CODE_STORAGE_ADDRESS: Address = H160([
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -225,7 +226,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
     
     for (idx, (el, input_value)) in basic_block_circuits.clone().into_flattened_set().into_iter().zip(basic_block_circuits_inputs.clone().into_flattened_set().into_iter()).enumerate() {
-        // continue;
+        continue;
 
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
@@ -253,251 +254,249 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
     let proof_config = base_layer_proof_config();
     let mut instance_idx = 0;
 
-    todo!();
+    let mut setup_data = None;
 
-    // let mut setup_data = None;
+    let mut source = LocalFileDataSource;
+    use crate::data_source::*;
 
-    // let mut source = LocalFileDataSource;
-    // use crate::data_source::*;
+    for (idx, el) in basic_block_circuits.clone().into_flattened_set().into_iter().enumerate() {
+        let descr = el.short_description();
+        println!("Doing {}: {}", idx, descr);
 
-    // for (idx, el) in basic_block_circuits.clone().into_flattened_set().into_iter().enumerate() {
-    //     let descr = el.short_description();
-    //     println!("Doing {}: {}", idx, descr);
+        if el.numeric_circuit_type() != previous_circuit_type || setup_data.is_none() {
+            let (
+                setup_base,
+                setup,
+                vk,
+                setup_tree,
+                vars_hint,
+                wits_hint,
+                finalization_hint
+            ) = create_base_layer_setup_data(el.clone(), &worker, BASE_LAYER_FRI_LDE_FACTOR, BASE_LAYER_CAP_SIZE);
 
-    //     if el.numeric_circuit_type() != previous_circuit_type || setup_data.is_none() {
-    //         let (
-    //             setup_base,
-    //             setup,
-    //             vk,
-    //             setup_tree,
-    //             vars_hint,
-    //             wits_hint,
-    //             finalization_hint
-    //         ) = create_base_layer_setup_data(el.clone(), &worker, BASE_LAYER_FRI_LDE_FACTOR, BASE_LAYER_CAP_SIZE);
+            source.set_base_layer_vk(
+                el.numeric_circuit_type(), 
+                ZkSyncBaseLayerVerificationKey::from_inner(el.numeric_circuit_type(), vk.clone())
+            ).unwrap();
+            source.set_base_layer_finalization_hint(
+                el.numeric_circuit_type(), 
+                ZkSyncBaseLayerFinalizationHint::from_inner(el.numeric_circuit_type(), finalization_hint.clone())
+            ).unwrap();
 
-    //         source.set_base_layer_vk(
-    //             el.numeric_circuit_type(), 
-    //             ZkSyncBaseLayerVerificationKey::from_inner(el.numeric_circuit_type(), vk.clone())
-    //         ).unwrap();
-    //         source.set_base_layer_finalization_hint(
-    //             el.numeric_circuit_type(), 
-    //             ZkSyncBaseLayerFinalizationHint::from_inner(el.numeric_circuit_type(), finalization_hint.clone())
-    //         ).unwrap();
+            setup_data = Some((
+                setup_base,
+                setup,
+                vk,
+                setup_tree,
+                vars_hint,
+                wits_hint,
+                finalization_hint
+            ));
 
-    //         setup_data = Some((
-    //             setup_base,
-    //             setup,
-    //             vk,
-    //             setup_tree,
-    //             vars_hint,
-    //             wits_hint,
-    //             finalization_hint
-    //         ));
+            instance_idx = 0;
+            previous_circuit_type = el.numeric_circuit_type();
+        }
 
-    //         instance_idx = 0;
-    //         previous_circuit_type = el.numeric_circuit_type();
-    //     }
+        if source.get_base_layer_proof(el.numeric_circuit_type(), instance_idx).is_ok() {
+            instance_idx += 1;
+            continue;
+        }
 
-    //     if source.get_base_layer_proof(el.numeric_circuit_type(), instance_idx).is_ok() {
-    //         instance_idx += 1;
-    //         continue;
-    //     }
+        println!("Proving!");
+        let now = std::time::Instant::now();
 
-    //     println!("Proving!");
-    //     let now = std::time::Instant::now();
+        let (
+            setup_base,
+            setup,
+            vk,
+            setup_tree,
+            vars_hint,
+            wits_hint,
+            finalization_hint
+        ) = setup_data.as_ref().unwrap();
 
-    //     let (
-    //         setup_base,
-    //         setup,
-    //         vk,
-    //         setup_tree,
-    //         vars_hint,
-    //         wits_hint,
-    //         finalization_hint
-    //     ) = setup_data.as_ref().unwrap();
+        let proof = prove_base_layer_circuit::<NoPow>(
+            el.clone(), 
+            &worker, 
+            proof_config.clone(), 
+            &setup_base, 
+            &setup, 
+            &setup_tree, 
+            &vk, 
+            &vars_hint, 
+            &wits_hint, 
+            &finalization_hint
+        );
 
-    //     let proof = prove_base_layer_circuit::<NoPow>(
-    //         el.clone(), 
-    //         &worker, 
-    //         proof_config.clone(), 
-    //         &setup_base, 
-    //         &setup, 
-    //         &setup_tree, 
-    //         &vk, 
-    //         &vars_hint, 
-    //         &wits_hint, 
-    //         &finalization_hint
-    //     );
+        println!("Proving is DONE, taken {:?}", now.elapsed());
 
-    //     println!("Proving is DONE, taken {:?}", now.elapsed());
+        let is_valid = verify_base_layer_proof::<NoPow>(
+            &el, 
+            &proof, 
+            &vk
+        );
 
-    //     let is_valid = verify_base_layer_proof::<NoPow>(
-    //         &el, 
-    //         &proof, 
-    //         &vk
-    //     );
+        assert!(is_valid);
 
-    //     assert!(is_valid);
+        if instance_idx == 0 {
+            source.set_base_layer_padding_proof(
+                el.numeric_circuit_type(), 
+                ZkSyncBaseLayerProof::from_inner(el.numeric_circuit_type(), proof.clone()),
+            ).unwrap();
+        }
 
-    //     if instance_idx == 0 {
-    //         source.set_base_layer_padding_proof(
-    //             el.numeric_circuit_type(), 
-    //             ZkSyncBaseLayerProof::from_inner(el.numeric_circuit_type(), proof.clone()),
-    //         ).unwrap();
-    //     }
+        source.set_base_layer_proof(
+            el.numeric_circuit_type(),
+            instance_idx,
+            ZkSyncBaseLayerProof::from_inner(el.numeric_circuit_type(), proof.clone()),
+        ).unwrap();
 
-    //     source.set_base_layer_proof(
-    //         el.numeric_circuit_type(),
-    //         instance_idx,
-    //         ZkSyncBaseLayerProof::from_inner(el.numeric_circuit_type(), proof.clone()),
-    //     ).unwrap();
+        instance_idx += 1;
+    }
 
-    //     instance_idx += 1;
-    // }
+    let round_function = ZkSyncDefaultRoundFunction::default();
 
-    // let round_function = ZkSyncDefaultRoundFunction::default();
+    let recursion_queues = basic_block_circuits_inputs.into_recursion_queues(
+        per_circuit_closed_form_inputs, 
+        &round_function
+    );
 
-    // let recursion_queues = basic_block_circuits_inputs.into_recursion_queues(
-    //     per_circuit_closed_form_inputs, 
-    //     &round_function
-    // );
+    let mut proofs = vec![];
+    let mut padding_proofs = vec![];
+    let mut verification_keys = vec![];
 
-    // let mut proofs = vec![];
-    // let mut padding_proofs = vec![];
-    // let mut verification_keys = vec![];
+    for (circuit_id, _, inputs) in recursion_queues.iter() {
+        let circuit_type = *circuit_id as u8;
+        let mut proofs_for_circuit_type = vec![];
+        for idx in 0..inputs.len() {
+            let proof = source.get_base_layer_proof(circuit_type, idx).unwrap();
+            proofs_for_circuit_type.push(proof);
+        }
 
-    // for (circuit_id, _, inputs) in recursion_queues.iter() {
-    //     let circuit_type = *circuit_id as u8;
-    //     let mut proofs_for_circuit_type = vec![];
-    //     for idx in 0..inputs.len() {
-    //         let proof = source.get_base_layer_proof(circuit_type, idx).unwrap();
-    //         proofs_for_circuit_type.push(proof);
-    //     }
+        let proof = source.get_base_layer_padding_proof(circuit_type).unwrap();
+        padding_proofs.push(proof);
 
-    //     let proof = source.get_base_layer_padding_proof(circuit_type).unwrap();
-    //     padding_proofs.push(proof);
+        let vk = source.get_base_layer_vk(circuit_type).unwrap();
+        verification_keys.push(vk);
 
-    //     let vk = source.get_base_layer_vk(circuit_type).unwrap();
-    //     verification_keys.push(vk);
+        proofs.push(proofs_for_circuit_type);
+    }
 
-    //     proofs.push(proofs_for_circuit_type);
-    // }
+    let mut all_leaf_aggregations = vec![];
+    use crate::witness::recursive_aggregation::create_leaf_witnesses;
 
-    // let mut all_leaf_aggregations = vec![];
-    // use crate::witness::recursive_aggregation::create_leaf_witnesses;
+    for (((subset, proofs),
+        padding_proof),
+        vk) in recursion_queues.clone().into_iter()
+            .zip(proofs.into_iter())
+            .zip(padding_proofs.iter().cloned())
+            .zip(verification_keys.iter().cloned()) 
+        {
+            let aggregations = create_leaf_witnesses(subset, proofs, padding_proof, vk);
+            all_leaf_aggregations.push(aggregations);
+        }
 
-    // for (((subset, proofs),
-    //     padding_proof),
-    //     vk) in recursion_queues.clone().into_iter()
-    //         .zip(proofs.into_iter())
-    //         .zip(padding_proofs.iter().cloned())
-    //         .zip(verification_keys.iter().cloned()) 
-    //     {
-    //         let aggregations = create_leaf_witnesses(subset, proofs, padding_proof, vk);
-    //         all_leaf_aggregations.push(aggregations);
-    //     }
+    let mut previous_circuit_type = 0;
+    let mut setup_data = None;
 
-    // let mut previous_circuit_type = 0;
-    // let mut setup_data = None;
-    // use crate::abstract_zksync_circuit::recursion_layer::*;
+    use circuit_definitions::circuit_definitions::recursion_layer::*;
 
-    // for (el, _) in all_leaf_aggregations.iter() {
-    //     for (_idx, el) in el.iter().enumerate() {
-    //         let descr = el.short_description();
-    //         let mut instance_idx = 0;
+    for (el, _) in all_leaf_aggregations.iter() {
+        for (_idx, el) in el.iter().enumerate() {
+            let descr = el.short_description();
+            let mut instance_idx = 0;
 
-    //         if el.numeric_circuit_type() != previous_circuit_type || setup_data.is_none() {
-    //             let (
-    //                 setup_base,
-    //                 setup,
-    //                 vk,
-    //                 setup_tree,
-    //                 vars_hint,
-    //                 wits_hint,
-    //                 finalization_hint
-    //             ) = create_recursive_layer_setup_data(el.clone(), &worker, BASE_LAYER_FRI_LDE_FACTOR, BASE_LAYER_CAP_SIZE);
+            if el.numeric_circuit_type() != previous_circuit_type || setup_data.is_none() {
+                let (
+                    setup_base,
+                    setup,
+                    vk,
+                    setup_tree,
+                    vars_hint,
+                    wits_hint,
+                    finalization_hint
+                ) = create_recursive_layer_setup_data(el.clone(), &worker, BASE_LAYER_FRI_LDE_FACTOR, BASE_LAYER_CAP_SIZE);
 
-    //             source.set_recursion_layer_vk(
-    //                 el.numeric_circuit_type(), 
-    //                 ZkSyncRecursionLayerVerificationKey::from_inner(el.numeric_circuit_type(), vk.clone())
-    //             ).unwrap();
-    //             source.set_recursion_layer_finalization_hint(
-    //                 el.numeric_circuit_type(), 
-    //                 ZkSyncRecursionLayerFinalizationHint::from_inner(el.numeric_circuit_type(), finalization_hint.clone())
-    //             ).unwrap();
+                source.set_recursion_layer_vk(
+                    el.numeric_circuit_type(), 
+                    ZkSyncRecursionLayerVerificationKey::from_inner(el.numeric_circuit_type(), vk.clone())
+                ).unwrap();
+                source.set_recursion_layer_finalization_hint(
+                    el.numeric_circuit_type(), 
+                    ZkSyncRecursionLayerFinalizationHint::from_inner(el.numeric_circuit_type(), finalization_hint.clone())
+                ).unwrap();
 
-    //             setup_data = Some((
-    //                 setup_base,
-    //                 setup,
-    //                 vk,
-    //                 setup_tree,
-    //                 vars_hint,
-    //                 wits_hint,
-    //                 finalization_hint
-    //             ));
+                setup_data = Some((
+                    setup_base,
+                    setup,
+                    vk,
+                    setup_tree,
+                    vars_hint,
+                    wits_hint,
+                    finalization_hint
+                ));
 
-    //             instance_idx = 0;
-    //             previous_circuit_type = el.numeric_circuit_type();
-    //         }
+                instance_idx = 0;
+                previous_circuit_type = el.numeric_circuit_type();
+            }
 
-    //         if source.get_base_layer_proof(el.numeric_circuit_type(), instance_idx).is_ok() {
-    //             instance_idx += 1;
-    //             continue;
-    //         }
+            if source.get_base_layer_proof(el.numeric_circuit_type(), instance_idx).is_ok() {
+                instance_idx += 1;
+                continue;
+            }
 
-    //         println!("Proving!");
-    //         let now = std::time::Instant::now();
+            println!("Proving!");
+            let now = std::time::Instant::now();
 
-    //         let (
-    //             setup_base,
-    //             setup,
-    //             vk,
-    //             setup_tree,
-    //             vars_hint,
-    //             wits_hint,
-    //             finalization_hint
-    //         ) = setup_data.as_ref().unwrap();
+            let (
+                setup_base,
+                setup,
+                vk,
+                setup_tree,
+                vars_hint,
+                wits_hint,
+                finalization_hint
+            ) = setup_data.as_ref().unwrap();
 
-    //         let proof = prove_recursion_layer_circuit::<NoPow>(
-    //             el.clone(), 
-    //             &worker, 
-    //             proof_config.clone(), 
-    //             &setup_base, 
-    //             &setup, 
-    //             &setup_tree, 
-    //             &vk, 
-    //             &vars_hint, 
-    //             &wits_hint, 
-    //             &finalization_hint
-    //         );
+            let proof = prove_recursion_layer_circuit::<NoPow>(
+                el.clone(), 
+                &worker, 
+                proof_config.clone(), 
+                &setup_base, 
+                &setup, 
+                &setup_tree, 
+                &vk, 
+                &vars_hint, 
+                &wits_hint, 
+                &finalization_hint
+            );
 
-    //         println!("Proving is DONE, taken {:?}", now.elapsed());
+            println!("Proving is DONE, taken {:?}", now.elapsed());
 
-    //         // let is_valid = verify_base_layer_proof::<NoPow>(
-    //         //     &el, 
-    //         //     &proof, 
-    //         //     &vk
-    //         // );
+            // let is_valid = verify_base_layer_proof::<NoPow>(
+            //     &el, 
+            //     &proof, 
+            //     &vk
+            // );
 
-    //         // assert!(is_valid);
+            // assert!(is_valid);
 
-    //         if instance_idx == 0 {
-    //             source.set_recursion_layer_padding_proof(
-    //                 el.numeric_circuit_type(), 
-    //                 ZkSyncRecursionLayerProof::from_inner(el.numeric_circuit_type(), proof.clone()),
-    //             ).unwrap();
-    //         }
+            if instance_idx == 0 {
+                source.set_recursion_layer_padding_proof(
+                    el.numeric_circuit_type(), 
+                    ZkSyncRecursionLayerProof::from_inner(el.numeric_circuit_type(), proof.clone()),
+                ).unwrap();
+            }
 
-    //         source.set_leaf_layer_proof(
-    //             el.numeric_circuit_type(),
-    //             instance_idx,
-    //             ZkSyncRecursionLayerProof::from_inner(el.numeric_circuit_type(), proof.clone()),
-    //         ).unwrap();
+            source.set_leaf_layer_proof(
+                el.numeric_circuit_type(),
+                instance_idx,
+                ZkSyncRecursionLayerProof::from_inner(el.numeric_circuit_type(), proof.clone()),
+            ).unwrap();
 
-    //         instance_idx += 1;
-    //     }
-    // }
-
+            instance_idx += 1;
+        }
+    }
 
     // todo!()
 

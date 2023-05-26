@@ -22,6 +22,7 @@ resolver = "2"
 zk_evm = {path = "../zk_evm"}
 boojum = {path = "../boojum"}
 zkevm_circuits = {path = "../zkevm_circuits"}
+circuit_definitions = {path = "./circuit_definitions"}
 
 # zkevm_circuits = {git = "https://github.com/matter-labs/zkevm_circuits.git", branch = "main"}
 # zk_evm = {git = "https://github.com/matter-labs/zk_evm.git", branch = "v1.4.0"}

@@ -48,7 +48,3 @@ pub fn create_out_of_circuit_global_context(
         zkporter_is_available,
     }
 }
-
-use crate::witness::oracle::VmInCircuitAuxilaryParameters;
-use crate::witness::oracle::VmInstanceWitness;
-use crate::witness::oracle::VmWitnessOracle;

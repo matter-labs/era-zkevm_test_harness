@@ -11,7 +11,6 @@ use boojum::gadgets::queue::CircuitQueueRawWitness;
 use std::collections::VecDeque;
 use zkevm_circuits::fsm_input_output::*;
 use boojum::gadgets::traits::allocatable::CSAllocatable;
-use crate::encodings::log_query_into_circuit_log_query_witness;
 use zkevm_circuits::base_structures::vm_state::{QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH};
 use zkevm_circuits::DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS;
 
