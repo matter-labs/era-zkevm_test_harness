@@ -60,7 +60,6 @@ pub(crate) fn compute_size_inner<
             let mut cs = builder.build(());
             SF::add_tables(&mut cs);
             let _ = SF::synthesize_into_cs_inner(&mut cs, witness, &round_function, config);
-
             let (max_trace_len, _) = cs.pad_and_shrink();
             let cs = cs.into_assembly();
 
@@ -179,7 +178,7 @@ pub fn log_demuxer_capacity() -> usize {
     > (
         SF::geometry(),
         20,
-        Some(40000),
+        Some(20000),
         |x: usize| {
             x
         },
@@ -304,7 +303,7 @@ mod test {
 
     #[test]
     fn test_size_estimation() {
-        let size = storage_application_capacity();
+        let size = log_demuxer_capacity();
 
         println!("Size = {}", size)
     }

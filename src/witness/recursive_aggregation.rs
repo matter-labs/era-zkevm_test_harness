@@ -117,109 +117,121 @@ pub fn create_leaf_witnesses(
 
         let circuit = match vk.numeric_circuit_type() {
             i if i == BaseLayerCircuitType::VM as u8 => {
-                let circuit = ZkSyncLeafLayerRecursiveCircuit::<BASE_LAYER_CIRCUIT_VM> {
+                let circuit = ZkSyncLeafLayerRecursiveCircuit {
                     witness,
                     config,
                     transcript_params: (),
+                    base_layer_circuit_type: BaseLayerCircuitType::VM,
                     _marker: std::marker::PhantomData,
                 };
                 ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForMainVM(circuit)
             },
             i if i == BaseLayerCircuitType::DecommitmentsFilter as u8 => {
-                let circuit = ZkSyncLeafLayerRecursiveCircuit::<BASE_LAYER_CIRCUIT_DECOMMITS_SORTER> {
+                let circuit = ZkSyncLeafLayerRecursiveCircuit {
                     witness,
                     config,
                     transcript_params: (),
+                    base_layer_circuit_type: BaseLayerCircuitType::DecommitmentsFilter,
                     _marker: std::marker::PhantomData,
                 };
                 ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForCodeDecommittmentsSorter(circuit)
             },
             i if i == BaseLayerCircuitType::Decommiter as u8 => {
-                let circuit = ZkSyncLeafLayerRecursiveCircuit::<BASE_LAYER_CIRCUIT_DECOMMITER> {
+                let circuit = ZkSyncLeafLayerRecursiveCircuit {
                     witness,
                     config,
                     transcript_params: (),
+                    base_layer_circuit_type: BaseLayerCircuitType::Decommiter,
                     _marker: std::marker::PhantomData,
                 };
                 ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForCodeDecommitter(circuit)
             },
             i if i == BaseLayerCircuitType::LogDemultiplexer as u8 => {
-                let circuit = ZkSyncLeafLayerRecursiveCircuit::<BASE_LAYER_CIRCUIT_LOG_DEMUXER> {
+                let circuit = ZkSyncLeafLayerRecursiveCircuit {
                     witness,
                     config,
                     transcript_params: (),
+                    base_layer_circuit_type: BaseLayerCircuitType::LogDemultiplexer,
                     _marker: std::marker::PhantomData,
                 };
                 ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForLogDemuxer(circuit)
             },
             i if i == BaseLayerCircuitType::KeccakPrecompile as u8 => {
-                let circuit = ZkSyncLeafLayerRecursiveCircuit::<BASE_LAYER_CIRCUIT_KECCAK256> {
+                let circuit = ZkSyncLeafLayerRecursiveCircuit {
                     witness,
                     config,
                     transcript_params: (),
+                    base_layer_circuit_type: BaseLayerCircuitType::KeccakPrecompile,
                     _marker: std::marker::PhantomData,
                 };
                 ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForKeccakRoundFunction(circuit)
             },
             i if i == BaseLayerCircuitType::Sha256Precompile as u8 => {
-                let circuit = ZkSyncLeafLayerRecursiveCircuit::<BASE_LAYER_CIRCUIT_SHA256> {
+                let circuit = ZkSyncLeafLayerRecursiveCircuit {
                     witness,
                     config,
                     transcript_params: (),
+                    base_layer_circuit_type: BaseLayerCircuitType::Sha256Precompile,
                     _marker: std::marker::PhantomData,
                 };
                 ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForSha256RoundFunction(circuit)
             },
             i if i == BaseLayerCircuitType::EcrecoverPrecompile as u8 => {
-                let circuit = ZkSyncLeafLayerRecursiveCircuit::<BASE_LAYER_CIRCUIT_ECRECOVER> {
+                let circuit = ZkSyncLeafLayerRecursiveCircuit {
                     witness,
                     config,
                     transcript_params: (),
+                    base_layer_circuit_type: BaseLayerCircuitType::EcrecoverPrecompile,
                     _marker: std::marker::PhantomData,
                 };
                 ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForECRecover(circuit)
             },
             i if i == BaseLayerCircuitType::RamValidation as u8 => {
-                let circuit = ZkSyncLeafLayerRecursiveCircuit::<BASE_LAYER_CIRCUIT_RAM_PERMUTATION> {
+                let circuit = ZkSyncLeafLayerRecursiveCircuit {
                     witness,
                     config,
                     transcript_params: (),
+                    base_layer_circuit_type: BaseLayerCircuitType::RamValidation,
                     _marker: std::marker::PhantomData,
                 };
                 ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForRAMPermutation(circuit)
             },
             i if i == BaseLayerCircuitType::StorageFilter as u8 => {
-                let circuit = ZkSyncLeafLayerRecursiveCircuit::<BASE_LAYER_CIRCUIT_STORAGE_SORTER> {
+                let circuit = ZkSyncLeafLayerRecursiveCircuit {
                     witness,
                     config,
                     transcript_params: (),
+                    base_layer_circuit_type: BaseLayerCircuitType::StorageFilter,
                     _marker: std::marker::PhantomData,
                 };
                 ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForStorageSorter(circuit)
             },
             i if i == BaseLayerCircuitType::StorageApplicator as u8 => {
-                let circuit = ZkSyncLeafLayerRecursiveCircuit::<BASE_LAYER_CIRCUIT_STORAGE_APPLICATION> {
+                let circuit = ZkSyncLeafLayerRecursiveCircuit {
                     witness,
                     config,
                     transcript_params: (),
+                    base_layer_circuit_type: BaseLayerCircuitType::StorageApplicator,
                     _marker: std::marker::PhantomData,
                 };
                 ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForStorageApplication(circuit)
             },
             i if i == BaseLayerCircuitType::EventsRevertsFilter as u8 => {
-                let circuit = ZkSyncLeafLayerRecursiveCircuit::<BASE_LAYER_CIRCUIT_EVENTS_SORTER> {
+                let circuit = ZkSyncLeafLayerRecursiveCircuit {
                     witness,
                     config,
                     transcript_params: (),
+                    base_layer_circuit_type: BaseLayerCircuitType::EventsRevertsFilter,
                     _marker: std::marker::PhantomData,
                 };
                 ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForEventsSorter(circuit)
             },
             i if i == BaseLayerCircuitType::L1MessagesRevertsFilter as u8 => {
-                let circuit = ZkSyncLeafLayerRecursiveCircuit::<BASE_LAYER_CIRCUIT_L1_MESSAGES_SORTER> {
+                let circuit = ZkSyncLeafLayerRecursiveCircuit {
                     witness,
                     config,
                     transcript_params: (),
+                    base_layer_circuit_type: BaseLayerCircuitType::L1MessagesRevertsFilter,
                     _marker: std::marker::PhantomData,
                 };
                 ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForL1MessagesSorter(circuit)

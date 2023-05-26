@@ -19,7 +19,7 @@ use boojum::cs::cs_builder::*;
 use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord;
 
 pub mod concrete_circuits;
-pub mod recursion_layer;
+// pub mod recursion_layer;
 
 pub trait ZkSyncUniformSynthesisFunction<F: SmallField>: 'static + Clone + serde::Serialize + serde::de::DeserializeOwned { 
     type Witness: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned + std::default::Default;
@@ -61,47 +61,6 @@ pub trait ZkSyncUniformSynthesisFunction<F: SmallField>: 'static + Clone + serde
 }
 
 use derivative::*;
-
-#[derive(Derivative, serde::Serialize, serde::Deserialize)]
-#[derivative(Clone(bound = ""), Debug, Default(bound = ""))]
-#[serde(bound = "")]
-pub struct ZkSyncUniformCircuitVerifierBuilder<
-    F: SmallField,
-    S: ZkSyncUniformSynthesisFunction<F>,
-> {
-    _marker: std::marker::PhantomData<(F, S)>
-}
-
-impl<
-    F: SmallField,
-    S: ZkSyncUniformSynthesisFunction<F>,
-> CircuitBuilder<F> for ZkSyncUniformCircuitVerifierBuilder<F, S> 
-{
-    fn geometry() -> CSGeometry {
-        S::geometry()
-    }
-    fn lookup_parameters() -> LookupParameters {
-        S::lookup_parameters()
-    }
-    fn configure_builder<T: CsBuilderImpl<F, T>, GC: GateConfigurationHolder<F>, TB: StaticToolboxHolder>(
-        builder: CsBuilder<T, F, GC, TB>
-    ) -> CsBuilder<T, F, impl GateConfigurationHolder<F>, impl StaticToolboxHolder> {
-        S::configure_builder(builder)
-    }
-}
-
-impl<
-    F: SmallField,
-    S: ZkSyncUniformSynthesisFunction<F>,
->ZkSyncUniformCircuitVerifierBuilder<F, S> {
-    pub fn into_dyn_verifier_builder<EXT: FieldExtension<2, BaseField = F>>(self) -> Box<dyn ErasedBuilderForVerifier<F, EXT>> {
-        Box::new(self)
-    }
-
-    pub fn into_dyn_recursive_verifier_builder<EXT: FieldExtension<2, BaseField = F>, CS: ConstraintSystem<F> + 'static>(self) -> Box<dyn ErasedBuilderForRecursiveVerifier<F, EXT, CS>> {
-        Box::new(self)
-    }
-}
 
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(bound = "")]

@@ -10,6 +10,6 @@ pub mod individual_circuits;
 pub mod tree;
 pub mod sort_storage_access;
 pub mod postprocessing;
-pub mod recursive_aggregation;
+// pub mod recursive_aggregation;
 // pub mod vk_set_generator;
 // pub mod block_header;

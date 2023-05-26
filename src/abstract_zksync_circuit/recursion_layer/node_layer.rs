@@ -59,15 +59,15 @@ where
         "Node layer circuit".to_string()
     }
 
-    pub fn geometry() -> CSGeometry {
+    pub fn geometry(&self) -> CSGeometry {
         <NodeLayerCircuitBuilder::<F, R> as CircuitBuilder<F>>::geometry()
     }
 
-    pub fn lookup_parameters() -> LookupParameters {
+    pub fn lookup_parameters(&self) -> LookupParameters {
         <NodeLayerCircuitBuilder::<F, R> as CircuitBuilder<F>>::lookup_parameters()
     }
     
-    pub fn size_hint() -> (Option<usize>, Option<usize>) {
+    pub fn size_hint(&self) -> (Option<usize>, Option<usize>) {
         (
             Some(TARGET_CIRCUIT_TRACE_LENGTH),
             Some((1 << 26) + (1 << 25))
@@ -75,12 +75,13 @@ where
     }
 
     pub fn configure_builder<T: CsBuilderImpl<F, T>, GC: GateConfigurationHolder<F>, TB: StaticToolboxHolder>(
+        &self,
         builder: CsBuilder<T, F, GC, TB>
     ) -> CsBuilder<T, F, impl GateConfigurationHolder<F>, impl StaticToolboxHolder> {
         NodeLayerCircuitBuilder::<F, R>::configure_builder(builder)
     }
 
-    pub fn add_tables<CS: ConstraintSystem<F>>(_cs: &mut CS) {
+    pub fn add_tables<CS: ConstraintSystem<F>>(&self, _cs: &mut CS) {
     }
 
     pub fn synthesize_into_cs<
@@ -106,6 +107,12 @@ where
             verifier_builder, 
             transcript_params
         )
+    }
+
+    pub fn get_builder(&self) -> NodeLayerCircuitBuilder<F, R> {
+        NodeLayerCircuitBuilder {
+            _marker: std::marker::PhantomData
+        }
     }
 }
 
@@ -175,6 +182,14 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
     }
 
     pub fn dyn_recursive_verifier_builder<EXT: FieldExtension<2, BaseField = F>, CS: ConstraintSystem<F> + 'static>() -> Box<dyn ErasedBuilderForRecursiveVerifier<F, EXT, CS>> {
+        Box::new(Self::default())
+    }
+
+    pub fn into_dyn_verifier_builder<EXT: FieldExtension<2, BaseField = F>>(&self) -> Box<dyn ErasedBuilderForVerifier<F, EXT>> {
+        Box::new(Self::default())
+    }
+
+    pub fn into_dyn_recursive_verifier_builder<EXT: FieldExtension<2, BaseField = F>, CS: ConstraintSystem<F> + 'static>(&self) -> Box<dyn ErasedBuilderForRecursiveVerifier<F, EXT, CS>> {
         Box::new(Self::default())
     }
 }

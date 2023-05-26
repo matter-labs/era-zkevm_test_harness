@@ -599,7 +599,7 @@ impl<F: SmallField> BlockBasicCircuitsPublicInputs<F> {
             assert_eq!(circuit_number, inp.numeric_circuit_type());
             let idx = (circuit_number as usize) - 1;
             let (id, dst_queue, dst_for_inputs) = &mut simulators[idx];
-            if *id == 0 {
+            if *id != 0 {
                 assert_eq!(*id, circuit_number as u64);
             } else {
                 *id = circuit_number as u64;

@@ -29,11 +29,11 @@ H: RecursiveTreeHasher<F, Num<F>>,
 TR: RecursiveTranscript<F, CompatibleCap = <H::NonCircuitSimulator as TreeHasher<F>>::Output, CircuitReflection = CTR>,
 CTR: CircuitTranscript<F, CircuitCompatibleCap = <H as CircuitTreeHasher<F, Num<F>>>::CircuitOutput, TransciptParameters = TR::TransciptParameters>,
 POW: RecursivePoWRunner<F>,
-const N: u8,
 > {
    pub witness: RecursionLeafInstanceWitness<F, H, EXT>,
    pub config: LeafLayerRecursionConfig<F, H::NonCircuitSimulator, EXT>,
    pub transcript_params: TR::TransciptParameters,
+   pub base_layer_circuit_type: BaseLayerCircuitType,
    pub _marker: std::marker::PhantomData<(R, POW)>
 }
 
@@ -45,8 +45,7 @@ H: RecursiveTreeHasher<F, Num<F>>,
 TR: RecursiveTranscript<F, CompatibleCap = <H::NonCircuitSimulator as TreeHasher<F>>::Output, CircuitReflection = CTR>,
 CTR: CircuitTranscript<F, CircuitCompatibleCap = <H as CircuitTreeHasher<F, Num<F>>>::CircuitOutput, TransciptParameters = TR::TransciptParameters>,
 POW: RecursivePoWRunner<F>,
-const N: u8,
-> LeafLayerRecursiveCircuit<F, EXT, R, H, TR, CTR, POW, N> 
+> LeafLayerRecursiveCircuit<F, EXT, R, H, TR, CTR, POW> 
 where 
     [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
@@ -57,19 +56,19 @@ where
     [(); <TimestampedStorageLogRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <RecursionQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
 {
-    pub fn description() -> String {
-        format!("Leaf layer circuit for circuit id {}", N)
+    pub fn description(&self) -> String {
+        format!("Leaf layer circuit for circuit id {}", self.base_layer_circuit_type as u8)
     }
 
-    pub fn geometry() -> CSGeometry {
+    pub fn geometry(&self) -> CSGeometry {
         <LeafLayerCircuitBuilder<F, R> as CircuitBuilder<F>>::geometry()
     }
 
-    pub fn lookup_parameters() -> LookupParameters {
+    pub fn lookup_parameters(&self) -> LookupParameters {
         <LeafLayerCircuitBuilder<F, R> as CircuitBuilder<F>>::lookup_parameters()
     }
     
-    pub fn size_hint() -> (Option<usize>, Option<usize>) {
+    pub fn size_hint(&self) -> (Option<usize>, Option<usize>) {
         (
             Some(TARGET_CIRCUIT_TRACE_LENGTH),
             Some((1 << 26) + (1 << 25))
@@ -77,12 +76,13 @@ where
     }
 
     pub fn configure_builder<T: CsBuilderImpl<F, T>, GC: GateConfigurationHolder<F>, TB: StaticToolboxHolder>(
+        &self,
         builder: CsBuilder<T, F, GC, TB>
     ) -> CsBuilder<T, F, impl GateConfigurationHolder<F>, impl StaticToolboxHolder> {
         LeafLayerCircuitBuilder::<F, R>::configure_builder(builder)
     }
 
-    pub fn add_tables<CS: ConstraintSystem<F>>(_cs: &mut CS) {
+    pub fn add_tables<CS: ConstraintSystem<F>>(&self, _cs: &mut CS) {
     }
 
     pub fn synthesize_into_cs<
@@ -99,7 +99,7 @@ where
             ..
         } = self;
 
-        let verifier_builder = dyn_recursive_verifier_builder_for_circuit_type::<F, EXT, CS, R>(N);
+        let verifier_builder = dyn_recursive_verifier_builder_for_circuit_type::<F, EXT, CS, R>(self.base_layer_circuit_type as u8);
         leaf_layer_recursion_entry_point::<F, CS, R, H, EXT, TR, CTR, POW>(
             cs, 
             witness, 
@@ -109,9 +109,15 @@ where
             transcript_params
         )
     }
+
+    pub fn get_builder(&self) -> LeafLayerCircuitBuilder<F, R> {
+        LeafLayerCircuitBuilder {
+            _marker: std::marker::PhantomData
+        }
+    }
 }
 
-pub type ZkSyncLeafLayerRecursiveCircuit<const N: u8> = LeafLayerRecursiveCircuit<
+pub type ZkSyncLeafLayerRecursiveCircuit = LeafLayerRecursiveCircuit<
     GoldilocksField,
     GoldilocksExt2,
     ZkSyncDefaultRoundFunction,
@@ -119,7 +125,6 @@ pub type ZkSyncLeafLayerRecursiveCircuit<const N: u8> = LeafLayerRecursiveCircui
     GoldilocksPoisedon2Transcript,
     CircuitAlgebraicSpongeBasedTranscript<GoldilocksField, 8, 12, 4, ZkSyncDefaultRoundFunction>,
     NoPow,
-    N
 >;
 
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
@@ -178,6 +183,14 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
     }
 
     pub fn dyn_recursive_verifier_builder<EXT: FieldExtension<2, BaseField = F>, CS: ConstraintSystem<F> + 'static>() -> Box<dyn ErasedBuilderForRecursiveVerifier<F, EXT, CS>> {
+        Box::new(Self::default())
+    }
+
+    pub fn into_dyn_verifier_builder<EXT: FieldExtension<2, BaseField = F>>(&self) -> Box<dyn ErasedBuilderForVerifier<F, EXT>> {
+        Box::new(Self::default())
+    }
+
+    pub fn into_dyn_recursive_verifier_builder<EXT: FieldExtension<2, BaseField = F>, CS: ConstraintSystem<F> + 'static>(&self) -> Box<dyn ErasedBuilderForRecursiveVerifier<F, EXT, CS>> {
         Box::new(Self::default())
     }
 }

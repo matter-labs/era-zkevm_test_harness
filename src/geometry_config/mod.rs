@@ -8,16 +8,16 @@ use crate::toolset::GeometryConfig;
 
 pub const fn get_geometry_config() -> GeometryConfig {
     GeometryConfig {
-        cycles_per_vm_snapshot: 5750,
-        cycles_per_log_demuxer: 62576,
+        cycles_per_vm_snapshot: 5713,
+        cycles_per_log_demuxer: 39058,
         cycles_per_storage_sorter: 25436,
         cycles_per_events_or_l1_messages_sorter: 31287,
         cycles_per_ram_permutation: 76561,
         cycles_code_decommitter_sorter: 63122,
         cycles_per_code_decommitter: 2114,
         cycles_per_storage_application: 33,
-        cycles_per_keccak256_circuit: 625,
-        cycles_per_sha256_circuit: 2050,
+        cycles_per_keccak256_circuit: 642,
+        cycles_per_sha256_circuit: 2063,
         cycles_per_ecrecover_circuit: 2,
         limit_for_l1_messages_pudata_hasher: 0,
         limit_for_l1_messages_merklizer: 0,
