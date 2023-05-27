@@ -267,7 +267,13 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
             instance_idx = 0;
         }
 
-        if source.get_base_layer_proof(el.numeric_circuit_type(), instance_idx).is_ok() {
+        if let Ok(proof) = source.get_base_layer_proof(el.numeric_circuit_type(), instance_idx) {
+            if instance_idx == 0 {
+                source.set_base_layer_padding_proof(
+                    proof,
+                ).unwrap();
+            }
+
             instance_idx += 1;
             continue;
         }
@@ -415,7 +421,15 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
             let descr = el.short_description();
             println!("Doing {}: {}", idx, descr);
 
-            if source.get_leaf_layer_proof(el.numeric_circuit_type(), instance_idx).is_ok() {
+            test_recursive_circuit(el.clone());
+
+            if let Ok(proof) = source.get_leaf_layer_proof(el.numeric_circuit_type(), instance_idx) {
+                if instance_idx == 0 {
+                    source.set_recursion_layer_padding_proof(
+                        proof,
+                    ).unwrap();
+                }
+
                 instance_idx += 1;
                 continue;
             }
@@ -448,7 +462,6 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
                     finalization_hint
                 ));
 
-                instance_idx = 0;
                 previous_circuit_type = el.numeric_circuit_type();
             }
 

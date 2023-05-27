@@ -8,6 +8,7 @@ pub mod simple_tests;
 
 use boojum::field::goldilocks::MixedGL;
 use boojum::worker::Worker;
+use circuit_definitions::circuit_definitions::recursion_layer::ZkSyncRecursiveLayerCircuit;
 use zk_evm::testing::storage::InMemoryStorage;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use crate::witness::tree::BinarySparseStorageTree;
@@ -191,6 +192,66 @@ pub(crate) fn base_test_circuit(
             let mut cs = builder.build(());
             inner.add_tables_proxy(&mut cs);
             inner.synthesize_proxy(&mut cs);
+            let _ = cs.pad_and_shrink();
+            cs.into_assembly()
+        },
+    };
+
+    let is_satisfied = cs.check_if_satisfied(&worker);
+    assert!(is_satisfied);
+}
+
+pub(crate) fn test_recursive_circuit(
+    circuit: ZkSyncRecursiveLayerCircuit
+) {
+    use boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
+    use boojum::config::DevCSConfig;
+    use boojum::cs::cs_builder::new_builder;
+
+    type P = GoldilocksField;
+    // type P = MixedGL;
+
+    let worker = Worker::new();
+
+    let geometry = circuit.geometry();
+    let (max_trace_len, num_vars) = circuit.size_hint();
+
+    let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
+        geometry, 
+        num_vars.unwrap(), 
+        max_trace_len.unwrap(),
+    );
+    let builder = new_builder::<_, GoldilocksField>(builder_impl);
+    let round_function = ZkSyncDefaultRoundFunction::default();
+
+    let mut cs = match circuit {
+        ZkSyncRecursiveLayerCircuit::SchedulerCircuit(inner) => {
+            unreachable!()
+        },
+        ZkSyncRecursiveLayerCircuit::NodeLayerCircuit(inner) => {
+            let builder = inner.configure_builder_proxy(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs, &round_function);
+            let _ = cs.pad_and_shrink();
+            cs.into_assembly()
+        },
+        ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForMainVM(inner)
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForCodeDecommittmentsSorter(inner)
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForCodeDecommitter(inner)
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForLogDemuxer(inner)
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForKeccakRoundFunction(inner)
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForSha256RoundFunction(inner)
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForECRecover(inner)
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForRAMPermutation(inner)
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForStorageSorter(inner)
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForStorageApplication(inner)
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForEventsSorter(inner)
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForL1MessagesSorter(inner) => {
+            let builder = inner.configure_builder_proxy(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs, &round_function);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
         },
