@@ -17,12 +17,12 @@ pub trait SetupDataSource {
     fn get_recursion_layer_padding_proof(&self, circuit_type: u8) -> SourceResult<ZkSyncRecursionLayerProof>;
     fn get_recursion_layer_finalization_hint(&self, circuit_type: u8) -> SourceResult<ZkSyncRecursionLayerFinalizationHint>;
 
-    fn set_base_layer_vk(&mut self, circuit_type: u8, vk: ZkSyncBaseLayerVerificationKey) -> SourceResult<()>;
-    fn set_base_layer_padding_proof(&mut self, circuit_type: u8, proof: ZkSyncBaseLayerProof) -> SourceResult<()>;
-    fn set_base_layer_finalization_hint(&self, circuit_type: u8, hint: ZkSyncBaseLayerFinalizationHint) -> SourceResult<()>;
-    fn set_recursion_layer_vk(&mut self, circuit_type: u8, vk: ZkSyncRecursionLayerVerificationKey) -> SourceResult<()>;
-    fn set_recursion_layer_padding_proof(&mut self, circuit_type: u8, proof: ZkSyncRecursionLayerProof) -> SourceResult<()>;
-    fn set_recursion_layer_finalization_hint(&self, circuit_type: u8, hint: ZkSyncRecursionLayerFinalizationHint) -> SourceResult<()>;
+    fn set_base_layer_vk(&mut self, vk: ZkSyncBaseLayerVerificationKey) -> SourceResult<()>;
+    fn set_base_layer_padding_proof(&mut self, proof: ZkSyncBaseLayerProof) -> SourceResult<()>;
+    fn set_base_layer_finalization_hint(&self, hint: ZkSyncBaseLayerFinalizationHint) -> SourceResult<()>;
+    fn set_recursion_layer_vk(&mut self, vk: ZkSyncRecursionLayerVerificationKey) -> SourceResult<()>;
+    fn set_recursion_layer_padding_proof(&mut self, proof: ZkSyncRecursionLayerProof) -> SourceResult<()>;
+    fn set_recursion_layer_finalization_hint(&self, hint: ZkSyncRecursionLayerFinalizationHint) -> SourceResult<()>;
 }
 
 // Object save trait to just get things for BLOCK
@@ -32,9 +32,9 @@ pub trait BlockDataSource {
     fn get_node_layer_proof(&self, circuit_type: u8, step: usize, index: usize) -> SourceResult<ZkSyncRecursionLayerProof>;
     fn get_scheduler_proof(&self) -> SourceResult<ZkSyncRecursionLayerProof>;
 
-    fn set_base_layer_proof(&mut self, circuit_type: u8, index: usize, proof: ZkSyncBaseLayerProof) -> SourceResult<()>;
-    fn set_leaf_layer_proof(&mut self, circuit_type: u8, index: usize, proof: ZkSyncRecursionLayerProof) -> SourceResult<()>;
-    fn set_node_layer_proof(&mut self, circuit_type: u8, step: usize, index: usize, proof: ZkSyncRecursionLayerProof) -> SourceResult<()>;
+    fn set_base_layer_proof(&mut self, index: usize, proof: ZkSyncBaseLayerProof) -> SourceResult<()>;
+    fn set_leaf_layer_proof(&mut self, index: usize, proof: ZkSyncRecursionLayerProof) -> SourceResult<()>;
+    fn set_node_layer_proof(&mut self, step: usize, index: usize, proof: ZkSyncRecursionLayerProof) -> SourceResult<()>;
     fn set_scheduler_proof(&mut self, proof: ZkSyncRecursionLayerProof) -> SourceResult<()>;
 }
 
@@ -80,37 +80,43 @@ impl SetupDataSource for LocalFileDataSource {
         Ok(result)
     }
 
-    fn set_base_layer_vk(&mut self, circuit_type: u8, vk: ZkSyncBaseLayerVerificationKey) -> SourceResult<()> {
+    fn set_base_layer_vk(&mut self, vk: ZkSyncBaseLayerVerificationKey) -> SourceResult<()> {
+        let circuit_type = vk.numeric_circuit_type();
         let file = File::create(format!("./setup/base_layer/vk_{}.json", circuit_type)).map_err(|el| Box::new(el) as Box<dyn Error>)?;
         serde_json::to_writer(file, &vk).map_err(|el| Box::new(el) as Box<dyn Error>)?;
 
         Ok(())
     }
-    fn set_base_layer_padding_proof(&mut self, circuit_type: u8, proof: ZkSyncBaseLayerProof) -> SourceResult<()> {
+    fn set_base_layer_padding_proof(&mut self, proof: ZkSyncBaseLayerProof) -> SourceResult<()> {
+        let circuit_type = proof.numeric_circuit_type();
         let file = File::create(format!("./setup/base_layer/padding_proof_{}.json", circuit_type)).map_err(|el| Box::new(el) as Box<dyn Error>)?;
         serde_json::to_writer(file, &proof).map_err(|el| Box::new(el) as Box<dyn Error>)?;
 
         Ok(())
     }
-    fn set_base_layer_finalization_hint(&self, circuit_type: u8, hint: ZkSyncBaseLayerFinalizationHint) -> SourceResult<()> {
+    fn set_base_layer_finalization_hint(&self, hint: ZkSyncBaseLayerFinalizationHint) -> SourceResult<()> {
+        let circuit_type = hint.numeric_circuit_type();
         let file = File::create(format!("./setup/base_layer/finalization_hint_{}.json", circuit_type)).map_err(|el| Box::new(el) as Box<dyn Error>)?;
         serde_json::to_writer(file, &hint).map_err(|el| Box::new(el) as Box<dyn Error>)?;
 
         Ok(())
     }
-    fn set_recursion_layer_vk(&mut self, circuit_type: u8, vk: ZkSyncRecursionLayerVerificationKey) -> SourceResult<()> {
+    fn set_recursion_layer_vk(&mut self, vk: ZkSyncRecursionLayerVerificationKey) -> SourceResult<()> {
+        let circuit_type = vk.numeric_circuit_type();
         let file = File::create(format!("./setup/recursion_layer/vk_{}.json", circuit_type)).map_err(|el| Box::new(el) as Box<dyn Error>)?;
         serde_json::to_writer(file, &vk).map_err(|el| Box::new(el) as Box<dyn Error>)?;
 
         Ok(())
     }
-    fn set_recursion_layer_padding_proof(&mut self, circuit_type: u8, proof: ZkSyncRecursionLayerProof) -> SourceResult<()> {
+    fn set_recursion_layer_padding_proof(&mut self, proof: ZkSyncRecursionLayerProof) -> SourceResult<()> {
+        let circuit_type = proof.numeric_circuit_type();
         let file = File::create(format!("./setup/recursion_layer/padding_proof_{}.json", circuit_type)).map_err(|el| Box::new(el) as Box<dyn Error>)?;
         serde_json::to_writer(file, &proof).map_err(|el| Box::new(el) as Box<dyn Error>)?;
 
         Ok(())
     }
-    fn set_recursion_layer_finalization_hint(&self, circuit_type: u8, hint: ZkSyncRecursionLayerFinalizationHint) -> SourceResult<()> {
+    fn set_recursion_layer_finalization_hint(&self, hint: ZkSyncRecursionLayerFinalizationHint) -> SourceResult<()> {
+        let circuit_type = hint.numeric_circuit_type();
         let file = File::create(format!("./setup/recursion_layer/finalization_hint_{}.json", circuit_type)).map_err(|el| Box::new(el) as Box<dyn Error>)?;
         serde_json::to_writer(file, &hint).map_err(|el| Box::new(el) as Box<dyn Error>)?;
 
@@ -144,19 +150,22 @@ impl BlockDataSource for LocalFileDataSource {
         Ok(result)
     }
 
-    fn set_base_layer_proof(&mut self, circuit_type: u8, index: usize, proof: ZkSyncBaseLayerProof) -> SourceResult<()> {
+    fn set_base_layer_proof(&mut self, index: usize, proof: ZkSyncBaseLayerProof) -> SourceResult<()> {
+        let circuit_type = proof.numeric_circuit_type();
         let file = File::create(format!("./test_proofs/base_layer/basic_circuit_proof_{}_{}.json", circuit_type, index)).map_err(|el| Box::new(el) as Box<dyn Error>)?;
         serde_json::to_writer(file, &proof).map_err(|el| Box::new(el) as Box<dyn Error>)?;
 
         Ok(())
     }
-    fn set_leaf_layer_proof(&mut self, circuit_type: u8, index: usize, proof: ZkSyncRecursionLayerProof) -> SourceResult<()> {
+    fn set_leaf_layer_proof(&mut self, index: usize, proof: ZkSyncRecursionLayerProof) -> SourceResult<()> {
+        let circuit_type = proof.numeric_circuit_type();
         let file = File::open(format!("./test_proofs/recursion_layer/leaf_layer_proof_{}_{}.json", circuit_type, index)).map_err(|el| Box::new(el) as Box<dyn Error>)?;
         serde_json::to_writer(file, &proof).map_err(|el| Box::new(el) as Box<dyn Error>)?;
 
         Ok(())
     }
-    fn set_node_layer_proof(&mut self, circuit_type: u8, step: usize, index: usize, proof: ZkSyncRecursionLayerProof) -> SourceResult<()> {
+    fn set_node_layer_proof(&mut self, step: usize, index: usize, proof: ZkSyncRecursionLayerProof) -> SourceResult<()> {
+        let circuit_type = proof.numeric_circuit_type();
         let file = File::open(format!("./test_proofs/recursion_layer/node_layer_proof_{}_{}_{}.json", circuit_type, step, index)).map_err(|el| Box::new(el) as Box<dyn Error>)?;
         serde_json::to_writer(file, &proof).map_err(|el| Box::new(el) as Box<dyn Error>)?;
 

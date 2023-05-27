@@ -1,49 +1,45 @@
 use boojum::cs::implementations::pow::NoPow;
 use derivative::*;
-use crate::ZkSyncDefaultRoundFunction;
 use boojum::gadgets::recursion::recursive_tree_hasher::*;
 use boojum::gadgets::recursion::recursive_transcript::*;
 use boojum::gadgets::recursion::circuit_pow::*;
 use boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
-use boojum::cs::oracle::TreeHasher;
 use zkevm_circuits::base_structures::recursion_query::RecursionQuery;
-use boojum::cs::traits::circuit::CircuitBuilder;
 use crate::circuit_definitions::base_layer::TARGET_CIRCUIT_TRACE_LENGTH;
 use zkevm_circuits::recursion::leaf_layer::input::*;
 use zkevm_circuits::recursion::leaf_layer::*;
+use boojum::cs::implementations::transcript::Transcript;
 
 use super::*;
 
+type F = GoldilocksField;
+type P = GoldilocksField;
+type TR = GoldilocksPoisedon2Transcript;
+type R = Poseidon2Goldilocks;
+type CTR = CircuitAlgebraicSpongeBasedTranscript<GoldilocksField, 8, 12, 4, R>;
+type EXT = GoldilocksExt2;
+type H = GoldilocksPoseidon2Sponge<AbsorbtionModeOverwrite>;
+type RH = CircuitGoldilocksPoseidon2Sponge;
+
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone, Debug(bound = ""))]
-#[serde(bound = "RecursionLeafInstanceWitness<F, H, EXT>: serde::Serialize + serde::de::DeserializeOwned,
-    LeafLayerRecursionConfig<F, H::NonCircuitSimulator, EXT>: serde::Serialize + serde::de::DeserializeOwned,
-    TR::TransciptParameters: serde::Serialize + serde::de::DeserializeOwned")]
+#[serde(bound = "")]
+// #[serde(bound = "RecursionLeafInstanceWitness<F, H, EXT>: serde::Serialize + serde::de::DeserializeOwned,
+//     LeafLayerRecursionConfig<F, H::NonCircuitSimulator, EXT>: serde::Serialize + serde::de::DeserializeOwned,
+//     TR::TransciptParameters: serde::Serialize + serde::de::DeserializeOwned")]
 pub struct LeafLayerRecursiveCircuit<
-F: SmallField,
-EXT: FieldExtension<2, BaseField = F>,
-R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
-H: RecursiveTreeHasher<F, Num<F>>,
-TR: RecursiveTranscript<F, CompatibleCap = <H::NonCircuitSimulator as TreeHasher<F>>::Output, CircuitReflection = CTR>,
-CTR: CircuitTranscript<F, CircuitCompatibleCap = <H as CircuitTreeHasher<F, Num<F>>>::CircuitOutput, TransciptParameters = TR::TransciptParameters>,
 POW: RecursivePoWRunner<F>,
 > {
-   pub witness: RecursionLeafInstanceWitness<F, H, EXT>,
-   pub config: LeafLayerRecursionConfig<F, H::NonCircuitSimulator, EXT>,
-   pub transcript_params: TR::TransciptParameters,
+   pub witness: RecursionLeafInstanceWitness<F, RH, EXT>,
+   pub config: LeafLayerRecursionConfig<F, H, EXT>,
+   pub transcript_params: <TR as Transcript<F>>::TransciptParameters,
    pub base_layer_circuit_type: BaseLayerCircuitType,
    pub _marker: std::marker::PhantomData<(R, POW)>
 }
 
 impl<
-F: SmallField,
-EXT: FieldExtension<2, BaseField = F>,
-R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
-H: RecursiveTreeHasher<F, Num<F>>,
-TR: RecursiveTranscript<F, CompatibleCap = <H::NonCircuitSimulator as TreeHasher<F>>::Output, CircuitReflection = CTR>,
-CTR: CircuitTranscript<F, CircuitCompatibleCap = <H as CircuitTreeHasher<F, Num<F>>>::CircuitOutput, TransciptParameters = TR::TransciptParameters>,
 POW: RecursivePoWRunner<F>,
-> CircuitBuilder<F> for LeafLayerRecursiveCircuit<F, EXT, R, H, TR, CTR, POW> 
+> boojum::cs::traits::circuit::CircuitBuilder<F> for LeafLayerRecursiveCircuit<POW> 
 where 
     [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
@@ -70,7 +66,7 @@ where
     fn configure_builder<T: CsBuilderImpl<F, T>, GC: GateConfigurationHolder<F>, TB: StaticToolboxHolder>(
         builder: CsBuilder<T, F, GC, TB>
     ) -> CsBuilder<T, F, impl GateConfigurationHolder<F>, impl StaticToolboxHolder> {
-        let builder = builder.allow_lookup(<Self as CircuitBuilder::<F>>::lookup_parameters());
+        // let builder = builder.allow_lookup(<Self as CircuitBuilder::<F>>::lookup_parameters());
 
         let builder = ConstantsAllocatorGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
         let builder = BooleanConstraintGate::configure_builder(builder, GatePlacementStrategy::UseSpecializedColumns { num_repetitions: 1, share_constants: false });
@@ -89,14 +85,8 @@ where
 }
 
 impl<
-F: SmallField,
-EXT: FieldExtension<2, BaseField = F>,
-R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
-H: RecursiveTreeHasher<F, Num<F>>,
-TR: RecursiveTranscript<F, CompatibleCap = <H::NonCircuitSimulator as TreeHasher<F>>::Output, CircuitReflection = CTR>,
-CTR: CircuitTranscript<F, CircuitCompatibleCap = <H as CircuitTreeHasher<F, Num<F>>>::CircuitOutput, TransciptParameters = TR::TransciptParameters>,
 POW: RecursivePoWRunner<F>,
-> LeafLayerRecursiveCircuit<F, EXT, R, H, TR, CTR, POW> 
+> LeafLayerRecursiveCircuit<POW> 
 where 
     [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
@@ -121,7 +111,7 @@ where
         &self,
         builder: CsBuilder<T, F, GC, TB>
     ) -> CsBuilder<T, F, impl GateConfigurationHolder<F>, impl StaticToolboxHolder> {
-        <Self as CircuitBuilder<F>>::configure_builder(builder)
+        <Self as boojum::cs::traits::circuit::CircuitBuilder<F>>::configure_builder(builder)
     }
 
     pub fn add_tables<CS: ConstraintSystem<F>>(&self, _cs: &mut CS) {
@@ -143,7 +133,7 @@ where
 
         use crate::circuit_definitions::verifier_builder::dyn_recursive_verifier_builder_for_circuit_type;
         let verifier_builder = dyn_recursive_verifier_builder_for_circuit_type::<F, EXT, CS, R>(self.base_layer_circuit_type as u8);
-        leaf_layer_recursion_entry_point::<F, CS, R, H, EXT, TR, CTR, POW>(
+        leaf_layer_recursion_entry_point::<F, CS, R, RH, EXT, TR, CTR, POW>(
             cs, 
             witness, 
             round_function, 
@@ -155,24 +145,18 @@ where
 }
 
 pub type ZkSyncLeafLayerRecursiveCircuit = LeafLayerRecursiveCircuit<
-    GoldilocksField,
-    GoldilocksExt2,
-    ZkSyncDefaultRoundFunction,
-    CircuitGoldilocksPoseidon2Sponge,
-    GoldilocksPoisedon2Transcript,
-    CircuitAlgebraicSpongeBasedTranscript<GoldilocksField, 8, 12, 4, ZkSyncDefaultRoundFunction>,
+    // GoldilocksField,
+    // GoldilocksExt2,
+    // ZkSyncDefaultRoundFunction,
+    // CircuitGoldilocksPoseidon2Sponge,
+    // GoldilocksPoisedon2Transcript,
+    // CircuitAlgebraicSpongeBasedTranscript<GoldilocksField, 8, 12, 4, ZkSyncDefaultRoundFunction>,
     NoPow,
 >;
 
 use boojum::cs::traits::circuit::CircuitBuilderProxy;
 
-pub type LeafLayerCircuitBuilder<F, EXT, R, H, TR, CTR, POW> = CircuitBuilderProxy<F, LeafLayerRecursiveCircuit<F, EXT, R, H, TR, CTR, POW>>; 
+pub type LeafLayerCircuitBuilder<POW> = CircuitBuilderProxy<F, LeafLayerRecursiveCircuit<POW>>; 
 pub type ConcreteLeafLayerCircuitBuilder = LeafLayerCircuitBuilder<
-    GoldilocksField,
-    GoldilocksExt2,
-    ZkSyncDefaultRoundFunction,
-    CircuitGoldilocksPoseidon2Sponge,
-    GoldilocksPoisedon2Transcript,
-    CircuitAlgebraicSpongeBasedTranscript<GoldilocksField, 8, 12, 4, ZkSyncDefaultRoundFunction>,
     NoPow,
 >;

@@ -535,16 +535,15 @@ pub fn prove_recursion_layer_circuit<
     )
 }
 
-// pub fn verify_recursion_layer_proof<
-//     POW: PoWRunner
-// >
-// (
-//     circuit: &ZkSyncRecursiveLayerCircuit,
-//     proof: &Proof<F, H, EXT>,
-//     vk: &VerificationKey<F, H>,
-// ) -> bool {
-//     let verifier_builder = circuit.into_dyn_verifier_builder::<EXT>();
-//     let verifier = verifier_builder.create_verifier();
-//     // let verifier = verifier_builder.create_dyn_verifier();
-//     verifier.verify::<H, TR, POW>((), vk, proof)
-// }
+pub fn verify_recursion_layer_proof<
+    POW: PoWRunner
+>
+(
+    circuit: &ZkSyncRecursiveLayerCircuit,
+    proof: &Proof<F, H, EXT>,
+    vk: &VerificationKey<F, H>,
+) -> bool {
+    let verifier_builder = circuit.into_dyn_verifier_builder();
+    let verifier = verifier_builder.create_verifier();
+    verifier.verify::<H, TR, POW>((), vk, proof)
+}

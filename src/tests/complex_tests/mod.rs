@@ -263,6 +263,15 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
 
+        if el.numeric_circuit_type() != previous_circuit_type {
+            instance_idx = 0;
+        }
+
+        if source.get_base_layer_proof(el.numeric_circuit_type(), instance_idx).is_ok() {
+            instance_idx += 1;
+            continue;
+        }
+
         if el.numeric_circuit_type() != previous_circuit_type || setup_data.is_none() {
             let (
                 setup_base,
@@ -275,11 +284,9 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
             ) = create_base_layer_setup_data(el.clone(), &worker, BASE_LAYER_FRI_LDE_FACTOR, BASE_LAYER_CAP_SIZE);
 
             source.set_base_layer_vk(
-                el.numeric_circuit_type(), 
                 ZkSyncBaseLayerVerificationKey::from_inner(el.numeric_circuit_type(), vk.clone())
             ).unwrap();
             source.set_base_layer_finalization_hint(
-                el.numeric_circuit_type(), 
                 ZkSyncBaseLayerFinalizationHint::from_inner(el.numeric_circuit_type(), finalization_hint.clone())
             ).unwrap();
 
@@ -293,13 +300,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
                 finalization_hint
             ));
 
-            instance_idx = 0;
             previous_circuit_type = el.numeric_circuit_type();
-        }
-
-        if source.get_base_layer_proof(el.numeric_circuit_type(), instance_idx).is_ok() {
-            instance_idx += 1;
-            continue;
         }
 
         println!("Proving!");
@@ -340,13 +341,11 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
         if instance_idx == 0 {
             source.set_base_layer_padding_proof(
-                el.numeric_circuit_type(), 
                 ZkSyncBaseLayerProof::from_inner(el.numeric_circuit_type(), proof.clone()),
             ).unwrap();
         }
 
         source.set_base_layer_proof(
-            el.numeric_circuit_type(),
             instance_idx,
             ZkSyncBaseLayerProof::from_inner(el.numeric_circuit_type(), proof.clone()),
         ).unwrap();
@@ -356,10 +355,14 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
     let round_function = ZkSyncDefaultRoundFunction::default();
 
+    println!("Preparing recursion queues");
+
     let recursion_queues = basic_block_circuits_inputs.into_recursion_queues(
         per_circuit_closed_form_inputs, 
         &round_function
     );
+
+    println!("Assembling keys");
 
     let mut proofs = vec![];
     let mut padding_proofs = vec![];
@@ -385,6 +388,8 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
     let mut all_leaf_aggregations = vec![];
     use crate::witness::recursive_aggregation::create_leaf_witnesses;
 
+    println!("Creating leaf aggregation circuits");
+
     for (((subset, proofs),
         padding_proof),
         vk) in recursion_queues.clone().into_iter()
@@ -396,15 +401,24 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
             all_leaf_aggregations.push(aggregations);
         }
 
+    println!("Proving leaf aggregation circuits");
+
     let mut previous_circuit_type = 0;
-    let mut setup_data = None;
 
     use circuit_definitions::circuit_definitions::recursion_layer::*;
 
     for (el, _) in all_leaf_aggregations.iter() {
-        for (_idx, el) in el.iter().enumerate() {
+        let mut instance_idx = 0;
+        let mut setup_data = None;
+
+        for (idx, el) in el.iter().enumerate() {
             let descr = el.short_description();
-            let mut instance_idx = 0;
+            println!("Doing {}: {}", idx, descr);
+
+            if source.get_leaf_layer_proof(el.numeric_circuit_type(), instance_idx).is_ok() {
+                instance_idx += 1;
+                continue;
+            }
 
             if el.numeric_circuit_type() != previous_circuit_type || setup_data.is_none() {
                 let (
@@ -418,11 +432,9 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
                 ) = create_recursive_layer_setup_data(el.clone(), &worker, BASE_LAYER_FRI_LDE_FACTOR, BASE_LAYER_CAP_SIZE);
 
                 source.set_recursion_layer_vk(
-                    el.numeric_circuit_type(), 
                     ZkSyncRecursionLayerVerificationKey::from_inner(el.numeric_circuit_type(), vk.clone())
                 ).unwrap();
                 source.set_recursion_layer_finalization_hint(
-                    el.numeric_circuit_type(), 
                     ZkSyncRecursionLayerFinalizationHint::from_inner(el.numeric_circuit_type(), finalization_hint.clone())
                 ).unwrap();
 
@@ -438,11 +450,6 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
                 instance_idx = 0;
                 previous_circuit_type = el.numeric_circuit_type();
-            }
-
-            if source.get_base_layer_proof(el.numeric_circuit_type(), instance_idx).is_ok() {
-                instance_idx += 1;
-                continue;
             }
 
             println!("Proving!");
@@ -473,23 +480,21 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
             println!("Proving is DONE, taken {:?}", now.elapsed());
 
-            // let is_valid = verify_base_layer_proof::<NoPow>(
-            //     &el, 
-            //     &proof, 
-            //     &vk
-            // );
+            let is_valid = verify_recursion_layer_proof::<NoPow>(
+                &el, 
+                &proof, 
+                &vk
+            );
 
-            // assert!(is_valid);
+            assert!(is_valid);
 
             if instance_idx == 0 {
                 source.set_recursion_layer_padding_proof(
-                    el.numeric_circuit_type(), 
                     ZkSyncRecursionLayerProof::from_inner(el.numeric_circuit_type(), proof.clone()),
                 ).unwrap();
             }
 
             source.set_leaf_layer_proof(
-                el.numeric_circuit_type(),
                 instance_idx,
                 ZkSyncRecursionLayerProof::from_inner(el.numeric_circuit_type(), proof.clone()),
             ).unwrap();

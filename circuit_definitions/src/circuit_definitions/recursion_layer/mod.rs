@@ -1,6 +1,5 @@
 use super::*;
 use boojum::cs::implementations::proof::Proof;
-use boojum::field::FieldExtension;
 use boojum::field::goldilocks::{GoldilocksField, GoldilocksExt2};
 use zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
