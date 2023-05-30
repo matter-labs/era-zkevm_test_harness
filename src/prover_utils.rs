@@ -57,7 +57,7 @@ pub fn create_base_layer_setup_data(
     );
     let builder = new_builder::<_, GoldilocksField>(builder_impl);
 
-    let (mut cs, finalization_hint) = match circuit {
+    let (cs, finalization_hint) = match circuit {
         ZkSyncBaseLayerCircuit::MainVM(inner) => {
             // create_base_layer_setup_data_single(
             //     (*inner.config).clone(),
@@ -221,7 +221,7 @@ pub fn prove_base_layer_circuit<
     );
     let builder = new_builder::<_, GoldilocksField>(builder_impl);
 
-    let mut cs = match circuit {
+    let cs = match circuit {
         ZkSyncBaseLayerCircuit::MainVM(inner) => {
             let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
@@ -388,7 +388,7 @@ pub fn create_recursive_layer_setup_data(
     );
     let builder = new_builder::<_, GoldilocksField>(builder_impl);
 
-    let (mut cs, finalization_hint) = match circuit {
+    let (cs, finalization_hint) = match circuit {
         ZkSyncRecursiveLayerCircuit::SchedulerCircuit(inner) => {
             unreachable!()
             // let builder = inner.configure_builder(builder);

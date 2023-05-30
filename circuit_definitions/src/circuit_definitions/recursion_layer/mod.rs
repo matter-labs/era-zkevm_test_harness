@@ -88,7 +88,7 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             ZkSyncRecursionLayerStorage::LeafLayerCircuitForMainVM(..) => "Leaf for Main VM",
             ZkSyncRecursionLayerStorage::LeafLayerCircuitForCodeDecommittmentsSorter(..) => "Leaf for Decommitts sorter",
             ZkSyncRecursionLayerStorage::LeafLayerCircuitForCodeDecommitter(..) => "Leaf for Code decommitter",
-            ZkSyncRecursionLayerStorage::LeafLayerCircuitForLogDemuxer(..) => "Leaf for Log demuxed",
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForLogDemuxer(..) => "Leaf for Log demuxer",
             ZkSyncRecursionLayerStorage::LeafLayerCircuitForKeccakRoundFunction(..) => "Leaf for Keccak",
             ZkSyncRecursionLayerStorage::LeafLayerCircuitForSha256RoundFunction(..) => "Leaf for SHA256",
             ZkSyncRecursionLayerStorage::LeafLayerCircuitForECRecover(..) => "Leaf for ECRecover",
@@ -163,6 +163,8 @@ use boojum::cs::implementations::setup::FinalizationHintsForProver;
 
 pub type ZkSyncRecursionLayerFinalizationHint = ZkSyncRecursionLayerStorage<FinalizationHintsForProver>;
 
+use zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
+
 use boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
 use boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
 
@@ -194,7 +196,7 @@ impl ZkSyncRecursiveLayerCircuit {
             Self::LeafLayerCircuitForMainVM(..) => "Leaf for Main VM",
             Self::LeafLayerCircuitForCodeDecommittmentsSorter(..) => "Leaf for Decommitts sorter",
             Self::LeafLayerCircuitForCodeDecommitter(..) => "Leaf for Code decommitter",
-            Self::LeafLayerCircuitForLogDemuxer(..) => "Leaf for Log demuxed",
+            Self::LeafLayerCircuitForLogDemuxer(..) => "Leaf for Log demuxer",
             Self::LeafLayerCircuitForKeccakRoundFunction(..) => "Leaf for Keccak",
             Self::LeafLayerCircuitForSha256RoundFunction(..) => "Leaf for SHA256",
             Self::LeafLayerCircuitForECRecover(..) => "Leaf for ECRecover",

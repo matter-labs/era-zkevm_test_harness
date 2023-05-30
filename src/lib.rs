@@ -1,4 +1,5 @@
 #![recursion_limit = "32"]
+#![allow(dropping_references)]
 
 #![feature(const_eval_limit)]
 #![const_eval_limit = "100000000"]

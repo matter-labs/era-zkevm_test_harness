@@ -351,6 +351,20 @@ impl<
         }
     }
 
+    pub fn merge(first: Self, second: Self) -> Self {
+        assert_eq!(first.tail, second.head);
+
+        let mut wit = first.witness;
+        wit.extend(second.witness);
+
+        Self {
+            head: first.head,
+            tail: second.tail,
+            num_items: first.num_items + second.num_items,
+            witness: wit
+        }
+    }
+
     pub fn push<
         R: CircuitRoundFunction<F, AW, SW, CW> + AlgebraicRoundFunction<F, AW, SW, CW>,
         const AW: usize,

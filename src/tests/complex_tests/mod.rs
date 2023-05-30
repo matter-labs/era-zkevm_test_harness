@@ -391,10 +391,23 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
         proofs.push(proofs_for_circuit_type);
     }
 
+    println!("Computing leaf params");
+    use zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
+    use crate::witness::recursive_aggregation::compute_leaf_params;
+    let mut leaf_vk_commits = vec![];
+
+    for circuit_type in (BaseLayerCircuitType::VM as u8)..=(BaseLayerCircuitType::L1MessagesRevertsFilter as u8) {
+        let vk = source.get_base_layer_vk(circuit_type).unwrap();
+        let params = compute_leaf_params(circuit_type, vk);
+        leaf_vk_commits.push((circuit_type, params));
+    }
+
     let mut all_leaf_aggregations = vec![];
     use crate::witness::recursive_aggregation::create_leaf_witnesses;
 
     println!("Creating leaf aggregation circuits");
+
+    let mut all_closed_form_inputs_for_scheduler = vec![];
 
     for (((subset, proofs),
         padding_proof),
@@ -403,8 +416,10 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
             .zip(padding_proofs.iter().cloned())
             .zip(verification_keys.iter().cloned()) 
         {
-            let aggregations = create_leaf_witnesses(subset, proofs, padding_proof, vk);
+            let param = leaf_vk_commits.iter().find(|el| el.0 == subset.0 as u8).cloned().unwrap();
+            let (aggregations, _closed_form_inputs) = create_leaf_witnesses(subset, proofs, padding_proof, vk, param);
             all_leaf_aggregations.push(aggregations);
+            all_closed_form_inputs_for_scheduler.extend(_closed_form_inputs);
         }
 
     println!("Proving leaf aggregation circuits");
@@ -413,15 +428,16 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
     use circuit_definitions::circuit_definitions::recursion_layer::*;
 
-    for (el, _) in all_leaf_aggregations.iter() {
+    for aggregations_for_circuit_type in all_leaf_aggregations.iter() {
         let mut instance_idx = 0;
         let mut setup_data = None;
-
-        for (idx, el) in el.iter().enumerate() {
+        for (idx, (_, _, el)) in aggregations_for_circuit_type.iter().enumerate() {
             let descr = el.short_description();
             println!("Doing {}: {}", idx, descr);
 
             test_recursive_circuit(el.clone());
+
+            println!("Circuit is satisfied");
 
             if let Ok(proof) = source.get_leaf_layer_proof(el.numeric_circuit_type(), instance_idx) {
                 if instance_idx == 0 {

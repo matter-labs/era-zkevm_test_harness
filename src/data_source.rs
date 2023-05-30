@@ -159,20 +159,20 @@ impl BlockDataSource for LocalFileDataSource {
     }
     fn set_leaf_layer_proof(&mut self, index: usize, proof: ZkSyncRecursionLayerProof) -> SourceResult<()> {
         let circuit_type = proof.numeric_circuit_type();
-        let file = File::open(format!("./test_proofs/recursion_layer/leaf_layer_proof_{}_{}.json", circuit_type, index)).map_err(|el| Box::new(el) as Box<dyn Error>)?;
+        let file = File::create(format!("./test_proofs/recursion_layer/leaf_layer_proof_{}_{}.json", circuit_type, index)).map_err(|el| Box::new(el) as Box<dyn Error>)?;
         serde_json::to_writer(file, &proof).map_err(|el| Box::new(el) as Box<dyn Error>)?;
 
         Ok(())
     }
     fn set_node_layer_proof(&mut self, step: usize, index: usize, proof: ZkSyncRecursionLayerProof) -> SourceResult<()> {
         let circuit_type = proof.numeric_circuit_type();
-        let file = File::open(format!("./test_proofs/recursion_layer/node_layer_proof_{}_{}_{}.json", circuit_type, step, index)).map_err(|el| Box::new(el) as Box<dyn Error>)?;
+        let file = File::create(format!("./test_proofs/recursion_layer/node_layer_proof_{}_{}_{}.json", circuit_type, step, index)).map_err(|el| Box::new(el) as Box<dyn Error>)?;
         serde_json::to_writer(file, &proof).map_err(|el| Box::new(el) as Box<dyn Error>)?;
 
         Ok(())
     }
     fn set_scheduler_proof(&mut self, proof: ZkSyncRecursionLayerProof) -> SourceResult<()> {
-        let file = File::open("./test_proofs/recursion_layer/scheduler_proof.json").map_err(|el| Box::new(el) as Box<dyn Error>)?;
+        let file = File::create("./test_proofs/recursion_layer/scheduler_proof.json").map_err(|el| Box::new(el) as Box<dyn Error>)?;
         serde_json::to_writer(file, &proof).map_err(|el| Box::new(el) as Box<dyn Error>)?;
 
         Ok(())
