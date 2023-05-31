@@ -3,15 +3,14 @@ use boojum::cs::implementations::proof::Proof;
 use boojum::field::goldilocks::{GoldilocksField, GoldilocksExt2};
 use zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
-use boojum::cs::gates::*;
 use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord;
 use boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
 use boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
 use boojum::gadgets::recursion::recursive_transcript::CircuitAlgebraicSpongeBasedTranscript;
-use boojum::cs::traits::gate::GatePlacementStrategy;
 
 pub mod leaf_layer;
 pub mod node_layer;
+pub mod circuit_def;
 
 use self::leaf_layer::*;
 use self::node_layer::*;
@@ -39,7 +38,7 @@ pub enum ZkSyncRecursiveLayerCircuit {
 }
 
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
-#[derivative(Clone(bound = ""), Debug)]
+#[derivative(Clone(bound = ""), Copy, Debug)]
 #[serde(bound = "")]
 #[repr(u8)]
 pub enum ZkSyncRecursionLayerStorageType {
@@ -162,8 +161,6 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
 use boojum::cs::implementations::setup::FinalizationHintsForProver;
 
 pub type ZkSyncRecursionLayerFinalizationHint = ZkSyncRecursionLayerStorage<FinalizationHintsForProver>;
-
-use zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
 
 use boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
 use boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;

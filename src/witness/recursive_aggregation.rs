@@ -105,125 +105,50 @@ pub fn create_leaf_witnesses(
             padding_proof: padding_proof.clone().into_inner(),
         };
 
+        let base_layer_circuit_type = BaseLayerCircuitType::from_numeric_value(vk.numeric_circuit_type());
+        let circuit = ZkSyncLeafLayerRecursiveCircuit {
+            witness,
+            config,
+            transcript_params: (),
+            base_layer_circuit_type: base_layer_circuit_type,
+            _marker: std::marker::PhantomData,
+        };
+
         let circuit = match vk.numeric_circuit_type() {
             i if i == BaseLayerCircuitType::VM as u8 => {
-                let circuit = ZkSyncLeafLayerRecursiveCircuit {
-                    witness,
-                    config,
-                    transcript_params: (),
-                    base_layer_circuit_type: BaseLayerCircuitType::VM,
-                    _marker: std::marker::PhantomData,
-                };
                 ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForMainVM(circuit)
             },
             i if i == BaseLayerCircuitType::DecommitmentsFilter as u8 => {
-                let circuit = ZkSyncLeafLayerRecursiveCircuit {
-                    witness,
-                    config,
-                    transcript_params: (),
-                    base_layer_circuit_type: BaseLayerCircuitType::DecommitmentsFilter,
-                    _marker: std::marker::PhantomData,
-                };
                 ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForCodeDecommittmentsSorter(circuit)
             },
             i if i == BaseLayerCircuitType::Decommiter as u8 => {
-                let circuit = ZkSyncLeafLayerRecursiveCircuit {
-                    witness,
-                    config,
-                    transcript_params: (),
-                    base_layer_circuit_type: BaseLayerCircuitType::Decommiter,
-                    _marker: std::marker::PhantomData,
-                };
                 ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForCodeDecommitter(circuit)
             },
             i if i == BaseLayerCircuitType::LogDemultiplexer as u8 => {
-                let circuit = ZkSyncLeafLayerRecursiveCircuit {
-                    witness,
-                    config,
-                    transcript_params: (),
-                    base_layer_circuit_type: BaseLayerCircuitType::LogDemultiplexer,
-                    _marker: std::marker::PhantomData,
-                };
                 ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForLogDemuxer(circuit)
             },
             i if i == BaseLayerCircuitType::KeccakPrecompile as u8 => {
-                let circuit = ZkSyncLeafLayerRecursiveCircuit {
-                    witness,
-                    config,
-                    transcript_params: (),
-                    base_layer_circuit_type: BaseLayerCircuitType::KeccakPrecompile,
-                    _marker: std::marker::PhantomData,
-                };
                 ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForKeccakRoundFunction(circuit)
             },
             i if i == BaseLayerCircuitType::Sha256Precompile as u8 => {
-                let circuit = ZkSyncLeafLayerRecursiveCircuit {
-                    witness,
-                    config,
-                    transcript_params: (),
-                    base_layer_circuit_type: BaseLayerCircuitType::Sha256Precompile,
-                    _marker: std::marker::PhantomData,
-                };
                 ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForSha256RoundFunction(circuit)
             },
             i if i == BaseLayerCircuitType::EcrecoverPrecompile as u8 => {
-                let circuit = ZkSyncLeafLayerRecursiveCircuit {
-                    witness,
-                    config,
-                    transcript_params: (),
-                    base_layer_circuit_type: BaseLayerCircuitType::EcrecoverPrecompile,
-                    _marker: std::marker::PhantomData,
-                };
                 ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForECRecover(circuit)
             },
             i if i == BaseLayerCircuitType::RamValidation as u8 => {
-                let circuit = ZkSyncLeafLayerRecursiveCircuit {
-                    witness,
-                    config,
-                    transcript_params: (),
-                    base_layer_circuit_type: BaseLayerCircuitType::RamValidation,
-                    _marker: std::marker::PhantomData,
-                };
                 ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForRAMPermutation(circuit)
             },
             i if i == BaseLayerCircuitType::StorageFilter as u8 => {
-                let circuit = ZkSyncLeafLayerRecursiveCircuit {
-                    witness,
-                    config,
-                    transcript_params: (),
-                    base_layer_circuit_type: BaseLayerCircuitType::StorageFilter,
-                    _marker: std::marker::PhantomData,
-                };
                 ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForStorageSorter(circuit)
             },
             i if i == BaseLayerCircuitType::StorageApplicator as u8 => {
-                let circuit = ZkSyncLeafLayerRecursiveCircuit {
-                    witness,
-                    config,
-                    transcript_params: (),
-                    base_layer_circuit_type: BaseLayerCircuitType::StorageApplicator,
-                    _marker: std::marker::PhantomData,
-                };
                 ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForStorageApplication(circuit)
             },
             i if i == BaseLayerCircuitType::EventsRevertsFilter as u8 => {
-                let circuit = ZkSyncLeafLayerRecursiveCircuit {
-                    witness,
-                    config,
-                    transcript_params: (),
-                    base_layer_circuit_type: BaseLayerCircuitType::EventsRevertsFilter,
-                    _marker: std::marker::PhantomData,
-                };
                 ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForEventsSorter(circuit)
             },
             i if i == BaseLayerCircuitType::L1MessagesRevertsFilter as u8 => {
-                let circuit = ZkSyncLeafLayerRecursiveCircuit {
-                    witness,
-                    config,
-                    transcript_params: (),
-                    base_layer_circuit_type: BaseLayerCircuitType::L1MessagesRevertsFilter,
-                    _marker: std::marker::PhantomData,
-                };
                 ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForL1MessagesSorter(circuit)
             },
             // i if i == BaseLayerCircuitType::VM as u8 => {
@@ -253,16 +178,21 @@ pub fn create_leaf_witnesses(
 pub fn compute_leaf_params(
     circuit_type: u8,
     base_layer_vk: ZkSyncBaseLayerVerificationKey,
+    leaf_layer_vk: ZkSyncRecursionLayerVerificationKey,
 ) -> RecursionLeafParametersWitness<F> {
     let round_function = ZkSyncDefaultRoundFunction::default();
     use crate::witness::utils::create_cs_for_witness_generation;
     use crate::witness::utils::*;
+
+    assert_eq!(circuit_type, base_layer_vk.numeric_circuit_type());
+    assert_eq!(base_circuit_type_into_recursive_leaf_circuit_type(BaseLayerCircuitType::from_numeric_value(circuit_type)) as u8, leaf_layer_vk.numeric_circuit_type());
+
     let mut cs_for_witness_generation = create_cs_for_witness_generation::<F, ZkSyncDefaultRoundFunction>(
         TRACE_LEN_LOG_2_FOR_CALCULATION,
         MAX_VARS_LOG_2_FOR_CALCULATION,
     );
 
-    let vk_commitment: [_; VK_COMMITMENT_LENGTH] = compute_encodable_item_from_witness::<
+    let base_vk_commitment: [_; VK_COMMITMENT_LENGTH] = compute_encodable_item_from_witness::<
         AllocatedVerificationKey<F, H>, 
         VK_COMMITMENT_LENGTH,
         _,
@@ -273,9 +203,21 @@ pub fn compute_leaf_params(
         &round_function,
     );
 
+    let leaf_vk_commitment: [_; VK_COMMITMENT_LENGTH] = compute_encodable_item_from_witness::<
+        AllocatedVerificationKey<F, H>, 
+        VK_COMMITMENT_LENGTH,
+        _,
+        _,
+    >(
+        leaf_layer_vk.into_inner(),
+        &mut cs_for_witness_generation,
+        &round_function,
+    );
+
     let params = RecursionLeafParametersWitness::<F> {
         circuit_type: F::from_u64_unchecked(circuit_type as u64),
-        vk_commitment: vk_commitment,
+        basic_circuit_vk_commitment: base_vk_commitment,
+        leaf_layer_vk_commitment: leaf_vk_commitment,
     };
 
     params
@@ -306,6 +248,27 @@ pub fn compute_node_vk_commitment(
     vk_commitment
 }
 
+pub fn base_circuit_type_into_recursive_leaf_circuit_type(
+    value: BaseLayerCircuitType
+) -> ZkSyncRecursionLayerStorageType {
+    match value {
+        BaseLayerCircuitType::None => {panic!("None is not a proper type")},
+        BaseLayerCircuitType::VM => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForMainVM,
+        BaseLayerCircuitType::DecommitmentsFilter => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForCodeDecommittmentsSorter,
+        BaseLayerCircuitType::Decommiter => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForCodeDecommitter,
+        BaseLayerCircuitType::LogDemultiplexer => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForLogDemuxer,
+        BaseLayerCircuitType::KeccakPrecompile => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForKeccakRoundFunction,
+        BaseLayerCircuitType::Sha256Precompile => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForSha256RoundFunction,
+        BaseLayerCircuitType::EcrecoverPrecompile => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForECRecover,
+        BaseLayerCircuitType::RamValidation => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForRAMPermutation,
+        BaseLayerCircuitType::StorageFilter => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForStorageSorter,
+        BaseLayerCircuitType::StorageApplicator => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForStorageApplication,
+        BaseLayerCircuitType::EventsRevertsFilter => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForEventsSorter,
+        BaseLayerCircuitType::L1MessagesRevertsFilter => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesSorter,
+        BaseLayerCircuitType::L1MessagesHasher => {todo!()},
+    }
+}
+
 pub fn create_node_witnesses(
     chunks: Vec<(
         u64,
@@ -332,6 +295,7 @@ pub fn create_node_witnesses(
 
     assert!(chunks.len() > 0);
     let circuit_type = chunks[0].0 as u8;
+    assert_eq!(base_circuit_type_into_recursive_leaf_circuit_type(BaseLayerCircuitType::from_numeric_value(circuit_type)) as u8, vk.numeric_circuit_type());
     let mut proofs_iter = proofs.into_iter();
 
     let leaf_layer_params = leaf_layer_params.iter().map(|el| {
@@ -346,6 +310,8 @@ pub fn create_node_witnesses(
         node_layer_vk_commitment: node_vk_commitment,
         queue_state: QueueState::placeholder_witness(),
     };
+
+    dbg!(&partial_inputs);
 
     let config = NodeLayerRecursionConfig::<F, <H as RecursiveTreeHasher<F, Num<F>>>::NonCircuitSimulator, EXT> {
         proof_config: base_layer_proof_config(),
@@ -376,6 +342,13 @@ pub fn create_node_witnesses(
             );
             queue = RecursionQueueSimulator::<F>::merge(queue, c.clone());
             proofs.push(proofs_iter.next().unwrap().into_inner());
+        }
+        if split_points.len() + 1 < RECURSION_ARITY {
+            let padding = QueueTailStateWitness {
+                tail: queue.tail,
+                length: 0,
+            };
+            split_points.resize(RECURSION_ARITY - 1, padding);
         }
         let mut input = partial_inputs.clone();
         input.queue_state = take_sponge_like_queue_state_from_simulator(&queue);

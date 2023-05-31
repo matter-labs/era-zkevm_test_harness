@@ -9,6 +9,7 @@ use crate::circuit_definitions::base_layer::TARGET_CIRCUIT_TRACE_LENGTH;
 use zkevm_circuits::recursion::leaf_layer::input::*;
 use zkevm_circuits::recursion::leaf_layer::*;
 use boojum::cs::implementations::transcript::Transcript;
+use super::circuit_def::*;
 
 use super::*;
 
@@ -51,36 +52,17 @@ where
     [(); <RecursionQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
 {
     fn geometry() -> CSGeometry {
-        CSGeometry { 
-            num_columns_under_copy_permutation: 140, 
-            num_witness_columns: 0, 
-            num_constant_columns: 4, 
-            max_allowed_constraint_degree: 8,
-        }
+        geometry_for_recursion_step()
     }
 
     fn lookup_parameters() -> LookupParameters {
-        LookupParameters::NoLookup
+        lookup_parameters_recursion_step()
     }
     
     fn configure_builder<T: CsBuilderImpl<F, T>, GC: GateConfigurationHolder<F>, TB: StaticToolboxHolder>(
         builder: CsBuilder<T, F, GC, TB>
     ) -> CsBuilder<T, F, impl GateConfigurationHolder<F>, impl StaticToolboxHolder> {
-        // let builder = builder.allow_lookup(<Self as CircuitBuilder::<F>>::lookup_parameters());
-
-        let builder = ConstantsAllocatorGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let builder = BooleanConstraintGate::configure_builder(builder, GatePlacementStrategy::UseSpecializedColumns { num_repetitions: 1, share_constants: false });
-        let builder = R::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let builder = ZeroCheckGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns, false);
-        let builder = FmaGateInBaseFieldWithoutConstant::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let builder = UIntXAddGate::<32>::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let builder = SelectionGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let builder = ParallelSelectionGate::<4>::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let builder = PublicInputGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let builder = ReductionGate::<_, 4>::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let builder = NopGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-
-        builder
+        configure_builder_recursion_step(builder)
     }
 }
 
