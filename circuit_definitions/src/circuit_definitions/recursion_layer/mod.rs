@@ -11,6 +11,7 @@ use boojum::gadgets::recursion::recursive_transcript::CircuitAlgebraicSpongeBase
 pub mod leaf_layer;
 pub mod node_layer;
 pub mod circuit_def;
+pub mod scheduler;
 
 use self::leaf_layer::*;
 use self::node_layer::*;
