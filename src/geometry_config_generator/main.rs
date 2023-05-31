@@ -61,7 +61,7 @@ fn main() {
     function.line("GeometryConfig {");
     function.line(format!("cycles_per_vm_snapshot: {},", opt.vm_snapshot));
     function.line(format!(
-        "limit_for_code_decommitter_sorter: {},",
+        "cycles_per_code_decommitter_sorter: {},",
         opt.code_decommitter_sorter
     ));
     function.line(format!("cycles_per_log_demuxer: {},", opt.log_demuxer));

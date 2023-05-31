@@ -221,10 +221,11 @@ impl<E: Engine> FullBlockArtifacts<E> {
                 self,
                 round_function,
                 geometry.cycles_per_code_decommitter as usize,
+                geometry.cycles_per_code_decommitter_sorter as usize
             );
 
         self.code_decommitter_circuits_data = code_decommitter_circuits_data;
-        self.decommittments_deduplicator_circuits_data = vec![decommittments_deduplicator_witness];
+        self.decommittments_deduplicator_circuits_data = decommittments_deduplicator_witness;
 
         // demux log queue
         use crate::witness::individual_circuits::log_demux::compute_logs_demux;
@@ -420,7 +421,7 @@ pub struct BlockBasicCircuits<E: Engine> {
     // main VM circuit. Many of them
     pub main_vm_circuits: Vec<VMMainCircuit<E, VmWitnessOracle<E>>>,
     // code decommittments sorter is only 1 circuit per block
-    pub code_decommittments_sorter_circuit: CodeDecommittsSorterCircuit<E>,
+    pub code_decommittments_sorter_circuits: Vec<CodeDecommittsSorterCircuit<E>>,
     // few code decommitters: code hash -> memory
     pub code_decommitter_circuits: Vec<CodeDecommitterCircuit<E>>,
     // demux logs to get precompiles for RAM too
@@ -456,7 +457,7 @@ impl<E: Engine> BlockBasicCircuits<E> {
     pub fn into_flattened_set(self) -> Vec<ZkSyncCircuit<E, VmWitnessOracle<E>>> {
         let BlockBasicCircuits {
             main_vm_circuits,
-            code_decommittments_sorter_circuit,
+            code_decommittments_sorter_circuits,
             code_decommitter_circuits,
             log_demux_circuits,
             keccak_precompile_circuits,
@@ -480,9 +481,10 @@ impl<E: Engine> BlockBasicCircuits<E> {
                 .map(|el| ZkSyncCircuit::MainVM(el)),
         );
 
-        result.push(ZkSyncCircuit::CodeDecommittmentsSorter(
-            code_decommittments_sorter_circuit,
-        ));
+        result.extend(
+            code_decommittments_sorter_circuits
+                .into_iter()
+                .map(|el| ZkSyncCircuit::CodeDecommittmentsSorter(el)));
 
         result.extend(
             code_decommitter_circuits
@@ -568,7 +570,7 @@ pub struct BlockBasicCircuitsPublicInputs<E: Engine> {
     // main VM circuit. Many of them
     pub main_vm_circuits: Vec<E::Fr>,
     // code decommittments sorter
-    pub code_decommittments_sorter_circuit: E::Fr,
+    pub code_decommittments_sorter_circuits: Vec<E::Fr>,
     // few code decommitters: code hash -> memory
     pub code_decommitter_circuits: Vec<E::Fr>,
     // demux logs to get precompiles for RAM too
@@ -604,7 +606,7 @@ impl<E: Engine> BlockBasicCircuitsPublicInputs<E> {
     pub fn into_flattened_set(self) -> Vec<E::Fr> {
         let BlockBasicCircuitsPublicInputs {
             main_vm_circuits,
-            code_decommittments_sorter_circuit,
+            code_decommittments_sorter_circuits,
             code_decommitter_circuits,
             log_demux_circuits,
             keccak_precompile_circuits,
@@ -626,7 +628,7 @@ impl<E: Engine> BlockBasicCircuitsPublicInputs<E> {
         let mut result = vec![];
         result.extend(main_vm_circuits);
 
-        result.push(code_decommittments_sorter_circuit);
+        result.extend(code_decommittments_sorter_circuits);
 
         result.extend(code_decommitter_circuits);
 
@@ -663,7 +665,7 @@ pub struct BlockBasicCircuitsPublicCompactFormsWitnesses<E: Engine> {
     // main VM circuit. Many of them
     pub main_vm_circuits: Vec<ClosedFormInputCompactFormWitness<E>>,
     // code decommittments sorter
-    pub code_decommittments_sorter_circuit: ClosedFormInputCompactFormWitness<E>,
+    pub code_decommittments_sorter_circuits: Vec<ClosedFormInputCompactFormWitness<E>>,
     // few code decommitters: code hash -> memory
     pub code_decommitter_circuits: Vec<ClosedFormInputCompactFormWitness<E>>,
     // demux logs to get precompiles for RAM too
@@ -699,7 +701,7 @@ impl<E: Engine> BlockBasicCircuitsPublicCompactFormsWitnesses<E> {
     pub fn into_flattened_set(self) -> Vec<ClosedFormInputCompactFormWitness<E>> {
         let BlockBasicCircuitsPublicCompactFormsWitnesses {
             main_vm_circuits,
-            code_decommittments_sorter_circuit,
+            code_decommittments_sorter_circuits,
             code_decommitter_circuits,
             log_demux_circuits,
             keccak_precompile_circuits,
@@ -721,7 +723,7 @@ impl<E: Engine> BlockBasicCircuitsPublicCompactFormsWitnesses<E> {
         let mut result = vec![];
         result.extend(main_vm_circuits);
 
-        result.push(code_decommittments_sorter_circuit);
+        result.extend(code_decommittments_sorter_circuits);
 
         result.extend(code_decommitter_circuits);
 

@@ -207,6 +207,8 @@ fn compare_reg_values(reg_idx: usize, in_circuit: [u128; 2], out_of_circuit: U25
 }
 
 pub(crate) fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
+    use sha3::Digest;
+
     let mut assembly = Assembly::try_from(asm.to_owned()).unwrap();
     let bytecode = assembly.compile_to_bytecode().unwrap();
 
@@ -227,7 +229,7 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
 
     let geometry = GeometryConfig {
         cycles_per_vm_snapshot: 10,
-        limit_for_code_decommitter_sorter: 16,
+        cycles_per_code_decommitter_sorter: 16,
         cycles_per_log_demuxer: 8,
         cycles_per_storage_sorter: 4,
         cycles_per_events_or_l1_messages_sorter: 2,
@@ -254,7 +256,7 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
     }));
 
     let mut storage_impl = InMemoryStorage::new();
-    let mut memory_impl = SimpleMemory::new_without_preallocations();
+    let memory_impl = SimpleMemory::new_without_preallocations();
     let mut tree = ZKSyncTestingTree::empty();
 
     let mut known_contracts = HashMap::new();

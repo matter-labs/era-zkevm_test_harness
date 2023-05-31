@@ -155,7 +155,7 @@ pub fn circuits_for_vk_generation(
     // decommits sorter
     let circuit = CodeDecommittsSorterCircuit::new(
         None,
-        geometry.limit_for_code_decommitter_sorter as usize,
+        geometry.cycles_per_code_decommitter_sorter as usize,
         round_function.clone(),
         None,
     );

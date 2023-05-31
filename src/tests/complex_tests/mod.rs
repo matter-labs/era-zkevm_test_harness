@@ -151,7 +151,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         cycles_per_sha256_circuit: 7,
         cycles_per_ecrecover_circuit: 2,
 
-        limit_for_code_decommitter_sorter: 512,
+        cycles_per_code_decommitter_sorter: 29,
         cycles_per_log_demuxer: 16,
         cycles_per_storage_sorter: 16,
         cycles_per_events_or_l1_messages_sorter: 4,
@@ -289,8 +289,57 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         }
     }
 
+    // synthesize for verification
+
+    for (idx, (el, input_value)) in basic_block_circuits
+        .clone()
+        .into_flattened_set()
+        .into_iter()
+        .zip(basic_block_circuits_inputs.clone().into_flattened_set())
+        .enumerate()
+    {
+        let descr = el.short_description();
+        println!("Checking {}: {}", idx, descr);
+
+        // match &el {
+        //     ZkSyncCircuit::CodeDecommittmentsSorter(inner) => {
+        //         let inner = inner.clone();
+        //         let witness = inner.witness.take().unwrap();
+        //         dbg!(&witness.closed_form_input);
+        //     },
+        //     _ => {
+        //         continue
+        //     }
+        // }
+
+        use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
+        use crate::bellman::plonk::better_better_cs::cs::TrivialAssembly;
+
+        let mut assembly = TrivialAssembly::<Bn256, PlonkCsWidth4WithNextStepAndCustomGatesParams, SelectorOptimizedWidth4MainGateWithDNext>::new();
+        el.synthesize(&mut assembly).unwrap();
+        assert_eq!(assembly.input_assingments.len(), 1);
+        assert_eq!(assembly.num_input_gates, 1);
+        let public_input = assembly.input_assingments[0];
+
+        // let (is_satisfied, public_input) = circuit_testing::check_if_satisfied::<
+        //     Bn256,
+        //     _,
+        //     PlonkCsWidth4WithNextStepAndCustomGatesParams,
+        // >(el)
+        // .unwrap();
+        // assert!(is_satisfied);
+
+        assert_eq!(
+            public_input, input_value,
+            "Public input diverged for circuit {} of type {}",
+            idx, descr
+        );
+    }
+
+    return;
+
     for circuit in unique_set.iter().cloned() {
-        // continue;
+        continue;
 
         circuit.erase_witness();
 
@@ -449,7 +498,7 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
 
     // recursion step. We decide on some arbitrary parameters
     let splitting_factor = 4; // we either split into N subqueues, or we do N leaf proofs per layer
-    let scheduler_upper_bound = 128;
+    let scheduler_upper_bound = 256;
 
     // verification keys for aggregation circuits requires some padding proof and VK, that we generated right above
     let mut all_vk_encodings = vec![];
@@ -900,8 +949,8 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
 
             assert_eq!(
                 proof.inputs[0], req.public_input,
-                "failed for req_idx = {}, i = {}, aggregation_idx = {}",
-                req_idx, i, idx
+                "failed for req_idx = {}, i = {}, aggregation_idx = {}, {}",
+                req_idx, i, idx, circuit_vk_file_name
             );
             assert_eq!(
                 proof.inputs[0], this_aggregation_subqueue.witness[i].2.public_input,

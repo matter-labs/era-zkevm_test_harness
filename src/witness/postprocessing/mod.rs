@@ -106,24 +106,39 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
 
     // Code decommitter sorter
 
-    assert!(decommittments_deduplicator_circuits_data.len() == 1);
-    let circuit_input = decommittments_deduplicator_circuits_data
-        .into_iter()
-        .next()
-        .unwrap();
+    let mut code_decommittments_sorter_circuits = vec![];
+    let mut code_decommittments_sorter_circuits_inputs = vec![];
+    let mut code_decommittments_sorter_circuit_compact_forms_witnesses = vec![];
+    let num_instances = decommittments_deduplicator_circuits_data.len();
+    let mut observable_input = None;
+    for (circuit_idx, mut circuit_input) in decommittments_deduplicator_circuits_data.into_iter().enumerate() {
 
-    let (proof_system_input, compact_form_witness) =
-        simulate_public_input_value_from_witness(circuit_input.closed_form_input.clone());
+        use crate::witness::utils::vm_instance_witness_to_circuit_formal_input;
+        let is_first = circuit_idx == 0;
+        let is_last = circuit_idx == num_instances - 1;
+        
+        if observable_input.is_none() {
+            assert!(is_first);
+            observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
+        } else {
+            circuit_input.closed_form_input.observable_input =
+                observable_input.as_ref().unwrap().clone();
+        }
 
-    let code_decommittments_sorter_circuit = CodeDecommittsSorterCircuit {
-        witness: AtomicCell::new(Some(circuit_input)),
-        config: Arc::new(geometry.limit_for_code_decommitter_sorter as usize),
-        round_function: round_function.clone(),
-        expected_public_input: Some(proof_system_input),
-    };
+        let (proof_system_input, compact_form_witness) =
+            simulate_public_input_value_from_witness(circuit_input.closed_form_input.clone());
 
-    let code_decommittments_sorter_circuit_input = proof_system_input;
-    let code_decommittments_sorter_circuit_compact_form_witness = compact_form_witness;
+        let instance = CodeDecommittsSorterCircuit {
+            witness: AtomicCell::new(Some(circuit_input)),
+            config: Arc::new(geometry.cycles_per_code_decommitter_sorter as usize),
+            round_function: round_function.clone(),
+            expected_public_input: Some(proof_system_input),
+        };
+
+        code_decommittments_sorter_circuits.push(instance);
+        code_decommittments_sorter_circuits_inputs.push(proof_system_input);
+        code_decommittments_sorter_circuit_compact_forms_witnesses.push(compact_form_witness);
+    }
 
     // Actual decommitter
 
@@ -564,7 +579,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
 
     let basic_circuits = BlockBasicCircuits {
         main_vm_circuits,
-        code_decommittments_sorter_circuit,
+        code_decommittments_sorter_circuits,
         code_decommitter_circuits,
         log_demux_circuits,
         keccak_precompile_circuits,
@@ -583,7 +598,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
 
     let basic_circuits_inputs = BlockBasicCircuitsPublicInputs {
         main_vm_circuits: main_vm_circuits_inputs,
-        code_decommittments_sorter_circuit: code_decommittments_sorter_circuit_input,
+        code_decommittments_sorter_circuits: code_decommittments_sorter_circuits_inputs,
         code_decommitter_circuits: code_decommitter_circuits_inputs,
         log_demux_circuits: log_demux_circuits_inputs,
         keccak_precompile_circuits: keccak_precompile_circuits_inputs,
@@ -602,7 +617,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
 
     let basic_circuits_public_inputs = BlockBasicCircuitsPublicCompactFormsWitnesses {
         main_vm_circuits: main_vm_circuits_compact_forms_witnesses,
-        code_decommittments_sorter_circuit: code_decommittments_sorter_circuit_compact_form_witness,
+        code_decommittments_sorter_circuits: code_decommittments_sorter_circuit_compact_forms_witnesses,
         code_decommitter_circuits: code_decommitter_circuits_compact_forms_witnesses,
         log_demux_circuits: log_demux_circuits_compact_forms_witnesses,
         keccak_precompile_circuits: keccak_precompile_circuits_compact_forms_witnesses,

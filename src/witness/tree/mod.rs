@@ -68,11 +68,8 @@ pub trait BinarySparseStorageTree<
         leafs: Vec<L>,
     ) -> Vec<LeafQuery<DEPTH, INDEX_BYTES, LEAF_DATA_WIDTH, HASH_OUTPUT_WIDTH, L>> {
         assert_eq!(indexes.len(), leafs.len());
-        // let mut uniqueness_checker = std::collections::HashSet::new();
         let mut result = Vec::with_capacity(indexes.len());
         for (idx, leaf) in indexes.iter().zip(leafs.into_iter()) {
-            // let is_unique = uniqueness_checker.insert(*idx);
-            // assert!(is_unique);
             let query = self.insert_leaf(idx, leaf);
             result.push(query);
         }
@@ -396,7 +393,7 @@ impl<
     }
 }
 
-use blake2::{Blake2s256, Digest};
+use crate::blake2::{Blake2s256, Digest};
 
 impl BinaryHasher<32> for Blake2s256 {
     fn new() -> Self {
@@ -421,7 +418,7 @@ impl BinaryHasher<32> for Blake2s256 {
     }
 }
 
-use sha3::Keccak256;
+use crate::sha3::Keccak256;
 
 impl BinaryHasher<32> for Keccak256 {
     fn new() -> Self {
@@ -484,12 +481,14 @@ impl EnumeratedBinaryLeaf<32> for ZkSyncStorageLeaf {
 
 #[cfg(test)]
 mod test {
+    use std::{str::FromStr, collections::HashSet};
+
     use sync_vm::{
         franklin_crypto::bellman::plonk::better_better_cs::cs::Circuit,
         glue::storage_application::input::StorageApplicationCircuitInstanceWitness,
         testing::create_test_artifacts_with_optimized_gate,
     };
-    use zk_evm::zkevm_opcode_defs::system_params::STORAGE_AUX_BYTE;
+    use zk_evm::{zkevm_opcode_defs::system_params::STORAGE_AUX_BYTE, ethereum_types::{Address, U256}, aux_structures::LogQuery};
 
     use crate::witness::postprocessing::USE_BLAKE2S_EXTRA_TABLES;
 
@@ -894,5 +893,201 @@ mod test {
         );
 
         circuit.synthesize(&mut cs).unwrap();
+    }
+
+    #[test]
+    fn reconstruct_state() {
+        let mut tree = ZKSyncTestingTree::empty();
+
+        println!("Initial root {}", hex::encode(&tree.root()));
+        println!("Initial enumeration counter = {}", tree.next_enumeration_index());
+
+        use std::io::BufRead;
+
+        let mut minibatch_to_block = HashMap::new();
+        
+        let source = std::fs::File::open("zksync_public_miniblocks.csv").unwrap();
+        let mut lines = std::io::BufReader::new(source).lines().map(|el| el.unwrap());
+        lines.next().unwrap(); // skip 1st one
+        for line in lines {
+            let mut separated = line.split(",");
+            let miniblock_number = separated.next().unwrap().parse::<u32>().unwrap();
+            let batch_number = separated.next().unwrap().parse::<i32>().unwrap();
+            assert!(separated.next().is_none());
+            minibatch_to_block.insert(miniblock_number, batch_number);
+        }
+
+        let mut tmp = vec![];
+        let mut block_batched_accesses = vec![];
+        let source = std::fs::File::open("zksync_public_storage_logs.csv").unwrap();
+        let mut previous_block = -1i32;
+        let mut lines = std::io::BufReader::new(source).lines().map(|el| el.unwrap());
+        lines.next().unwrap(); // skip 1st one
+
+        for line in lines {
+            let mut separated = line.split(",");
+            let _ = separated.next().unwrap();
+            let address = separated.next().unwrap();
+            let key = separated.next().unwrap();
+            let value = separated.next().unwrap();
+            let op_number = separated.next().unwrap().parse::<u32>().unwrap();
+            let _ = separated.next().unwrap();
+            let miniblock_number = separated.next().unwrap().parse::<u32>().unwrap();
+            let block_number = minibatch_to_block[&miniblock_number];
+            let address = Address::from_str(address.strip_prefix("0x").unwrap()).unwrap();
+            let key = U256::from_str_radix(&key.strip_prefix("0x").unwrap(), 16).unwrap();
+            let value = U256::from_str_radix(&value.strip_prefix("0x").unwrap(), 16).unwrap();
+
+            let record = (
+                address,
+                key,
+                value,
+                miniblock_number,
+                op_number
+            );
+
+            if block_number != previous_block {
+                previous_block = block_number;
+                if tmp.len() != 0 {
+                    let taken = std::mem::replace(&mut tmp, vec![]);
+                    block_batched_accesses.push(taken);
+                }
+            }
+            // always push
+            tmp.push(record);
+        }
+
+        // take last one
+        if tmp.len() != 0 {
+            let taken = std::mem::replace(&mut tmp, vec![]);
+            block_batched_accesses.push(taken);
+        }
+
+        // sort in each block
+
+        for block_data in block_batched_accesses.iter_mut() {
+            block_data.sort_by(|a, b| {
+                // let a_address = U256::from_big_endian(&a.0.0);
+                // let b_address = U256::from_big_endian(&b.0.0);
+
+                match a.0.cmp(&b.0) {
+                    std::cmp::Ordering::Equal => {
+                        match a.1.cmp(&b.1) {
+                            std::cmp::Ordering::Equal => {
+                                match a.3.cmp(&b.3) {
+                                    std::cmp::Ordering::Equal => {
+                                        match a.4.cmp(&b.4) {
+                                            std::cmp::Ordering::Equal => {
+                                                panic!("must be unique")
+                                            },
+                                            a @ _ => a,
+                                        }
+                                    },
+                                    a @ _ => a,
+                                }
+                            },
+                            a @ _ => a,
+                        }
+                    },
+                    a @ _ => a,
+                }
+            })
+        }
+
+        let mut key_set = HashSet::new();
+
+        let mut extra_batched = vec![];
+        // batch
+        for (_block_number, block) in block_batched_accesses.into_iter().enumerate() {
+            for el in block.iter() {
+                let derived_key = LogQuery::derive_final_address_for_params(&el.0, &el.1);
+                key_set.insert(derived_key);
+            }
+
+            let mut batched = vec![];
+            let mut it = block.into_iter();
+            let mut previous = it.next().unwrap();
+            for el in it {
+                if el.0 != previous.0 || el.1 != previous.1 {
+                    batched.push((previous.0, previous.1, previous.2));
+                }
+
+                previous = el;
+            }
+
+            // finalize
+            batched.push((previous.0, previous.1, previous.2));
+
+            extra_batched.push(batched);
+        }
+
+        println!("Have {} unique keys in the tree", key_set.len());
+
+        // we should merge now
+        for (block_number, block) in extra_batched.into_iter().enumerate() {
+            for (address, key, value) in block.into_iter() {
+                let derived_key = LogQuery::derive_final_address_for_params(&address, &key);
+                let existing_leaf = tree.get_leaf(&derived_key);
+                let existing_value = U256::from_big_endian(existing_leaf.leaf.value());
+                if existing_value == value {
+                    // we downgrade to read
+                    // println!("Downgrading to read")
+                } else {
+                    // we write
+                    let mut tmp = [0u8; 32];
+                    value.to_big_endian(&mut tmp);
+                    let leaf = ZkSyncStorageLeaf::from_value(tmp);
+                    if block_number == 6 {
+                        let addr = Address::from_low_u64_be(0x8002);
+                        let k = U256::zero();
+                        if address == addr && key == k {
+                            let root_before_inserting = tree.root();
+                            println!("root before inserting = {}", hex::encode(&root_before_inserting));
+                        }
+                    }
+                    let query = tree.insert_leaf(&derived_key, leaf);
+                    assert!(tree.verify_inclusion_proxy(&tree.root(), &query));
+
+                    if block_number == 6 {
+                        let addr = Address::from_low_u64_be(0x8002);
+                        let k = U256::zero();
+                        if address == addr && key == k {
+                            let root_after_inserting = tree.root();
+                            println!("root after inserting = {}", hex::encode(&root_after_inserting));
+
+                            // use crate::bytes_to_u32_le;
+                            // let path: Vec<[u32; 8]> = (*query.merkle_path)
+                            //     .into_iter()
+                            //     .map(|el| bytes_to_u32_le(&el))
+                            //     .collect::<Vec<_>>();
+
+                            // dbg!(&path);
+                        }
+
+                    }
+                }
+            }
+
+            println!("Final root at block number {} is {}", block_number, hex::encode(&tree.root()));
+            println!("Tree contains {} elements", tree.leafs.len());
+            println!("Next enumeration index is {}", tree.next_enumeration_index());
+
+            if block_number == 5 || block_number == 6 {
+                let address = Address::from_low_u64_be(0x8002);
+                let derived_key = LogQuery::derive_final_address_for_params(&address, &U256::zero());
+                let leaf = tree.get_leaf(&derived_key);
+                let value = U256::from_big_endian(leaf.leaf.value());
+                println!("At block {} address {:?}, key 0 has value 0x{:064x} and enumeration index {}", block_number, address, value, leaf.leaf.index);
+            }
+
+            if block_number == 5 {
+                let address = Address::from_str("0x0000000000000000000000000000000000008006".strip_prefix("0x").unwrap()).unwrap();
+                let key = U256::from_dec_str("10296424936580223820182946083978523599072867450410225418412986085349035080739").unwrap();
+                let derived_key = LogQuery::derive_final_address_for_params(&address, &U256::zero());
+                let leaf = tree.get_leaf(&derived_key);
+                let value = U256::from_big_endian(leaf.leaf.value());
+                println!("At block {} address {:?}, key {} has value 0x{:064x} and enumeration index {}", block_number, address, key, value, leaf.leaf.index);
+            }
+        }
     }
 }

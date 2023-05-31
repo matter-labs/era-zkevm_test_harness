@@ -125,6 +125,7 @@ pub struct CallstackWithAuxData {
     pub log_queue_access_snapshots: Vec<(u32, RenumeratedQueryIndex)>,
     pub log_access_history: Vec<(u32, QueryMarker)>,
     pub child_into_parent: HashMap<usize, usize>,
+    pub flat_new_frames_history: Vec<(u32, CallStackEntry)>,
 }
 
 impl CallstackWithAuxData {
@@ -153,6 +154,7 @@ impl CallstackWithAuxData {
             log_queue_access_snapshots: vec![],
             log_access_history: vec![],
             child_into_parent: HashMap::new(),
+            flat_new_frames_history: vec![],
         };
 
         new
@@ -175,6 +177,8 @@ impl CallstackWithAuxData {
         previous_simple_entry: CallStackEntry,
         new_simple_entry: CallStackEntry,
     ) {
+        self.flat_new_frames_history.push((monotonic_cycle_counter, new_simple_entry));
+
         let new_counter = self.monotonic_frame_counter;
         self.monotonic_frame_counter += 1;
         self.depth += 1;

@@ -145,6 +145,7 @@ pub fn decompose_into_storage_application_witnesses<
         "Initial enumeration index = {}",
         tree.next_enumeration_index()
     );
+    let mut current_root = tree.root();
     tracing::debug!("Initial root = {}", hex::encode(&tree.root()));
 
     for (idx, chunk) in chunks.into_iter().enumerate() {
@@ -174,6 +175,15 @@ pub fn decompose_into_storage_application_witnesses<
                 // by convension we have read and write both
                 let read_query = tree.get_leaf(&key);
                 // assert!(tree.verify_inclusion_proxy(&tree.root(), &read_query));
+
+                // assert_eq!(current_root, tree.root());
+                // we can use independent implementation here to check
+                assert!(
+                    ZKSyncTestingTree::verify_inclusion(&current_root, &read_query),
+                    "failed to verify inclusion of read query during write operation over log query {:?}",
+                    &el
+                );
+
                 let mut buffer = [0u8; 32];
                 el.read_value.to_big_endian(&mut buffer);
                 assert_eq!(&buffer, read_query.leaf.value(), "While writing: divergent leaf read value for index {}: expecting to read {}, got {}", hex::encode(&key), hex::encode(&buffer), hex::encode(&read_query.leaf.value()));
@@ -185,7 +195,13 @@ pub fn decompose_into_storage_application_witnesses<
                 el.written_value.to_big_endian(leaf.value_ref_mut());
                 // we expect that tree properly updates enumeration index on insert
                 let write_query = tree.insert_leaf(&key, leaf);
+                current_root = tree.root();
                 assert!(tree.verify_inclusion_proxy(&tree.root(), &write_query));
+                assert!(
+                    ZKSyncTestingTree::verify_inclusion(&current_root, &write_query),
+                    "failed to verify inclusion of write query during write operation over log query {:?}",
+                    &el
+                );
 
                 assert_eq!(&*read_query.merkle_path, &*write_query.merkle_path);
 
@@ -206,12 +222,14 @@ pub fn decompose_into_storage_application_witnesses<
                 merkle_paths.push(path);
 
                 if first_write {
+                    assert_eq!(leaf_index, 0);
                     let first_write = InitialStorageWrite {
                         key,
                         value: leaf.value,
                     };
                     first_writes_simulator.push(first_write, round_function);
                 } else {
+                    assert_ne!(leaf_index, 0);
                     let repeated_write = RepeatedStorageWrite {
                         index: leaf.index,
                         value: leaf.value,
@@ -220,8 +238,18 @@ pub fn decompose_into_storage_application_witnesses<
                 }
             } else {
                 // read
+                assert_eq!(current_root, tree.root());
+
                 let read_query = tree.get_leaf(&key);
                 assert!(tree.verify_inclusion_proxy(&tree.root(), &read_query));
+
+                // we can use independent implementation here to check
+                assert!(
+                    ZKSyncTestingTree::verify_inclusion(&current_root, &read_query),
+                    "failed to verify inclusion of query during read operation over log query {:?}",
+                    &el
+                );
+
                 let LeafQuery {
                     leaf,
                     first_write: _,
@@ -244,7 +272,6 @@ pub fn decompose_into_storage_application_witnesses<
                 merkle_paths.push(path);
             }
         }
-
         assert_eq!(leaf_enumeration_index_for_read.len(), merkle_paths.len());
 
         let mut final_fsm_state = StorageApplicationFSM::<E>::placeholder_witness();
@@ -306,6 +333,7 @@ pub fn decompose_into_storage_application_witnesses<
         "Final enumeration index = {}",
         tree.next_enumeration_index()
     );
+    assert_eq!(current_root, tree.root());
     tracing::debug!("Final root = {}", hex::encode(&tree.root()));
 
     result

@@ -78,6 +78,8 @@ pub struct VmWitnessOracle<E: Engine> {
     pub rollback_queue_initial_tails_for_new_frames: VecDeque<(u32, E::Fr)>,
     pub storage_queries: VecDeque<(u32, LogQuery)>, // cycle, query
     pub storage_refund_queries: VecDeque<(u32, LogQuery, u32)>, // cycle, query, pubdata refund
+    pub callstack_new_frames_witnesses:
+        VecDeque<(u32, CallStackEntry)>,
     pub callstack_values_witnesses:
         VecDeque<(u32, (ExtendedCallstackEntry<E>, CallstackSimulatorState<E>))>,
 }
@@ -179,7 +181,7 @@ struct FlattenedLogQueueIndexer<E: Engine> {
 }
 
 use crate::witness::tree::*;
-use blake2::Blake2s256;
+use crate::blake2::Blake2s256;
 
 pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction<E, 2, 3>>(
     tracer: WitnessTracer,
@@ -1089,10 +1091,23 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
             .cloned()
             .collect();
 
-        let rollback_queue_head_segments = rollback_queue_head_segments
-            .iter()
-            .skip_while(|el| el.0 < initial_state.at_cycle)
-            .take_while(|el| el.0 < final_state.at_cycle)
+        let rollback_queue_head_segments = rollback_queue_head_segments.iter()
+            .skip_while(
+                |el| el.0 < initial_state.at_cycle
+            )
+            .take_while(
+                |el| el.0 < final_state.at_cycle
+            )
+            .cloned()
+            .collect();
+
+        let callstack_new_frames_witnesses = callstack_with_aux_data.flat_new_frames_history.iter()
+            .skip_while(
+                |el| el.0 < initial_state.at_cycle
+            )
+            .take_while(
+                |el| el.0 < final_state.at_cycle
+            )
             .cloned()
             .collect();
 
@@ -1107,6 +1122,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
             storage_queries: per_instance_storage_queries_witnesses.into(),
             storage_refund_queries: per_instance_refund_logs.into(),
             callstack_values_witnesses,
+            callstack_new_frames_witnesses,
         };
 
         let range = history_of_storage_log_states.range(..initial_state.at_cycle);
@@ -1248,15 +1264,6 @@ use sync_vm::vm::vm_state::saved_contract_context::ExecutionContextRecordWitness
 use crate::INITIAL_MONOTONIC_CYCLE_COUNTER;
 
 impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
-    fn report_new_callstack_frame(
-        &mut self,
-        new_callstack: &ExecutionContextRecord<E>,
-        new_depth: UInt32<E>,
-        is_call: &Boolean,
-        execute: &Boolean,
-    ) {
-        todo!();
-    }
     fn get_memory_witness_for_read(
         &mut self,
         timestamp: UInt32<E>,
@@ -1506,6 +1513,49 @@ impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
             Some(tail)
         } else {
             Some(E::Fr::zero())
+        }
+    }
+
+    fn report_new_callstack_frame(
+        &mut self,
+        new_callstack: &ExecutionContextRecord<E>,
+        _new_depth: UInt32<E>,
+        is_call: &Boolean,
+        execute: &Boolean,
+    ) {
+        if execute.get_value().unwrap_or(false) && is_call.get_value().unwrap_or(false) {
+            let (_cycle_idx, entry) = 
+                self.callstack_new_frames_witnesses.pop_front().unwrap();
+
+            // compare
+            let witness = new_callstack.create_witness().unwrap();
+
+            assert_eq!(u160_from_address(entry.this_address), witness.common_part.this);
+            assert_eq!(u160_from_address(entry.msg_sender), witness.common_part.caller);
+            assert_eq!(u160_from_address(entry.code_address), witness.common_part.code_address);
+
+            assert_eq!(entry.code_page.0, witness.common_part.code_page);
+            assert_eq!(entry.base_memory_page.0, witness.common_part.base_page);
+
+            assert_eq!(entry.pc, witness.common_part.pc);
+            assert_eq!(entry.sp, witness.common_part.sp);
+
+            assert_eq!(entry.heap_bound, witness.common_part.heap_upper_bound);
+            assert_eq!(entry.aux_heap_bound, witness.common_part.aux_heap_upper_bound);
+
+            assert_eq!(entry.exception_handler_location, witness.common_part.exception_handler_loc);
+            assert_eq!(entry.ergs_remaining, witness.common_part.ergs_remaining);
+
+            assert_eq!(entry.is_static, witness.common_part.is_static_execution);
+            assert_eq!(entry.is_kernel_mode(), witness.common_part.is_kernel_mode);
+
+            assert_eq!(entry.this_shard_id, witness.common_part.this_shard_id);
+            assert_eq!(entry.caller_shard_id, witness.common_part.caller_shard_id);
+            assert_eq!(entry.code_shard_id, witness.common_part.code_shard_id);
+
+            assert_eq!([entry.context_u128_value as u64, (entry.context_u128_value >> 64) as u64], witness.common_part.context_u128_value_composite);
+
+            assert_eq!(entry.is_local_frame, witness.extension.is_local_call);
         }
     }
 

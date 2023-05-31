@@ -15,7 +15,7 @@ use crate::{
     witness::full_block_artifact::FullBlockArtifacts,
 };
 use ::tracing;
-use blake2::Blake2s256;
+use crate::blake2::Blake2s256;
 use sync_vm::scheduler::block_header::*;
 use sync_vm::testing::create_test_artifacts_with_optimized_gate;
 use sync_vm::{
@@ -34,6 +34,7 @@ use zk_evm::GenericNoopTracer;
 
 use sync_vm::circuit_structures::bytes32::Bytes32;
 use sync_vm::scheduler::{NUM_MEMORY_QUERIES_TO_VERIFY, SCHEDULER_TIMESTAMP};
+use zk_evm::zkevm_opcode_defs::FatPointer;
 
 /// This is a testing interface that basically will
 /// setup the environment and will run out-of-circuit and then in-circuit
@@ -196,6 +197,40 @@ pub fn run<
         out_of_circuit_vm.is_any_pending() == false,
         "VM execution didn't process pending operations"
     );
+    if out_of_circuit_vm.local_state.callstack.current.pc != 0 {
+        let r1_value = out_of_circuit_vm.local_state.registers[0].value;
+        let r1_fat_ptr = FatPointer::from_u256(r1_value);
+        dbg!(&r1_fat_ptr);
+        let mut aligned_returndata = vec![];
+        let start_word = r1_fat_ptr.start / 32;
+        let mut end_word = (r1_fat_ptr.start + r1_fat_ptr.length) / 32;
+        if (r1_fat_ptr.start + r1_fat_ptr.length) % 32 != 0 {
+            end_word += 1;
+        }
+
+        for word in start_word..end_word {
+            let query = MemoryQuery { 
+                timestamp: Timestamp(0), 
+                location: MemoryLocation { 
+                    memory_type: MemoryType::Heap, 
+                    page: MemoryPage(r1_fat_ptr.memory_page), 
+                    index: MemoryIndex(word)
+                }, 
+                rw_flag: false, 
+                is_pended: false, 
+                value_is_pointer: false, 
+                value: U256::zero() 
+            };
+            let memory_content = out_of_circuit_vm.memory.execute_partial_query(0, query);
+            let mut buffer = [0u8; 32];
+            memory_content.value.to_big_endian(&mut buffer);
+            aligned_returndata.extend(buffer);
+        }
+
+        let unaligned_returndata = aligned_returndata[((r1_fat_ptr.start as usize) % 32)..][..(r1_fat_ptr.length as usize)].to_vec();
+        panic!("root frame ended up with panic with returndata 0x{}", hex::encode(&unaligned_returndata));
+    }
+    
     assert_eq!(
         out_of_circuit_vm.local_state.callstack.current.pc, 0,
         "root frame ended up with panic"
@@ -342,6 +377,23 @@ pub fn run<
             sponge_state: tail,
         };
 
+        let decommits_sorter_sorter_state = basic_circuits
+            .code_decommittments_sorter_circuits
+            .last()
+            .unwrap()
+            .clone_witness()
+            .unwrap()
+            .closed_form_input
+            .observable_input
+            .sorted_queue_initial_state;
+        let tail = decommits_sorter_sorter_state.tail;
+        let length = decommits_sorter_sorter_state.length;
+
+        let decommits_sorter_intermediate_queue_state = SpongeLikeQueueStateWitness::<Bn256, 3> {
+            length,
+            sponge_state: tail,
+        };
+
         use sync_vm::recursion::node_aggregation::NodeAggregationOutputData;
         use sync_vm::traits::CSWitnessable;
 
@@ -359,7 +411,9 @@ pub fn run<
                 .closed_form_input
                 .observable_output,
             decommits_sorter_observable_output: basic_circuits
-                .code_decommittments_sorter_circuit
+                .code_decommittments_sorter_circuits
+                .last()
+                .unwrap()
                 .clone_witness()
                 .unwrap()
                 .closed_form_input
@@ -472,6 +526,7 @@ pub fn run<
             per_circuit_closed_form_inputs: per_circuit_inputs,
             bootloader_heap_memory_state: memory_state_after_bootloader_heap_writes,
             ram_sorted_queue_state: ram_permutation_sorted_state,
+            decommits_sorter_intermediate_queue_state: decommits_sorter_intermediate_queue_state,
             rollup_initital_writes_pubdata_hash: basic_circuits
                 .initial_writes_hasher_circuit
                 .clone_witness()
