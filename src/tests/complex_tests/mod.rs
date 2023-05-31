@@ -19,6 +19,7 @@ use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use boojum::cs::implementations::pow::NoPow;
 use boojum::cs::implementations::prover::ProofConfig;
 use circuit_definitions::circuit_definitions::recursion_layer::leaf_layer::ZkSyncLeafLayerRecursiveCircuit;
+use circuit_definitions::circuit_definitions::recursion_layer::scheduler::SchedulerCircuit;
 use zk_evm::abstractions::*;
 use zk_evm::aux_structures::DecommittmentQuery;
 use zk_evm::aux_structures::*;
@@ -762,8 +763,9 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
             );
 
             for (idx, (_, _, el)) in next_aggregations.iter().enumerate() {
-                test_recursive_circuit(el.clone());
-                println!("Circuit is satisfied");
+
+                // test_recursive_circuit(el.clone());
+                // println!("Circuit is satisfied");
 
                 if let Ok(proof) = source.get_node_layer_proof(
                     recursive_circuit_type as u8,
@@ -873,7 +875,108 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
         }
     }
 
-    dbg!(&final_node_proofs.keys());
+    let mut keys: Vec<_> = final_node_proofs.keys().into_iter().cloned().collect();
+    keys.sort();
 
-    // todo!()
+    let mut scheduler_proofs = vec![];
+    for key in keys.into_iter() {
+        let v = final_node_proofs.remove(&key).unwrap().into_inner();
+        scheduler_proofs.push(v);
+    }
+
+    let mut scheduler_witness = scheduler_partial_input;
+    // we need to reassign block specific data, and proofs
+
+    // node VK
+    let node_vk = source.get_recursion_layer_node_vk().unwrap().into_inner();
+    scheduler_witness.node_layer_vk_witness = node_vk.clone();
+    // leaf params
+    let leaf_layer_params = leaf_vk_commits.iter().map(|el| {
+        el.1.clone()
+    }).collect::<Vec<_>>().try_into().unwrap();
+    scheduler_witness.leaf_layer_parameters = leaf_layer_params;
+    // proofs
+    scheduler_witness.proof_witnesses = scheduler_proofs.into();
+
+    // ideally we need to fill previous block meta and aux hashes, but here we are fine
+
+    use zkevm_circuits::scheduler::SchedulerConfig;
+
+    let padding_proof = source.get_recursion_layer_node_padding_proof().unwrap().into_inner();
+
+    let config = SchedulerConfig {
+        proof_config: base_layer_proof_config(),
+        vk_fixed_parameters: node_vk.fixed_parameters,
+        padding_proof: padding_proof,
+        capacity: SCHEDULER_CAPACITY,
+    };
+
+    let scheduler_circuit = SchedulerCircuit {
+        witness: scheduler_witness,
+        config,
+        transcript_params: (),
+        _marker: std::marker::PhantomData,
+    };
+
+    let scheduler_circuit = ZkSyncRecursiveLayerCircuit::SchedulerCircuit(scheduler_circuit);
+
+    if source.get_scheduler_proof().is_err() {
+        let f = std::fs::File::create("tmp.json").unwrap();
+        serde_json::to_writer(f, &scheduler_circuit).unwrap();
+
+        // test_recursive_circuit(scheduler_circuit.clone());
+        // println!("Circuit is satisfied");
+
+        let (
+            setup_base,
+            setup,
+            vk,
+            setup_tree,
+            vars_hint,
+            wits_hint,
+            finalization_hint
+        ) = create_recursive_layer_setup_data(scheduler_circuit.clone(), &worker, BASE_LAYER_FRI_LDE_FACTOR, BASE_LAYER_CAP_SIZE);
+
+        // we did it above
+        source.set_recursion_layer_vk(ZkSyncRecursionLayerVerificationKey::SchedulerCircuit(vk.clone())).unwrap();
+        source.set_recursion_layer_finalization_hint(ZkSyncRecursionLayerFinalizationHint::SchedulerCircuit(finalization_hint.clone())).unwrap();
+
+        // prove
+        println!("Proving!");
+        let now = std::time::Instant::now();
+
+        let proof = prove_recursion_layer_circuit::<NoPow>(
+            scheduler_circuit.clone(), 
+            &worker, 
+            proof_config.clone(), 
+            &setup_base, 
+            &setup, 
+            &setup_tree, 
+            &vk, 
+            &vars_hint, 
+            &wits_hint, 
+            &finalization_hint
+        );
+
+        println!("Proving is DONE, taken {:?}", now.elapsed());
+
+        let is_valid = verify_recursion_layer_proof::<NoPow>(
+            &scheduler_circuit, 
+            &proof, 
+            &vk
+        );
+
+        assert!(is_valid);
+
+        source.set_scheduler_proof(ZkSyncRecursionLayerProof::SchedulerCircuit(proof)).unwrap();
+    }
+
+    println!("DONE");
+}
+
+#[test]
+fn run_single() {
+    let f = std::fs::File::open("tmp.json").unwrap();
+    let circuit: ZkSyncRecursiveLayerCircuit = serde_json::from_reader(f).unwrap();
+    test_recursive_circuit(circuit);
 }

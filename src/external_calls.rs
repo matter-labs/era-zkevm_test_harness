@@ -75,9 +75,6 @@ pub fn run<
     [(); <zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
 {
-// ) -> (BlockBasicCircuits<GoldilocksField>, BlockBasicCircuitsPublicInputs<GoldilocksField>, SchedulerCircuitInstanceWitness<GoldilocksField>) {
-// ) -> (Vec<VmInstanceWitness<F, VmWitnessOracle<F>>>, FullBlockArtifacts<F>) {
-// ) {
     assert!(zk_porter_is_available == false);
     assert_eq!(ram_verification_queries.len(), 0, "for now it's implemented such that we do not need it");
 
@@ -342,14 +339,9 @@ pub fn run<
 
             previous_block_meta_hash: [0u8; 32],
             previous_block_aux_hash: [0u8; 32],
-            recursion_node_verification_key_hash: [0u8; 32],
-            recursion_leaf_verification_key_hash: [0u8; 32],
-            all_different_circuits_keys_hash: [0u8; 32],
 
-            node_leyer_vk_witness: VerificationKey::default(),
+            node_layer_vk_witness: VerificationKey::default(),
             leaf_layer_parameters: std::array::from_fn(|_| RecursionLeafParameters::placeholder_witness()),
-            leaf_layer_parameters_commitment: [F::ZERO; LEAF_LAYER_PARAMETERS_COMMITMENT_LENGTH],
-            node_layer_vk_commitment: [F::ZERO; VK_COMMITMENT_LENGTH],
 
             proof_witnesses: VecDeque::new(),
         };
@@ -376,9 +368,6 @@ pub fn run_with_fixed_params<S: Storage>(
     geometry: GeometryConfig,
     storage: S,
     tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
-// ) {
-// ) -> (Vec<VmInstanceWitness<GoldilocksField, VmWitnessOracle<GoldilocksField>>>, FullBlockArtifacts<GoldilocksField>) {
-// ) -> (BlockBasicCircuits<Bn256>, BlockBasicCircuitsPublicInputs<Bn256>, SchedulerCircuitInstanceWitness<Bn256>) {
 ) -> (
     BlockBasicCircuits<GoldilocksField, ZkSyncDefaultRoundFunction>, 
     BlockBasicCircuitsPublicInputs<GoldilocksField>, 

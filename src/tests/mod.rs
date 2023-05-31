@@ -226,7 +226,12 @@ pub(crate) fn test_recursive_circuit(
 
     let mut cs = match circuit {
         ZkSyncRecursiveLayerCircuit::SchedulerCircuit(inner) => {
-            unreachable!()
+            let builder = inner.configure_builder_proxy(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs, &round_function);
+            let _ = cs.pad_and_shrink();
+            cs.into_assembly()
         },
         ZkSyncRecursiveLayerCircuit::NodeLayerCircuit(inner) => {
             let builder = inner.configure_builder_proxy(builder);

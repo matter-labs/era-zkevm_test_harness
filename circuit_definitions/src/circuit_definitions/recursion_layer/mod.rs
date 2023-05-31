@@ -15,14 +15,16 @@ pub mod scheduler;
 
 use self::leaf_layer::*;
 use self::node_layer::*;
+use self::scheduler::*;
 
 pub const RECURSION_ARITY: usize = 16;
+pub const SCHEDULER_CAPACITY: usize = 4096;
 
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone(bound = ""))]
 #[serde(bound = "")]
 pub enum ZkSyncRecursiveLayerCircuit {
-    SchedulerCircuit(()),
+    SchedulerCircuit(ZkSyncSchedulerCircuit),
     NodeLayerCircuit(ZkSyncNodeLayerRecursiveCircuit),
     LeafLayerCircuitForMainVM(ZkSyncLeafLayerRecursiveCircuit),
     LeafLayerCircuitForCodeDecommittmentsSorter(ZkSyncLeafLayerRecursiveCircuit),
@@ -227,7 +229,7 @@ impl ZkSyncRecursiveLayerCircuit {
 
     pub fn size_hint(&self) -> (Option<usize>, Option<usize>) {
         match &self {
-            Self::SchedulerCircuit(inner) => {todo!()},
+            Self::SchedulerCircuit(inner) => {inner.size_hint()},
             Self::NodeLayerCircuit(inner) => {inner.size_hint()},
             Self::LeafLayerCircuitForMainVM(inner)
             | Self::LeafLayerCircuitForCodeDecommittmentsSorter(inner)
@@ -250,7 +252,7 @@ impl ZkSyncRecursiveLayerCircuit {
         use boojum::cs::traits::circuit::CircuitBuilder;
 
         match &self {
-            Self::SchedulerCircuit(..) => {todo!()},
+            Self::SchedulerCircuit(..) => {ZkSyncSchedulerCircuit::geometry()},
             Self::NodeLayerCircuit(..) => {ZkSyncNodeLayerRecursiveCircuit::geometry()},
             Self::LeafLayerCircuitForMainVM(..)
             | Self::LeafLayerCircuitForCodeDecommittmentsSorter(..)
@@ -271,7 +273,7 @@ impl ZkSyncRecursiveLayerCircuit {
 
     pub fn into_dyn_verifier_builder(&self) -> Box<dyn boojum::cs::traits::circuit::ErasedBuilderForVerifier<F, EXT>> {
         match &self {
-            Self::SchedulerCircuit(..) => {todo!()},
+            Self::SchedulerCircuit(..) => {ConcreteSchedulerCircuitBuilder::dyn_verifier_builder::<EXT>()},
             Self::NodeLayerCircuit(..) => {ConcreteLeafLayerCircuitBuilder::dyn_verifier_builder::<EXT>()},
             Self::LeafLayerCircuitForMainVM(..)
             | Self::LeafLayerCircuitForCodeDecommittmentsSorter(..)
@@ -292,7 +294,7 @@ impl ZkSyncRecursiveLayerCircuit {
 
     pub fn into_dyn_recursive_verifier_builder<CS: ConstraintSystem<F> + 'static>(&self) -> Box<dyn boojum::cs::traits::circuit::ErasedBuilderForRecursiveVerifier<F, EXT, CS>> {
         match &self {
-            Self::SchedulerCircuit(..) => {todo!()},
+            Self::SchedulerCircuit(..) => {ConcreteSchedulerCircuitBuilder::dyn_recursive_verifier_builder::<EXT, CS>()},
             Self::NodeLayerCircuit(..) => {ConcreteLeafLayerCircuitBuilder::dyn_recursive_verifier_builder::<EXT, CS>()},
             Self::LeafLayerCircuitForMainVM(..)
             | Self::LeafLayerCircuitForCodeDecommittmentsSorter(..)

@@ -11,9 +11,9 @@ use crate::circuit_definitions::base_layer::TARGET_CIRCUIT_TRACE_LENGTH;
 use boojum::cs::traits::gate::GatePlacementStrategy;
 use boojum::cs::implementations::transcript::Transcript;
 use boojum::cs::gates::*;
+use boojum::gadgets::tables::*;
 
 use super::*;
-use super::node_layer::NodeLayerCircuitBuilder;
 
 type F = GoldilocksField;
 type P = GoldilocksField;
@@ -121,7 +121,21 @@ where
         <Self as boojum::cs::traits::circuit::CircuitBuilder<F>>::configure_builder(builder)
     }
 
-    pub fn add_tables<CS: ConstraintSystem<F>>(&self, _cs: &mut CS) {
+    pub fn add_tables<CS: ConstraintSystem<F>>(&self, cs: &mut CS) {
+        let table = create_xor8_table();
+        cs.add_lookup_table::<Xor8Table, 3>(table);
+
+        let table = create_and8_table();
+        cs.add_lookup_table::<And8Table, 3>(table);
+
+        let table = create_byte_split_table::<F, 1>();
+        cs.add_lookup_table::<ByteSplitTable<1>, 3>(table);
+        let table = create_byte_split_table::<F, 2>();
+        cs.add_lookup_table::<ByteSplitTable<2>, 3>(table);
+        let table = create_byte_split_table::<F, 3>();
+        cs.add_lookup_table::<ByteSplitTable<3>, 3>(table);
+        let table = create_byte_split_table::<F, 4>();
+        cs.add_lookup_table::<ByteSplitTable<4>, 3>(table);
     }
 
     pub fn synthesize_into_cs<

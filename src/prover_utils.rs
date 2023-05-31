@@ -390,13 +390,12 @@ pub fn create_recursive_layer_setup_data(
 
     let (cs, finalization_hint) = match circuit {
         ZkSyncRecursiveLayerCircuit::SchedulerCircuit(inner) => {
-            unreachable!()
-            // let builder = inner.configure_builder(builder);
-            // let mut cs = builder.build(());
-            // inner.add_tables(&mut cs);
-            // inner.synthesize_proxy(&mut cs);
-            // let (_, finalization_hint) = cs.pad_and_shrink();
-            // (cs.into_assembly(), finalization_hint)
+            let builder = inner.configure_builder_proxy(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs, &round_function);
+            let (_, finalization_hint) = cs.pad_and_shrink();
+            (cs.into_assembly(), finalization_hint)
         },
         ZkSyncRecursiveLayerCircuit::NodeLayerCircuit(inner) => {
             let builder = inner.configure_builder_proxy(builder);
@@ -484,13 +483,12 @@ pub fn prove_recursion_layer_circuit<
 
     let cs = match circuit {
         ZkSyncRecursiveLayerCircuit::SchedulerCircuit(inner) => {
-            unreachable!()
-            // let builder = inner.configure_builder(builder);
-            // let mut cs = builder.build(());
-            // inner.add_tables(&mut cs);
-            // inner.synthesize_proxy(&mut cs);
-            // let (_, finalization_hint) = cs.pad_and_shrink();
-            // (cs.into_assembly(), finalization_hint)
+            let builder = inner.configure_builder_proxy(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs, &round_function);
+            cs.pad_and_shrink_using_hint(finalization_hint);
+            cs.into_assembly()
         },
         ZkSyncRecursiveLayerCircuit::NodeLayerCircuit(inner) => {
             let builder = inner.configure_builder_proxy(builder);
