@@ -139,7 +139,7 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 const N: usize,
 >(
     tail: [F; N],
-    round_function: &R,
+    _round_function: &R,
 ) -> [F; QUEUE_FINAL_STATE_COMMITMENT_LENGTH] {
     // rescue prime paddings
     let mut to_absorb = vec![];
@@ -157,5 +157,10 @@ const N: usize,
 pub fn finalized_queue_state_as_bytes<F: SmallField>(
     input: [F; QUEUE_FINAL_STATE_COMMITMENT_LENGTH]
 ) -> [u8; 32] {
-    todo!()
+    let mut result = [0u8; 32];
+    for (dst, src) in result.array_chunks_mut::<8>().zip(input.into_iter()) {
+        *dst = src.as_u64_reduced().to_be_bytes();
+    }
+
+    result
 }
