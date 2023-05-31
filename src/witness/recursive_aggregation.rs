@@ -311,8 +311,6 @@ pub fn create_node_witnesses(
         queue_state: QueueState::placeholder_witness(),
     };
 
-    dbg!(&partial_inputs);
-
     let config = NodeLayerRecursionConfig::<F, <H as RecursiveTreeHasher<F, Num<F>>>::NonCircuitSimulator, EXT> {
         proof_config: base_layer_proof_config(),
         vk_fixed_parameters: vk.clone().into_inner().fixed_parameters,
@@ -332,6 +330,13 @@ pub fn create_node_witnesses(
         let mut queue = queue.clone();
 
         let mut split_points = vec![];
+        split_points.push(
+            QueueTailStateWitness {
+                tail: queue.tail,
+                length: queue.num_items,
+            }
+        );
+        
         proofs.push(proofs_iter.next().unwrap().into_inner());
         for (_, c, _) in it {
             split_points.push(
@@ -350,6 +355,7 @@ pub fn create_node_witnesses(
             };
             split_points.resize(RECURSION_ARITY - 1, padding);
         }
+        dbg!(&split_points);
         let mut input = partial_inputs.clone();
         input.queue_state = take_sponge_like_queue_state_from_simulator(&queue);
 
