@@ -13,6 +13,7 @@ use crate::ethereum_types::*;
 use crate::external_calls::base_layer_proof_config;
 use crate::witness::oracle::create_artifacts_from_tracer;
 use crate::witness::utils::*;
+use boojum::field::goldilocks::GoldilocksExt2;
 use boojum::gadgets::traits::allocatable::CSAllocatable;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use boojum::cs::implementations::pow::NoPow;
@@ -26,6 +27,7 @@ use zk_evm::witness_trace::VmWitnessTracer;
 use zk_evm::GenericNoopTracer;
 use zkevm_assembly::Assembly;
 use zk_evm::testing::storage::InMemoryStorage;
+use zkevm_circuits::scheduler::input::SchedulerCircuitInstanceWitness;
 use crate::toolset::{create_tools, GeometryConfig};
 use utils::{read_test_artifact, TestArtifact};
 use crate::witness::tree::{ZKSyncTestingTree, BinarySparseStorageTree};
@@ -98,6 +100,9 @@ pub(crate) fn save_predeployed_contracts(storage: &mut InMemoryStorage, tree: &m
 }
 
 use crate::witness::full_block_artifact::*;
+use boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
+use boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
+use boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
 
 pub(crate) fn generate_base_layer(
     mut test_artifact: TestArtifact, 
@@ -107,6 +112,7 @@ pub(crate) fn generate_base_layer(
     BlockBasicCircuits<GoldilocksField, ZkSyncDefaultRoundFunction>, 
     BlockBasicCircuitsPublicInputs<GoldilocksField>,
     BlockBasicCircuitsPublicCompactFormsWitnesses<GoldilocksField>,
+    SchedulerCircuitInstanceWitness<GoldilocksField, CircuitGoldilocksPoseidon2Sponge, GoldilocksExt2>,
 ) {
     use zk_evm::zkevm_opcode_defs::system_params::BOOTLOADER_FORMAL_ADDRESS;
 
@@ -168,6 +174,8 @@ pub(crate) fn generate_base_layer(
         basic_block_circuits, 
         basic_block_circuits_inputs,
         closed_form_inputs,
+        scheduler_partial_input,
+        aux_data,
     ) = run(
         Address::zero(),
         test_artifact.entry_point_address,
@@ -184,7 +192,7 @@ pub(crate) fn generate_base_layer(
         &mut tree
     );
 
-    (basic_block_circuits, basic_block_circuits_inputs, closed_form_inputs)
+    (basic_block_circuits, basic_block_circuits_inputs, closed_form_inputs, scheduler_partial_input)
 }
 
 fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: usize) {
@@ -218,6 +226,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
         basic_block_circuits, 
         basic_block_circuits_inputs,
         per_circuit_closed_form_inputs,
+        scheduler_partial_input,
     ) = generate_base_layer(
         test_artifact,
         cycle_limit,
@@ -510,8 +519,6 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
         );
         leaf_vk_commits.push((circuit_type, params));
     }
-
-    dbg!(&leaf_vk_commits);
 
     let mut all_leaf_aggregations = vec![];
     use crate::witness::recursive_aggregation::create_leaf_witnesses;

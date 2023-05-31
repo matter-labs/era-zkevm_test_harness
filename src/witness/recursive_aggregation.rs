@@ -291,7 +291,6 @@ pub fn create_node_witnesses(
     assert_eq!(leaf_layer_params.len(), NUM_BASE_LAYER_CIRCUITS);
 
     assert_eq!(chunks.len(), proofs.len());
-    assert_eq!(vk.numeric_circuit_type(), padding_proof.numeric_circuit_type());
 
     assert!(chunks.len() > 0);
     let circuit_type = chunks[0].0 as u8;
@@ -336,7 +335,7 @@ pub fn create_node_witnesses(
                 length: queue.num_items,
             }
         );
-        
+
         proofs.push(proofs_iter.next().unwrap().into_inner());
         for (_, c, _) in it {
             split_points.push(
@@ -355,7 +354,7 @@ pub fn create_node_witnesses(
             };
             split_points.resize(RECURSION_ARITY - 1, padding);
         }
-        dbg!(&split_points);
+
         let mut input = partial_inputs.clone();
         input.queue_state = take_sponge_like_queue_state_from_simulator(&queue);
 

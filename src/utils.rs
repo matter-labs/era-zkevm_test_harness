@@ -1,14 +1,14 @@
 use std::ops::Add;
 
 use crate::witness::tree::BinaryHasher;
-use boojum::algebraic_props::round_function;
+use boojum::{algebraic_props::round_function, field::SmallField};
 use boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
 use boojum::cs::implementations::setup::FinalizationHintsForProver;
 use boojum::field::goldilocks::GoldilocksExt2;
 use num_bigint::BigUint;
 use zk_evm::{address_to_u256, ethereum_types::*};
 use boojum::config::*;
-use circuit_definitions::encodings::BytesSerializable;
+use circuit_definitions::encodings::{BytesSerializable, QueueSimulator};
 
 pub fn u64_as_u32_le(value: u64) -> [u32; 2] {
     [
@@ -127,3 +127,35 @@ pub fn binary_merklize_set<
 pub const BASE_LAYER_FRI_LDE_FACTOR: usize = 2;
 pub const BASE_LAYER_CAP_SIZE: usize = 32;
 pub const SECURITY_BITS_TARGET: usize = 100;
+
+use zkevm_circuits::scheduler::QUEUE_FINAL_STATE_COMMITMENT_LENGTH;
+use boojum::gadgets::traits::round_function::BuildableCircuitRoundFunction;
+use boojum::algebraic_props::round_function::AlgebraicRoundFunction;
+use circuit_definitions::encodings::OutOfCircuitFixedLengthEncodable;
+
+pub fn finalize_queue_state<
+F: SmallField,
+R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+const N: usize,
+>(
+    tail: [F; N],
+    round_function: &R,
+) -> [F; QUEUE_FINAL_STATE_COMMITMENT_LENGTH] {
+    // rescue prime paddings
+    let mut to_absorb = vec![];
+    to_absorb.extend(tail);
+    to_absorb.push(F::ONE);
+
+    let mut state = R::initial_state();
+    use boojum::algebraic_props::round_function::absorb_into_state_vararg;
+    absorb_into_state_vararg::<F, R, AbsorbtionModeOverwrite, 8, 12, 4>(&mut state, &to_absorb);
+    let commitment = <R as AlgebraicRoundFunction<F, 8, 12, 4>>::state_into_committment::<QUEUE_FINAL_STATE_COMMITMENT_LENGTH>(&state);
+
+    commitment
+}
+
+pub fn finalized_queue_state_as_bytes<F: SmallField>(
+    input: [F; QUEUE_FINAL_STATE_COMMITMENT_LENGTH]
+) -> [u8; 32] {
+    todo!()
+}

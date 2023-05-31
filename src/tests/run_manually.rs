@@ -4,6 +4,7 @@ use super::*;
 use crate::entry_point::{create_out_of_circuit_global_context};
 
 use crate::ethereum_types::*;
+use crate::external_calls::run_with_fixed_params;
 use crate::witness::oracle::create_artifacts_from_tracer;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use boojum::config::{SetupCSConfig, ProvingCSConfig};
@@ -230,11 +231,15 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         &known_contracts
     );
 
-    let round_function = ZkSyncDefaultRoundFunction::default();
-
     // let (basic_block_circuits, basic_block_circuits_inputs, scheduler_input) = run(
-    let (basic_block_circuits, basic_block_circuits_inputs, closed_form_inputs) = 
-    run(
+    let (
+        basic_block_circuits, 
+        basic_block_circuits_inputs, 
+        closed_form_inputs,
+        _,
+        _,
+    ) = 
+    run_with_fixed_params(
         Address::zero(),
         *BOOTLOADER_FORMAL_ADDRESS,
         entry_point_bytecode,
@@ -244,7 +249,6 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         used_bytecodes_and_hashes,
         vec![],
         cycle_limit,
-        round_function,
         geometry,
         storage_impl,
         &mut tree

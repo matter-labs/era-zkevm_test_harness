@@ -16,6 +16,7 @@ pub(crate) fn generate_base_layer_vks_and_proofs() {
         base_layer_circuit, 
         base_layer_circuit_inputs,
         _,
+        _,
     ) = generate_base_layer(
         test_artifact, 
         20000,

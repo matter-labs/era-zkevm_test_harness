@@ -1,7 +1,10 @@
-use crate::{ethereum_types::{Address, U256}, utils::calldata_to_aligned_data};
+use std::collections::VecDeque;
+
+use crate::{ethereum_types::{Address, U256}, utils::{calldata_to_aligned_data, u64_as_u32_le}};
 use crate::toolset::GeometryConfig;
-use boojum::{field::{SmallField, goldilocks::GoldilocksField}, cs::implementations::prover::ProofConfig};
+use boojum::{field::{SmallField, goldilocks::GoldilocksField}, cs::implementations::{prover::ProofConfig, verifier::VerificationKey}};
 use zk_evm::abstractions::Storage;
+use zkevm_circuits::{scheduler::input::SchedulerCircuitInstanceWitness, base_structures::vm_state::FULL_SPONGE_QUEUE_STATE_WIDTH};
 use crate::toolset::create_tools;
 use zk_evm::contract_bytecode_to_words;
 use zk_evm::bytecode_to_code_hash;
@@ -29,6 +32,10 @@ use crate::witness::oracle::VmInstanceWitness;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use crate::witness::full_block_artifact::FullBlockArtifacts;
 use boojum::gadgets::traits::allocatable::*;
+use zkevm_circuits::scheduler::block_header::BlockAuxilaryOutputWitness;
+use boojum::gadgets::recursion::recursive_tree_hasher::RecursiveTreeHasher;
+use boojum::gadgets::num::Num;
+use boojum::field::FieldExtension;
 
 /// This is a testing interface that basically will
 /// setup the environment and will run out-of-circuit and then in-circuit
@@ -36,6 +43,8 @@ use boojum::gadgets::traits::allocatable::*;
 pub fn run<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
+    H: RecursiveTreeHasher<F, Num<F>>,
+    EXT: FieldExtension<2, BaseField = F>,
     S: Storage
 >(
     caller: Address, // for real block must be zero
@@ -51,7 +60,13 @@ pub fn run<
     geometry: GeometryConfig,
     storage: S,
     tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
-) -> (BlockBasicCircuits<F, R>, BlockBasicCircuitsPublicInputs<F>, BlockBasicCircuitsPublicCompactFormsWitnesses<F>) 
+) -> (
+    BlockBasicCircuits<F, R>, 
+    BlockBasicCircuitsPublicInputs<F>, 
+    BlockBasicCircuitsPublicCompactFormsWitnesses<F>,
+    SchedulerCircuitInstanceWitness<F, H, EXT>,
+    BlockAuxilaryOutputWitness<F>,
+) 
     where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <zkevm_circuits::base_structures::memory_query::MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <zkevm_circuits::base_structures::decommit_query::DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
@@ -230,114 +245,123 @@ pub fn run<
         &round_function
     );
 
-    return (basic_circuits, basic_circuits_inputs, compact_form_witnesses)
+    let (scheduler_circuit_witness, aux_data) = {
+        use zkevm_circuits::scheduler::block_header::*;
+        use zkevm_circuits::scheduler::input::*;
 
-    // let scheduler_circuit_witness = {
-    //     use sync_vm::circuit_structures::bytes32::Bytes32Witness;
+        let prev_rollup_state = PerShardStateWitness {
+            enumeration_counter: u64_as_u32_le(initial_rollup_enumeration_counter),
+            state_root: initial_rollup_root,
+        };
 
-    //     fn u256_to_bytes32witness_be<E: crate::bellman::Engine>(value: U256) -> Bytes32Witness<E> {
-    //         let mut buffer = [0u8; 32];
-    //         value.to_big_endian(&mut buffer);
-    //         Bytes32Witness::from_bytes_array(&buffer)
-    //     }
+        let prev_porter_state = PerShardStateWitness {
+            enumeration_counter: [0; 2],
+            state_root: [0u8; 32],
+        };
 
-    //     let prev_rollup_state = PerShardStateWitness {
-    //         enumeration_counter: initial_rollup_enumeration_counter,
-    //         state_root: Bytes32Witness::from_bytes_array(&initial_rollup_root),
-    //         _marker: std::marker::PhantomData
-    //     };
+        let previous_block_passthrough = BlockPassthroughDataWitness { 
+            per_shard_states: [prev_rollup_state, prev_porter_state],
+        };
 
-    //     let prev_porter_state = PerShardStateWitness {
-    //         enumeration_counter: 0,
-    //         state_root: Bytes32Witness::from_bytes_array(&[0u8; 32]),
-    //         _marker: std::marker::PhantomData
-    //     };
+        // now we need parameters and aux
+        // parameters
 
-    //     let previous_block_passthrough = BlockPassthroughDataWitness { 
-    //         per_shard_states: [prev_rollup_state, prev_porter_state],
-    //         _marker: std::marker::PhantomData
-    //     };
+        let block_meta_parameters = BlockMetaParametersWitness {
+            bootloader_code_hash: entry_point_code_hash_as_u256,
+            default_aa_code_hash: default_aa_code_hash,
+            zkporter_is_available: zk_porter_is_available,
+        };
 
-    //     // now we need parameters and aux
-    //     // parameters
-    //     let block_meta_parameters = BlockMetaParametersWitness {
-    //         bootloader_code_hash: u256_to_bytes32witness_be(entry_point_code_hash_as_u256),
-    //         default_aa_code_hash: u256_to_bytes32witness_be(default_aa_code_hash),
-    //         zkporter_is_available: zk_porter_is_available,
-    //         _marker: std::marker::PhantomData
-    //     };
+        use zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
 
-    //     // aux
-    //     let _aux_data = BlockAuxilaryOutputWitness {
-    //         l1_messages_linear_hash: basic_circuits.l1_messages_merklizer_circuit.clone_witness().unwrap().closed_form_input.observable_output.linear_hash,
-    //         l1_messages_root: basic_circuits.l1_messages_merklizer_circuit.clone_witness().unwrap().closed_form_input.observable_output.root_hash,
-    //         rollup_initital_writes_pubdata_hash: basic_circuits.initial_writes_hasher_circuit.clone_witness().unwrap().closed_form_input.observable_output.pubdata_hash,
-    //         rollup_repeated_writes_pubdata_hash: basic_circuits.repeated_writes_hasher_circuit.clone_witness().unwrap().closed_form_input.observable_output.pubdata_hash,
-    //         _marker: std::marker::PhantomData
-    //     };
+        let t = basic_circuits.events_sorter_circuits.last().map(|el| {
+            let wit = el.clone_witness().unwrap();
+            wit.closed_form_input.observable_output.final_queue_state.tail.tail
+        }).unwrap_or([F::ZERO; QUEUE_STATE_WIDTH]);
 
-    //     let per_circuit_inputs = compact_form_witnesses.clone().into_flattened_set();
+        use crate::finalize_queue_state;
+        use crate::finalized_queue_state_as_bytes;
 
-    //     let ram_permutation_full_sorted_state = basic_circuits.ram_permutation_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_input.sorted_queue_initial_state;
-    //     let tail = ram_permutation_full_sorted_state.tail;
-    //     let length = ram_permutation_full_sorted_state.length;
+        let events_queue_state = finalize_queue_state(t, &round_function);
+        let events_queue_state = finalized_queue_state_as_bytes(events_queue_state);
 
-    //     let ram_permutation_sorted_state = SpongeLikeQueueStateWitness::<Bn256, 3> {
-    //         length,
-    //         sponge_state: tail
-    //     };
+        let t = basic_circuits.main_vm_circuits.first().map(|el| {
+            let wit = el.clone_witness().unwrap();
+            wit.closed_form_input.observable_input.memory_queue_initial_state.tail
+        }).unwrap_or([F::ZERO; FULL_SPONGE_QUEUE_STATE_WIDTH]);
 
-    //     use sync_vm::traits::CSWitnessable;
-    //     use sync_vm::recursion::node_aggregation::NodeAggregationOutputData;
+        let bootloader_heap_initial_content = finalize_queue_state(t, &round_function);
+        let bootloader_heap_initial_content = finalized_queue_state_as_bytes(bootloader_heap_initial_content);
 
-    //     // let memory_verification_queries: [sync_vm::glue::code_unpacker_sha256::memory_query_updated::MemoryQueryWitness<Bn256>; NUM_MEMORY_QUERIES_TO_VERIFY] = memory_verification_queries.try_into().unwrap();
+        let rollup_state_diff_for_compression = basic_circuits.storage_application_circuits.last().map(|el| {
+            let wit = el.clone_witness().unwrap();
+            wit.closed_form_input.observable_output.state_diffs_keccak256_hash
+        }).expect("at least 1 storage application");
 
-    //     let scheduler_circuit_witness = SchedulerCircuitInstanceWitness {
-    //         prev_block_data: previous_block_passthrough,
-    //         block_meta_parameters,
-    //         vm_end_of_execution_observable_output: basic_circuits.main_vm_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
-    //         decommits_sorter_observable_output: basic_circuits.code_decommittments_sorter_circuit.clone_witness().unwrap().closed_form_input.observable_output,
-    //         code_decommitter_observable_output: basic_circuits.code_decommitter_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
-    //         log_demuxer_observable_output: basic_circuits.log_demux_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
-    //         keccak256_observable_output: basic_circuits.keccak_precompile_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
-    //         sha256_observable_output: basic_circuits.sha256_precompile_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
-    //         ecrecover_observable_output: basic_circuits.ecrecover_precompile_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
-    //         storage_sorter_observable_output: basic_circuits.storage_sorter_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
-    //         storage_application_observable_output: basic_circuits.storage_application_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
-    //         initial_writes_rehasher_observable_output: basic_circuits.initial_writes_hasher_circuit.clone_witness().unwrap().closed_form_input.observable_output,
-    //         repeated_writes_rehasher_observable_output: basic_circuits.repeated_writes_hasher_circuit.clone_witness().unwrap().closed_form_input.observable_output,
-    //         events_sorter_observable_output: basic_circuits.events_sorter_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
-    //         l1messages_sorter_observable_output: basic_circuits.l1_messages_sorter_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
-    //         l1messages_linear_hasher_observable_output: basic_circuits.l1_messages_pubdata_hasher_circuit.clone_witness().unwrap().closed_form_input.observable_output,
-    //         l1messages_merklizer_observable_output: basic_circuits.l1_messages_merklizer_circuit.clone_witness().unwrap().closed_form_input.observable_output,
-    //         storage_log_tail: basic_circuits.main_vm_circuits.first().unwrap().clone_witness().unwrap().closed_form_input.observable_input.rollback_queue_tail_for_block,
-    //         per_circuit_closed_form_inputs: per_circuit_inputs,
-    //         bootloader_heap_memory_state: memory_state_after_bootloader_heap_writes,
-    //         ram_sorted_queue_state: ram_permutation_sorted_state,
-    //         rollup_initital_writes_pubdata_hash: basic_circuits.initial_writes_hasher_circuit.clone_witness().unwrap().closed_form_input.observable_output.pubdata_hash,
-    //         rollup_repeated_writes_pubdata_hash: basic_circuits.repeated_writes_hasher_circuit.clone_witness().unwrap().closed_form_input.observable_output.pubdata_hash,
+        // aux
+        let aux_data = BlockAuxilaryOutputWitness::<F> {
+            events_queue_state,
+            bootloader_heap_initial_content,
+            rollup_state_diff_for_compression,
+            l1_messages_linear_hash: [0u8; 32],
+        };
 
-    //         events_sorter_intermediate_queue_state: basic_circuits.events_sorter_circuits.first().unwrap().clone_witness().unwrap().closed_form_input.observable_input.intermediate_sorted_queue_state,
-    //         l1messages_sorter_intermediate_queue_state: basic_circuits.l1_messages_sorter_circuits.first().unwrap().clone_witness().unwrap().closed_form_input.observable_input.intermediate_sorted_queue_state,
-    //         rollup_storage_sorter_intermediate_queue_state: basic_circuits.storage_sorter_circuits.first().unwrap().clone_witness().unwrap().closed_form_input.observable_input.intermediate_sorted_queue_state,
+        use zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
+        let per_circuit_inputs: VecDeque<ClosedFormInputCompactFormWitness<F>> = compact_form_witnesses.clone().into_flattened_set().into_iter().map(|el| el.into_inner()).collect();
 
-    //         previous_block_meta_hash: Bytes32::placeholder_witness(),
-    //         previous_block_aux_hash: Bytes32::placeholder_witness(),
-    //         recursion_node_verification_key_hash: Bytes32::placeholder_witness(),
-    //         recursion_leaf_verification_key_hash: Bytes32::placeholder_witness(),
-    //         all_different_circuits_keys_hash: Bytes32::placeholder_witness(),
+        // let memory_verification_queries: [sync_vm::glue::code_unpacker_sha256::memory_query_updated::MemoryQueryWitness<Bn256>; NUM_MEMORY_QUERIES_TO_VERIFY] = memory_verification_queries.try_into().unwrap();
 
-    //         aggregation_result: NodeAggregationOutputData::placeholder_witness(),
+        use zkevm_circuits::recursion::leaf_layer::input::RecursionLeafParameters;
+        use zkevm_circuits::scheduler::LEAF_LAYER_PARAMETERS_COMMITMENT_LENGTH;
+        use zkevm_circuits::recursion::VK_COMMITMENT_LENGTH;
 
-    //         proof_witnesses: vec![],
-    //         vk_encoding_witnesses: vec![],
-    //     };
+        let scheduler_circuit_witness = SchedulerCircuitInstanceWitness {
+            prev_block_data: previous_block_passthrough,
+            block_meta_parameters,
+            vm_end_of_execution_observable_output: basic_circuits.main_vm_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
+            decommits_sorter_observable_output: basic_circuits.code_decommittments_sorter_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
+            code_decommitter_observable_output: basic_circuits.code_decommitter_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
+            log_demuxer_observable_output: basic_circuits.log_demux_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
+            keccak256_observable_output: basic_circuits.keccak_precompile_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
+            sha256_observable_output: basic_circuits.sha256_precompile_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
+            ecrecover_observable_output: basic_circuits.ecrecover_precompile_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
+            storage_sorter_observable_output: basic_circuits.storage_sorter_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
+            storage_application_observable_output: basic_circuits.storage_application_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
+            events_sorter_observable_output: basic_circuits.events_sorter_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
+            l1messages_sorter_observable_output: basic_circuits.l1_messages_sorter_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
+            // l1messages_linear_hasher_observable_output: basic_circuits.l1_messages_pubdata_hasher_circuit.clone_witness().unwrap().closed_form_input.observable_output,
+            storage_log_tail: basic_circuits.main_vm_circuits.first().unwrap().clone_witness().unwrap().closed_form_input.observable_input.rollback_queue_tail_for_block,
+            per_circuit_closed_form_inputs: per_circuit_inputs,
 
-    //     scheduler_circuit_witness
-    // };
+            bootloader_heap_memory_state: basic_circuits.main_vm_circuits.first().unwrap().clone_witness().unwrap().closed_form_input.observable_input.memory_queue_initial_state,
+            ram_sorted_queue_state: basic_circuits.ram_permutation_circuits.first().unwrap().clone_witness().unwrap().closed_form_input.observable_input.sorted_queue_initial_state.tail,
+            decommits_sorter_intermediate_queue_state: basic_circuits.code_decommittments_sorter_circuits.first().unwrap().clone_witness().unwrap().closed_form_input.observable_input.sorted_queue_initial_state.tail,
+            events_sorter_intermediate_queue_state: basic_circuits.events_sorter_circuits.first().unwrap().clone_witness().unwrap().closed_form_input.observable_input.intermediate_sorted_queue_state.tail,
+            l1messages_sorter_intermediate_queue_state: basic_circuits.l1_messages_sorter_circuits.first().unwrap().clone_witness().unwrap().closed_form_input.observable_input.intermediate_sorted_queue_state.tail,
+            rollup_storage_sorter_intermediate_queue_state: basic_circuits.storage_sorter_circuits.first().unwrap().clone_witness().unwrap().closed_form_input.observable_input.intermediate_sorted_queue_state.tail,
 
-    // (basic_circuits, basic_circuits_inputs, scheduler_circuit_witness)
+            previous_block_meta_hash: [0u8; 32],
+            previous_block_aux_hash: [0u8; 32],
+            recursion_node_verification_key_hash: [0u8; 32],
+            recursion_leaf_verification_key_hash: [0u8; 32],
+            all_different_circuits_keys_hash: [0u8; 32],
+
+            node_leyer_vk_witness: VerificationKey::default(),
+            leaf_layer_parameters: std::array::from_fn(|_| RecursionLeafParameters::placeholder_witness()),
+            leaf_layer_parameters_commitment: [F::ZERO; LEAF_LAYER_PARAMETERS_COMMITMENT_LENGTH],
+            node_layer_vk_commitment: [F::ZERO; VK_COMMITMENT_LENGTH],
+
+            proof_witnesses: VecDeque::new(),
+        };
+
+        (scheduler_circuit_witness, aux_data)
+    };
+
+    (basic_circuits, basic_circuits_inputs, compact_form_witnesses, scheduler_circuit_witness, aux_data)
 }
+
+use boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
+use boojum::field::goldilocks::GoldilocksExt2;
 
 pub fn run_with_fixed_params<S: Storage>(
     caller: Address, // for real block must be zero
@@ -355,7 +379,13 @@ pub fn run_with_fixed_params<S: Storage>(
 // ) {
 // ) -> (Vec<VmInstanceWitness<GoldilocksField, VmWitnessOracle<GoldilocksField>>>, FullBlockArtifacts<GoldilocksField>) {
 // ) -> (BlockBasicCircuits<Bn256>, BlockBasicCircuitsPublicInputs<Bn256>, SchedulerCircuitInstanceWitness<Bn256>) {
-) -> (BlockBasicCircuits<GoldilocksField, ZkSyncDefaultRoundFunction>, BlockBasicCircuitsPublicInputs<GoldilocksField>, BlockBasicCircuitsPublicCompactFormsWitnesses<GoldilocksField>) {
+) -> (
+    BlockBasicCircuits<GoldilocksField, ZkSyncDefaultRoundFunction>, 
+    BlockBasicCircuitsPublicInputs<GoldilocksField>, 
+    BlockBasicCircuitsPublicCompactFormsWitnesses<GoldilocksField>,
+    SchedulerCircuitInstanceWitness<GoldilocksField, CircuitGoldilocksPoseidon2Sponge, GoldilocksExt2>,
+    BlockAuxilaryOutputWitness<GoldilocksField>,
+) {
 
     let round_function = ZkSyncDefaultRoundFunction::default();
 
