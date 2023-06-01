@@ -113,7 +113,6 @@ pub fn generate_recursive_layer_vks_and_proofs(source: &mut dyn SetupDataSource)
     let recursion_step_proof_config = base_layer_proof_config();
 
     for base_circuit_type in (BaseLayerCircuitType::VM as u8)..=(BaseLayerCircuitType::L1MessagesHasher as u8) {
-        continue;
         let recursive_circuit_type = base_circuit_type_into_recursive_leaf_circuit_type(BaseLayerCircuitType::from_numeric_value(base_circuit_type));
 
         println!("Computing leaf layer VK for type {:?}", recursive_circuit_type);
