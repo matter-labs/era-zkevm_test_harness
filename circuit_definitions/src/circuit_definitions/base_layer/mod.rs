@@ -26,8 +26,7 @@ pub mod storage_sort_dedup;
 pub mod storage_apply;
 pub mod events_sort_dedup;
 // pub mod l1_messages_sort_dedup; // equal to one above
-// pub mod l1_messages_merklize;
-// pub mod l1_messages_hasher;
+pub mod linear_hasher;
 
 pub use self::vm_main::VmMainInstanceSynthesisFunction;
 pub use self::sort_code_decommits::CodeDecommittmentsSorterSynthesisFunction;
@@ -40,8 +39,7 @@ pub use self::ram_permutation::RAMPermutationInstanceSynthesisFunction;
 pub use self::storage_sort_dedup::StorageSortAndDedupInstanceSynthesisFunction;
 pub use self::storage_apply::StorageApplicationInstanceSynthesisFunction;
 pub use self::events_sort_dedup::EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction;
-// pub use self::l1_messages_merklize::MessagesMerklizerInstanceSynthesisFunction;
-// pub use self::l1_messages_hasher::L1MessagesRehasherInstanceSynthesisFunction;
+pub use self::linear_hasher::LinearHasherInstanceSynthesisFunction;
 
 // Type definitions for circuits, so one can easily form circuits with witness, and their definition
 // will take care of particular synthesis function. There is already an implementation of Circuit<F> for ZkSyncUniformCircuitInstance,
@@ -58,9 +56,7 @@ pub type StorageSorterCircuit<F, R> = ZkSyncUniformCircuitInstance<F, StorageSor
 pub type StorageApplicationCircuit<F, R> = ZkSyncUniformCircuitInstance<F, StorageApplicationInstanceSynthesisFunction<F, R>>;
 pub type EventsSorterCircuit<F, R> = ZkSyncUniformCircuitInstance<F, EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction<F, R>>;
 pub type L1MessagesSorterCircuit<F, R> = ZkSyncUniformCircuitInstance<F, EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction<F, R>>;
-
-// pub type L1MessagesMerklizerCircuit<F> = ZkSyncUniformCircuitInstance<F, MessagesMerklizerInstanceSynthesisFunction>;
-// pub type L1MessagesHasherCircuit<F> = ZkSyncUniformCircuitInstance<F, L1MessagesRehasherInstanceSynthesisFunction>;
+pub type L1MessagesHasherCircuit<F, R> = ZkSyncUniformCircuitInstance<F, LinearHasherInstanceSynthesisFunction<F, R>>;
 
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone(bound = ""), Debug)]
@@ -78,6 +74,7 @@ pub enum ZkSyncBaseLayerStorage<T: Clone + std::fmt::Debug + serde::Serialize + 
     StorageApplication(T),
     EventsSorter(T),
     L1MessagesSorter(T),
+    L1MessagesHasher(T),
 }
 
 impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned> ZkSyncBaseLayerStorage<T> {
@@ -95,8 +92,7 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             ZkSyncBaseLayerStorage::StorageApplication(..) => "Storage application",
             ZkSyncBaseLayerStorage::EventsSorter(..) => "Events sorter",
             ZkSyncBaseLayerStorage::L1MessagesSorter(..) => "L1 messages sorter",
-            // ZkSyncBaseLayerStorage::L1MessagesMerklier(..) => "L1 messages merklizer",
-            // ZkSyncBaseLayerStorage::L1MessagesPubdataHasher(..) => "L1 messages rehasher",
+            ZkSyncBaseLayerStorage::L1MessagesHasher(..) => "L1 messages rehasher",
         }
     }
 
@@ -116,8 +112,7 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             ZkSyncBaseLayerStorage::StorageApplication(..) => BaseLayerCircuitType::StorageApplicator as u8,
             ZkSyncBaseLayerStorage::EventsSorter(..) => BaseLayerCircuitType::EventsRevertsFilter as u8,
             ZkSyncBaseLayerStorage::L1MessagesSorter(..) => BaseLayerCircuitType::L1MessagesRevertsFilter as u8,
-            // ZkSyncBaseLayerStorage::L1MessagesMerklier(..) => CircuitType::L1MessagesMerkelization as u8,
-            // ZkSyncBaseLayerStorage::L1MessagesPubdataHasher(..) => CircuitType::L1MessagesHasher as u8
+            ZkSyncBaseLayerStorage::L1MessagesHasher(..) => BaseLayerCircuitType::L1MessagesHasher as u8
         }
     }
 
@@ -135,8 +130,7 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             ZkSyncBaseLayerStorage::StorageApplication(inner) => inner,
             ZkSyncBaseLayerStorage::EventsSorter(inner) => inner,
             ZkSyncBaseLayerStorage::L1MessagesSorter(inner) => inner,
-            // ZkSyncBaseLayerStorage::L1MessagesMerklier(inner) => inner,
-            // ZkSyncBaseLayerStorage::L1MessagesPubdataHasher(inner) => inner,
+            ZkSyncBaseLayerStorage::L1MessagesHasher(inner) => inner,
         }
     }
 
@@ -156,8 +150,7 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             a if a == BaseLayerCircuitType::StorageApplicator as u8 => Self::StorageApplication(inner),
             a if a == BaseLayerCircuitType::EventsRevertsFilter as u8 => Self::EventsSorter(inner),
             a if a == BaseLayerCircuitType::L1MessagesRevertsFilter as u8 => Self::L1MessagesSorter(inner),
-            // a if a == BaseLayerCircuitType::L1MessagesMerkelization as u8 => Self::L1MessagesMerklier(inner),
-            // a if a == BaseLayerCircuitType::L1MessagesHasher as u8 => Self::L1MessagesPubdataHasher(inner),
+            a if a == BaseLayerCircuitType::L1MessagesHasher as u8 => Self::L1MessagesHasher(inner),
             a @ _ => panic!("unknown numeric type {}", a)
         }
     }
@@ -191,9 +184,7 @@ pub enum ZkSyncBaseLayerCircuit<
     StorageApplication(StorageApplicationCircuit<F, R>),
     EventsSorter(EventsSorterCircuit<F, R>),
     L1MessagesSorter(L1MessagesSorterCircuit<F, R>),
-
-    // L1MessagesMerklier(L1MessagesMerklizerCircuit<F>),
-    // L1MessagesPubdataHasher(L1MessagesHasherCircuit<F>),
+    L1MessagesHasher(L1MessagesHasherCircuit<F, R>),
 }
 
 impl<
@@ -223,8 +214,7 @@ impl<
             ZkSyncBaseLayerCircuit::StorageApplication(..) => "Storage application",
             ZkSyncBaseLayerCircuit::EventsSorter(..) => "Events sorter",
             ZkSyncBaseLayerCircuit::L1MessagesSorter(..) => "L1 messages sorter",
-            // ZkSyncBaseLayerCircuit::L1MessagesMerklier(..) => "L1 messages merklizer",
-            // ZkSyncBaseLayerCircuit::L1MessagesPubdataHasher(..) => "L1 messages rehasher",
+            ZkSyncBaseLayerCircuit::L1MessagesHasher(..) => "L1 messages rehasher",
         }
     }
 
@@ -242,6 +232,7 @@ impl<
             ZkSyncBaseLayerCircuit::StorageApplication(inner) => {inner.size_hint()},
             ZkSyncBaseLayerCircuit::EventsSorter(inner) => {inner.size_hint()},
             ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {inner.size_hint()},
+            ZkSyncBaseLayerCircuit::L1MessagesHasher(inner) => {inner.size_hint()},
         }
     }
 
@@ -259,6 +250,7 @@ impl<
             ZkSyncBaseLayerCircuit::StorageApplication(inner) => {inner.geometry_proxy()},
             ZkSyncBaseLayerCircuit::EventsSorter(inner) => {inner.geometry_proxy()},
             ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {inner.geometry_proxy()},
+            ZkSyncBaseLayerCircuit::L1MessagesHasher(inner) => {inner.geometry_proxy()},
         }
     }
 
@@ -304,8 +296,7 @@ impl<
             ZkSyncBaseLayerCircuit::StorageApplication(..) => BaseLayerCircuitType::StorageApplicator as u8,
             ZkSyncBaseLayerCircuit::EventsSorter(..) => BaseLayerCircuitType::EventsRevertsFilter as u8,
             ZkSyncBaseLayerCircuit::L1MessagesSorter(..) => BaseLayerCircuitType::L1MessagesRevertsFilter as u8,
-            // ZkSyncBaseLayerCircuit::L1MessagesMerklier(..) => CircuitType::L1MessagesMerkelization as u8,
-            // ZkSyncBaseLayerCircuit::L1MessagesPubdataHasher(..) => CircuitType::L1MessagesHasher as u8
+            ZkSyncBaseLayerCircuit::L1MessagesHasher(..) => BaseLayerCircuitType::L1MessagesHasher as u8,
         }
     }
 

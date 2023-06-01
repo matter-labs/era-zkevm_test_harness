@@ -450,10 +450,12 @@ impl<F: SmallField> CircuitEquivalentReflection<F> for LogQueryWithExtendedEnume
     }
 }
 
+use zkevm_circuits::base_structures::log_query::L2_TO_L1_MESSAGE_BYTE_LENGTH;
+
 // for purposes of L1 messages
-impl BytesSerializable<88> for LogQuery {
-    fn serialize(&self) -> [u8; 88] {
-        let mut result = [0u8; 88];
+impl BytesSerializable<L2_TO_L1_MESSAGE_BYTE_LENGTH> for LogQuery {
+    fn serialize(&self) -> [u8; L2_TO_L1_MESSAGE_BYTE_LENGTH] {
+        let mut result = [0u8; L2_TO_L1_MESSAGE_BYTE_LENGTH];
         let mut offset = 0;
         result[offset] = self.shard_id;
         offset += 1;
@@ -478,7 +480,7 @@ impl BytesSerializable<88> for LogQuery {
         result[offset..(offset + bytes_be.len())].copy_from_slice(&bytes_be);
         offset += bytes_be.len();
 
-        assert_eq!(offset, 88);
+        assert_eq!(offset, L2_TO_L1_MESSAGE_BYTE_LENGTH);
 
         result
     }

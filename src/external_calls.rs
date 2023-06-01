@@ -295,12 +295,17 @@ pub fn run<
             wit.closed_form_input.observable_output.state_diffs_keccak256_hash
         }).expect("at least 1 storage application");
 
+        let l1_messages_linear_hash = basic_circuits.l1_messages_hasher_circuits.last().map(|el| {
+            let wit = el.clone_witness().unwrap();
+            wit.closed_form_input.observable_output.keccak256_hash
+        }).expect("at least 1 L2 to L1 message");
+
         // aux
         let aux_data = BlockAuxilaryOutputWitness::<F> {
             events_queue_state,
             bootloader_heap_initial_content,
             rollup_state_diff_for_compression,
-            l1_messages_linear_hash: [0u8; 32],
+            l1_messages_linear_hash: l1_messages_linear_hash,
         };
 
         use zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
@@ -326,7 +331,7 @@ pub fn run<
             storage_application_observable_output: basic_circuits.storage_application_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
             events_sorter_observable_output: basic_circuits.events_sorter_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
             l1messages_sorter_observable_output: basic_circuits.l1_messages_sorter_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
-            // l1messages_linear_hasher_observable_output: basic_circuits.l1_messages_pubdata_hasher_circuit.clone_witness().unwrap().closed_form_input.observable_output,
+            l1messages_linear_hasher_observable_output: basic_circuits.l1_messages_hasher_circuits.last().unwrap().clone_witness().unwrap().closed_form_input.observable_output,
             storage_log_tail: basic_circuits.main_vm_circuits.first().unwrap().clone_witness().unwrap().closed_form_input.observable_input.rollback_queue_tail_for_block,
             per_circuit_closed_form_inputs: per_circuit_inputs,
 

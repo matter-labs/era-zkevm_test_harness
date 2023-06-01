@@ -51,14 +51,11 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
         storage_deduplicator_circuit_data,
         events_deduplicator_circuit_data,
         l1_messages_deduplicator_circuit_data,
-        // initial_writes_pubdata_hasher_circuit_data,
-        // repeated_writes_pubdata_hasher_circuit_data,
         rollup_storage_application_circuit_data,
         keccak256_circuits_data,
         sha256_circuits_data,
         ecrecover_circuits_data,
-        // l1_messages_merklizer_data,
-        // l1_messages_linear_hash_data,
+        l1_messages_linear_hash_data,
         ..
     } = artifacts;
 
@@ -654,43 +651,49 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
         l1_messages_sorter_circuits_compact_forms_witnesses.push(compact_form_witness);
     }
 
-    // // l1 messages pubdata hasher
+    // l1 messages pubdata hasher
 
-    // assert!(l1_messages_linear_hash_data.len() == 1);        
-    // let circuit_input = l1_messages_linear_hash_data.into_iter().next().unwrap();
+    let mut l1_messages_hasher_circuits = vec![];
+    let mut l1_messages_hasher_circuits_inputs = vec![];
+    let mut l1_messages_hasher_circuits_compact_forms_witnesses = vec![];
+    let num_instances = l1_messages_linear_hash_data.len();
+    let mut observable_input = None;
+    for (instance_idx, mut circuit_input) in l1_messages_linear_hash_data.into_iter().enumerate() {
+        let is_first = instance_idx == 0;
+        let _is_last = instance_idx == num_instances - 1;
 
-    // let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
-    //     circuit_input.closed_form_input.clone(),
-    // );
+        if observable_input.is_none() {
+            assert!(is_first);
+            observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
+        } else {
+            circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
+        }
 
-    // let l1_messages_pubdata_hasher_circuit = L1MessagesHasherCircuit {
-    //     witness: AtomicCell::new(Some(circuit_input)),
-    //     config: Arc::new(geometry.limit_for_l1_messages_pudata_hasher as usize),
-    //     round_function: round_function.clone(),
-    //     expected_public_input: Some(proof_system_input),
-    // };
+        let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
+            &mut cs_for_witness_generation,
+            circuit_input.closed_form_input.clone(),
+            &*round_function,
+        );
 
-    // let l1_messages_pubdata_hasher_circuit_input = proof_system_input;
-    // let l1_messages_pubdata_hasher_circuit_compact_form_witness = compact_form_witness;
-    
-    // // l1 messages merklizer
+        cycles_used += 1;
+        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            cs_for_witness_generation = create_cs_for_witness_generation(
+                TRACE_LEN_LOG_2_FOR_CALCULATION, 
+                MAX_VARS_LOG_2_FOR_CALCULATION,
+            );
+        }
 
-    // assert!(l1_messages_merklizer_data.len() == 1);        
-    // let circuit_input = l1_messages_merklizer_data.into_iter().next().unwrap();
+        let instance = L1MessagesHasherCircuit {
+            witness: AtomicCell::new(Some(circuit_input)),
+            config: Arc::new(geometry.limit_for_l1_messages_pudata_hasher as usize),
+            round_function: round_function.clone(),
+            expected_public_input: Some(proof_system_input),
+        };
 
-    // let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
-    //     circuit_input.closed_form_input.clone(),
-    // );
-
-    // let l1_messages_merklizer_circuit = L1MessagesMerklizerCircuit {
-    //     witness: AtomicCell::new(Some(circuit_input)),
-    //     config: Arc::new((geometry.limit_for_l1_messages_merklizer as usize, L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH)),
-    //     round_function: round_function.clone(),
-    //     expected_public_input: Some(proof_system_input),
-    // };
-
-    // let l1_messages_merklizer_circuit_input = proof_system_input;
-    // let l1_messages_merklizer_circuit_compact_form_witness = compact_form_witness;
+        l1_messages_hasher_circuits.push(instance);
+        l1_messages_hasher_circuits_inputs.push(proof_system_input);
+        l1_messages_hasher_circuits_compact_forms_witnesses.push(compact_form_witness);
+    }
 
     // done!
 
@@ -705,12 +708,9 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
         ram_permutation_circuits,
         storage_sorter_circuits,
         storage_application_circuits,
-        // initial_writes_hasher_circuit,
-        // repeated_writes_hasher_circuit,
         events_sorter_circuits,
         l1_messages_sorter_circuits,
-        // l1_messages_pubdata_hasher_circuit,
-        // l1_messages_merklizer_circuit,
+        l1_messages_hasher_circuits,
     };
 
     let basic_circuits_inputs = BlockBasicCircuitsPublicInputs {
@@ -724,12 +724,9 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
         ram_permutation_circuits: ram_permutation_circuits_inputs,
         storage_sorter_circuits: storage_sorter_circuit_inputs,
         storage_application_circuits: storage_application_circuits_inputs,
-        // initial_writes_hasher_circuit: initial_writes_hasher_circuit_input,
-        // repeated_writes_hasher_circuit: repeated_writes_hasher_circuit_input,
         events_sorter_circuits: events_sorter_circuits_inputs,
         l1_messages_sorter_circuits: l1_messages_sorter_circuits_inputs,
-        // l1_messages_pubdata_hasher_circuit: l1_messages_pubdata_hasher_circuit_input,
-        // l1_messages_merklizer_circuit: l1_messages_merklizer_circuit_input,
+        l1_messages_hasher_circuits_inputs,
     };
 
     let basic_circuits_public_inputs = BlockBasicCircuitsPublicCompactFormsWitnesses {
@@ -743,12 +740,9 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
         ram_permutation_circuits: ram_permutation_circuits_compact_forms_witnesses,
         storage_sorter_circuits: storage_sorter_circuit_compact_form_witnesses,
         storage_application_circuits: storage_application_circuits_compact_forms_witnesses,
-        // initial_writes_hasher_circuit: initial_writes_hasher_circuit_compact_form_witness,
-        // repeated_writes_hasher_circuit: repeated_writes_hasher_circuit_compact_form_witness,
         events_sorter_circuits: events_sorter_circuits_compact_forms_witnesses,
         l1_messages_sorter_circuits: l1_messages_sorter_circuits_compact_forms_witnesses,
-        // l1_messages_pubdata_hasher_circuit: l1_messages_pubdata_hasher_circuit_compact_form_witness,
-        // l1_messages_merklizer_circuit: l1_messages_merklizer_circuit_compact_form_witness,
+        l1_messages_hasher_circuits_compact_forms_witnesses,
     };
 
     (basic_circuits, basic_circuits_inputs, basic_circuits_public_inputs)

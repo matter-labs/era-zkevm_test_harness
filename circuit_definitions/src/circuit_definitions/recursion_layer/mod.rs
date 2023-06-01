@@ -38,6 +38,7 @@ pub enum ZkSyncRecursiveLayerCircuit {
     LeafLayerCircuitForStorageApplication(ZkSyncLeafLayerRecursiveCircuit),
     LeafLayerCircuitForEventsSorter(ZkSyncLeafLayerRecursiveCircuit),
     LeafLayerCircuitForL1MessagesSorter(ZkSyncLeafLayerRecursiveCircuit),
+    LeafLayerCircuitForL1MessagesHasher(ZkSyncLeafLayerRecursiveCircuit),
 }
 
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
@@ -59,6 +60,7 @@ pub enum ZkSyncRecursionLayerStorageType {
     LeafLayerCircuitForStorageApplication = 12,
     LeafLayerCircuitForEventsSorter = 13,
     LeafLayerCircuitForL1MessagesSorter = 14,
+    LeafLayerCircuitForL1MessagesHasher = 15,
 }
 
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
@@ -80,6 +82,7 @@ pub enum ZkSyncRecursionLayerStorage<T: Clone + std::fmt::Debug + serde::Seriali
     LeafLayerCircuitForStorageApplication(T) = 12,
     LeafLayerCircuitForEventsSorter(T) = 13,
     LeafLayerCircuitForL1MessagesSorter(T) = 14,
+    LeafLayerCircuitForL1MessagesHasher(T) = 15,
 }
 
 impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned> ZkSyncRecursionLayerStorage<T> {
@@ -99,6 +102,7 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             ZkSyncRecursionLayerStorage::LeafLayerCircuitForStorageApplication(..) => "Leaf for Storage application",
             ZkSyncRecursionLayerStorage::LeafLayerCircuitForEventsSorter(..) => "Leaf for Events sorter",
             ZkSyncRecursionLayerStorage::LeafLayerCircuitForL1MessagesSorter(..) => "Leaf for L1 messages sorter",
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForL1MessagesHasher(..) => "Leaf for L1 messages hasher",
         }
     }
 
@@ -118,9 +122,10 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             ZkSyncRecursionLayerStorage::LeafLayerCircuitForStorageApplication(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForStorageApplication as u8,
             ZkSyncRecursionLayerStorage::LeafLayerCircuitForEventsSorter(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForEventsSorter as u8,
             ZkSyncRecursionLayerStorage::LeafLayerCircuitForL1MessagesSorter(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesSorter as u8,
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForL1MessagesHasher(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesHasher as u8,
         }
     }
-
+    
     pub fn into_inner(self) -> T {
         match self {
             Self::SchedulerCircuit(inner) => inner,
@@ -137,6 +142,7 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             Self::LeafLayerCircuitForStorageApplication(inner) => inner,
             Self::LeafLayerCircuitForEventsSorter(inner) => inner,
             Self::LeafLayerCircuitForL1MessagesSorter(inner) => inner,
+            Self::LeafLayerCircuitForL1MessagesHasher(inner) => inner,
         }
     }
 
@@ -156,6 +162,7 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             a if a == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForStorageApplication as u8 => Self::LeafLayerCircuitForStorageApplication(inner),
             a if a == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForEventsSorter as u8 => Self::LeafLayerCircuitForEventsSorter(inner),
             a if a == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesSorter as u8 => Self::LeafLayerCircuitForL1MessagesSorter(inner),
+            a if a == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesHasher as u8 => Self::LeafLayerCircuitForL1MessagesHasher(inner),
             a @ _ => panic!("unknown numeric type {}", a)
         }
     }
@@ -205,6 +212,7 @@ impl ZkSyncRecursiveLayerCircuit {
             Self::LeafLayerCircuitForStorageApplication(..) => "Leaf for Storage application",
             Self::LeafLayerCircuitForEventsSorter(..) => "Leaf for Events sorter",
             Self::LeafLayerCircuitForL1MessagesSorter(..) => "Leaf for L1 messages sorter",
+            Self::LeafLayerCircuitForL1MessagesHasher(..) => "Leaf for L1 messages hasher",   
         }
     }
 
@@ -224,6 +232,7 @@ impl ZkSyncRecursiveLayerCircuit {
             Self::LeafLayerCircuitForStorageApplication(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForStorageApplication as u8,
             Self::LeafLayerCircuitForEventsSorter(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForEventsSorter as u8,
             Self::LeafLayerCircuitForL1MessagesSorter(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesSorter as u8,
+            Self::LeafLayerCircuitForL1MessagesHasher(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesHasher as u8,
         }
     }
 
@@ -242,7 +251,8 @@ impl ZkSyncRecursiveLayerCircuit {
             | Self::LeafLayerCircuitForStorageSorter(inner)
             | Self::LeafLayerCircuitForStorageApplication(inner)
             | Self::LeafLayerCircuitForEventsSorter(inner)
-            | Self::LeafLayerCircuitForL1MessagesSorter(inner) => {
+            | Self::LeafLayerCircuitForL1MessagesSorter(inner) 
+            | Self::LeafLayerCircuitForL1MessagesHasher(inner) => {
                 inner.size_hint()
             },
         }
@@ -265,7 +275,8 @@ impl ZkSyncRecursiveLayerCircuit {
             | Self::LeafLayerCircuitForStorageSorter(..)
             | Self::LeafLayerCircuitForStorageApplication(..)
             | Self::LeafLayerCircuitForEventsSorter(..)
-            | Self::LeafLayerCircuitForL1MessagesSorter(..) => {
+            | Self::LeafLayerCircuitForL1MessagesSorter(..)
+            | Self::LeafLayerCircuitForL1MessagesHasher(..) => {
                 ZkSyncLeafLayerRecursiveCircuit::geometry()
             },
         }
@@ -286,7 +297,8 @@ impl ZkSyncRecursiveLayerCircuit {
             | Self::LeafLayerCircuitForStorageSorter(..)
             | Self::LeafLayerCircuitForStorageApplication(..)
             | Self::LeafLayerCircuitForEventsSorter(..)
-            | Self::LeafLayerCircuitForL1MessagesSorter(..) => {
+            | Self::LeafLayerCircuitForL1MessagesSorter(..)
+            | Self::LeafLayerCircuitForL1MessagesHasher(..) => {
                 ConcreteNodeLayerCircuitBuilder::dyn_verifier_builder::<EXT>()
             }
         }
@@ -307,7 +319,8 @@ impl ZkSyncRecursiveLayerCircuit {
             | Self::LeafLayerCircuitForStorageSorter(..)
             | Self::LeafLayerCircuitForStorageApplication(..)
             | Self::LeafLayerCircuitForEventsSorter(..)
-            | Self::LeafLayerCircuitForL1MessagesSorter(..) => {
+            | Self::LeafLayerCircuitForL1MessagesSorter(..)
+            | Self::LeafLayerCircuitForL1MessagesHasher(..) => {
                 ConcreteNodeLayerCircuitBuilder::dyn_recursive_verifier_builder::<EXT, CS>()
             }
         }

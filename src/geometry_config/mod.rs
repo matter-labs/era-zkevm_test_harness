@@ -19,7 +19,7 @@ pub const fn get_geometry_config() -> GeometryConfig {
         cycles_per_keccak256_circuit: 642,
         cycles_per_sha256_circuit: 2063,
         cycles_per_ecrecover_circuit: 2,
-        limit_for_l1_messages_pudata_hasher: 0,
+        limit_for_l1_messages_pudata_hasher: 717,
         limit_for_l1_messages_merklizer: 0,
         limit_for_initial_writes_pubdata_hasher: 0,
         limit_for_repeated_writes_pubdata_hasher: 0,
@@ -40,6 +40,7 @@ fn all_runners() -> Vec<Box<dyn Fn() -> usize + Send>> {
         Box::new(event_sorter_capacity),
         Box::new(storage_sorter_capacity),
         Box::new(storage_application_capacity),
+        Box::new(l1_messages_hasher_capacity),
     ]
 }
 
@@ -68,6 +69,7 @@ pub fn compute_config() -> GeometryConfig {
     let cycles_per_events_or_l1_messages_sorter = sizes.pop().unwrap();
     let cycles_per_storage_sorter = sizes.pop().unwrap();
     let cycles_per_storage_application = sizes.pop().unwrap();
+    let limit_for_l1_messages_pudata_hasher = sizes.pop().unwrap();
 
     assert!(sizes.is_empty());
 
@@ -98,7 +100,7 @@ pub fn compute_config() -> GeometryConfig {
         limit_for_initial_writes_pubdata_hasher: 0,
         limit_for_repeated_writes_pubdata_hasher: 0,
         limit_for_l1_messages_merklizer: 0,
-        limit_for_l1_messages_pudata_hasher: 0,
+        limit_for_l1_messages_pudata_hasher,
     };
 
     dbg!(&config);

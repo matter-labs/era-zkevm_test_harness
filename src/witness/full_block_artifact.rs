@@ -25,6 +25,7 @@ use zkevm_circuits::sort_decommittment_requests::input::CodeDecommittmentsDedupl
 use zkevm_circuits::storage_validity_by_grand_product::input::StorageDeduplicatorInstanceWitness;
 use zkevm_circuits::log_sorter::input::EventsDeduplicatorInstanceWitness;
 use zkevm_circuits::storage_application::input::StorageApplicationCircuitInstanceWitness;
+use zkevm_circuits::linear_hasher::input::LinearHasherCircuitInstanceWitness;
 use circuit_definitions::circuit_definitions::base_layer::*;
 use circuit_definitions::encodings::*;
 use circuit_definitions::encodings::recursion_request::*;
@@ -148,9 +149,8 @@ pub struct FullBlockArtifacts<F: SmallField> {
     pub sha256_circuits_data: Vec<Sha256RoundFunctionCircuitInstanceWitness<F>>,
     //
     pub ecrecover_circuits_data: Vec<EcrecoverCircuitInstanceWitness<F>>,
-    // //
-    // pub l1_messages_linear_hash_data: Vec<PubdataHasherInstanceWitness<E, 5, 88, <LogQuery as CircuitEquivalentReflection<F>>::Destination>>,
-    // pub l1_messages_merklizer_data: Vec<MessagesMerklizerInstanceWitness<E, 5, 88, <LogQuery as CircuitEquivalentReflection<F>>::Destination>>,
+    //
+    pub l1_messages_linear_hash_data: Vec<LinearHasherCircuitInstanceWitness<F>>,
 }
 
 use crate::witness::tree::*;
@@ -333,38 +333,21 @@ impl<F: SmallField> FullBlockArtifacts<F> {
 
         self.l1_messages_deduplicator_circuit_data = l1_messages_deduplicator_circuit_data;
 
-        // // compute flattened hash of all messages
+        // compute flattened hash of all messages
 
-        // tracing::debug!("Running L1 messages linear hash simulation");
+        tracing::debug!("Running L1 messages linear hash simulation");
 
-        // assert!(self.deduplicated_to_l1_queue_simulator.num_items <= geometry.limit_for_l1_messages_pudata_hasher, "too many L1 messages to linearly hash by single circuit");
+        assert!(self.deduplicated_to_l1_queue_simulator.num_items <= geometry.limit_for_l1_messages_pudata_hasher, "too many L1 messages to linearly hash by single circuit");
 
-        // use crate::witness::individual_circuits::data_hasher_and_merklizer::compute_pubdata_hasher_witness;
+        use crate::witness::individual_circuits::data_hasher_and_merklizer::compute_linear_keccak256;
 
-        // let l1_messages_pubdata_hasher_data = compute_pubdata_hasher_witness(
-        //     &self.deduplicated_to_l1_queue_simulator,
-        //     geometry.limit_for_l1_messages_pudata_hasher as usize,
-        // );
+        let l1_messages_pubdata_hasher_data = compute_linear_keccak256(
+            &self.deduplicated_to_l1_queue_simulator,
+            geometry.limit_for_l1_messages_pudata_hasher as usize,
+            round_function,
+        );
 
-        // self.l1_messages_linear_hash_data = vec![l1_messages_pubdata_hasher_data];
-
-        // // merklize some messages
-
-        // use crate::witness::individual_circuits::data_hasher_and_merklizer::compute_merklizer_witness;
-
-        // tracing::debug!("Running L1 messages merklization simulation");
-
-        // use crate::witness::postprocessing::L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH;
-
-        // assert!(self.deduplicated_to_l1_queue_simulator.num_items <= geometry.limit_for_l1_messages_merklizer, "too many L1 messages to merklize by single circuit");
-
-        // let l1_messages_merklizer_data = compute_merklizer_witness(
-        //     &self.deduplicated_to_l1_queue_simulator,
-        //     geometry.limit_for_l1_messages_merklizer as usize,
-        //     L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH,
-        // );
-
-        // self.l1_messages_merklizer_data = vec![l1_messages_merklizer_data];
+        self.l1_messages_linear_hash_data = l1_messages_pubdata_hasher_data;
 
         // process the storage application
 
@@ -427,10 +410,8 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
     pub events_sorter_circuits: Vec<EventsSorterCircuit<F, R>>,
     // sort and dedup L1 messages
     pub l1_messages_sorter_circuits: Vec<L1MessagesSorterCircuit<F, R>>,
-    // // hash l1 messages into pubdata
-    // pub l1_messages_pubdata_hasher_circuit: L1MessagesHasherCircuit<F>,
-    // // merklize L1 message
-    // pub l1_messages_merklizer_circuit: L1MessagesMerklizerCircuit<F>
+    // hash l1 messages into pubdata
+    pub l1_messages_hasher_circuits: Vec<L1MessagesHasherCircuit<F, R>>,
 }
 
 impl<
@@ -458,9 +439,8 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
             storage_sorter_circuits, 
             storage_application_circuits, 
             events_sorter_circuits, 
-            l1_messages_sorter_circuits, 
-            // l1_messages_pubdata_hasher_circuit,
-            // l1_messages_merklizer_circuit 
+            l1_messages_sorter_circuits,
+            l1_messages_hasher_circuits, 
         } = self;
 
         let mut result = vec![];
@@ -486,10 +466,8 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
         
         result.extend(l1_messages_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuit::L1MessagesSorter(el)));
         
-        // result.push(ZkSyncBaseLayerCircuit::L1MessagesPubdataHasher(l1_messages_pubdata_hasher_circuit));
-
-        // result.push(ZkSyncBaseLayerCircuit::L1MessagesMerklier(l1_messages_merklizer_circuit));
-
+        result.extend(l1_messages_hasher_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuit::L1MessagesHasher(el)));
+        
         result
     }
 }
@@ -525,10 +503,8 @@ pub struct BlockBasicCircuitsPublicInputs<F: SmallField> {
     pub events_sorter_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
     // sort and dedup L1 messages
     pub l1_messages_sorter_circuits: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
-    // // hash l1 messages into pubdata
-    // pub l1_messages_pubdata_hasher_circuit: F,
-    // // merklize L1 message
-    // pub l1_messages_merklizer_circuit: F,
+    // hash l1 messages into pubdata
+    pub l1_messages_hasher_circuits_inputs: Vec<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>,
 }
 
 impl<F: SmallField> BlockBasicCircuitsPublicInputs<F> {
@@ -546,8 +522,7 @@ impl<F: SmallField> BlockBasicCircuitsPublicInputs<F> {
             storage_application_circuits, 
             events_sorter_circuits, 
             l1_messages_sorter_circuits, 
-            // l1_messages_pubdata_hasher_circuit,
-            // l1_messages_merklizer_circuit 
+            l1_messages_hasher_circuits_inputs,
         } = self;
 
         let mut result = vec![];
@@ -572,8 +547,7 @@ impl<F: SmallField> BlockBasicCircuitsPublicInputs<F> {
         result.extend(events_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuitInput::EventsSorter(el)));
         result.extend(l1_messages_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuitInput::L1MessagesSorter(el)));
 
-        // result.push(l1_messages_pubdata_hasher_circuit);
-        // result.push(l1_messages_merklizer_circuit);
+        result.extend(l1_messages_hasher_circuits_inputs.into_iter().map(|el| ZkSyncBaseLayerCircuitInput::L1MessagesHasher(el)));
 
         result
     }
@@ -646,10 +620,8 @@ pub struct BlockBasicCircuitsPublicCompactFormsWitnesses<F: SmallField> {
     pub events_sorter_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
     // sort and dedup L1 messages
     pub l1_messages_sorter_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
-    // // hash l1 messages into pubdata
-    // pub l1_messages_pubdata_hasher_circuit: ClosedFormInputCompactFormWitness<F>,
-    // // merklize L1 message
-    // pub l1_messages_merklizer_circuit: ClosedFormInputCompactFormWitness<F>,
+    // hash l1 messages into pubdata
+    pub l1_messages_hasher_circuits_compact_forms_witnesses: Vec<ClosedFormInputCompactFormWitness<F>>,
 }
 
 impl<F: SmallField> BlockBasicCircuitsPublicCompactFormsWitnesses<F> {
@@ -666,9 +638,8 @@ impl<F: SmallField> BlockBasicCircuitsPublicCompactFormsWitnesses<F> {
             storage_sorter_circuits, 
             storage_application_circuits, 
             events_sorter_circuits, 
-            l1_messages_sorter_circuits, 
-            // l1_messages_pubdata_hasher_circuit,
-            // l1_messages_merklizer_circuit 
+            l1_messages_sorter_circuits,
+            l1_messages_hasher_circuits_compact_forms_witnesses,
         } = self;
 
         let mut result = vec![];
@@ -693,8 +664,7 @@ impl<F: SmallField> BlockBasicCircuitsPublicCompactFormsWitnesses<F> {
         result.extend(events_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerClosedFormInput::EventsSorter(el)));
         result.extend(l1_messages_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerClosedFormInput::L1MessagesSorter(el)));
 
-        // result.push(l1_messages_pubdata_hasher_circuit);
-        // result.push(l1_messages_merklizer_circuit);
+        result.extend(l1_messages_hasher_circuits_compact_forms_witnesses.into_iter().map(|el| ZkSyncBaseLayerClosedFormInput::L1MessagesHasher(el)));
 
         result
     }

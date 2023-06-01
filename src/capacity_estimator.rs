@@ -298,107 +298,30 @@ pub fn storage_application_capacity() -> usize {
     )
 }
 
+pub fn l1_messages_hasher_capacity() -> usize {
+    type SF = LinearHasherInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+
+    compute_size_inner::<
+        SF,
+        _,
+    > (
+        SF::geometry(),
+        20,
+        Some(512),
+        |x: usize| {
+            x
+        },
+    )
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
     fn test_size_estimation() {
-        let size = log_demuxer_capacity();
+        let size = l1_messages_hasher_capacity();
 
         println!("Size = {}", size)
     }
-
 }
-
-// pub fn get_circuit_capacity(circuit_type: u8) -> usize {
-//     match circuit_type {
-//         3 => compute_inner::<VmMainInstanceSynthesisFunction<_, VmWitnessOracle<_>>, _>(
-//             |x: usize| {
-//                 x
-//             }, None,
-//         ),
-//         4 => compute_inner::<CodeDecommittmentsSorterSynthesisFunction, _>(
-//             |x: usize| {
-//                 x
-//             },
-//             None,
-//         ),
-//         5 => compute_inner::<CodeDecommitterInstanceSynthesisFunction, _>(
-//             |x: usize| {
-//                 x
-//             },
-//             None,
-//         ),
-//         6 => compute_inner::<LogDemuxInstanceSynthesisFunction, _>(
-//             |x: usize| {
-//                 x
-//             },
-//             None,
-//         ),
-//         7 => compute_inner::<Keccak256RoundFunctionInstanceSynthesisFunction, _>(
-//             |x: usize| {
-//                 x
-//             },
-//             None,
-//         ),
-//         8 => compute_inner::<Sha256RoundFunctionInstanceSynthesisFunction, _>(
-//             |x: usize| {
-//                 x
-//             },
-//             None,
-//         ),
-//         9 => compute_inner::<ECRecoverFunctionInstanceSynthesisFunction, _>(
-//             |x: usize| {
-//                 x
-//             },
-//             None,
-//         ),
-//         10 => compute_inner::<RAMPermutationInstanceSynthesisFunction, _>(
-//             |x: usize| {
-//                 x
-//             },
-//             None,
-//         ),
-//         11 => compute_inner::<StorageSortAndDedupInstanceSynthesisFunction, _>(
-//             |x: usize| {
-//                 x
-//             },
-//             None,
-//         ),
-//         12 => compute_inner::<StorageApplicationInstanceSynthesisFunction, _>(
-//             |x: usize| {
-//                 (x, USE_BLAKE2S_EXTRA_TABLES)
-//             },
-//             None,
-//         ),
-//         13 => compute_inner::<StorageInitialWritesRehasherInstanceSynthesisFunction, _>(
-//             |x: usize| {
-//                 x
-//             },
-//             None,
-//         ),
-//         14 => compute_inner::<StorageRepeatedWritesRehasherInstanceSynthesisFunction, _>(
-//             |x: usize| {
-//                 x
-//             },
-//             None,
-//         ),
-//         15 | 16 => compute_inner::<EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction, _>(
-//             |x: usize| {
-//                 x
-//             },
-//             None,
-//         ),
-//         // L1MessagesRehasherInstanceSynthesisFunction
-//         17 | 18 => compute_inner::<MessagesMerklizerInstanceSynthesisFunction, _>(
-//             |x: usize| {
-//                 (x, L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH)
-//             },
-//             // Round down cycles to power of 2 as L1 message merklizer circuit expects it to be power of 2
-//             // https://github.com/matter-labs/sync_vm/blob/b538a6105bbc0586ad437484f7f76b2c3e329c46/src/glue/merkleize_l1_messages/merkleize.rs#L298-L301
-//             Some(|cycles: usize| { 2usize.pow((cycles as f64).log2().floor() as u32) }),
-//         ),
-//         _ => panic!("Unknown circuit type for which the limit can be computed {}", circuit_type)
-//     }
-// }

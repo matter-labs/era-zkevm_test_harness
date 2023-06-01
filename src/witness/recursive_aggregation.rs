@@ -265,7 +265,7 @@ pub fn base_circuit_type_into_recursive_leaf_circuit_type(
         BaseLayerCircuitType::StorageApplicator => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForStorageApplication,
         BaseLayerCircuitType::EventsRevertsFilter => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForEventsSorter,
         BaseLayerCircuitType::L1MessagesRevertsFilter => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesSorter,
-        BaseLayerCircuitType::L1MessagesHasher => {todo!()},
+        BaseLayerCircuitType::L1MessagesHasher => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesHasher,
     }
 }
 

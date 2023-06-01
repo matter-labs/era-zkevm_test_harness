@@ -10,7 +10,7 @@
   "cycles_per_keccak256_circuit": 642,
   "cycles_per_sha256_circuit": 2063,
   "cycles_per_ecrecover_circuit": 2,
-  "limit_for_l1_messages_pudata_hasher": 0,
+  "limit_for_l1_messages_pudata_hasher": 717,
   "limit_for_l1_messages_merklizer": 0,
   "limit_for_initial_writes_pubdata_hasher": 0,
   "limit_for_repeated_writes_pubdata_hasher": 0

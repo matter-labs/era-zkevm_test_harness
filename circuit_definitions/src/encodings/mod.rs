@@ -19,8 +19,6 @@ pub mod decommittment_request;
 pub mod log_query;
 pub mod memory_query;
 pub mod state_diff_record;
-// pub mod initial_storage_write;
-// pub mod repeated_storage_write;
 pub mod recursion_request;
 
 pub use self::log_query::*;

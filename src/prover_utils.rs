@@ -59,12 +59,6 @@ pub fn create_base_layer_setup_data(
 
     let (cs, finalization_hint) = match circuit {
         ZkSyncBaseLayerCircuit::MainVM(inner) => {
-            // create_base_layer_setup_data_single(
-            //     (*inner.config).clone(),
-            //     &worker,
-            //     fri_lde_factor,
-            //     merkle_tree_cap_size
-            // )
             let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
             inner.add_tables_proxy(&mut cs);
@@ -153,6 +147,14 @@ pub fn create_base_layer_setup_data(
             (cs.into_assembly(), finalization_hint)
         },
         ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {
+            let builder = inner.configure_builder_proxy(builder);
+            let mut cs = builder.build(());
+            inner.add_tables_proxy(&mut cs);
+            inner.synthesize_proxy(&mut cs);
+            let (_, finalization_hint) = cs.pad_and_shrink();
+            (cs.into_assembly(), finalization_hint)
+        },
+        ZkSyncBaseLayerCircuit::L1MessagesHasher(inner) => {
             let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
             inner.add_tables_proxy(&mut cs);
@@ -318,6 +320,14 @@ pub fn prove_base_layer_circuit<
             cs.pad_and_shrink_using_hint(finalization_hint);
             cs.into_assembly()
         },
+        ZkSyncBaseLayerCircuit::L1MessagesHasher(inner) => {
+            let builder = inner.configure_builder_proxy(builder);
+            let mut cs = builder.build(());
+            inner.add_tables_proxy(&mut cs);
+            inner.synthesize_proxy(&mut cs);
+            cs.pad_and_shrink_using_hint(finalization_hint);
+            cs.into_assembly()
+        },
     };
 
     cs.prove_from_precomputations::<EXT, TR, H, POW>(
@@ -417,6 +427,7 @@ pub fn create_recursive_layer_setup_data(
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForStorageApplication(inner)
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForEventsSorter(inner)
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForL1MessagesSorter(inner)
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForL1MessagesHasher(inner)
         => {
             let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
@@ -509,7 +520,8 @@ pub fn prove_recursion_layer_circuit<
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForStorageSorter(inner)
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForStorageApplication(inner)
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForEventsSorter(inner)
-        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForL1MessagesSorter(inner) 
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForL1MessagesSorter(inner)
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForL1MessagesHasher(inner)
         => {
             let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());

@@ -195,6 +195,14 @@ pub(crate) fn base_test_circuit(
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
         },
+        ZkSyncBaseLayerCircuit::L1MessagesHasher(inner) => {
+            let builder = inner.configure_builder_proxy(builder);
+            let mut cs = builder.build(());
+            inner.add_tables_proxy(&mut cs);
+            inner.synthesize_proxy(&mut cs);
+            let _ = cs.pad_and_shrink();
+            cs.into_assembly()
+        },
     };
 
     let is_satisfied = cs.check_if_satisfied(&worker);
@@ -252,7 +260,8 @@ pub(crate) fn test_recursive_circuit(
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForStorageSorter(inner)
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForStorageApplication(inner)
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForEventsSorter(inner)
-        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForL1MessagesSorter(inner) => {
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForL1MessagesSorter(inner)
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForL1MessagesHasher(inner) => {
             let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
             inner.add_tables(&mut cs);

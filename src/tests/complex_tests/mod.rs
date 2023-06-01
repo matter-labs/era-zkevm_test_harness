@@ -405,7 +405,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
     println!("Computing leaf vks");
 
-    for base_circuit_type in (BaseLayerCircuitType::VM as u8)..=(BaseLayerCircuitType::L1MessagesRevertsFilter as u8) {
+    for base_circuit_type in (BaseLayerCircuitType::VM as u8)..=(BaseLayerCircuitType::L1MessagesHasher as u8) {
         let recursive_circuit_type = base_circuit_type_into_recursive_leaf_circuit_type(BaseLayerCircuitType::from_numeric_value(base_circuit_type));
 
         if source.get_recursion_layer_vk(recursive_circuit_type as u8).is_err() {
@@ -475,12 +475,9 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
                 i if i == BaseLayerCircuitType::L1MessagesRevertsFilter as u8 => {
                     ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForL1MessagesSorter(circuit)
                 },
-                // i if i == BaseLayerCircuitType::VM as u8 => {
-                //     ZkSyncUniformCircuitVerifierBuilder::<F, VMMainCircuitVerifierBuilder<F, VmWitnessOracle<F>, R>>::default().into_dyn_verifier_builder()
-                // },
-                // i if i == BaseLayerCircuitType::VM as u8 => {
-                //     ZkSyncUniformCircuitVerifierBuilder::<F, VMMainCircuitVerifierBuilder<F, VmWitnessOracle<F>, R>>::default().into_dyn_verifier_builder()
-                // },
+                i if i == BaseLayerCircuitType::L1MessagesHasher as u8 => {
+                    ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForL1MessagesHasher(circuit)
+                },
                 circuit_type => {
                     panic!("unknown circuit type = {}", circuit_type);
                 }
@@ -509,7 +506,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
     use crate::witness::recursive_aggregation::base_circuit_type_into_recursive_leaf_circuit_type;
     let mut leaf_vk_commits = vec![];
 
-    for circuit_type in (BaseLayerCircuitType::VM as u8)..=(BaseLayerCircuitType::L1MessagesRevertsFilter as u8) {
+    for circuit_type in (BaseLayerCircuitType::VM as u8)..=(BaseLayerCircuitType::L1MessagesHasher as u8) {
         let recursive_circuit_type = base_circuit_type_into_recursive_leaf_circuit_type(BaseLayerCircuitType::from_numeric_value(circuit_type));
         let base_vk = source.get_base_layer_vk(circuit_type).unwrap();
         let leaf_vk = source.get_recursion_layer_vk(recursive_circuit_type as u8).unwrap();
