@@ -14,6 +14,7 @@ use std::collections::VecDeque;
 use circuit_definitions::circuit_definitions::recursion_layer::*;
 use circuit_definitions::circuit_definitions::recursion_layer::leaf_layer::*;
 use circuit_definitions::circuit_definitions::recursion_layer::node_layer::*;
+use crate::zkevm_circuits::base_structures::vm_state::{QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH};
 
 use crate::prover_utils::*;
 
@@ -36,9 +37,6 @@ pub fn generate_base_layer_vks_and_proofs(source: &mut dyn SetupDataSource) -> c
     let mut processed = HashSet::new();
 
     for el in base_layer_circuit.into_flattened_set().into_iter() {
-        if !matches!(&el, ZkSyncBaseLayerCircuit::L1MessagesHasher(..)) {
-            continue;
-        }
         let name = el.short_description();
         if processed.contains(&name) {
             continue;
@@ -115,6 +113,7 @@ pub fn generate_recursive_layer_vks_and_proofs(source: &mut dyn SetupDataSource)
     let recursion_step_proof_config = base_layer_proof_config();
 
     for base_circuit_type in (BaseLayerCircuitType::VM as u8)..=(BaseLayerCircuitType::L1MessagesHasher as u8) {
+        continue;
         let recursive_circuit_type = base_circuit_type_into_recursive_leaf_circuit_type(BaseLayerCircuitType::from_numeric_value(base_circuit_type));
 
         println!("Computing leaf layer VK for type {:?}", recursive_circuit_type);
@@ -204,10 +203,14 @@ pub fn generate_recursive_layer_vks_and_proofs(source: &mut dyn SetupDataSource)
         use crate::zkevm_circuits::recursion::node_layer::input::*;
         let input = RecursionNodeInput::placeholder_witness();
         let vk = source.get_recursion_layer_vk(ZkSyncRecursionLayerStorageType::LeafLayerCircuitForMainVM as u8)?;
+
+        // the only thing to setup here is to have proper number of split points
+        use crate::boojum::gadgets::queue::QueueTailState;
+        let split_points = vec![QueueTailState::<GoldilocksField, FULL_SPONGE_QUEUE_STATE_WIDTH>::placeholder_witness(); RECURSION_ARITY-1];
         let witness = RecursionNodeInstanceWitness{
             input,
             vk_witness: vk.clone().into_inner(),
-            split_points: VecDeque::new(),
+            split_points: split_points.into(),
             proof_witnesses: VecDeque::new(),
         };
 
@@ -315,7 +318,6 @@ pub fn generate_recursive_layer_vks_and_proofs(source: &mut dyn SetupDataSource)
             finalization_hint
         ) = create_recursive_layer_setup_data(scheduler_circuit.clone(), &worker, BASE_LAYER_FRI_LDE_FACTOR, BASE_LAYER_CAP_SIZE);
 
-        // we did it above
         source.set_recursion_layer_vk(ZkSyncRecursionLayerVerificationKey::SchedulerCircuit(vk.clone()))?;
         source.set_recursion_layer_finalization_hint(ZkSyncRecursionLayerFinalizationHint::SchedulerCircuit(finalization_hint.clone()))?;
     }
