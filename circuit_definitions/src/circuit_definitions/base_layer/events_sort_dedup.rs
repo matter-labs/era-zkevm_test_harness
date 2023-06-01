@@ -1,7 +1,7 @@
 use derivative::*;
 
 use super::*;
-use boojum::cs::traits::circuit::CircuitBuilder;
+use crate::boojum::cs::traits::circuit::CircuitBuilder;
 
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone, Copy, Debug, Default(bound = ""))]

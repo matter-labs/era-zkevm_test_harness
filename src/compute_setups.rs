@@ -1,20 +1,28 @@
 use std::{path::{Path, PathBuf}, collections::{HashMap, HashSet}};
 
-use boojum::worker::Worker;
+use crate::boojum::worker::Worker;
+use circuit_definitions::circuit_definitions::base_layer::{ZkSyncBaseLayerVerificationKey, ZkSyncBaseLayerFinalizationHint, ZkSyncBaseLayerProof, ZkSyncBaseLayerCircuit};
 
 use super::*;
 
-use crate::tests::complex_tests::utils::*;
+use crate::{tests::complex_tests::utils::*, external_calls::base_layer_proof_config, data_source::LocalFileDataSource};
 use crate::tests::complex_tests::generate_base_layer;
-use boojum::cs::implementations::prover::ProofConfig;
-use boojum::cs::implementations::pow::NoPow;
+use crate::boojum::cs::implementations::prover::ProofConfig;
+use crate::boojum::cs::implementations::pow::NoPow;
+use crate::data_source::SetupDataSource;
+use std::collections::VecDeque;
+use circuit_definitions::circuit_definitions::recursion_layer::*;
+use circuit_definitions::circuit_definitions::recursion_layer::leaf_layer::*;
+use circuit_definitions::circuit_definitions::recursion_layer::node_layer::*;
 
-pub(crate) fn generate_base_layer_vks_and_proofs() {
+use crate::prover_utils::*;
+
+pub fn generate_base_layer_vks_and_proofs(source: &mut dyn SetupDataSource) -> crate::data_source::SourceResult<()> {
     let test_artifact = read_test_artifact("basic_test");
     let geometry = crate::geometry_config::get_geometry_config();
     let (
         base_layer_circuit, 
-        base_layer_circuit_inputs,
+        _,
         _,
         _,
     ) = generate_base_layer(
@@ -25,81 +33,310 @@ pub(crate) fn generate_base_layer_vks_and_proofs() {
 
     let worker = Worker::new();
 
-    todo!();
+    let mut processed = HashSet::new();
 
-    // let mut processed = HashSet::new();
+    for el in base_layer_circuit.into_flattened_set().into_iter() {
+        if !matches!(&el, ZkSyncBaseLayerCircuit::L1MessagesHasher(..)) {
+            continue;
+        }
+        let name = el.short_description();
+        if processed.contains(&name) {
+            continue;
+        }
 
-    // for el in base_layer_circuit.into_flattened_set().into_iter() {
-    //     let name = el.short_description();
-    //     if processed.contains(&name) {
-    //         continue;
-    //     }
+        println!("Will compute for {} circuit type", &name);
 
-    //     println!("Will compute for {} circuit type", &name);
+        let circuit_type = el.numeric_circuit_type();
 
-    //     let circuit_type = el.numeric_circuit_type();
+        let (
+            setup_base,
+            setup,
+            vk,
+            setup_tree,
+            vars_hint,
+            wits_hint,
+            finalization_hint
+        ) = create_base_layer_setup_data(el.clone(), &worker, BASE_LAYER_FRI_LDE_FACTOR, BASE_LAYER_CAP_SIZE);
 
-    //     let (
-    //         setup_base,
-    //         setup,
-    //         vk,
-    //         setup_tree,
-    //         vars_hint,
-    //         wits_hint,
-    //         finalization_hint
-    //     ) = create_base_layer_setup_data(el.clone(), &worker, BASE_LAYER_FRI_LDE_FACTOR, BASE_LAYER_CAP_SIZE);
+        let typed_vk = ZkSyncBaseLayerVerificationKey::from_inner(circuit_type, vk.clone());
+        let typed_finalization_hint = ZkSyncBaseLayerFinalizationHint::from_inner(circuit_type, finalization_hint.clone());
 
-    //     let proof_config = ProofConfig {
-    //         fri_lde_factor: BASE_LAYER_FRI_LDE_FACTOR,
-    //         merkle_tree_cap_size: BASE_LAYER_CAP_SIZE,
-    //         fri_folding_schedule: None,
-    //         security_level: SECURITY_BITS_TARGET,
-    //         pow_bits: 0
-    //     };
+        source.set_base_layer_finalization_hint(typed_finalization_hint)?;
+        source.set_base_layer_vk(typed_vk)?;
 
-    //     println!("Proving!");
-    //     let now = std::time::Instant::now();
+        let proof_config = base_layer_proof_config();
 
-    //     let proof = prove_base_layer_circuit::<NoPow>(
-    //         el.clone(), 
-    //         &worker, 
-    //         proof_config, 
-    //         &setup_base, 
-    //         &setup, 
-    //         &setup_tree, 
-    //         &vk, 
-    //         &vars_hint, 
-    //         &wits_hint, 
-    //         &finalization_hint
-    //     );
+        println!("Proving!");
+        let now = std::time::Instant::now();
 
-    //     println!("Proving is DONE, taken {:?}", now.elapsed());
+        let proof = prove_base_layer_circuit::<NoPow>(
+            el.clone(), 
+            &worker, 
+            proof_config, 
+            &setup_base, 
+            &setup, 
+            &setup_tree, 
+            &vk, 
+            &vars_hint, 
+            &wits_hint, 
+            &finalization_hint
+        );
 
-    //     let is_valid = verify_base_layer_proof::<NoPow>(
-    //         &el, 
-    //         &proof, 
-    //         &vk
-    //     );
+        println!("Proving is DONE, taken {:?}", now.elapsed());
 
-    //     assert!(is_valid);
+        let is_valid = verify_base_layer_proof::<NoPow>(
+            &el, 
+            &proof, 
+            &vk
+        );
 
-    //     let vk_file = path_for_base_layer_circuit_vk(circuit_type, "json");
-    //     let mut vk_file = std::fs::File::create(vk_file).unwrap();
-    //     serde_json::ser::to_writer(&mut vk_file, &vk).unwrap();
+        assert!(is_valid);
 
-    //     let finalization_file = path_for_base_layer_circuit_finalization(circuit_type, "json");
-    //     let mut finalization_file = std::fs::File::create(finalization_file).unwrap();
-    //     serde_json::ser::to_writer(&mut finalization_file, &finalization_hint).unwrap();
+        let proof = ZkSyncBaseLayerProof::from_inner(circuit_type, proof);
+        source.set_base_layer_padding_proof(proof)?;
 
-    //     let proof_file = path_for_base_layer_circuit_proof(circuit_type, "json");
-    //     let mut proof_file = std::fs::File::create(proof_file).unwrap();
-    //     serde_json::ser::to_writer(&mut proof_file, &proof).unwrap();
+        processed.insert(name);
+    }
 
-    //     processed.insert(name);
-    // }
+    Ok(())
 }
 
-#[test]
-fn test_run_create_base_layer_vks_and_proofs() {
-    generate_base_layer_vks_and_proofs();
+pub fn generate_recursive_layer_vks_and_proofs(source: &mut dyn SetupDataSource) -> crate::data_source::SourceResult<()> {
+    use crate::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
+    use circuit_definitions::circuit_definitions::recursion_layer::base_circuit_type_into_recursive_leaf_circuit_type;
+    use circuit_definitions::boojum::gadgets::traits::allocatable::CSAllocatable;
+
+    // here we rely ONLY on VKs and proofs from the setup, so we keep the geometries and circuits
+    // via padding proofs
+    let worker = Worker::new();
+
+    println!("Computing leaf vks");
+
+    let recursion_step_proof_config = base_layer_proof_config();
+
+    for base_circuit_type in (BaseLayerCircuitType::VM as u8)..=(BaseLayerCircuitType::L1MessagesHasher as u8) {
+        let recursive_circuit_type = base_circuit_type_into_recursive_leaf_circuit_type(BaseLayerCircuitType::from_numeric_value(base_circuit_type));
+
+        println!("Computing leaf layer VK for type {:?}", recursive_circuit_type);
+        use crate::zkevm_circuits::recursion::leaf_layer::input::*;
+        let input = RecursionLeafInput::placeholder_witness();
+        let vk = source.get_base_layer_vk(base_circuit_type)?;
+
+        use crate::boojum::gadgets::queue::full_state_queue::FullStateCircuitQueueRawWitness;
+        let witness = RecursionLeafInstanceWitness{
+            input,
+            vk_witness: vk.clone().into_inner(),
+            queue_witness: FullStateCircuitQueueRawWitness { elements: VecDeque::new() },
+            proof_witnesses: VecDeque::new(),
+        };
+
+        let padding_proof = source.get_base_layer_padding_proof(base_circuit_type)?;
+
+        use crate::zkevm_circuits::recursion::leaf_layer::LeafLayerRecursionConfig;
+        let config = LeafLayerRecursionConfig {
+            proof_config: base_layer_proof_config(),
+            vk_fixed_parameters: vk.into_inner().fixed_parameters,
+            capacity: RECURSION_ARITY,
+            padding_proof: padding_proof.into_inner(),
+        };
+
+        let circuit = ZkSyncLeafLayerRecursiveCircuit {
+            base_layer_circuit_type: BaseLayerCircuitType::from_numeric_value(base_circuit_type),
+            witness: witness,
+            config: config,
+            transcript_params: (),
+            _marker: std::marker::PhantomData,
+        };
+
+        let circuit = ZkSyncRecursiveLayerCircuit::leaf_circuit_from_base_type(
+            BaseLayerCircuitType::from_numeric_value(base_circuit_type),
+            circuit
+        );
+
+        let (
+            setup_base,
+            setup,
+            vk,
+            setup_tree,
+            vars_hint,
+            wits_hint,
+            finalization_hint
+        ) = create_recursive_layer_setup_data(circuit.clone(), &worker, BASE_LAYER_FRI_LDE_FACTOR, BASE_LAYER_CAP_SIZE);
+
+        let typed_finalization_hint = ZkSyncRecursionLayerFinalizationHint::from_inner(recursive_circuit_type as u8, finalization_hint.clone());
+        source.set_recursion_layer_finalization_hint(typed_finalization_hint)?;
+        let typed_vk = ZkSyncRecursionLayerVerificationKey::from_inner(recursive_circuit_type as u8, vk.clone());
+        source.set_recursion_layer_vk(typed_vk)?;
+
+        println!("Proving!");
+        let now = std::time::Instant::now();
+
+        let proof = prove_recursion_layer_circuit::<NoPow>(
+            circuit.clone(), 
+            &worker, 
+            recursion_step_proof_config.clone(), 
+            &setup_base, 
+            &setup, 
+            &setup_tree, 
+            &vk, 
+            &vars_hint, 
+            &wits_hint, 
+            &finalization_hint
+        );
+
+        println!("Proving is DONE, taken {:?}", now.elapsed());
+
+        let is_valid = verify_recursion_layer_proof::<NoPow>(
+            &circuit, 
+            &proof, 
+            &vk
+        );
+
+        assert!(is_valid);
+
+        let proof = ZkSyncRecursionLayerProof::from_inner(recursive_circuit_type as u8, proof);
+        source.set_recursion_layer_leaf_padding_proof(proof)?;
+    }
+
+    println!("Computing node vk");
+
+    {
+        use crate::zkevm_circuits::recursion::node_layer::input::*;
+        let input = RecursionNodeInput::placeholder_witness();
+        let vk = source.get_recursion_layer_vk(ZkSyncRecursionLayerStorageType::LeafLayerCircuitForMainVM as u8)?;
+        let witness = RecursionNodeInstanceWitness{
+            input,
+            vk_witness: vk.clone().into_inner(),
+            split_points: VecDeque::new(),
+            proof_witnesses: VecDeque::new(),
+        };
+
+        let padding_proof = source.get_recursion_layer_leaf_padding_proof()?;
+        use circuit_definitions::circuit_definitions::recursion_layer::node_layer::ZkSyncNodeLayerRecursiveCircuit;
+        use crate::zkevm_circuits::recursion::node_layer::NodeLayerRecursionConfig;
+        let config = NodeLayerRecursionConfig {
+            proof_config: recursion_step_proof_config.clone(),
+            vk_fixed_parameters: vk.into_inner().fixed_parameters,
+            leaf_layer_capacity: RECURSION_ARITY,
+            node_layer_capacity: RECURSION_ARITY,
+            padding_proof: padding_proof.into_inner(),
+        };
+        let circuit = ZkSyncNodeLayerRecursiveCircuit {
+            witness: witness,
+            config: config,
+            transcript_params: (),
+            _marker: std::marker::PhantomData,
+        };
+
+        let circuit = ZkSyncRecursiveLayerCircuit::NodeLayerCircuit(circuit);
+
+        let (
+            setup_base,
+            setup,
+            vk,
+            setup_tree,
+            vars_hint,
+            wits_hint,
+            finalization_hint
+        ) = create_recursive_layer_setup_data(circuit.clone(), &worker, BASE_LAYER_FRI_LDE_FACTOR, BASE_LAYER_CAP_SIZE);
+
+        let typed_finalization_hint = ZkSyncRecursionLayerFinalizationHint::NodeLayerCircuit(finalization_hint.clone());
+        source.set_recursion_layer_node_finalization_hint(typed_finalization_hint)?;
+        let typed_vk = ZkSyncRecursionLayerVerificationKey::NodeLayerCircuit(vk.clone());
+        source.set_recursion_layer_node_vk(typed_vk)?;
+
+        println!("Proving!");
+        let now = std::time::Instant::now();
+
+        let proof = prove_recursion_layer_circuit::<NoPow>(
+            circuit.clone(), 
+            &worker, 
+            recursion_step_proof_config.clone(), 
+            &setup_base, 
+            &setup, 
+            &setup_tree, 
+            &vk, 
+            &vars_hint, 
+            &wits_hint, 
+            &finalization_hint
+        );
+
+        println!("Proving is DONE, taken {:?}", now.elapsed());
+
+        let is_valid = verify_recursion_layer_proof::<NoPow>(
+            &circuit, 
+            &proof, 
+            &vk
+        );
+
+        assert!(is_valid);
+
+        let proof = ZkSyncRecursionLayerProof::NodeLayerCircuit(proof);
+        source.set_recursion_layer_node_padding_proof(proof)?;
+    }
+
+    println!("Computing scheduler vk");
+
+    {
+        use crate::zkevm_circuits::scheduler::SchedulerConfig;
+        use circuit_definitions::circuit_definitions::recursion_layer::scheduler::SchedulerCircuit;
+
+        let node_vk = source.get_recursion_layer_node_vk()?.into_inner();
+        let padding_proof = source.get_recursion_layer_node_padding_proof()?.into_inner();
+
+        let config = SchedulerConfig {
+            proof_config: base_layer_proof_config(),
+            vk_fixed_parameters: node_vk.fixed_parameters.clone(),
+            padding_proof: padding_proof,
+            capacity: SCHEDULER_CAPACITY,
+        };
+
+        use crate::zkevm_circuits::scheduler::input::SchedulerCircuitInstanceWitness;
+        let mut scheduler_witness = SchedulerCircuitInstanceWitness::placeholder();
+        // the only thing we need to setup here is a VK
+        scheduler_witness.node_layer_vk_witness = node_vk;
+
+        let scheduler_circuit = SchedulerCircuit {
+            witness: scheduler_witness,
+            config,
+            transcript_params: (),
+            _marker: std::marker::PhantomData,
+        };
+
+        let scheduler_circuit = ZkSyncRecursiveLayerCircuit::SchedulerCircuit(scheduler_circuit);
+
+        let (
+            _setup_base,
+            _setup,
+            vk,
+            _setup_tree,
+            _vars_hint,
+            _wits_hint,
+            finalization_hint
+        ) = create_recursive_layer_setup_data(scheduler_circuit.clone(), &worker, BASE_LAYER_FRI_LDE_FACTOR, BASE_LAYER_CAP_SIZE);
+
+        // we did it above
+        source.set_recursion_layer_vk(ZkSyncRecursionLayerVerificationKey::SchedulerCircuit(vk.clone()))?;
+        source.set_recursion_layer_finalization_hint(ZkSyncRecursionLayerFinalizationHint::SchedulerCircuit(finalization_hint.clone()))?;
+    }
+
+    Ok(())
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_run_create_base_layer_vks_and_proofs() {
+        let mut source = LocalFileDataSource;
+        generate_base_layer_vks_and_proofs(&mut source).expect("must compute setup");
+    }
+
+    #[test]
+    fn test_run_create_recursion_layer_vks_and_proofs() {
+        let mut source = LocalFileDataSource;
+        generate_recursive_layer_vks_and_proofs(&mut source).expect("must compute setup");
+    }
+}
+

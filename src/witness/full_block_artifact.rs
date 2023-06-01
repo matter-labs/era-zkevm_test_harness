@@ -3,29 +3,29 @@ use crate::ethereum_types::U256;
 use crate::toolset::GeometryConfig;
 use derivative::Derivative;
 use rayon::slice::ParallelSliceMut;
-use zkevm_circuits::scheduler::aux::NUM_CIRCUIT_TYPES_TO_SCHEDULE;
+use crate::zkevm_circuits::scheduler::aux::NUM_CIRCUIT_TYPES_TO_SCHEDULE;
 use std::cmp::Ordering;
-use zk_evm::aux_structures::DecommittmentQuery;
-use zk_evm::aux_structures::LogQuery;
-use zk_evm::aux_structures::MemoryIndex;
-use zk_evm::aux_structures::MemoryQuery;
-use zk_evm::precompiles::ecrecover::ECRecoverRoundWitness;
-use zk_evm::precompiles::keccak256::Keccak256RoundWitness;
-use zk_evm::precompiles::sha256::Sha256RoundWitness;
+use crate::zk_evm::aux_structures::DecommittmentQuery;
+use crate::zk_evm::aux_structures::LogQuery;
+use crate::zk_evm::aux_structures::MemoryIndex;
+use crate::zk_evm::aux_structures::MemoryQuery;
+use crate::zk_evm::precompiles::ecrecover::ECRecoverRoundWitness;
+use crate::zk_evm::precompiles::keccak256::Keccak256RoundWitness;
+use crate::zk_evm::precompiles::sha256::Sha256RoundWitness;
 use tracing;
-use boojum::field::SmallField;
-use zkevm_circuits::demux_log_queue::input::LogDemuxerCircuitInstanceWitness;
-use zkevm_circuits::sha256_round_function::input::Sha256RoundFunctionCircuitInstanceWitness;
-use zkevm_circuits::keccak256_round_function::input::Keccak256RoundFunctionCircuitInstanceWitness;
-use zkevm_circuits::ecrecover::EcrecoverCircuitInstanceWitness;
-use boojum::gadgets::traits::round_function::*;
-use zkevm_circuits::ram_permutation::input::RamPermutationCircuitInstanceWitness;
-use zkevm_circuits::code_unpacker_sha256::input::CodeDecommitterCircuitInstanceWitness;
-use zkevm_circuits::sort_decommittment_requests::input::CodeDecommittmentsDeduplicatorInstanceWitness;
-use zkevm_circuits::storage_validity_by_grand_product::input::StorageDeduplicatorInstanceWitness;
-use zkevm_circuits::log_sorter::input::EventsDeduplicatorInstanceWitness;
-use zkevm_circuits::storage_application::input::StorageApplicationCircuitInstanceWitness;
-use zkevm_circuits::linear_hasher::input::LinearHasherCircuitInstanceWitness;
+use crate::boojum::field::SmallField;
+use crate::zkevm_circuits::demux_log_queue::input::LogDemuxerCircuitInstanceWitness;
+use crate::zkevm_circuits::sha256_round_function::input::Sha256RoundFunctionCircuitInstanceWitness;
+use crate::zkevm_circuits::keccak256_round_function::input::Keccak256RoundFunctionCircuitInstanceWitness;
+use crate::zkevm_circuits::ecrecover::EcrecoverCircuitInstanceWitness;
+use crate::boojum::gadgets::traits::round_function::*;
+use crate::zkevm_circuits::ram_permutation::input::RamPermutationCircuitInstanceWitness;
+use crate::zkevm_circuits::code_unpacker_sha256::input::CodeDecommitterCircuitInstanceWitness;
+use crate::zkevm_circuits::sort_decommittment_requests::input::CodeDecommittmentsDeduplicatorInstanceWitness;
+use crate::zkevm_circuits::storage_validity_by_grand_product::input::StorageDeduplicatorInstanceWitness;
+use crate::zkevm_circuits::log_sorter::input::EventsDeduplicatorInstanceWitness;
+use crate::zkevm_circuits::storage_application::input::StorageApplicationCircuitInstanceWitness;
+use crate::zkevm_circuits::linear_hasher::input::LinearHasherCircuitInstanceWitness;
 use circuit_definitions::circuit_definitions::base_layer::*;
 use circuit_definitions::encodings::*;
 use circuit_definitions::encodings::recursion_request::*;
@@ -155,7 +155,7 @@ pub struct FullBlockArtifacts<F: SmallField> {
 
 use crate::witness::tree::*;
 use blake2::Blake2s256;
-use boojum::algebraic_props::round_function::AlgebraicRoundFunction;
+use crate::boojum::algebraic_props::round_function::AlgebraicRoundFunction;
 
 impl<F: SmallField> FullBlockArtifacts<F> {
     pub fn process<
@@ -368,7 +368,7 @@ impl<F: SmallField> FullBlockArtifacts<F> {
 }
 
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
-use boojum::gadgets::traits::allocatable::*;
+use crate::boojum::gadgets::traits::allocatable::*;
 
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone)]
@@ -472,7 +472,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
     }
 }
 
-use zkevm_circuits::fsm_input_output::circuit_inputs::INPUT_OUTPUT_COMMITMENT_LENGTH;
+use crate::zkevm_circuits::fsm_input_output::circuit_inputs::INPUT_OUTPUT_COMMITMENT_LENGTH;
 
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone)]
@@ -589,7 +589,7 @@ impl<F: SmallField> BlockBasicCircuitsPublicInputs<F> {
     }
 }
 
-use zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
+use crate::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
 
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone)]

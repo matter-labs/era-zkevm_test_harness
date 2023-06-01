@@ -13,22 +13,22 @@ use crate::ethereum_types::*;
 use crate::external_calls::base_layer_proof_config;
 use crate::witness::oracle::create_artifacts_from_tracer;
 use crate::witness::utils::*;
-use boojum::field::goldilocks::GoldilocksExt2;
-use boojum::gadgets::traits::allocatable::CSAllocatable;
+use crate::boojum::field::goldilocks::GoldilocksExt2;
+use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
-use boojum::cs::implementations::pow::NoPow;
-use boojum::cs::implementations::prover::ProofConfig;
+use crate::boojum::cs::implementations::pow::NoPow;
+use crate::boojum::cs::implementations::prover::ProofConfig;
 use circuit_definitions::circuit_definitions::recursion_layer::leaf_layer::ZkSyncLeafLayerRecursiveCircuit;
 use circuit_definitions::circuit_definitions::recursion_layer::scheduler::SchedulerCircuit;
-use zk_evm::abstractions::*;
-use zk_evm::aux_structures::DecommittmentQuery;
-use zk_evm::aux_structures::*;
-use zk_evm::utils::{bytecode_to_code_hash, contract_bytecode_to_words};
-use zk_evm::witness_trace::VmWitnessTracer;
-use zk_evm::GenericNoopTracer;
+use crate::zk_evm::abstractions::*;
+use crate::zk_evm::aux_structures::DecommittmentQuery;
+use crate::zk_evm::aux_structures::*;
+use crate::zk_evm::utils::{bytecode_to_code_hash, contract_bytecode_to_words};
+use crate::zk_evm::witness_trace::VmWitnessTracer;
+use crate::zk_evm::GenericNoopTracer;
 use zkevm_assembly::Assembly;
-use zk_evm::testing::storage::InMemoryStorage;
-use zkevm_circuits::scheduler::input::SchedulerCircuitInstanceWitness;
+use crate::zk_evm::testing::storage::InMemoryStorage;
+use crate::zkevm_circuits::scheduler::input::SchedulerCircuitInstanceWitness;
 use crate::toolset::{create_tools, GeometryConfig};
 use utils::{read_test_artifact, TestArtifact};
 use crate::witness::tree::{ZKSyncTestingTree, BinarySparseStorageTree};
@@ -101,9 +101,9 @@ pub(crate) fn save_predeployed_contracts(storage: &mut InMemoryStorage, tree: &m
 }
 
 use crate::witness::full_block_artifact::*;
-use boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
-use boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
-use boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
+use crate::boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
+use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
+use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
 
 pub(crate) fn generate_base_layer(
     mut test_artifact: TestArtifact, 
@@ -115,7 +115,7 @@ pub(crate) fn generate_base_layer(
     BlockBasicCircuitsPublicCompactFormsWitnesses<GoldilocksField>,
     SchedulerCircuitInstanceWitness<GoldilocksField, CircuitGoldilocksPoseidon2Sponge, GoldilocksExt2>,
 ) {
-    use zk_evm::zkevm_opcode_defs::system_params::BOOTLOADER_FORMAL_ADDRESS;
+    use crate::zk_evm::zkevm_opcode_defs::system_params::BOOTLOADER_FORMAL_ADDRESS;
 
     let round_function = ZkSyncDefaultRoundFunction::default();
 
@@ -410,11 +410,11 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
         if source.get_recursion_layer_vk(recursive_circuit_type as u8).is_err() {
             println!("Computing leaf layer VK for type {:?}", recursive_circuit_type);
-            use zkevm_circuits::recursion::leaf_layer::input::*;
+            use crate::zkevm_circuits::recursion::leaf_layer::input::*;
             let input = RecursionLeafInput::placeholder_witness();
             let vk = source.get_base_layer_vk(base_circuit_type).unwrap();
 
-            use boojum::gadgets::queue::full_state_queue::FullStateCircuitQueueRawWitness;
+            use crate::boojum::gadgets::queue::full_state_queue::FullStateCircuitQueueRawWitness;
             let witness = RecursionLeafInstanceWitness{
                 input,
                 vk_witness: vk.clone().into_inner(),
@@ -423,7 +423,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
             };
     
             let padding_proof = source.get_base_layer_padding_proof(base_circuit_type).unwrap();
-            use zkevm_circuits::recursion::leaf_layer::LeafLayerRecursionConfig;
+            use crate::zkevm_circuits::recursion::leaf_layer::LeafLayerRecursionConfig;
             let config = LeafLayerRecursionConfig {
                 proof_config: base_layer_proof_config(),
                 vk_fixed_parameters: vk.into_inner().fixed_parameters,
@@ -438,50 +438,10 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
                 _marker: std::marker::PhantomData,
             };
 
-            let circuit = match base_circuit_type {
-                i if i == BaseLayerCircuitType::VM as u8 => {
-                    ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForMainVM(circuit)
-                },
-                i if i == BaseLayerCircuitType::DecommitmentsFilter as u8 => {
-                    ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForCodeDecommittmentsSorter(circuit)
-                },
-                i if i == BaseLayerCircuitType::Decommiter as u8 => {
-                    ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForCodeDecommitter(circuit)
-                },
-                i if i == BaseLayerCircuitType::LogDemultiplexer as u8 => {
-                    ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForLogDemuxer(circuit)
-                },
-                i if i == BaseLayerCircuitType::KeccakPrecompile as u8 => {
-                    ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForKeccakRoundFunction(circuit)
-                },
-                i if i == BaseLayerCircuitType::Sha256Precompile as u8 => {
-                    ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForSha256RoundFunction(circuit)
-                },
-                i if i == BaseLayerCircuitType::EcrecoverPrecompile as u8 => {
-                    ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForECRecover(circuit)
-                },
-                i if i == BaseLayerCircuitType::RamValidation as u8 => {
-                    ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForRAMPermutation(circuit)
-                },
-                i if i == BaseLayerCircuitType::StorageFilter as u8 => {
-                    ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForStorageSorter(circuit)
-                },
-                i if i == BaseLayerCircuitType::StorageApplicator as u8 => {
-                    ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForStorageApplication(circuit)
-                },
-                i if i == BaseLayerCircuitType::EventsRevertsFilter as u8 => {
-                    ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForEventsSorter(circuit)
-                },
-                i if i == BaseLayerCircuitType::L1MessagesRevertsFilter as u8 => {
-                    ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForL1MessagesSorter(circuit)
-                },
-                i if i == BaseLayerCircuitType::L1MessagesHasher as u8 => {
-                    ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForL1MessagesHasher(circuit)
-                },
-                circuit_type => {
-                    panic!("unknown circuit type = {}", circuit_type);
-                }
-            };
+            let circuit = ZkSyncRecursiveLayerCircuit::leaf_circuit_from_base_type(
+                BaseLayerCircuitType::from_numeric_value(base_circuit_type),
+                circuit
+            );
     
             let (
                 _setup_base,
@@ -501,9 +461,8 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
     }
 
     println!("Computing leaf params");
-    use zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
+    use crate::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
     use crate::witness::recursive_aggregation::compute_leaf_params;
-    use crate::witness::recursive_aggregation::base_circuit_type_into_recursive_leaf_circuit_type;
     let mut leaf_vk_commits = vec![];
 
     for circuit_type in (BaseLayerCircuitType::VM as u8)..=(BaseLayerCircuitType::L1MessagesHasher as u8) {
@@ -657,7 +616,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
     // do that once in setup-mode only
 
     if source.get_recursion_layer_node_vk().is_err() {
-        use zkevm_circuits::recursion::node_layer::input::*;
+        use crate::zkevm_circuits::recursion::node_layer::input::*;
         let input = RecursionNodeInput::placeholder_witness();
         let vk = source.get_recursion_layer_vk(ZkSyncRecursionLayerStorageType::LeafLayerCircuitForMainVM as u8).unwrap();
         let witness = RecursionNodeInstanceWitness{
@@ -669,7 +628,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
         let padding_proof = source.get_recursion_layer_leaf_padding_proof().unwrap();
         use circuit_definitions::circuit_definitions::recursion_layer::node_layer::ZkSyncNodeLayerRecursiveCircuit;
-        use zkevm_circuits::recursion::node_layer::NodeLayerRecursionConfig;
+        use crate::zkevm_circuits::recursion::node_layer::NodeLayerRecursionConfig;
         let config = NodeLayerRecursionConfig {
             proof_config: base_layer_proof_config(),
             vk_fixed_parameters: vk.into_inner().fixed_parameters,
@@ -719,7 +678,6 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
         let circuit_type_enum = BaseLayerCircuitType::from_numeric_value(base_circuit_type);
         println!("Continuing into node aggregation for circuit type {:?}", circuit_type_enum);
 
-        use crate::witness::recursive_aggregation::base_circuit_type_into_recursive_leaf_circuit_type;
         let recursive_circuit_type = base_circuit_type_into_recursive_leaf_circuit_type(circuit_type_enum);
 
         use crate::witness::recursive_aggregation::create_node_witnesses;
@@ -897,7 +855,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
     // ideally we need to fill previous block meta and aux hashes, but here we are fine
 
-    use zkevm_circuits::scheduler::SchedulerConfig;
+    use crate::zkevm_circuits::scheduler::SchedulerConfig;
 
     let padding_proof = source.get_recursion_layer_node_padding_proof().unwrap().into_inner();
 

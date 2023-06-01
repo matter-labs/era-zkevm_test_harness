@@ -1,13 +1,13 @@
 use std::ops::Add;
 
 use crate::witness::tree::BinaryHasher;
-use boojum::{algebraic_props::round_function, field::SmallField};
-use boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
-use boojum::cs::implementations::setup::FinalizationHintsForProver;
-use boojum::field::goldilocks::GoldilocksExt2;
+use crate::boojum::{algebraic_props::round_function, field::SmallField};
+use crate::boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
+use crate::boojum::cs::implementations::setup::FinalizationHintsForProver;
+use crate::boojum::field::goldilocks::GoldilocksExt2;
 use num_bigint::BigUint;
-use zk_evm::{address_to_u256, ethereum_types::*};
-use boojum::config::*;
+use crate::zk_evm::{address_to_u256, ethereum_types::*};
+use crate::boojum::config::*;
 use circuit_definitions::encodings::{BytesSerializable, QueueSimulator};
 
 pub fn u64_as_u32_le(value: u64) -> [u32; 2] {
@@ -128,9 +128,9 @@ pub const BASE_LAYER_FRI_LDE_FACTOR: usize = 2;
 pub const BASE_LAYER_CAP_SIZE: usize = 32;
 pub const SECURITY_BITS_TARGET: usize = 100;
 
-use zkevm_circuits::scheduler::QUEUE_FINAL_STATE_COMMITMENT_LENGTH;
-use boojum::gadgets::traits::round_function::BuildableCircuitRoundFunction;
-use boojum::algebraic_props::round_function::AlgebraicRoundFunction;
+use crate::zkevm_circuits::scheduler::QUEUE_FINAL_STATE_COMMITMENT_LENGTH;
+use crate::boojum::gadgets::traits::round_function::BuildableCircuitRoundFunction;
+use crate::boojum::algebraic_props::round_function::AlgebraicRoundFunction;
 use circuit_definitions::encodings::OutOfCircuitFixedLengthEncodable;
 
 pub fn finalize_queue_state<
@@ -147,7 +147,7 @@ const N: usize,
     to_absorb.push(F::ONE);
 
     let mut state = R::initial_state();
-    use boojum::algebraic_props::round_function::absorb_into_state_vararg;
+    use crate::boojum::algebraic_props::round_function::absorb_into_state_vararg;
     absorb_into_state_vararg::<F, R, AbsorbtionModeOverwrite, 8, 12, 4>(&mut state, &to_absorb);
     let commitment = <R as AlgebraicRoundFunction<F, 8, 12, 4>>::state_into_committment::<QUEUE_FINAL_STATE_COMMITMENT_LENGTH>(&state);
 

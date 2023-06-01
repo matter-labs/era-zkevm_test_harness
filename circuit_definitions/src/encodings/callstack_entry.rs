@@ -1,4 +1,4 @@
-use boojum::field::SmallField;
+use crate::boojum::field::SmallField;
 use zk_evm::vm_state::CallStackEntry;
 
 use super::*;

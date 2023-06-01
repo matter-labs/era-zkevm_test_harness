@@ -1,21 +1,21 @@
 use crate::witness::callstack_handler::CallstackWithAuxData;
-use zk_evm::abstractions::PrecompileCyclesWitness;
-use zk_evm::aux_structures::LogQuery;
-use zk_evm::aux_structures::*;
-use zk_evm::ethereum_types::U256;
-use zk_evm::reference_impls::event_sink::ApplicationData;
-use zk_evm::vm_state::CallStackEntry;
+use crate::zk_evm::abstractions::PrecompileCyclesWitness;
+use crate::zk_evm::aux_structures::LogQuery;
+use crate::zk_evm::aux_structures::*;
+use crate::zk_evm::ethereum_types::U256;
+use crate::zk_evm::reference_impls::event_sink::ApplicationData;
+use crate::zk_evm::vm_state::CallStackEntry;
 
-use zk_evm::precompiles::ecrecover::ECRecoverRoundWitness;
-use zk_evm::precompiles::keccak256::Keccak256RoundWitness;
-use zk_evm::precompiles::sha256::Sha256RoundWitness;
+use crate::zk_evm::precompiles::ecrecover::ECRecoverRoundWitness;
+use crate::zk_evm::precompiles::keccak256::Keccak256RoundWitness;
+use crate::zk_evm::precompiles::sha256::Sha256RoundWitness;
 
-use zk_evm::zkevm_opcode_defs::decoding::EncodingModeProduction;
+use crate::zk_evm::zkevm_opcode_defs::decoding::EncodingModeProduction;
 use tracing;
-use zk_evm::zkevm_opcode_defs::system_params::NUM_SPONGES;
-use zk_evm::zkevm_opcode_defs::system_params::STORAGE_AUX_BYTE;
-use zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS;
-use zk_evm::zkevm_opcode_defs::system_params::VM_MAX_STACK_DEPTH;
+use crate::zk_evm::zkevm_opcode_defs::system_params::NUM_SPONGES;
+use crate::zk_evm::zkevm_opcode_defs::system_params::STORAGE_AUX_BYTE;
+use crate::zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS;
+use crate::zk_evm::zkevm_opcode_defs::system_params::VM_MAX_STACK_DEPTH;
 
 // cycle indicators below are not timestamps!
 
@@ -191,8 +191,8 @@ impl AuxCallstackProto {
     }
 }
 
-use zk_evm::vm_state::VmLocalState;
-use zk_evm::witness_trace::VmWitnessTracer;
+use crate::zk_evm::vm_state::VmLocalState;
+use crate::zk_evm::witness_trace::VmWitnessTracer;
 
 use super::vm_snapshot::VmSnapshot;
 
@@ -258,7 +258,7 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
         &mut self, 
         monotonic_cycle_counter: u32, 
         log_query: LogQuery, 
-        refund: zk_evm::abstractions::RefundType
+        refund: crate::zk_evm::abstractions::RefundType
     ) {
         assert!(log_query.aux_byte == STORAGE_AUX_BYTE);
         self.refunds_logs.push((monotonic_cycle_counter, log_query, refund.pubdata_refund()));

@@ -1,28 +1,28 @@
-use boojum::cs::{CSGeometry};
-use boojum::gadgets::traits::witnessable::WitnessHookable;
-use boojum::implementations::poseidon2::Poseidon2Goldilocks;
+use crate::boojum::cs::{CSGeometry};
+use crate::boojum::gadgets::traits::witnessable::WitnessHookable;
+use crate::boojum::implementations::poseidon2::Poseidon2Goldilocks;
 use crossbeam::atomic::AtomicCell;
-use boojum::field::{SmallField, FieldExtension};
-use boojum::gadgets::traits::round_function::*;
-use boojum::algebraic_props::round_function::AlgebraicRoundFunction;
-use boojum::cs::traits::cs::ConstraintSystem;
+use crate::boojum::field::{SmallField, FieldExtension};
+use crate::boojum::gadgets::traits::round_function::*;
+use crate::boojum::algebraic_props::round_function::AlgebraicRoundFunction;
+use crate::boojum::cs::traits::cs::ConstraintSystem;
 use zkevm_circuits::base_structures::decommit_query::DecommitQuery;
 use zkevm_circuits::fsm_input_output::circuit_inputs::INPUT_OUTPUT_COMMITMENT_LENGTH;
-use boojum::gadgets::num::Num;
+use crate::boojum::gadgets::num::Num;
 use zkevm_circuits::base_structures::log_query::LogQuery;
 use zkevm_circuits::base_structures::memory_query::MemoryQuery;
-use boojum::gadgets::traits::allocatable::*;
-use boojum::gadgets::u256::UInt256;
+use crate::boojum::gadgets::traits::allocatable::*;
+use crate::boojum::gadgets::u256::UInt256;
 use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
-use boojum::cs::*;
-use boojum::cs::cs_builder::*;
+use crate::boojum::cs::*;
+use crate::boojum::cs::cs_builder::*;
 use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord;
 
 pub mod base_layer;
 pub mod recursion_layer;
 pub mod verifier_builder;
 
-pub trait ZkSyncUniformSynthesisFunction<F: SmallField>: boojum::cs::traits::circuit::CircuitBuilder<F> 
+pub trait ZkSyncUniformSynthesisFunction<F: SmallField>: crate::boojum::cs::traits::circuit::CircuitBuilder<F> 
     + 'static + Clone + serde::Serialize + serde::de::DeserializeOwned
 { 
     type Witness: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned + std::default::Default;

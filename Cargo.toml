@@ -19,9 +19,10 @@ resolver = "2"
 # path = "src/geometry_config_generator/main.rs"
 
 [dependencies]
-zk_evm = {path = "../zk_evm"}
-boojum = {path = "../boojum"}
-zkevm_circuits = {path = "../zkevm_circuits"}
+# zk_evm = {path = "../zk_evm"}
+# boojum = {path = "../boojum"}
+# zkevm_circuits = {path = "../zkevm_circuits"}
+
 circuit_definitions = {path = "./circuit_definitions"}
 
 # zkevm_circuits = {git = "https://github.com/matter-labs/zkevm_circuits.git", branch = "main"}

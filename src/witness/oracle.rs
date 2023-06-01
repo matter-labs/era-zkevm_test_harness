@@ -4,44 +4,44 @@
 
 use crate::toolset::GeometryConfig;
 use crate::witness::tracer::{WitnessTracer, QueryMarker};
-use boojum::field::SmallField;
-use zkevm_circuits::base_structures::vm_state::{QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH, GlobalContextWitness};
-use zkevm_circuits::main_vm::main_vm_entry_point;
+use crate::boojum::field::SmallField;
+use crate::zkevm_circuits::base_structures::vm_state::{QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH, GlobalContextWitness};
+use crate::zkevm_circuits::main_vm::main_vm_entry_point;
 use derivative::Derivative;
 use num_bigint::BigUint;
 use rayon::slice::ParallelSliceMut;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::ops::RangeInclusive;
 use crate::ethereum_types::U256;
-use zk_evm::aux_structures::DecommittmentQuery;
-use zk_evm::aux_structures::{
+use crate::zk_evm::aux_structures::DecommittmentQuery;
+use crate::zk_evm::aux_structures::{
     LogQuery, MemoryIndex, MemoryPage, MemoryQuery,
 };
 use crate::witness::full_block_artifact::FullBlockArtifacts;
-use zk_evm::precompiles::ecrecover::ECRecoverRoundWitness;
-use zk_evm::precompiles::keccak256::Keccak256RoundWitness;
-use zk_evm::precompiles::sha256::Sha256RoundWitness;
-use zk_evm::reference_impls::event_sink::ApplicationData;
-use zk_evm::vm_state::{CallStackEntry, VmLocalState};
+use crate::zk_evm::precompiles::ecrecover::ECRecoverRoundWitness;
+use crate::zk_evm::precompiles::keccak256::Keccak256RoundWitness;
+use crate::zk_evm::precompiles::sha256::Sha256RoundWitness;
+use crate::zk_evm::reference_impls::event_sink::ApplicationData;
+use crate::zk_evm::vm_state::{CallStackEntry, VmLocalState};
 use super::callstack_handler::*;
 use smallvec::SmallVec;
 use super::utils::*;
-use boojum::gadgets::queue::{QueueState, QueueStateWitness, QueueTailStateWitness};
-use zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
-use boojum::algebraic_props::round_function::AlgebraicRoundFunction;
-use boojum::gadgets::traits::round_function::*;
-use boojum::gadgets::traits::allocatable::CSAllocatable;
+use crate::boojum::gadgets::queue::{QueueState, QueueStateWitness, QueueTailStateWitness};
+use crate::zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
+use crate::boojum::algebraic_props::round_function::AlgebraicRoundFunction;
+use crate::boojum::gadgets::traits::round_function::*;
+use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use circuit_definitions::encodings::LogQueueSimulator;
 use circuit_definitions::encodings::callstack_entry::ExtendedCallstackEntry;
 
-use zk_evm::zkevm_opcode_defs::system_params::{
+use crate::zk_evm::zkevm_opcode_defs::system_params::{
     KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
     SHA256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
     ECRECOVER_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS
 };
 
-use zk_evm::zkevm_opcode_defs::system_params::{
+use crate::zk_evm::zkevm_opcode_defs::system_params::{
     STORAGE_AUX_BYTE,
     EVENT_AUX_BYTE,
     L1_MESSAGE_AUX_BYTE,
@@ -195,7 +195,7 @@ pub fn create_artifacts_from_tracer<
     // we should have an initial query somewhat before the time
     assert!(decommittment_queries.len() >= 1);
     let (ts, q, w) = &decommittment_queries[0];
-    assert!(*ts < zk_evm::zkevm_opcode_defs::STARTING_TIMESTAMP);
+    assert!(*ts < crate::zk_evm::zkevm_opcode_defs::STARTING_TIMESTAMP);
     assert_eq!(q, &entry_point_decommittment_query.0);
     assert_eq!(w, &entry_point_decommittment_query.1);
 
@@ -518,7 +518,7 @@ pub fn create_artifacts_from_tracer<
                 }
                 PRECOMPILE_AUX_BYTE => {
                     assert!(!query.rollback);
-                    use zk_evm::precompiles::*;
+                    use crate::zk_evm::precompiles::*;
                     match query.address {
                         a if a == *KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
                             demuxed_keccak_precompile_queries.push(query);

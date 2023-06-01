@@ -1,13 +1,13 @@
-use boojum::cs::implementations::proof::Proof;
-use boojum::cs::implementations::setup::FinalizationHintsForProver;
-use boojum::field::goldilocks::{GoldilocksField, GoldilocksExt2};
+use crate::boojum::cs::implementations::proof::Proof;
+use crate::boojum::cs::implementations::setup::FinalizationHintsForProver;
+use crate::boojum::field::goldilocks::{GoldilocksField, GoldilocksExt2};
 use zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
 use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
 use zkevm_circuits::tables::*;
-use boojum::gadgets::tables::*;
-use boojum::cs::gates::*;
+use crate::boojum::gadgets::tables::*;
+use crate::boojum::cs::gates::*;
 use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord;
-use boojum::cs::traits::gate::GatePlacementStrategy;
+use crate::boojum::cs::traits::gate::GatePlacementStrategy;
 
 use super::*;
 
@@ -331,8 +331,8 @@ use zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
 
 pub type ZkSyncBaseLayerClosedFormInput<F> = ZkSyncBaseLayerStorage<ClosedFormInputCompactFormWitness<F>>;
 
-use boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
-use boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
+use crate::boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
+use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
 
 pub type BaseProofsTreeHasher = GoldilocksPoseidon2Sponge<AbsorbtionModeOverwrite>;
 pub type ZkSyncBaseProof = Proof<GoldilocksField, BaseProofsTreeHasher, GoldilocksExt2>;
@@ -341,7 +341,7 @@ pub type ZkSyncBaseLayerProof = ZkSyncBaseLayerStorage<ZkSyncBaseProof>;
 
 pub type ZkSyncBaseLayerFinalizationHint = ZkSyncBaseLayerStorage<FinalizationHintsForProver>;
 
-use boojum::cs::implementations::verifier::VerificationKey;
+use crate::boojum::cs::implementations::verifier::VerificationKey;
 pub type ZkSyncBaseVerificationKey = VerificationKey<GoldilocksField, BaseProofsTreeHasher>;
 
 pub type ZkSyncBaseLayerVerificationKey = ZkSyncBaseLayerStorage<ZkSyncBaseVerificationKey>;

@@ -1,9 +1,9 @@
-use zk_evm::aux_structures::*;
-use zk_evm::ethereum_types::*;
-use zk_evm::vm_state::CallStackEntry;
-use zk_evm::vm_state::VmState;
-use zk_evm::zkevm_opcode_defs::*;
-use zk_evm::zkevm_opcode_defs::system_params::INITIAL_FRAME_FORMAL_EH_LOCATION;
+use crate::zk_evm::aux_structures::*;
+use crate::zk_evm::ethereum_types::*;
+use crate::zk_evm::vm_state::CallStackEntry;
+use crate::zk_evm::vm_state::VmState;
+use crate::zk_evm::zkevm_opcode_defs::*;
+use crate::zk_evm::zkevm_opcode_defs::system_params::INITIAL_FRAME_FORMAL_EH_LOCATION;
 
 use super::*;
 
@@ -37,7 +37,7 @@ pub fn initial_out_of_circuit_context(
     }
 }
 
-use zk_evm::block_properties::BlockProperties;
+use crate::zk_evm::block_properties::BlockProperties;
 
 pub fn create_out_of_circuit_global_context(
     zkporter_is_available: bool,

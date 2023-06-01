@@ -1,6 +1,6 @@
 use super::*;
-use zkevm_circuits::demux_log_queue::input::*;
-use zkevm_circuits::base_structures::log_query::*;
+use crate::zkevm_circuits::demux_log_queue::input::*;
+use crate::zkevm_circuits::base_structures::log_query::*;
 use circuit_definitions::encodings::*;
 
 /// Take a storage log, output logs separately for events, l1 messages, storage, etc
@@ -15,7 +15,7 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
     // trivial empty case
     if artifacts.original_log_queue_simulator.witness.as_slices().0.is_empty() {
         // return singe dummy witness
-        use boojum::gadgets::queue::QueueState;
+        use crate::boojum::gadgets::queue::QueueState;
 
         let initial_fsm_state = LogDemuxerFSMInputOutput::<F>::placeholder_witness();
 
@@ -57,13 +57,13 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 
     let full_log_queue_state = take_queue_state_from_simulator(&artifacts.original_log_queue_simulator);
 
-    use zk_evm::zkevm_opcode_defs::system_params::{
+    use crate::zk_evm::zkevm_opcode_defs::system_params::{
         KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
         SHA256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
         ECRECOVER_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS
     };
     
-    use zk_evm::zkevm_opcode_defs::system_params::{
+    use crate::zk_evm::zkevm_opcode_defs::system_params::{
         STORAGE_AUX_BYTE,
         EVENT_AUX_BYTE,
         L1_MESSAGE_AUX_BYTE,
@@ -126,7 +126,7 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
                     },
                     PRECOMPILE_AUX_BYTE => {
                         assert!(!query.rollback);
-                        use zk_evm::precompiles::*;
+                        use crate::zk_evm::precompiles::*;
                         match query.address {
                             a if a == *KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
                                 let item = demuxed_keccak_precompile_queries_it.next().copied().unwrap();

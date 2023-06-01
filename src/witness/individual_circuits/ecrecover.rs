@@ -1,7 +1,7 @@
 use super::*;
-use zkevm_circuits::ecrecover::*;
-use zkevm_circuits::base_structures::log_query::*;
-use zk_evm::zkevm_opcode_defs::ethereum_types::U256;
+use crate::zkevm_circuits::ecrecover::*;
+use crate::zkevm_circuits::base_structures::log_query::*;
+use crate::zk_evm::zkevm_opcode_defs::ethereum_types::U256;
 use circuit_definitions::encodings::*;
 
 // we want to simulate splitting of data into many separate instances of the same circuit.
@@ -21,7 +21,7 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
 
     // split into aux witness, don't mix with the memory
 
-    use zk_evm::precompiles::ecrecover::ECRecoverRoundWitness;
+    use crate::zk_evm::precompiles::ecrecover::ECRecoverRoundWitness;
     for (_cycle, _query, witness) in artifacts.ecrecover_witnesses.iter() {
         let ECRecoverRoundWitness {
             new_request: _,
@@ -119,7 +119,7 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
         let (_cycle, _req, round_witness) = per_request_work;
         assert_eq!(request, _req);
 
-        use zk_evm::precompiles::precompile_abi_in_log;
+        use crate::zk_evm::precompiles::precompile_abi_in_log;
         let mut precompile_request = precompile_abi_in_log(request);
         let is_last_request = request_idx == num_requests - 1;
 

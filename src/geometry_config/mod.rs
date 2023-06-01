@@ -2,7 +2,7 @@
 
 use std::collections::VecDeque;
 
-use boojum::worker::Worker;
+use crate::boojum::worker::Worker;
 
 use crate::toolset::GeometryConfig;
 

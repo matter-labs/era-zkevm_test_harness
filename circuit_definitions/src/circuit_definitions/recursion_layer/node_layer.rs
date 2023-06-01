@@ -1,14 +1,14 @@
-use boojum::cs::implementations::pow::NoPow;
+use crate::boojum::cs::implementations::pow::NoPow;
 use derivative::*;
-use boojum::gadgets::recursion::recursive_tree_hasher::*;
-use boojum::gadgets::recursion::recursive_transcript::*;
-use boojum::gadgets::recursion::circuit_pow::*;
-use boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
+use crate::boojum::gadgets::recursion::recursive_tree_hasher::*;
+use crate::boojum::gadgets::recursion::recursive_transcript::*;
+use crate::boojum::gadgets::recursion::circuit_pow::*;
+use crate::boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
 use zkevm_circuits::base_structures::recursion_query::RecursionQuery;
 use crate::circuit_definitions::base_layer::TARGET_CIRCUIT_TRACE_LENGTH;
 use zkevm_circuits::recursion::node_layer::input::*;
 use zkevm_circuits::recursion::node_layer::*;
-use boojum::cs::implementations::transcript::Transcript;
+use crate::boojum::cs::implementations::transcript::Transcript;
 use super::circuit_def::*;
 
 use super::*;
@@ -39,7 +39,7 @@ POW: RecursivePoWRunner<F>,
 
 impl<
 POW: RecursivePoWRunner<F>,
-> boojum::cs::traits::circuit::CircuitBuilder<F> for NodeLayerRecursiveCircuit<POW> 
+> crate::boojum::cs::traits::circuit::CircuitBuilder<F> for NodeLayerRecursiveCircuit<POW> 
 where 
     [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
@@ -93,7 +93,7 @@ where
         &self,
         builder: CsBuilder<T, F, GC, TB>
     ) -> CsBuilder<T, F, impl GateConfigurationHolder<F>, impl StaticToolboxHolder> {
-        <Self as boojum::cs::traits::circuit::CircuitBuilder<F>>::configure_builder(builder)
+        <Self as crate::boojum::cs::traits::circuit::CircuitBuilder<F>>::configure_builder(builder)
     }
 
     pub fn add_tables<CS: ConstraintSystem<F>>(&self, _cs: &mut CS) {
@@ -135,7 +135,7 @@ pub type ZkSyncNodeLayerRecursiveCircuit = NodeLayerRecursiveCircuit<
     NoPow,
 >;
 
-use boojum::cs::traits::circuit::CircuitBuilderProxy;
+use crate::boojum::cs::traits::circuit::CircuitBuilderProxy;
 
 pub type NodeLayerCircuitBuilder<POW> = CircuitBuilderProxy<F, NodeLayerRecursiveCircuit<POW>>; 
 pub type ConcreteNodeLayerCircuitBuilder = NodeLayerCircuitBuilder<

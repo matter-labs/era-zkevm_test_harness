@@ -1,17 +1,17 @@
-use boojum::cs::implementations::pow::NoPow;
+use crate::boojum::cs::implementations::pow::NoPow;
 use derivative::*;
-use boojum::gadgets::recursion::recursive_tree_hasher::*;
-use boojum::gadgets::recursion::recursive_transcript::*;
-use boojum::gadgets::recursion::circuit_pow::*;
-use boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
+use crate::boojum::gadgets::recursion::recursive_tree_hasher::*;
+use crate::boojum::gadgets::recursion::recursive_transcript::*;
+use crate::boojum::gadgets::recursion::circuit_pow::*;
+use crate::boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
 use zkevm_circuits::base_structures::recursion_query::RecursionQuery;
 use zkevm_circuits::scheduler::input::SchedulerCircuitInstanceWitness;
 use zkevm_circuits::scheduler::*;
 use crate::circuit_definitions::base_layer::TARGET_CIRCUIT_TRACE_LENGTH;
-use boojum::cs::traits::gate::GatePlacementStrategy;
-use boojum::cs::implementations::transcript::Transcript;
-use boojum::cs::gates::*;
-use boojum::gadgets::tables::*;
+use crate::boojum::cs::traits::gate::GatePlacementStrategy;
+use crate::boojum::cs::implementations::transcript::Transcript;
+use crate::boojum::cs::gates::*;
+use crate::boojum::gadgets::tables::*;
 
 use super::*;
 
@@ -41,7 +41,7 @@ pub struct SchedulerCircuit<
 
 impl<
 POW: RecursivePoWRunner<F>,
-> boojum::cs::traits::circuit::CircuitBuilder<F> for SchedulerCircuit<POW> 
+> crate::boojum::cs::traits::circuit::CircuitBuilder<F> for SchedulerCircuit<POW> 
 where 
     [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
@@ -72,7 +72,7 @@ where
     fn configure_builder<T: CsBuilderImpl<F, T>, GC: GateConfigurationHolder<F>, TB: StaticToolboxHolder>(
         builder: CsBuilder<T, F, GC, TB>
     ) -> CsBuilder<T, F, impl GateConfigurationHolder<F>, impl StaticToolboxHolder> {
-        let builder = builder.allow_lookup(<Self as boojum::cs::traits::circuit::CircuitBuilder<F>>::lookup_parameters());
+        let builder = builder.allow_lookup(<Self as crate::boojum::cs::traits::circuit::CircuitBuilder<F>>::lookup_parameters());
 
         let builder = ConstantsAllocatorGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
         let builder = BooleanConstraintGate::configure_builder(builder, GatePlacementStrategy::UseSpecializedColumns { num_repetitions: 1, share_constants: false });
@@ -118,7 +118,7 @@ where
         &self,
         builder: CsBuilder<T, F, GC, TB>
     ) -> CsBuilder<T, F, impl GateConfigurationHolder<F>, impl StaticToolboxHolder> {
-        <Self as boojum::cs::traits::circuit::CircuitBuilder<F>>::configure_builder(builder)
+        <Self as crate::boojum::cs::traits::circuit::CircuitBuilder<F>>::configure_builder(builder)
     }
 
     pub fn add_tables<CS: ConstraintSystem<F>>(&self, cs: &mut CS) {
@@ -174,7 +174,7 @@ pub type ZkSyncSchedulerCircuit = SchedulerCircuit<
     NoPow,
 >;
 
-use boojum::cs::traits::circuit::CircuitBuilderProxy;
+use crate::boojum::cs::traits::circuit::CircuitBuilderProxy;
 
 pub type SchedulerCircuitBuilder<POW> = CircuitBuilderProxy<F, SchedulerCircuit<POW>>; 
 pub type ConcreteSchedulerCircuitBuilder = SchedulerCircuitBuilder<

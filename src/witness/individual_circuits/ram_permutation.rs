@@ -1,13 +1,13 @@
-use zk_evm::{abstractions::MemoryType, ethereum_types::U256};
+use crate::zk_evm::{abstractions::MemoryType, ethereum_types::U256};
 use super::*;
 use std::cmp::Ordering;
-use zkevm_circuits::{ram_permutation::input::*, base_structures::memory_query::MEMORY_QUERY_PACKED_WIDTH};
+use crate::zkevm_circuits::{ram_permutation::input::*, base_structures::memory_query::MEMORY_QUERY_PACKED_WIDTH};
 use rayon::prelude::*;
-use boojum::gadgets::queue::full_state_queue::FullStateCircuitQueueRawWitness;
+use crate::boojum::gadgets::queue::full_state_queue::FullStateCircuitQueueRawWitness;
 use circuit_definitions::encodings::*;
 use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 
-use zk_evm::zkevm_opcode_defs::BOOTLOADER_HEAP_PAGE;
+use crate::zk_evm::zkevm_opcode_defs::BOOTLOADER_HEAP_PAGE;
 
 pub fn compute_ram_circuit_snapshots<
 F: SmallField,
@@ -168,7 +168,7 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
         let is_ptr = last_sorted_query.value_is_pointer;
         let value = last_sorted_query.value;
 
-        use boojum::gadgets::queue::QueueState;
+        use crate::boojum::gadgets::queue::QueueState;
         let placeholder_witness = QueueState::<F, FULL_SPONGE_QUEUE_STATE_WIDTH>::placeholder_witness();
 
         let (current_unsorted_queue_state, current_sorted_queue_state) = results.last().map(|el: &RamPermutationCircuitInstanceWitness<F>| {
@@ -260,7 +260,7 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 //     // this is only proof of permutation, without extra login on what the permutation should be
 
 //     use crate::ethereum_types::U256;
-//     use zk_evm::aux_structures::*;
+//     use crate::zk_evm::aux_structures::*;
 //     use sync_vm::testing::Bn256;
 //     use sync_vm::testing::create_test_artifacts_with_optimized_gate;
 //     use sync_vm::franklin_crypto::bellman::pairing::ff::ScalarEngine;

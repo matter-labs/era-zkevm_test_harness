@@ -1,26 +1,26 @@
 use super::*;
-use boojum::field::SmallField;
+use crate::boojum::field::SmallField;
 
 pub mod run_manually;
 pub mod complex_tests;
 pub mod simple_tests;
 
 
-use boojum::field::goldilocks::MixedGL;
-use boojum::worker::Worker;
+use crate::boojum::field::goldilocks::MixedGL;
+use crate::boojum::worker::Worker;
 use circuit_definitions::circuit_definitions::recursion_layer::ZkSyncRecursiveLayerCircuit;
-use zk_evm::testing::storage::InMemoryStorage;
+use crate::zk_evm::testing::storage::InMemoryStorage;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use crate::witness::tree::BinarySparseStorageTree;
 use crate::ethereum_types::U256;
 use crate::ethereum_types::Address;
 use crate::ethereum_types::H160;
-use zk_evm::bytecode_to_code_hash;
-use zk_evm::aux_structures::LogQuery;
+use crate::zk_evm::bytecode_to_code_hash;
+use crate::zk_evm::aux_structures::LogQuery;
 use crate::witness::tree::ZkSyncStorageLeaf;
 use std::collections::HashMap;
 use crate::blake2::Blake2s256;
-use boojum::cs::traits::circuit::Circuit;
+use crate::boojum::cs::traits::circuit::Circuit;
 use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit;
 
 const ACCOUNT_CODE_STORAGE_ADDRESS: Address = H160([
@@ -79,9 +79,9 @@ pub(crate) fn save_predeployed_contracts(storage: &mut InMemoryStorage, tree: &m
 pub(crate) fn base_test_circuit(
     circuit: ZkSyncBaseLayerCircuit<GoldilocksField, VmWitnessOracle<GoldilocksField>, ZkSyncDefaultRoundFunction>
 ) {
-    use boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
-    use boojum::config::DevCSConfig;
-    use boojum::cs::cs_builder::new_builder;
+    use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
+    use crate::boojum::config::DevCSConfig;
+    use crate::boojum::cs::cs_builder::new_builder;
 
     type P = GoldilocksField;
     // type P = MixedGL;
@@ -212,9 +212,9 @@ pub(crate) fn base_test_circuit(
 pub(crate) fn test_recursive_circuit(
     circuit: ZkSyncRecursiveLayerCircuit
 ) {
-    use boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
-    use boojum::config::DevCSConfig;
-    use boojum::cs::cs_builder::new_builder;
+    use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
+    use crate::boojum::config::DevCSConfig;
+    use crate::boojum::cs::cs_builder::new_builder;
 
     type P = GoldilocksField;
     // type P = MixedGL;

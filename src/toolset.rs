@@ -1,9 +1,9 @@
-use zk_evm::reference_impls::event_sink::InMemoryEventSink;
-use zk_evm::precompiles::DefaultPrecompilesProcessor;
-use zk_evm::reference_impls::decommitter::SimpleDecommitter;
-use zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS;
+use crate::zk_evm::reference_impls::event_sink::InMemoryEventSink;
+use crate::zk_evm::precompiles::DefaultPrecompilesProcessor;
+use crate::zk_evm::reference_impls::decommitter::SimpleDecommitter;
+use crate::zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS;
 use crate::witness::tracer::WitnessTracer;
-use zk_evm::abstractions::Storage;
+use crate::zk_evm::abstractions::Storage;
 use std::hash::Hash;
 
 /// Set should only differ due to another storage that would be sustituted from outside,
@@ -60,11 +60,11 @@ pub fn create_tools<S: Storage>(storage: S, config: &GeometryConfig) -> ProvingT
 }
 
 use crate::ethereum_types::Address;
-use zk_evm::block_properties::BlockProperties;
-use zk_evm::vm_state::{VmState, PrimitiveValue};
+use crate::zk_evm::block_properties::BlockProperties;
+use crate::zk_evm::vm_state::{VmState, PrimitiveValue};
 use crate::entry_point::initial_out_of_circuit_context;
-use zk_evm::zkevm_opcode_defs::*;
-use zk_evm::reference_impls::memory::SimpleMemory;
+use crate::zk_evm::zkevm_opcode_defs::*;
+use crate::zk_evm::reference_impls::memory::SimpleMemory;
 
 /// We expect that storage/memory/decommitter were prefilled
 pub fn create_out_of_circuit_vm<'a, S: Storage>(
@@ -109,7 +109,7 @@ pub fn create_out_of_circuit_vm<'a, S: Storage>(
     // we also FORMALLY mark r1 as "pointer" type, even though we will NOT have any calldata
     let formal_ptr = FatPointer {
         offset: 0,
-        memory_page: zk_evm::zkevm_opcode_defs::BOOTLOADER_CALLDATA_PAGE,
+        memory_page: crate::zk_evm::zkevm_opcode_defs::BOOTLOADER_CALLDATA_PAGE,
         start: 0,
         length: 0
     };

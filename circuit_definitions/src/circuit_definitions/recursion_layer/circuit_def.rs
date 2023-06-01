@@ -1,14 +1,14 @@
-use boojum::cs::*;
-use boojum::cs::cs_builder::*;
-use boojum::field::goldilocks::GoldilocksField;
-use boojum::implementations::poseidon2::Poseidon2Goldilocks;
-use boojum::gadgets::traits::round_function::BuildableCircuitRoundFunction;
+use crate::boojum::cs::*;
+use crate::boojum::cs::cs_builder::*;
+use crate::boojum::field::goldilocks::GoldilocksField;
+use crate::boojum::implementations::poseidon2::Poseidon2Goldilocks;
+use crate::boojum::gadgets::traits::round_function::BuildableCircuitRoundFunction;
 
 type F = GoldilocksField;
 type R = Poseidon2Goldilocks;
 
-use boojum::cs::traits::gate::GatePlacementStrategy;
-use boojum::cs::gates::*;
+use crate::boojum::cs::traits::gate::GatePlacementStrategy;
+use crate::boojum::cs::gates::*;
 
 pub fn geometry_for_recursion_step() -> CSGeometry {
     CSGeometry { 

@@ -1,7 +1,7 @@
 use std::{collections::HashMap};
 
 use crate::witness::tracer::QueryMarker;
-use zk_evm::{aux_structures::LogQuery, vm_state::CallStackEntry};
+use crate::zk_evm::{aux_structures::LogQuery, vm_state::CallStackEntry};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum RenumeratedQueryIndex {

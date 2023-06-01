@@ -7,22 +7,22 @@ use crate::ethereum_types::*;
 use crate::external_calls::run_with_fixed_params;
 use crate::witness::oracle::create_artifacts_from_tracer;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
-use boojum::config::{SetupCSConfig, ProvingCSConfig};
-use boojum::cs::implementations::prover::ProofConfig;
-use boojum::cs::traits::cs::ConstraintSystem;
-use boojum::field::traits::field_like::TrivialContext;
-use zkevm_circuits::base_structures::vm_state::GlobalContextWitness;
-use zkevm_circuits::main_vm::main_vm_entry_point;
-use zk_evm::abstractions::*;
-use zk_evm::aux_structures::DecommittmentQuery;
-use zk_evm::aux_structures::*;
-use zk_evm::utils::{bytecode_to_code_hash, contract_bytecode_to_words};
-use zk_evm::witness_trace::VmWitnessTracer;
-use zk_evm::GenericNoopTracer;
+use crate::boojum::config::{SetupCSConfig, ProvingCSConfig};
+use crate::boojum::cs::implementations::prover::ProofConfig;
+use crate::boojum::cs::traits::cs::ConstraintSystem;
+use crate::boojum::field::traits::field_like::TrivialContext;
+use crate::zkevm_circuits::base_structures::vm_state::GlobalContextWitness;
+use crate::zkevm_circuits::main_vm::main_vm_entry_point;
+use crate::zk_evm::abstractions::*;
+use crate::zk_evm::aux_structures::DecommittmentQuery;
+use crate::zk_evm::aux_structures::*;
+use crate::zk_evm::utils::{bytecode_to_code_hash, contract_bytecode_to_words};
+use crate::zk_evm::witness_trace::VmWitnessTracer;
+use crate::zk_evm::GenericNoopTracer;
 use zkevm_assembly::Assembly;
-use zk_evm::testing::storage::InMemoryStorage;
+use crate::zk_evm::testing::storage::InMemoryStorage;
 use crate::toolset::create_tools;
-use boojum::cs::traits::gate::GatePlacementStrategy;
+use crate::boojum::cs::traits::gate::GatePlacementStrategy;
 
 #[test]
 fn run_and_try_create_witness() {
@@ -184,7 +184,7 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
     other_contracts: Vec<(H160, Vec<[u8; 32]>)>,
     cycle_limit: usize
 ) {
-    use zk_evm::zkevm_opcode_defs::system_params::BOOTLOADER_FORMAL_ADDRESS;
+    use crate::zk_evm::zkevm_opcode_defs::system_params::BOOTLOADER_FORMAL_ADDRESS;
     use crate::external_calls::run;
 
     use crate::toolset::GeometryConfig;

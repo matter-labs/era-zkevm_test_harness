@@ -12,15 +12,15 @@ use crate::witness::utils::*;
 use circuit_definitions::circuit_definitions::base_layer::*;
 
 use std::sync::Arc;
-use boojum::algebraic_props::round_function;
+use crate::boojum::algebraic_props::round_function;
 use crossbeam::atomic::AtomicCell;
 
 pub const L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH: bool = false;
 
-use boojum::algebraic_props::round_function::AlgebraicRoundFunction;
-use boojum::gadgets::traits::round_function::*;
-use boojum::field::SmallField;
-use boojum::gadgets::traits::allocatable::CSAllocatableExt;
+use crate::boojum::algebraic_props::round_function::AlgebraicRoundFunction;
+use crate::boojum::gadgets::traits::round_function::*;
+use crate::boojum::field::SmallField;
+use crate::boojum::gadgets::traits::allocatable::CSAllocatableExt;
 
 pub fn create_leaf_level_circuits_and_scheduler_witness<
 F: SmallField, 
@@ -61,7 +61,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
 
     let round_function = Arc::new(round_function.clone());
 
-    use zkevm_circuits::base_structures::vm_state::GlobalContextWitness;
+    use crate::zkevm_circuits::base_structures::vm_state::GlobalContextWitness;
 
     let in_circuit_global_context = GlobalContextWitness {
         zkporter_is_available,

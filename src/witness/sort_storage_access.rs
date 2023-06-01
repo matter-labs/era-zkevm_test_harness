@@ -1,10 +1,10 @@
-use zk_evm::aux_structures::LogQuery;
+use crate::zk_evm::aux_structures::LogQuery;
 use std::cmp::Ordering;
 use rayon::prelude::*;
 use crate::ethereum_types::H160;
 use crate::ethereum_types::U256;
 use derivative::Derivative;
-use zk_evm::aux_structures::Timestamp;
+use crate::zk_evm::aux_structures::Timestamp;
 use circuit_definitions::encodings::LogQueryLike;
 use circuit_definitions::encodings::LogQueryLikeWithExtendedEnumeration;
 
@@ -122,7 +122,7 @@ pub fn sort_storage_access_queries<L: LogQueryLike>(unsorted_storage_queries: &[
             }
         }
 
-        use zk_evm::aux_structures::Timestamp;
+        use crate::zk_evm::aux_structures::Timestamp;
 
         if current_element_history.did_read_at_depth_zero == false && current_element_history.changes_stack.is_empty() {
             // whatever happened there didn't produce any final changes

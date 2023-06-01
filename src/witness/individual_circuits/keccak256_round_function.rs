@@ -1,7 +1,7 @@
 use super::*;
 use derivative::*;
-use zkevm_circuits::keccak256_round_function::{input::*, Keccak256PrecompileCallParamsWitness};
-use zkevm_circuits::base_structures::log_query::*;
+use crate::zkevm_circuits::keccak256_round_function::{input::*, Keccak256PrecompileCallParamsWitness};
+use crate::zkevm_circuits::base_structures::log_query::*;
 use circuit_definitions::encodings::*;
 
 #[derive(Derivative)]
@@ -28,7 +28,7 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
     assert_eq!(artifacts.all_memory_queries_accumulated.len(), artifacts.memory_queue_simulator.num_items as usize);
 
     // split into aux witness, don't mix with the memory
-    use zk_evm::precompiles::keccak256::Keccak256RoundWitness;
+    use crate::zk_evm::precompiles::keccak256::Keccak256RoundWitness;
 
     for (_cycle, _query, witness) in artifacts.keccak_round_function_witnesses.iter() {
         for el in witness.iter() {
@@ -87,11 +87,11 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
         hidden_fsm_output_state.completed = true;
 
         // internal state is a bit more tricky, it'll be a round over empty input
-        use zk_evm::precompiles::keccak256::Keccak256;
+        use crate::zk_evm::precompiles::keccak256::Keccak256;
         let mut internal_state_over_empty_buffer = Keccak256::default();
-        use zk_evm::precompiles::keccak256::KECCAK_RATE_IN_U64_WORDS;
+        use crate::zk_evm::precompiles::keccak256::KECCAK_RATE_IN_U64_WORDS;
         let empty_block = [0u8; KECCAK_RATE_IN_U64_WORDS * 8];
-        use zk_evm::precompiles::keccak256::Digest;
+        use crate::zk_evm::precompiles::keccak256::Digest;
         internal_state_over_empty_buffer.update(&empty_block);
         let empty_state_inner =
             zk_evm::precompiles::keccak256::transmute_state(internal_state_over_empty_buffer.clone());
@@ -156,7 +156,7 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 
         let _ = artifacts.demuxed_keccak_precompile_queue_simulator.pop_and_output_intermediate_data(round_function);
 
-        use zk_evm::precompiles::keccak256::Keccak256;
+        use crate::zk_evm::precompiles::keccak256::Keccak256;
         let mut internal_state = Keccak256::default();
     
         let mut memory_reads_per_request = vec![];
@@ -171,10 +171,10 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 
         // those are refreshed every cycle
         let mut input_buffer = zk_evm::precompiles::keccak256::Buffer::new();
-        use zk_evm::precompiles::keccak256::NEW_WORDS_PER_CYCLE;
+        use crate::zk_evm::precompiles::keccak256::NEW_WORDS_PER_CYCLE;
         let mut words_buffer = [0u64; NEW_WORDS_PER_CYCLE];
 
-        use zk_evm::precompiles::precompile_abi_in_log;
+        use crate::zk_evm::precompiles::precompile_abi_in_log;
         let mut precompile_request = precompile_abi_in_log(request);
         let num_rounds = precompile_request.precompile_interpreted_data as usize;
         assert_eq!(num_rounds, round_witness.len());
@@ -193,7 +193,7 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 
             // simulate absorb
             if input_buffer.can_read_into() {
-                use zk_evm::precompiles::keccak256::NUM_WORDS_PER_QUERY;
+                use crate::zk_evm::precompiles::keccak256::NUM_WORDS_PER_QUERY;
                 assert!(round.reads.is_some());
                 let reads = round.reads.unwrap();
                 for (query_index, read) in reads.into_iter().enumerate() {
@@ -221,13 +221,13 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
             }
 
             let words = input_buffer.consume_rate();
-            use zk_evm::precompiles::keccak256::KECCAK_RATE_IN_U64_WORDS;
+            use crate::zk_evm::precompiles::keccak256::KECCAK_RATE_IN_U64_WORDS;
             let mut block = [0u8; KECCAK_RATE_IN_U64_WORDS * 8];
 
             for (i, word) in words.into_iter().enumerate() {
                 block[(i * 8)..(i * 8 + 8)].copy_from_slice(&word.to_le_bytes());
             }
-            use zk_evm::precompiles::keccak256::Digest;
+            use crate::zk_evm::precompiles::keccak256::Digest;
             internal_state.update(&block);
 
             num_rounds_left -= 1;
@@ -289,7 +289,7 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
                     // internal state is a bit more tricky, it'll be a round over empty input
                     let mut internal_state_over_empty_buffer = Keccak256::default();
                     let empty_block = [0u8; KECCAK_RATE_IN_U64_WORDS * 8];
-                    use zk_evm::precompiles::keccak256::Digest;
+                    use crate::zk_evm::precompiles::keccak256::Digest;
                     internal_state_over_empty_buffer.update(&empty_block);
                     let empty_state_inner =
                         zk_evm::precompiles::keccak256::transmute_state(internal_state_over_empty_buffer.clone());

@@ -1,5 +1,3 @@
-#![recursion_limit = "16"]
-
 #![feature(const_eval_limit)]
 #![const_eval_limit = "100000000"]
 #![feature(array_chunks)]
@@ -17,6 +15,10 @@ pub mod aux_definitions;
 pub mod encodings;
 
 pub use zk_evm::ethereum_types;
-use boojum::implementations::poseidon2::Poseidon2Goldilocks;
+use crate::boojum::implementations::poseidon2::Poseidon2Goldilocks;
 
 pub type ZkSyncDefaultRoundFunction = Poseidon2Goldilocks;
+
+pub use zk_evm;
+pub use zkevm_circuits;
+pub use zkevm_circuits::boojum;

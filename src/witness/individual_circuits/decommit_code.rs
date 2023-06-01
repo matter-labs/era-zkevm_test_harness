@@ -1,18 +1,18 @@
 use super::*;
 use crate::witness::full_block_artifact::FullBlockArtifacts;
-use boojum::gadgets::u256::recompose_u256_as_u32x8;
+use crate::boojum::gadgets::u256::recompose_u256_as_u32x8;
 use rayon::prelude::*;
-use zk_evm::ethereum_types::U256;
+use crate::zk_evm::ethereum_types::U256;
 use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::sync::Arc;
-use zk_evm::aux_structures::MemoryIndex;
-use zk_evm::aux_structures::MemoryQuery;
-use zkevm_circuits::code_unpacker_sha256::input::*;
-use zkevm_circuits::code_unpacker_sha256::*;
-use boojum::gadgets::queue::full_state_queue::FullStateCircuitQueueRawWitness;
-use zkevm_circuits::base_structures::decommit_query::DECOMMIT_QUERY_PACKED_WIDTH;
-use zkevm_circuits::base_structures::decommit_query::DecommitQueryWitness;
+use crate::zk_evm::aux_structures::MemoryIndex;
+use crate::zk_evm::aux_structures::MemoryQuery;
+use crate::zkevm_circuits::code_unpacker_sha256::input::*;
+use crate::zkevm_circuits::code_unpacker_sha256::*;
+use crate::boojum::gadgets::queue::full_state_queue::FullStateCircuitQueueRawWitness;
+use crate::zkevm_circuits::base_structures::decommit_query::DECOMMIT_QUERY_PACKED_WIDTH;
+use crate::zkevm_circuits::base_structures::decommit_query::DecommitQueryWitness;
 
 pub fn compute_decommitter_circuit_snapshots<
 F: SmallField,
@@ -126,14 +126,14 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
     let mut start = true;
     let mut memory_queue_state_offset = 0;
 
-    use zk_evm::precompiles::keccak256::Digest;
-    use zk_evm::precompiles::sha256::transmute_state;
-    use zk_evm::precompiles::sha256::Sha256;
+    use crate::zk_evm::precompiles::keccak256::Digest;
+    use crate::zk_evm::precompiles::sha256::transmute_state;
+    use crate::zk_evm::precompiles::sha256::Sha256;
 
     let mut internal_state = Sha256::default();
     let mut fsm_internals = CodeDecommittmentFSM::<F>::placeholder_witness();
 
-    use boojum::gadgets::queue::QueueState;
+    use crate::boojum::gadgets::queue::QueueState;
     let placeholder_witness = QueueState::<F, FULL_SPONGE_QUEUE_STATE_WIDTH>::placeholder_witness();
 
     'outer: loop {
@@ -220,7 +220,7 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
                 current_memory_data = memory_data;
 
                 // fill the witness
-                use zk_evm::aux_structures::DecommittmentQuery;
+                use crate::zk_evm::aux_structures::DecommittmentQuery;
 
                 let DecommittmentQuery {
                     hash,

@@ -1,12 +1,12 @@
 use std::collections::VecDeque;
-use boojum::field::SmallField;
-use boojum::gadgets::traits::allocatable::CSAllocatable;
+use crate::boojum::field::SmallField;
+use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 use derivative::Derivative;
-use boojum::algebraic_props::round_function::{AlgebraicRoundFunction, absorb_multiple_rounds, AbsorbtionModeOverwrite};
-use boojum::gadgets::traits::round_function::*;
+use crate::boojum::algebraic_props::round_function::{AlgebraicRoundFunction, absorb_multiple_rounds, AbsorbtionModeOverwrite};
+use crate::boojum::gadgets::traits::round_function::*;
 use zkevm_circuits::base_structures::vm_state::{QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH};
-use boojum::gadgets::u256::decompose_u256_as_u32x8;
-use boojum::gadgets::u160::decompose_address_as_u32x5;
+use crate::boojum::gadgets::u256::decompose_u256_as_u32x8;
+use crate::boojum::gadgets::u160::decompose_address_as_u32x5;
 
 // for we need to encode some structures as packed field elements
 pub trait OutOfCircuitFixedLengthEncodable<F: SmallField, const N: usize>: Clone {
@@ -502,9 +502,9 @@ impl<
 #[serde(bound = "")]
 pub struct FullWidthStackIntermediateStates<F: SmallField, const SW: usize, const ROUNDS: usize> {
     pub is_push: bool,
-    #[serde(with = "boojum::serde_utils::BigArraySerde")]
+    #[serde(with = "crate::boojum::serde_utils::BigArraySerde")]
     pub previous_state: [F; SW],
-    #[serde(with = "boojum::serde_utils::BigArraySerde")]
+    #[serde(with = "crate::boojum::serde_utils::BigArraySerde")]
     pub new_state: [F; SW],
     pub depth: u32,
     #[serde(skip)]

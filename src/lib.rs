@@ -14,12 +14,16 @@
 #![allow(unused_imports)]
 #![allow(clippy::drop_ref)]
 
-use boojum::field::goldilocks::GoldilocksField;
-use boojum::implementations::poseidon2::Poseidon2Goldilocks;
+use crate::boojum::field::goldilocks::GoldilocksField;
+use crate::boojum::implementations::poseidon2::Poseidon2Goldilocks;
 
-pub use zk_evm::blake2;
-pub use zk_evm::sha2;
-pub use zk_evm::sha3;
+pub use circuit_definitions::zk_evm;
+pub use circuit_definitions::boojum;
+pub use circuit_definitions::zkevm_circuits;
+
+pub use crate::zk_evm::blake2;
+pub use crate::zk_evm::sha2;
+pub use crate::zk_evm::sha3;
 
 pub mod data_source;
 pub mod entry_point;
@@ -28,7 +32,7 @@ pub mod witness;
 pub mod geometry_config;
 pub mod prover_utils;
 
-pub use zk_evm::ethereum_types;
+pub use crate::zk_evm::ethereum_types;
 
 use self::utils::*;
 

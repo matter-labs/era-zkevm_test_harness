@@ -1,9 +1,9 @@
 use super::*;
 use std::cmp::Ordering;
-use zkevm_circuits::storage_validity_by_grand_product::input::*;
-use zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
-use zkevm_circuits::base_structures::log_query::{LOG_QUERY_PACKED_WIDTH, LOG_QUERY_ABSORBTION_ROUNDS};
-use zkevm_circuits::DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS;
+use crate::zkevm_circuits::storage_validity_by_grand_product::input::*;
+use crate::zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
+use crate::zkevm_circuits::base_structures::log_query::{LOG_QUERY_PACKED_WIDTH, LOG_QUERY_ABSORBTION_ROUNDS};
+use crate::zkevm_circuits::DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS;
 use circuit_definitions::encodings::*;
 
 pub fn compute_storage_dedup_and_sort<
@@ -20,7 +20,7 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 
     if artifacts.demuxed_rollup_storage_queries.is_empty() {
         // return singe dummy witness
-        use boojum::gadgets::queue::QueueState;
+        use crate::boojum::gadgets::queue::QueueState;
 
         let initial_fsm_state = StorageDeduplicatorFSMInputOutput::<F>::placeholder_witness();
 
@@ -402,7 +402,7 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
             )
         };
 
-        use boojum::gadgets::queue::QueueState;
+        use crate::boojum::gadgets::queue::QueueState;
         let placeholder_witness = QueueState::<F, QUEUE_STATE_WIDTH>::placeholder_witness();
 
         let (current_unsorted_queue_state, current_intermediate_sorted_queue_state) = results.last().map(|el: &StorageDeduplicatorInstanceWitness<F>| {

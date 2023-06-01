@@ -1,10 +1,10 @@
 use super::*;
-use zkevm_circuits::sha256_round_function::input::*;
-use boojum::gadgets::traits::allocatable::CSAllocatable;
-use zkevm_circuits::base_structures::log_query::*;
+use crate::zkevm_circuits::sha256_round_function::input::*;
+use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
+use crate::zkevm_circuits::base_structures::log_query::*;
 use derivative::*;
-use zkevm_circuits::sha256_round_function::*;
-use zk_evm::zkevm_opcode_defs::ethereum_types::U256;
+use crate::zkevm_circuits::sha256_round_function::*;
+use crate::zk_evm::zkevm_opcode_defs::ethereum_types::U256;
 use circuit_definitions::encodings::*;
 
 #[derive(Derivative)]
@@ -31,7 +31,7 @@ pub fn sha256_decompose_into_per_circuit_witness<
     assert_eq!(artifacts.all_memory_queries_accumulated.len(), artifacts.memory_queue_simulator.num_items as usize);
 
     // split into aux witness, don't mix with the memory
-    use zk_evm::precompiles::sha256::Sha256RoundWitness;
+    use crate::zk_evm::precompiles::sha256::Sha256RoundWitness;
 
     for (_cycle, _query, witness) in artifacts.sha256_round_function_witnesses.iter() {
         for el in witness.iter() {
@@ -87,11 +87,11 @@ pub fn sha256_decompose_into_per_circuit_witness<
         let mut hidden_fsm_output_state = Sha256RoundFunctionFSM::<F>::placeholder_witness();
         hidden_fsm_output_state.completed = true;
 
-        use zk_evm::precompiles::sha256::Sha256;
+        use crate::zk_evm::precompiles::sha256::Sha256;
         // internal state is a bit more tricky, it'll be a round over empty input
         let mut internal_state_over_empty_buffer = Sha256::default();
         let empty_block = [0u8; 64];
-        use zk_evm::precompiles::sha256::Digest;
+        use crate::zk_evm::precompiles::sha256::Digest;
         internal_state_over_empty_buffer.update(&empty_block);
         let sha256_internal_state_over_empty_buffer =
             zk_evm::precompiles::sha256::transmute_state(internal_state_over_empty_buffer.clone());
@@ -154,7 +154,7 @@ pub fn sha256_decompose_into_per_circuit_witness<
     {
         let _ = artifacts.demuxed_sha256_precompile_queue_simulator.pop_and_output_intermediate_data(round_function);
 
-        use zk_evm::precompiles::sha256::Sha256;
+        use crate::zk_evm::precompiles::sha256::Sha256;
         let mut internal_state = Sha256::default();
 
         let mut memory_reads_per_request: Vec<U256> = vec![];
@@ -167,7 +167,7 @@ pub fn sha256_decompose_into_per_circuit_witness<
         let (_cycle, _req, round_witness) = per_request_work;
         assert_eq!(request, _req);
 
-        use zk_evm::precompiles::precompile_abi_in_log;
+        use crate::zk_evm::precompiles::precompile_abi_in_log;
         let mut precompile_request = precompile_abi_in_log(request);
         let num_rounds = precompile_request.precompile_interpreted_data as usize;
         assert_eq!(num_rounds, round_witness.len());
@@ -200,7 +200,7 @@ pub fn sha256_decompose_into_per_circuit_witness<
 
                 precompile_request.input_memory_offset += 1;
             }
-            use zk_evm::precompiles::sha256::Digest;
+            use crate::zk_evm::precompiles::sha256::Digest;
             internal_state.update(&block);
 
             num_rounds_left -= 1;
@@ -258,7 +258,7 @@ pub fn sha256_decompose_into_per_circuit_witness<
                     // internal state is a bit more tricky, it'll be a round over empty input
                     let mut internal_state_over_empty_buffer = Sha256::default();
                     let empty_block = [0u8; 64];
-                    use zk_evm::precompiles::sha256::Digest;
+                    use crate::zk_evm::precompiles::sha256::Digest;
                     internal_state_over_empty_buffer.update(&empty_block);
                     let sha256_internal_state_over_empty_buffer =
                         zk_evm::precompiles::sha256::transmute_state(internal_state_over_empty_buffer.clone());

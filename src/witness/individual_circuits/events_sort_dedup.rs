@@ -1,10 +1,10 @@
-use zk_evm::aux_structures::*;
-use zkevm_circuits::DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS;
-use zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
+use crate::zk_evm::aux_structures::*;
+use crate::zkevm_circuits::DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS;
+use crate::zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
 use crate::ethereum_types::U256;
 use super::*;
-use zkevm_circuits::base_structures::log_query::{LOG_QUERY_PACKED_WIDTH, LOG_QUERY_ABSORBTION_ROUNDS};
-use zkevm_circuits::log_sorter::input::*;
+use crate::zkevm_circuits::base_structures::log_query::{LOG_QUERY_PACKED_WIDTH, LOG_QUERY_ABSORBTION_ROUNDS};
+use crate::zkevm_circuits::log_sorter::input::*;
 use std::cmp::Ordering;
 use smallvec::SmallVec;
 use rayon::prelude::*;
@@ -26,7 +26,7 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 
     if unsorted_queries.is_empty() {
         // return singe dummy witness
-        use boojum::gadgets::queue::QueueState;
+        use crate::boojum::gadgets::queue::QueueState;
 
         let initial_fsm_state = EventsDeduplicatorFSMInputOutput::<F>::placeholder_witness();
 
@@ -271,7 +271,7 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
             )
         };
 
-        use boojum::gadgets::queue::QueueState;
+        use crate::boojum::gadgets::queue::QueueState;
         let placeholder_witness = QueueState::<F, QUEUE_STATE_WIDTH>::placeholder_witness();
 
         let (current_unsorted_queue_state, current_intermediate_sorted_queue_state) = results.last().map(|el: &EventsDeduplicatorInstanceWitness<F>| {

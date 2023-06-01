@@ -1,14 +1,14 @@
 use super::*;
-use boojum::sha3::Keccak256;
-use boojum::sha3::digest::{FixedOutput, Update};
-use zk_evm::precompiles::keccak256::{BUFFER_SIZE, transmute_state};
+use crate::boojum::sha3::Keccak256;
+use crate::boojum::sha3::digest::{FixedOutput, Update};
+use crate::zk_evm::precompiles::keccak256::{BUFFER_SIZE, transmute_state};
 use crate::witness::tree::*;
 use blake2::Blake2s256;
 use tracing;
 use crate::witness::individual_circuits::keccak256_round_function::encode_kecca256_inner_state;
-use zkevm_circuits::storage_application::input::*;
-use zkevm_circuits::base_structures::state_diff_record::NUM_KECCAK256_ROUNDS_PER_RECORD_ACCUMULATION;
-use boojum::gadgets::keccak256::{self};
+use crate::zkevm_circuits::storage_application::input::*;
+use crate::zkevm_circuits::base_structures::state_diff_record::NUM_KECCAK256_ROUNDS_PER_RECORD_ACCUMULATION;
+use crate::boojum::gadgets::keccak256::{self};
 use circuit_definitions::encodings::state_diff_record::StateDiffRecord;
 
 use crate::sha3::Digest;

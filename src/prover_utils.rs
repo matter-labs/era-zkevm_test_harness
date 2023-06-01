@@ -3,17 +3,17 @@ use super::*;
 use crate::GoldilocksField;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use crate::ZkSyncDefaultRoundFunction;
-use boojum::worker::Worker;
-use boojum::cs::implementations::polynomial_storage::*;
-use boojum::cs::implementations::verifier::*;
-use boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
-use boojum::cs::oracle::merkle_tree::*;
-use boojum::cs::implementations::hints::*;
-use boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
-use boojum::config::*;
-use boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
-use boojum::field::goldilocks::GoldilocksExt2;
-use boojum::gadgets::recursion::recursive_transcript::CircuitAlgebraicSpongeBasedTranscript;
+use crate::boojum::worker::Worker;
+use crate::boojum::cs::implementations::polynomial_storage::*;
+use crate::boojum::cs::implementations::verifier::*;
+use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
+use crate::boojum::cs::oracle::merkle_tree::*;
+use crate::boojum::cs::implementations::hints::*;
+use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
+use crate::boojum::config::*;
+use crate::boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
+use crate::boojum::field::goldilocks::GoldilocksExt2;
+use crate::boojum::gadgets::recursion::recursive_transcript::CircuitAlgebraicSpongeBasedTranscript;
 use circuit_definitions::circuit_definitions::recursion_layer::ZkSyncRecursiveLayerCircuit;
 use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit;
 
@@ -26,7 +26,7 @@ type EXT = GoldilocksExt2;
 type H = GoldilocksPoseidon2Sponge<AbsorbtionModeOverwrite>;
 type RH = CircuitGoldilocksPoseidon2Sponge;
 
-use boojum::cs::implementations::setup::FinalizationHintsForProver;
+use crate::boojum::cs::implementations::setup::FinalizationHintsForProver;
 
 pub fn create_base_layer_setup_data(
     circuit: ZkSyncBaseLayerCircuit<GoldilocksField, VmWitnessOracle<GoldilocksField>, ZkSyncDefaultRoundFunction>,
@@ -42,10 +42,10 @@ pub fn create_base_layer_setup_data(
     DenseWitnessCopyHint,
     FinalizationHintsForProver,
 ){
-    use boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
-    use boojum::config::DevCSConfig;
-    use boojum::cs::cs_builder::new_builder;
-    use boojum::cs::traits::circuit::Circuit;
+    use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
+    use crate::boojum::config::DevCSConfig;
+    use crate::boojum::cs::cs_builder::new_builder;
+    use crate::boojum::cs::traits::circuit::Circuit;
 
     let geometry = circuit.geometry();
     let (max_trace_len, num_vars) = circuit.size_hint();
@@ -188,11 +188,11 @@ pub fn create_base_layer_setup_data(
     )
 }
 
-use boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
-use boojum::cs::implementations::prover::ProofConfig;
-use boojum::cs::implementations::proof::Proof;
+use crate::boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
+use crate::boojum::cs::implementations::prover::ProofConfig;
+use crate::boojum::cs::implementations::proof::Proof;
 
-use boojum::cs::implementations::pow::PoWRunner;
+use crate::boojum::cs::implementations::pow::PoWRunner;
 
 pub fn prove_base_layer_circuit<
     POW: PoWRunner
@@ -209,9 +209,9 @@ pub fn prove_base_layer_circuit<
     wits_hint: &DenseWitnessCopyHint,
     finalization_hint: &FinalizationHintsForProver,
 ) -> Proof<F, H, EXT> {
-    use boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
-    use boojum::cs::cs_builder::new_builder;
-    use boojum::cs::traits::circuit::Circuit;
+    use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
+    use crate::boojum::cs::cs_builder::new_builder;
+    use crate::boojum::cs::traits::circuit::Circuit;
 
     let geometry = circuit.geometry();
     let (max_trace_len, num_vars) = circuit.size_hint();
@@ -359,14 +359,14 @@ pub fn verify_base_layer_proof<
     verifier.verify::<H, TR, POW>((), vk, proof)
 }
 
-use boojum::gadgets::traits::allocatable::CSAllocatableExt;
-use zkevm_circuits::base_structures::log_query::*;
-use zkevm_circuits::base_structures::memory_query::*;
-use zkevm_circuits::base_structures::decommit_query::*;
-use zkevm_circuits::base_structures::recursion_query::*;
-use boojum::gadgets::u256::UInt256;
-use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
-use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord;
+use crate::boojum::gadgets::traits::allocatable::CSAllocatableExt;
+use crate::zkevm_circuits::base_structures::log_query::*;
+use crate::zkevm_circuits::base_structures::memory_query::*;
+use crate::zkevm_circuits::base_structures::decommit_query::*;
+use crate::zkevm_circuits::base_structures::recursion_query::*;
+use crate::boojum::gadgets::u256::UInt256;
+use crate::zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
+use crate::zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord;
 
 pub fn create_recursive_layer_setup_data(
     circuit: ZkSyncRecursiveLayerCircuit,
@@ -382,9 +382,9 @@ pub fn create_recursive_layer_setup_data(
     DenseWitnessCopyHint,
     FinalizationHintsForProver,
 ) {
-    use boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
-    use boojum::cs::cs_builder::new_builder;
-    use boojum::cs::traits::circuit::Circuit;
+    use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
+    use crate::boojum::cs::cs_builder::new_builder;
+    use crate::boojum::cs::traits::circuit::Circuit;
 
     let round_function = ZkSyncDefaultRoundFunction::default();
 
@@ -476,9 +476,9 @@ pub fn prove_recursion_layer_circuit<
     wits_hint: &DenseWitnessCopyHint,
     finalization_hint: &FinalizationHintsForProver,
 ) -> Proof<F, H, EXT> {
-    use boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
-    use boojum::cs::cs_builder::new_builder;
-    use boojum::cs::traits::circuit::Circuit;
+    use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
+    use crate::boojum::cs::cs_builder::new_builder;
+    use crate::boojum::cs::traits::circuit::Circuit;
 
     let round_function = ZkSyncDefaultRoundFunction::default();
 

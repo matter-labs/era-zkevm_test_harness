@@ -2,17 +2,17 @@ use std::collections::VecDeque;
 
 use crate::{ethereum_types::{Address, U256}, utils::{calldata_to_aligned_data, u64_as_u32_le}};
 use crate::toolset::GeometryConfig;
-use boojum::{field::{SmallField, goldilocks::GoldilocksField}, cs::implementations::{prover::ProofConfig, verifier::VerificationKey}};
-use zk_evm::abstractions::Storage;
-use zkevm_circuits::{scheduler::input::SchedulerCircuitInstanceWitness, base_structures::vm_state::FULL_SPONGE_QUEUE_STATE_WIDTH};
+use crate::boojum::{field::{SmallField, goldilocks::GoldilocksField}, cs::implementations::{prover::ProofConfig, verifier::VerificationKey}};
+use crate::zk_evm::abstractions::Storage;
+use crate::zkevm_circuits::{scheduler::input::SchedulerCircuitInstanceWitness, base_structures::vm_state::FULL_SPONGE_QUEUE_STATE_WIDTH};
 use crate::toolset::create_tools;
-use zk_evm::contract_bytecode_to_words;
-use zk_evm::bytecode_to_code_hash;
-use zk_evm::aux_structures::*;
-use zk_evm::abstractions::*;
-use zk_evm::witness_trace::VmWitnessTracer;
+use crate::zk_evm::contract_bytecode_to_words;
+use crate::zk_evm::bytecode_to_code_hash;
+use crate::zk_evm::aux_structures::*;
+use crate::zk_evm::abstractions::*;
+use crate::zk_evm::witness_trace::VmWitnessTracer;
 use crate::entry_point::*;
-use zk_evm::GenericNoopTracer;
+use crate::zk_evm::GenericNoopTracer;
 use crate::witness::oracle::create_artifacts_from_tracer;
 use crate::witness::tree::ZKSyncTestingTree;
 use crate::witness::full_block_artifact::BlockBasicCircuits;
@@ -21,9 +21,9 @@ use crate::witness::tree::ZkSyncStorageLeaf;
 use crate::witness::tree::BinarySparseStorageTree;
 use crate::witness::full_block_artifact::BlockBasicCircuitsPublicInputs;
 use ::tracing;
-use boojum::algebraic_props::round_function::AlgebraicRoundFunction;
+use crate::boojum::algebraic_props::round_function::AlgebraicRoundFunction;
 use crate::ZkSyncDefaultRoundFunction;
-use boojum::gadgets::traits::round_function::BuildableCircuitRoundFunction;
+use crate::boojum::gadgets::traits::round_function::BuildableCircuitRoundFunction;
 use crate::witness::full_block_artifact::BlockBasicCircuitsPublicCompactFormsWitnesses;
 
 pub const SCHEDULER_TIMESTAMP: u32 = 1;
@@ -31,11 +31,11 @@ pub const SCHEDULER_TIMESTAMP: u32 = 1;
 use crate::witness::oracle::VmInstanceWitness;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use crate::witness::full_block_artifact::FullBlockArtifacts;
-use boojum::gadgets::traits::allocatable::*;
-use zkevm_circuits::scheduler::block_header::BlockAuxilaryOutputWitness;
-use boojum::gadgets::recursion::recursive_tree_hasher::RecursiveTreeHasher;
-use boojum::gadgets::num::Num;
-use boojum::field::FieldExtension;
+use crate::boojum::gadgets::traits::allocatable::*;
+use crate::zkevm_circuits::scheduler::block_header::BlockAuxilaryOutputWitness;
+use crate::boojum::gadgets::recursion::recursive_tree_hasher::RecursiveTreeHasher;
+use crate::boojum::gadgets::num::Num;
+use crate::boojum::field::FieldExtension;
 
 /// This is a testing interface that basically will
 /// setup the environment and will run out-of-circuit and then in-circuit
@@ -67,13 +67,13 @@ pub fn run<
     SchedulerCircuitInstanceWitness<F, H, EXT>,
     BlockAuxilaryOutputWitness<F>,
 ) 
-    where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <zkevm_circuits::base_structures::memory_query::MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <zkevm_circuits::base_structures::decommit_query::DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <boojum::gadgets::u256::UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <boojum::gadgets::u256::UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN + 1]:,
-    [(); <zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    where [(); <crate::zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <crate::zkevm_circuits::base_structures::memory_query::MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <crate::zkevm_circuits::base_structures::decommit_query::DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <crate::boojum::gadgets::u256::UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <crate::boojum::gadgets::u256::UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN + 1]:,
+    [(); <crate::zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <crate::zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
 {
     assert!(zk_porter_is_available == false);
     assert_eq!(ram_verification_queries.len(), 0, "for now it's implemented such that we do not need it");
@@ -103,7 +103,7 @@ pub fn run<
     let entry_point_decommittment_query = DecommittmentQuery {
         hash: entry_point_code_hash_as_u256,
         timestamp: Timestamp(SCHEDULER_TIMESTAMP),
-        memory_page: MemoryPage(zk_evm::zkevm_opcode_defs::BOOTLOADER_CODE_PAGE),
+        memory_page: MemoryPage(crate::zk_evm::zkevm_opcode_defs::BOOTLOADER_CODE_PAGE),
         decommitted_length: entry_point_code.len() as u16,
         is_fresh: true,
     };
@@ -137,7 +137,7 @@ pub fn run<
     for (idx, el) in heap_writes.into_iter().enumerate() {
         let query = MemoryQuery { 
             timestamp: Timestamp(0), 
-            location: MemoryLocation { memory_type: MemoryType::Heap, page: MemoryPage(zk_evm::zkevm_opcode_defs::BOOTLOADER_HEAP_PAGE), index: MemoryIndex(idx as u32) }, 
+            location: MemoryLocation { memory_type: MemoryType::Heap, page: MemoryPage(crate::zk_evm::zkevm_opcode_defs::BOOTLOADER_HEAP_PAGE), index: MemoryIndex(idx as u32) }, 
             rw_flag: true, 
             value: el,
             value_is_pointer: false,
@@ -243,8 +243,8 @@ pub fn run<
     );
 
     let (scheduler_circuit_witness, aux_data) = {
-        use zkevm_circuits::scheduler::block_header::*;
-        use zkevm_circuits::scheduler::input::*;
+        use crate::zkevm_circuits::scheduler::block_header::*;
+        use crate::zkevm_circuits::scheduler::input::*;
 
         let prev_rollup_state = PerShardStateWitness {
             enumeration_counter: u64_as_u32_le(initial_rollup_enumeration_counter),
@@ -269,7 +269,7 @@ pub fn run<
             zkporter_is_available: zk_porter_is_available,
         };
 
-        use zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
+        use crate::zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
 
         let t = basic_circuits.events_sorter_circuits.last().map(|el| {
             let wit = el.clone_witness().unwrap();
@@ -308,14 +308,14 @@ pub fn run<
             l1_messages_linear_hash: l1_messages_linear_hash,
         };
 
-        use zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
+        use crate::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
         let per_circuit_inputs: VecDeque<ClosedFormInputCompactFormWitness<F>> = compact_form_witnesses.clone().into_flattened_set().into_iter().map(|el| el.into_inner()).collect();
 
         // let memory_verification_queries: [sync_vm::glue::code_unpacker_sha256::memory_query_updated::MemoryQueryWitness<Bn256>; NUM_MEMORY_QUERIES_TO_VERIFY] = memory_verification_queries.try_into().unwrap();
 
-        use zkevm_circuits::recursion::leaf_layer::input::RecursionLeafParameters;
-        use zkevm_circuits::scheduler::LEAF_LAYER_PARAMETERS_COMMITMENT_LENGTH;
-        use zkevm_circuits::recursion::VK_COMMITMENT_LENGTH;
+        use crate::zkevm_circuits::recursion::leaf_layer::input::RecursionLeafParameters;
+        use crate::zkevm_circuits::scheduler::LEAF_LAYER_PARAMETERS_COMMITMENT_LENGTH;
+        use crate::zkevm_circuits::recursion::VK_COMMITMENT_LENGTH;
 
         let scheduler_circuit_witness = SchedulerCircuitInstanceWitness {
             prev_block_data: previous_block_passthrough,
@@ -357,8 +357,8 @@ pub fn run<
     (basic_circuits, basic_circuits_inputs, compact_form_witnesses, scheduler_circuit_witness, aux_data)
 }
 
-use boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
-use boojum::field::goldilocks::GoldilocksExt2;
+use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
+use crate::boojum::field::goldilocks::GoldilocksExt2;
 
 pub fn run_with_fixed_params<S: Storage>(
     caller: Address, // for real block must be zero

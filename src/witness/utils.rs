@@ -1,30 +1,30 @@
-use boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
-use boojum::config::DevCSConfig;
-use boojum::config::ProvingCSConfig;
-use boojum::cs::CSGeometry;
-use boojum::cs::GateConfigurationHolder;
-use boojum::cs::StaticToolboxHolder;
-use boojum::cs::gates::BooleanConstraintGate;
-use boojum::cs::gates::ConstantsAllocatorGate;
-use boojum::cs::gates::FmaGateInBaseFieldWithoutConstant;
-use boojum::cs::gates::ReductionGate;
-use boojum::cs::gates::SelectionGate;
-use boojum::cs::implementations::reference_cs::CSReferenceImplementation;
-use boojum::cs::traits::cs::ConstraintSystem;
-use boojum::gadgets::queue::QueueStateWitness;
-use boojum::gadgets::queue::QueueTailState;
-use boojum::gadgets::queue::QueueTailStateWitness;
-use boojum::gadgets::traits::encodable::CircuitEncodable;
-use zkevm_circuits::base_structures::vm_state::GlobalContextWitness;
-use zkevm_circuits::base_structures::vm_state::VmLocalStateWitness;
-use zk_evm::aux_structures::LogQuery;
-use zkevm_circuits::fsm_input_output::circuit_inputs::INPUT_OUTPUT_COMMITMENT_LENGTH;
-use boojum::field::SmallField;
-use boojum::algebraic_props::round_function::AlgebraicRoundFunction;
-use boojum::gadgets::traits::round_function::*;
-use boojum::gadgets::queue::QueueState;
-use zkevm_circuits::base_structures::vm_state::{QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH};
-use boojum::cs::traits::gate::GatePlacementStrategy;
+use crate::boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
+use crate::boojum::config::DevCSConfig;
+use crate::boojum::config::ProvingCSConfig;
+use crate::boojum::cs::CSGeometry;
+use crate::boojum::cs::GateConfigurationHolder;
+use crate::boojum::cs::StaticToolboxHolder;
+use crate::boojum::cs::gates::BooleanConstraintGate;
+use crate::boojum::cs::gates::ConstantsAllocatorGate;
+use crate::boojum::cs::gates::FmaGateInBaseFieldWithoutConstant;
+use crate::boojum::cs::gates::ReductionGate;
+use crate::boojum::cs::gates::SelectionGate;
+use crate::boojum::cs::implementations::reference_cs::CSReferenceImplementation;
+use crate::boojum::cs::traits::cs::ConstraintSystem;
+use crate::boojum::gadgets::queue::QueueStateWitness;
+use crate::boojum::gadgets::queue::QueueTailState;
+use crate::boojum::gadgets::queue::QueueTailStateWitness;
+use crate::boojum::gadgets::traits::encodable::CircuitEncodable;
+use crate::zkevm_circuits::base_structures::vm_state::GlobalContextWitness;
+use crate::zkevm_circuits::base_structures::vm_state::VmLocalStateWitness;
+use crate::zk_evm::aux_structures::LogQuery;
+use crate::zkevm_circuits::fsm_input_output::circuit_inputs::INPUT_OUTPUT_COMMITMENT_LENGTH;
+use crate::boojum::field::SmallField;
+use crate::boojum::algebraic_props::round_function::AlgebraicRoundFunction;
+use crate::boojum::gadgets::traits::round_function::*;
+use crate::boojum::gadgets::queue::QueueState;
+use crate::zkevm_circuits::base_structures::vm_state::{QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH};
+use crate::boojum::cs::traits::gate::GatePlacementStrategy;
 use circuit_definitions::encodings::*;
 
 use super::*;
@@ -110,7 +110,7 @@ pub fn take_sponge_like_queue_state_from_simulator<
 }
 
 use std::collections::VecDeque;
-use boojum::gadgets::queue::CircuitQueueWitness;
+use crate::boojum::gadgets::queue::CircuitQueueWitness;
 use std::sync::RwLock;
 use circuit_definitions::encodings::CircuitEquivalentReflection;
 use circuit_definitions::encodings::OutOfCircuitFixedLengthEncodable;
@@ -133,11 +133,11 @@ pub fn transform_queue_witness<
     }
 }
 
-use zk_evm::aux_structures::MemoryQuery;
-use boojum::gadgets::traits::allocatable::*;
-use boojum::gadgets::traits::encodable::CircuitVarLengthEncodable;
-use boojum::gadgets::traits::witnessable::WitnessHookable;
-use zkevm_circuits::fsm_input_output::*;
+use crate::zk_evm::aux_structures::MemoryQuery;
+use crate::boojum::gadgets::traits::allocatable::*;
+use crate::boojum::gadgets::traits::encodable::CircuitVarLengthEncodable;
+use crate::boojum::gadgets::traits::witnessable::WitnessHookable;
+use crate::zkevm_circuits::fsm_input_output::*;
 
 pub const TRACE_LEN_LOG_2_FOR_CALCULATION: usize = 20;
 pub const MAX_VARS_LOG_2_FOR_CALCULATION: usize = 26;
@@ -162,7 +162,7 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
     let max_trace_len = 1 << max_trace_len_log_2;
     let num_vars = 1 << max_vars_log_2;
 
-    use boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
+    use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
 
     let builder_impl = CsReferenceImplementationBuilder::<F, F, ProvingCSConfig>::new(
         geometry, 
@@ -187,8 +187,8 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 
     let mut cs = builder.build(());
 
-    use boojum::gadgets::tables::*;
-    use boojum::cs::traits::cs::ConstraintSystem;
+    use crate::boojum::gadgets::tables::*;
+    use crate::boojum::cs::traits::cs::ConstraintSystem;
 
     let table = create_binop_table();
     cs.add_lookup_table::<BinopTable, 3>(table);
@@ -235,8 +235,8 @@ pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
     vm_state: &zk_evm::vm_state::VmLocalState,
     aux_params: &VmInCircuitAuxilaryParameters<F>,
 ) -> VmLocalStateWitness<F> {
-    use boojum::gadgets::traits::allocatable::CSAllocatable;
-    use zkevm_circuits::base_structures::vm_state::VmLocalState;
+    use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
+    use crate::zkevm_circuits::base_structures::vm_state::VmLocalState;
 
     let mut hidden_fsm = VmLocalState::placeholder_witness();
     // depth and state encoding
@@ -288,7 +288,7 @@ pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
     hidden_fsm.callstack.current_context.saved_context.reverted_queue_tail = aux_params.current_frame_rollback_queue_tail;
     hidden_fsm.callstack.current_context.saved_context.reverted_queue_segment_len = aux_params.current_frame_rollback_queue_segment_length;
 
-    use zkevm_circuits::base_structures::vm_state::ArithmeticFlagsPortWitness;
+    use crate::zkevm_circuits::base_structures::vm_state::ArithmeticFlagsPortWitness;
 
     // arithmetic flags
     hidden_fsm.flags = ArithmeticFlagsPortWitness {
@@ -333,8 +333,8 @@ pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
 }
 
 use crate::witness::oracle::VmInstanceWitness;
-use zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
-use zkevm_circuits::fsm_input_output::circuit_inputs::main_vm::VmCircuitWitness;
+use crate::zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
+use crate::zkevm_circuits::fsm_input_output::circuit_inputs::main_vm::VmCircuitWitness;
 
 pub fn vm_instance_witness_to_circuit_formal_input<F: SmallField, O: WitnessOracle<F>>(
     witness: VmInstanceWitness<F, O>,
@@ -365,8 +365,8 @@ pub fn vm_instance_witness_to_circuit_formal_input<F: SmallField, O: WitnessOrac
         &auxilary_final_parameters
     );
 
-    use boojum::gadgets::traits::allocatable::CSAllocatable;
-    use zkevm_circuits::fsm_input_output::circuit_inputs::main_vm::*;
+    use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
+    use crate::zkevm_circuits::fsm_input_output::circuit_inputs::main_vm::*;
 
     let mut observable_input = VmInputData::placeholder_witness();
     if is_first {

@@ -1,4 +1,4 @@
-use boojum::field::SmallField;
+use crate::boojum::field::SmallField;
 use derivative::*;
 use zk_evm::aux_structures::MemoryQuery;
 use zk_evm::vm_state::CallStackEntry;
@@ -8,7 +8,7 @@ use zk_evm::aux_structures::LogQuery;
 use zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
 use crate::encodings::callstack_entry::*;
 use crate::ethereum_types::U256;
-use boojum::gadgets::traits::allocatable::CSAllocatable;
+use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 
 pub fn u128_as_u32_le(value: u128) -> [u32; 4] {
     [

@@ -449,7 +449,7 @@ impl EnumeratedBinaryLeaf<32> for ZkSyncStorageLeaf {
 // #[cfg(test)]
 // mod test {
 //     use sync_vm::{glue::storage_application::input::StorageApplicationCircuitInstanceWitness, testing::create_test_artifacts_with_optimized_gate, franklin_crypto::bellman::plonk::better_better_cs::cs::Circuit};
-//     use zk_evm::zkevm_opcode_defs::system_params::STORAGE_AUX_BYTE;
+//     use crate::zk_evm::zkevm_opcode_defs::system_params::STORAGE_AUX_BYTE;
 
 //     use crate::witness::postprocessing::USE_BLAKE2S_EXTRA_TABLES;
 
@@ -517,7 +517,7 @@ impl EnumeratedBinaryLeaf<32> for ZkSyncStorageLeaf {
 //         // let's create a leaf
 
 //         let dummy_leaf = ZkSyncStorageLeaf::from_value([1u8; 32]);
-//         use zk_evm::aux_structures::LogQuery;
+//         use crate::zk_evm::aux_structures::LogQuery;
 //         use crate::ethereum_types::{Address, U256};
 //         let address = Address::from_low_u64_be(0x8002);
 //         let key = U256::zero();
@@ -556,7 +556,7 @@ impl EnumeratedBinaryLeaf<32> for ZkSyncStorageLeaf {
 //         const INDEX_BYTES: usize = 32;
 //         // const DEPTH: usize = 8;
 //         // const INDEX_BYTES: usize = 1;
-//         use zk_evm::aux_structures::LogQuery;
+//         use crate::zk_evm::aux_structures::LogQuery;
 //         use crate::ethereum_types::{Address, U256};
 
 //         let mut tree = InMemoryStorageTree::<DEPTH, INDEX_BYTES, 8, Blake2s256, ZkSyncStorageLeaf>::empty();
@@ -670,7 +670,7 @@ impl EnumeratedBinaryLeaf<32> for ZkSyncStorageLeaf {
 //         // let's create a leaf
 
 //         let dummy_leaf = ZkSyncStorageLeaf::from_value([1u8; 32]);
-//         use zk_evm::aux_structures::LogQuery;
+//         use crate::zk_evm::aux_structures::LogQuery;
 //         use crate::ethereum_types::{Address, U256};
 
 //         let address = Address::from_low_u64_be(0xffffff);
@@ -694,7 +694,7 @@ impl EnumeratedBinaryLeaf<32> for ZkSyncStorageLeaf {
 
 //         // manually form a log
 
-//         use zk_evm::aux_structures::*;
+//         use crate::zk_evm::aux_structures::*;
 
 //         let log_query = LogQuery {
 //             timestamp: Timestamp(0),

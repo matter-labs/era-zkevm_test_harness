@@ -1,7 +1,7 @@
 use std::{fs, path::PathBuf};
 use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
-use zk_evm::ethereum_types::Address;
+use crate::zk_evm::ethereum_types::Address;
 use super::serialize_utils::{deserialize_bytecode, deserialize_bytecodes_with_addresses};
 
 const TEST_ARTIFACTS_DIR: &'static str = "./src/tests/complex_tests/test_artifacts/";

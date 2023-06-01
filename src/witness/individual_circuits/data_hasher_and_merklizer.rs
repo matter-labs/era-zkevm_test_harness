@@ -1,7 +1,7 @@
 use super::*;
 use derivative::*;
-use zkevm_circuits::linear_hasher::{input::*};
-use zkevm_circuits::base_structures::log_query::*;
+use crate::zkevm_circuits::linear_hasher::{input::*};
+use crate::zkevm_circuits::base_structures::log_query::*;
 use circuit_definitions::encodings::*;
 use crate::sha3::*;
 
