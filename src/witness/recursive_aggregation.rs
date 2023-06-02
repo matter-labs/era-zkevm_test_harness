@@ -1,44 +1,60 @@
-use crate::boojum::{field::{goldilocks::GoldilocksExt2, U64Representable}, gadgets::{traits::allocatable::CSAllocatable, recursion::allocated_vk::AllocatedVerificationKey, queue::QueueTailStateWitness}, cs::traits::cs::ConstraintSystem};
+use crate::boojum::{
+    cs::traits::cs::ConstraintSystem,
+    field::{goldilocks::GoldilocksExt2, U64Representable},
+    gadgets::{
+        queue::QueueTailStateWitness, recursion::allocated_vk::AllocatedVerificationKey,
+        traits::allocatable::CSAllocatable,
+    },
+};
 
-use crate::witness::utils::take_sponge_like_queue_state_from_simulator;
 use super::*;
-use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
-use crate::zkevm_circuits::recursion::{leaf_layer::input::*, VK_COMMITMENT_LENGTH, node_layer::{input::RecursionNodeInputWitness, NodeLayerRecursionConfig}};
-use crate::boojum::gadgets::queue::full_state_queue::FullStateCircuitQueueRawWitness;
-use std::collections::VecDeque;
 use crate::boojum::gadgets::num::Num;
+use crate::boojum::gadgets::queue::full_state_queue::FullStateCircuitQueueRawWitness;
+use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
+use crate::witness::utils::take_sponge_like_queue_state_from_simulator;
+use crate::zkevm_circuits::recursion::{
+    leaf_layer::input::*,
+    node_layer::{input::RecursionNodeInputWitness, NodeLayerRecursionConfig},
+    VK_COMMITMENT_LENGTH,
+};
+use std::collections::VecDeque;
 
 type F = GoldilocksField;
 type EXT = GoldilocksExt2;
 type H = CircuitGoldilocksPoseidon2Sponge;
 
 use crate::boojum::algebraic_props::round_function::AlgebraicRoundFunction;
-use crate::boojum::gadgets::traits::round_function::BuildableCircuitRoundFunction;
-use crate::zkevm_circuits::fsm_input_output::commit_variable_length_encodable_item;
-use crate::boojum::gadgets::traits::encodable::CircuitVarLengthEncodable;
-use crate::boojum::gadgets::traits::witnessable::WitnessHookable;
-use crate::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
-use crate::zkevm_circuits::recursion::leaf_layer::LeafLayerRecursionConfig;
-use crate::external_calls::base_layer_proof_config;
 use crate::boojum::gadgets::recursion::recursive_tree_hasher::RecursiveTreeHasher;
-use circuit_definitions::circuit_definitions::recursion_layer::{*, node_layer::ZkSyncNodeLayerRecursiveCircuit};
+use crate::boojum::gadgets::traits::encodable::CircuitVarLengthEncodable;
+use crate::boojum::gadgets::traits::round_function::BuildableCircuitRoundFunction;
+use crate::boojum::gadgets::traits::witnessable::WitnessHookable;
+use crate::external_calls::base_layer_proof_config;
+use crate::zkevm_circuits::fsm_input_output::commit_variable_length_encodable_item;
+use crate::zkevm_circuits::recursion::leaf_layer::LeafLayerRecursionConfig;
+use crate::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use circuit_definitions::circuit_definitions::base_layer::*;
-use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::circuit_definitions::recursion_layer::leaf_layer::*;
+use circuit_definitions::circuit_definitions::recursion_layer::{
+    node_layer::ZkSyncNodeLayerRecursiveCircuit, *,
+};
+use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::encodings::CircuitEquivalentReflection;
 
 pub(crate) fn compute_encodable_item_from_witness<
-T: CSAllocatable<F> + CircuitVarLengthEncodable<F>, 
-const N: usize, 
-CS: ConstraintSystem<F>,
-R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
+    T: CSAllocatable<F> + CircuitVarLengthEncodable<F>,
+    const N: usize,
+    CS: ConstraintSystem<F>,
+    R: BuildableCircuitRoundFunction<F, 8, 12, 4>
+        + AlgebraicRoundFunction<F, 8, 12, 4>
+        + serde::Serialize
+        + serde::de::DeserializeOwned,
 >(
     wit: T::Witness,
     cs: &mut CS,
     round_function: &R,
 ) -> [F; N] {
     // allocate in full
-    
+
     let element = T::allocate(cs, wit);
 
     let commitment = commit_variable_length_encodable_item(cs, &element, round_function);
@@ -48,18 +64,23 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 }
 
 pub fn create_leaf_witnesses(
-    subset: (u64, RecursionQueueSimulator<F>, Vec<ZkSyncBaseLayerClosedFormInput<F>>),
+    subset: (
+        u64,
+        RecursionQueueSimulator<F>,
+        Vec<ZkSyncBaseLayerClosedFormInput<F>>,
+    ),
     proofs: Vec<ZkSyncBaseLayerProof>,
     padding_proof: ZkSyncBaseLayerProof,
     vk: ZkSyncBaseLayerVerificationKey,
     leaf_params: (u8, RecursionLeafParametersWitness<F>),
-) -> (Vec<(
-    u64,
-    RecursionQueueSimulator<F>, // chunk
-    ZkSyncRecursiveLayerCircuit, // proof for that chunk
-    // RecursionLeafInputWitness<F>, // input for the circuit over this chunk
-)>,
-    Vec<ZkSyncBaseLayerClosedFormInput<F>>
+) -> (
+    Vec<(
+        u64,
+        RecursionQueueSimulator<F>, // chunk
+        ZkSyncRecursiveLayerCircuit, // proof for that chunk
+                                    // RecursionLeafInputWitness<F>, // input for the circuit over this chunk
+    )>,
+    Vec<ZkSyncBaseLayerClosedFormInput<F>>,
 ) {
     let round_function = ZkSyncDefaultRoundFunction::default();
 
@@ -87,9 +108,11 @@ pub fn create_leaf_witnesses(
             queue_state: take_sponge_like_queue_state_from_simulator(&el),
         };
 
-        let elements: VecDeque<_> = el.witness.iter().map(|(_, old_tail, element)| {
-            (element.reflect(), *old_tail)
-        }).collect();
+        let elements: VecDeque<_> = el
+            .witness
+            .iter()
+            .map(|(_, old_tail, element)| (element.reflect(), *old_tail))
+            .collect();
 
         let witness = RecursionLeafInstanceWitness::<F, H, EXT> {
             input: leaf_input,
@@ -98,14 +121,19 @@ pub fn create_leaf_witnesses(
             proof_witnesses: proof_witnesses,
         };
 
-        let config = LeafLayerRecursionConfig::<F, <H as RecursiveTreeHasher<F, Num<F>>>::NonCircuitSimulator, EXT> {
+        let config = LeafLayerRecursionConfig::<
+            F,
+            <H as RecursiveTreeHasher<F, Num<F>>>::NonCircuitSimulator,
+            EXT,
+        > {
             proof_config: base_layer_proof_config(),
             vk_fixed_parameters: vk.clone().into_inner().fixed_parameters,
             capacity: RECURSION_ARITY,
             padding_proof: padding_proof.clone().into_inner(),
         };
 
-        let base_layer_circuit_type = BaseLayerCircuitType::from_numeric_value(vk.numeric_circuit_type());
+        let base_layer_circuit_type =
+            BaseLayerCircuitType::from_numeric_value(vk.numeric_circuit_type());
         let circuit = ZkSyncLeafLayerRecursiveCircuit {
             witness,
             config,
@@ -116,17 +144,15 @@ pub fn create_leaf_witnesses(
 
         let circuit = ZkSyncRecursiveLayerCircuit::leaf_circuit_from_base_type(
             BaseLayerCircuitType::from_numeric_value(vk.numeric_circuit_type()),
-            circuit
+            circuit,
         );
 
-        results.push(
-            (
-                circuit_type,
-                el,
-                circuit,
-                // leaf_input,
-            )
-        );
+        results.push((
+            circuit_type,
+            el,
+            circuit,
+            // leaf_input,
+        ));
     }
 
     (results, closed_form_inputs)
@@ -142,15 +168,21 @@ pub fn compute_leaf_params(
     use crate::witness::utils::*;
 
     assert_eq!(circuit_type, base_layer_vk.numeric_circuit_type());
-    assert_eq!(base_circuit_type_into_recursive_leaf_circuit_type(BaseLayerCircuitType::from_numeric_value(circuit_type)) as u8, leaf_layer_vk.numeric_circuit_type());
-
-    let mut cs_for_witness_generation = create_cs_for_witness_generation::<F, ZkSyncDefaultRoundFunction>(
-        TRACE_LEN_LOG_2_FOR_CALCULATION,
-        MAX_VARS_LOG_2_FOR_CALCULATION,
+    assert_eq!(
+        base_circuit_type_into_recursive_leaf_circuit_type(
+            BaseLayerCircuitType::from_numeric_value(circuit_type)
+        ) as u8,
+        leaf_layer_vk.numeric_circuit_type()
     );
 
+    let mut cs_for_witness_generation =
+        create_cs_for_witness_generation::<F, ZkSyncDefaultRoundFunction>(
+            TRACE_LEN_LOG_2_FOR_CALCULATION,
+            MAX_VARS_LOG_2_FOR_CALCULATION,
+        );
+
     let base_vk_commitment: [_; VK_COMMITMENT_LENGTH] = compute_encodable_item_from_witness::<
-        AllocatedVerificationKey<F, H>, 
+        AllocatedVerificationKey<F, H>,
         VK_COMMITMENT_LENGTH,
         _,
         _,
@@ -161,7 +193,7 @@ pub fn compute_leaf_params(
     );
 
     let leaf_vk_commitment: [_; VK_COMMITMENT_LENGTH] = compute_encodable_item_from_witness::<
-        AllocatedVerificationKey<F, H>, 
+        AllocatedVerificationKey<F, H>,
         VK_COMMITMENT_LENGTH,
         _,
         _,
@@ -186,13 +218,14 @@ pub fn compute_node_vk_commitment(
     let round_function = ZkSyncDefaultRoundFunction::default();
     use crate::witness::utils::create_cs_for_witness_generation;
     use crate::witness::utils::*;
-    let mut cs_for_witness_generation = create_cs_for_witness_generation::<F, ZkSyncDefaultRoundFunction>(
-        TRACE_LEN_LOG_2_FOR_CALCULATION,
-        MAX_VARS_LOG_2_FOR_CALCULATION,
-    );
+    let mut cs_for_witness_generation =
+        create_cs_for_witness_generation::<F, ZkSyncDefaultRoundFunction>(
+            TRACE_LEN_LOG_2_FOR_CALCULATION,
+            MAX_VARS_LOG_2_FOR_CALCULATION,
+        );
 
     let vk_commitment: [_; VK_COMMITMENT_LENGTH] = compute_encodable_item_from_witness::<
-        AllocatedVerificationKey<F, H>, 
+        AllocatedVerificationKey<F, H>,
         VK_COMMITMENT_LENGTH,
         _,
         _,
@@ -208,7 +241,7 @@ pub fn compute_node_vk_commitment(
 pub fn create_node_witnesses(
     chunks: Vec<(
         u64,
-        RecursionQueueSimulator<F>, // chunk
+        RecursionQueueSimulator<F>,  // chunk
         ZkSyncRecursiveLayerCircuit, // proof for that chunk
     )>,
     proofs: Vec<ZkSyncRecursionLayerProof>,
@@ -218,11 +251,11 @@ pub fn create_node_witnesses(
     leaf_layer_params: &Vec<(u8, RecursionLeafParametersWitness<F>)>,
 ) -> Vec<(
     u64,
-    RecursionQueueSimulator<F>, // chunk
+    RecursionQueueSimulator<F>,  // chunk
     ZkSyncRecursiveLayerCircuit, // proof for that chunk
 )> {
-    use crate::zkevm_circuits::recursion::NUM_BASE_LAYER_CIRCUITS;
     use crate::boojum::gadgets::queue::QueueState;
+    use crate::zkevm_circuits::recursion::NUM_BASE_LAYER_CIRCUITS;
 
     assert_eq!(leaf_layer_params.len(), NUM_BASE_LAYER_CIRCUITS);
 
@@ -230,14 +263,24 @@ pub fn create_node_witnesses(
 
     assert!(chunks.len() > 0);
     let circuit_type = chunks[0].0 as u8;
-    assert_eq!(base_circuit_type_into_recursive_leaf_circuit_type(BaseLayerCircuitType::from_numeric_value(circuit_type)) as u8, vk.numeric_circuit_type());
+    assert_eq!(
+        base_circuit_type_into_recursive_leaf_circuit_type(
+            BaseLayerCircuitType::from_numeric_value(circuit_type)
+        ) as u8,
+        vk.numeric_circuit_type()
+    );
     let mut proofs_iter = proofs.into_iter();
 
-    let leaf_layer_params = leaf_layer_params.iter().map(|el| {
-        assert_eq!(el.0 as u64, el.1.circuit_type.as_u64_reduced());
+    let leaf_layer_params = leaf_layer_params
+        .iter()
+        .map(|el| {
+            assert_eq!(el.0 as u64, el.1.circuit_type.as_u64_reduced());
 
-        el.1.clone()
-    }).collect::<Vec<_>>().try_into().unwrap();
+            el.1.clone()
+        })
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap();
 
     let partial_inputs = RecursionNodeInputWitness {
         branch_circuit_type: F::from_u64_unchecked(circuit_type as u64),
@@ -246,7 +289,11 @@ pub fn create_node_witnesses(
         queue_state: QueueState::placeholder_witness(),
     };
 
-    let config = NodeLayerRecursionConfig::<F, <H as RecursiveTreeHasher<F, Num<F>>>::NonCircuitSimulator, EXT> {
+    let config = NodeLayerRecursionConfig::<
+        F,
+        <H as RecursiveTreeHasher<F, Num<F>>>::NonCircuitSimulator,
+        EXT,
+    > {
         proof_config: base_layer_proof_config(),
         vk_fixed_parameters: vk.clone().into_inner().fixed_parameters,
         leaf_layer_capacity: RECURSION_ARITY,
@@ -265,21 +312,17 @@ pub fn create_node_witnesses(
         let mut queue = queue.clone();
 
         let mut split_points = vec![];
-        split_points.push(
-            QueueTailStateWitness {
-                tail: queue.tail,
-                length: queue.num_items,
-            }
-        );
+        split_points.push(QueueTailStateWitness {
+            tail: queue.tail,
+            length: queue.num_items,
+        });
 
         proofs.push(proofs_iter.next().unwrap().into_inner());
         for (_, c, _) in it {
-            split_points.push(
-                QueueTailStateWitness {
-                    tail: c.tail,
-                    length: c.num_items,
-                }
-            );
+            split_points.push(QueueTailStateWitness {
+                tail: c.tail,
+                length: c.num_items,
+            });
             queue = RecursionQueueSimulator::<F>::merge(queue, c.clone());
             proofs.push(proofs_iter.next().unwrap().into_inner());
         }
@@ -296,7 +339,7 @@ pub fn create_node_witnesses(
 
         use crate::zkevm_circuits::recursion::node_layer::input::RecursionNodeInstanceWitness;
 
-        let witness = RecursionNodeInstanceWitness{
+        let witness = RecursionNodeInstanceWitness {
             input,
             vk_witness: vk.clone().into_inner(),
             split_points: split_points.into(),
@@ -312,13 +355,7 @@ pub fn create_node_witnesses(
 
         let circuit = ZkSyncRecursiveLayerCircuit::NodeLayerCircuit(circuit);
 
-        results.push(
-            (
-                circuit_type,
-                queue,
-                circuit
-            )
-        );
+        results.push((circuit_type, queue, circuit));
     }
 
     results

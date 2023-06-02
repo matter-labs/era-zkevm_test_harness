@@ -1,9 +1,7 @@
 use crate::boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
+use crate::boojum::algebraic_props::round_function::AlgebraicRoundFunction;
 use crate::boojum::config::DevCSConfig;
 use crate::boojum::config::ProvingCSConfig;
-use crate::boojum::cs::CSGeometry;
-use crate::boojum::cs::GateConfigurationHolder;
-use crate::boojum::cs::StaticToolboxHolder;
 use crate::boojum::cs::gates::BooleanConstraintGate;
 use crate::boojum::cs::gates::ConstantsAllocatorGate;
 use crate::boojum::cs::gates::FmaGateInBaseFieldWithoutConstant;
@@ -11,20 +9,24 @@ use crate::boojum::cs::gates::ReductionGate;
 use crate::boojum::cs::gates::SelectionGate;
 use crate::boojum::cs::implementations::reference_cs::CSReferenceImplementation;
 use crate::boojum::cs::traits::cs::ConstraintSystem;
+use crate::boojum::cs::traits::gate::GatePlacementStrategy;
+use crate::boojum::cs::CSGeometry;
+use crate::boojum::cs::GateConfigurationHolder;
+use crate::boojum::cs::StaticToolboxHolder;
+use crate::boojum::field::SmallField;
+use crate::boojum::gadgets::queue::QueueState;
 use crate::boojum::gadgets::queue::QueueStateWitness;
 use crate::boojum::gadgets::queue::QueueTailState;
 use crate::boojum::gadgets::queue::QueueTailStateWitness;
 use crate::boojum::gadgets::traits::encodable::CircuitEncodable;
+use crate::boojum::gadgets::traits::round_function::*;
+use crate::zk_evm::aux_structures::LogQuery;
 use crate::zkevm_circuits::base_structures::vm_state::GlobalContextWitness;
 use crate::zkevm_circuits::base_structures::vm_state::VmLocalStateWitness;
-use crate::zk_evm::aux_structures::LogQuery;
+use crate::zkevm_circuits::base_structures::vm_state::{
+    FULL_SPONGE_QUEUE_STATE_WIDTH, QUEUE_STATE_WIDTH,
+};
 use crate::zkevm_circuits::fsm_input_output::circuit_inputs::INPUT_OUTPUT_COMMITMENT_LENGTH;
-use crate::boojum::field::SmallField;
-use crate::boojum::algebraic_props::round_function::AlgebraicRoundFunction;
-use crate::boojum::gadgets::traits::round_function::*;
-use crate::boojum::gadgets::queue::QueueState;
-use crate::zkevm_circuits::base_structures::vm_state::{QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH};
-use crate::boojum::cs::traits::gate::GatePlacementStrategy;
 use circuit_definitions::encodings::*;
 
 use super::*;
@@ -32,7 +34,10 @@ use super::*;
 pub fn log_queries_into_states<
     F: SmallField,
     R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
->(queries: impl Iterator<Item = LogQuery>, round_function: &R) -> Vec<LogQueueState<F>> {
+>(
+    queries: impl Iterator<Item = LogQuery>,
+    round_function: &R,
+) -> Vec<LogQueueState<F>> {
     let mut result = vec![];
     let mut simulator = LogQueueSimulator::<F>::empty();
     for q in queries {
@@ -50,7 +55,7 @@ pub fn transform_queue_state<F: SmallField, const N: usize, const M: usize>(
         head: witness_state.head,
         tail: QueueTailStateWitness {
             tail: witness_state.tail,
-            length: witness_state.num_items
+            length: witness_state.num_items,
         },
     };
 
@@ -64,7 +69,7 @@ pub fn transform_sponge_like_queue_state<F: SmallField, const M: usize>(
         head: witness_state.head,
         tail: QueueTailStateWitness {
             tail: witness_state.tail,
-            length: witness_state.num_items
+            length: witness_state.num_items,
         },
     };
 
@@ -72,18 +77,18 @@ pub fn transform_sponge_like_queue_state<F: SmallField, const M: usize>(
 }
 
 pub fn take_queue_state_from_simulator<
-    F: SmallField, 
+    F: SmallField,
     I: OutOfCircuitFixedLengthEncodable<F, N>,
     const N: usize,
-    const ROUNDS: usize
+    const ROUNDS: usize,
 >(
-    simulator: &QueueSimulator<F, I, QUEUE_STATE_WIDTH, N, ROUNDS>
+    simulator: &QueueSimulator<F, I, QUEUE_STATE_WIDTH, N, ROUNDS>,
 ) -> QueueStateWitness<F, QUEUE_STATE_WIDTH> {
     let result = QueueStateWitness {
         head: simulator.head,
         tail: QueueTailStateWitness {
             tail: simulator.tail,
-            length: simulator.num_items
+            length: simulator.num_items,
         },
     };
 
@@ -91,73 +96,81 @@ pub fn take_queue_state_from_simulator<
 }
 
 pub fn take_sponge_like_queue_state_from_simulator<
-    F: SmallField, 
+    F: SmallField,
     I: OutOfCircuitFixedLengthEncodable<F, N>,
     const N: usize,
-    const ROUNDS: usize
+    const ROUNDS: usize,
 >(
-    simulator: &FullWidthQueueSimulator<F, I, N, 12, ROUNDS>
+    simulator: &FullWidthQueueSimulator<F, I, N, 12, ROUNDS>,
 ) -> QueueStateWitness<F, FULL_SPONGE_QUEUE_STATE_WIDTH> {
     let result = QueueStateWitness {
         head: simulator.head,
         tail: QueueTailStateWitness {
             tail: simulator.tail,
-            length: simulator.num_items
+            length: simulator.num_items,
         },
     };
-    
+
     result
 }
 
-use std::collections::VecDeque;
 use crate::boojum::gadgets::queue::CircuitQueueWitness;
-use std::sync::RwLock;
 use circuit_definitions::encodings::CircuitEquivalentReflection;
 use circuit_definitions::encodings::OutOfCircuitFixedLengthEncodable;
+use std::collections::VecDeque;
+use std::sync::RwLock;
 
 pub fn transform_queue_witness<
-    'a, 
-    F: SmallField, 
+    'a,
+    F: SmallField,
     I: OutOfCircuitFixedLengthEncodable<F, N> + 'a + CircuitEquivalentReflection<F, Destination = D>,
     const N: usize,
     D: CircuitEncodable<F, N>,
 >(
     witness_iter: impl Iterator<Item = &'a ([F; N], [F; QUEUE_STATE_WIDTH], I)>,
 ) -> CircuitQueueWitness<F, D, QUEUE_STATE_WIDTH, N> {
-    let wit: VecDeque<_> = witness_iter.map(|(_enc, old_tail, el)| {
-        (el.reflect(), *old_tail)
-    }).collect();
+    let wit: VecDeque<_> = witness_iter
+        .map(|(_enc, old_tail, el)| (el.reflect(), *old_tail))
+        .collect();
 
     CircuitQueueWitness {
-        elements: RwLock::new(wit)
+        elements: RwLock::new(wit),
     }
 }
 
-use crate::zk_evm::aux_structures::MemoryQuery;
 use crate::boojum::gadgets::traits::allocatable::*;
 use crate::boojum::gadgets::traits::encodable::CircuitVarLengthEncodable;
 use crate::boojum::gadgets::traits::witnessable::WitnessHookable;
+use crate::zk_evm::aux_structures::MemoryQuery;
 use crate::zkevm_circuits::fsm_input_output::*;
 
 pub const TRACE_LEN_LOG_2_FOR_CALCULATION: usize = 20;
 pub const MAX_VARS_LOG_2_FOR_CALCULATION: usize = 26;
 pub const CYCLES_PER_SCRATCH_SPACE: usize = 256;
 
-
 pub fn create_cs_for_witness_generation<
-F: SmallField,
-R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
+    F: SmallField,
+    R: BuildableCircuitRoundFunction<F, 8, 12, 4>
+        + AlgebraicRoundFunction<F, 8, 12, 4>
+        + serde::Serialize
+        + serde::de::DeserializeOwned,
 >(
     max_trace_len_log_2: usize,
     max_vars_log_2: usize,
-) -> CSReferenceImplementation<F, F, ProvingCSConfig, impl GateConfigurationHolder<F>, impl StaticToolboxHolder> {
+) -> CSReferenceImplementation<
+    F,
+    F,
+    ProvingCSConfig,
+    impl GateConfigurationHolder<F>,
+    impl StaticToolboxHolder,
+> {
     // create temporary cs, and allocate in full
 
     let geometry = CSGeometry {
         num_columns_under_copy_permutation: 140,
         num_witness_columns: 0,
         num_constant_columns: 4,
-        max_allowed_constraint_degree: 8
+        max_allowed_constraint_degree: 8,
     };
     let max_trace_len = 1 << max_trace_len_log_2;
     let num_vars = 1 << max_vars_log_2;
@@ -165,30 +178,43 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
     use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
 
     let builder_impl = CsReferenceImplementationBuilder::<F, F, ProvingCSConfig>::new(
-        geometry, 
-        num_vars, 
+        geometry,
+        num_vars,
         max_trace_len,
     );
     let builder = boojum::cs::cs_builder::new_builder::<_, F>(builder_impl);
     let builder = builder.allow_lookup(
-        boojum::cs::LookupParameters::UseSpecializedColumnsWithTableIdAsConstant { 
-            width: 3, 
-            num_repetitions: 1, 
-            share_table_id: true
-        }
+        boojum::cs::LookupParameters::UseSpecializedColumnsWithTableIdAsConstant {
+            width: 3,
+            num_repetitions: 1,
+            share_table_id: true,
+        },
     );
 
-    let builder = ConstantsAllocatorGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
+    let builder = ConstantsAllocatorGate::configure_builder(
+        builder,
+        GatePlacementStrategy::UseGeneralPurposeColumns,
+    );
     let builder = R::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-    let builder = FmaGateInBaseFieldWithoutConstant::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-    let builder = BooleanConstraintGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-    let builder = ReductionGate::<F, 4>::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-    let builder = SelectionGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
+    let builder = FmaGateInBaseFieldWithoutConstant::configure_builder(
+        builder,
+        GatePlacementStrategy::UseGeneralPurposeColumns,
+    );
+    let builder = BooleanConstraintGate::configure_builder(
+        builder,
+        GatePlacementStrategy::UseGeneralPurposeColumns,
+    );
+    let builder = ReductionGate::<F, 4>::configure_builder(
+        builder,
+        GatePlacementStrategy::UseGeneralPurposeColumns,
+    );
+    let builder =
+        SelectionGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
 
     let mut cs = builder.build(());
 
-    use crate::boojum::gadgets::tables::*;
     use crate::boojum::cs::traits::cs::ConstraintSystem;
+    use crate::boojum::gadgets::tables::*;
 
     let table = create_binop_table();
     cs.add_lookup_table::<BinopTable, 3>(table);
@@ -199,22 +225,28 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 pub fn simulate_public_input_value_from_witness<
     F: SmallField,
     CS: ConstraintSystem<F>,
-    R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
+    R: BuildableCircuitRoundFunction<F, 8, 12, 4>
+        + AlgebraicRoundFunction<F, 8, 12, 4>
+        + serde::Serialize
+        + serde::de::DeserializeOwned,
     T: Clone + std::fmt::Debug + CSAllocatable<F> + CircuitVarLengthEncodable<F> + WitnessHookable<F>,
     IN: Clone + std::fmt::Debug + CSAllocatable<F> + CircuitVarLengthEncodable<F> + WitnessHookable<F>,
     OUT: Clone + std::fmt::Debug + CSAllocatable<F> + CircuitVarLengthEncodable<F> + WitnessHookable<F>,
 >(
     cs: &mut CS,
-    input_witness: ClosedFormInputWitness<F, T, IN, OUT>, 
+    input_witness: ClosedFormInputWitness<F, T, IN, OUT>,
     round_function: &R,
-) -> ([F; INPUT_OUTPUT_COMMITMENT_LENGTH], ClosedFormInputCompactFormWitness<F>)
+) -> (
+    [F; INPUT_OUTPUT_COMMITMENT_LENGTH],
+    ClosedFormInputCompactFormWitness<F>,
+)
 where
     <T as CSAllocatable<F>>::Witness: serde::Serialize + serde::de::DeserializeOwned + Eq,
     <IN as CSAllocatable<F>>::Witness: serde::Serialize + serde::de::DeserializeOwned + Eq,
     <OUT as CSAllocatable<F>>::Witness: serde::Serialize + serde::de::DeserializeOwned + Eq,
 {
     // allocate in full
-    
+
     let full_input = ClosedFormInput::allocate(cs, input_witness);
     // compute the compact form
     let compact_form = ClosedFormInputCompactForm::from_full_form(cs, &full_input, round_function);
@@ -244,8 +276,12 @@ pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
     hidden_fsm.callstack.context_stack_depth = vm_state.callstack.depth() as u32;
 
     // non-saved part
-    hidden_fsm.callstack.current_context.log_queue_forward_part_length = aux_params.storage_log_queue_state.tail.length;
-    hidden_fsm.callstack.current_context.log_queue_forward_tail = aux_params.storage_log_queue_state.tail.tail;
+    hidden_fsm
+        .callstack
+        .current_context
+        .log_queue_forward_part_length = aux_params.storage_log_queue_state.tail.length;
+    hidden_fsm.callstack.current_context.log_queue_forward_tail =
+        aux_params.storage_log_queue_state.tail.tail;
     // saved part
 
     let ctx = &mut hidden_fsm.callstack.current_context;
@@ -260,10 +296,14 @@ pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
     ctx.saved_context.aux_heap_upper_bound = out_of_circuit_context.aux_heap_bound;
 
     // context composite
-    ctx.saved_context.context_u128_value_composite[0] = out_of_circuit_context.context_u128_value as u32;
-    ctx.saved_context.context_u128_value_composite[1] = (out_of_circuit_context.context_u128_value >> 32) as u32;
-    ctx.saved_context.context_u128_value_composite[2] = (out_of_circuit_context.context_u128_value >> 64) as u32;
-    ctx.saved_context.context_u128_value_composite[3] = (out_of_circuit_context.context_u128_value >> 96) as u32;
+    ctx.saved_context.context_u128_value_composite[0] =
+        out_of_circuit_context.context_u128_value as u32;
+    ctx.saved_context.context_u128_value_composite[1] =
+        (out_of_circuit_context.context_u128_value >> 32) as u32;
+    ctx.saved_context.context_u128_value_composite[2] =
+        (out_of_circuit_context.context_u128_value >> 64) as u32;
+    ctx.saved_context.context_u128_value_composite[3] =
+        (out_of_circuit_context.context_u128_value >> 96) as u32;
 
     // various counters
     ctx.saved_context.pc = out_of_circuit_context.pc;
@@ -275,7 +315,7 @@ pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
     ctx.saved_context.code_address = out_of_circuit_context.code_address;
     ctx.saved_context.this = out_of_circuit_context.this_address;
     ctx.saved_context.caller = out_of_circuit_context.msg_sender;
-    
+
     // flags
     ctx.saved_context.is_static_execution = out_of_circuit_context.is_static;
     ctx.saved_context.is_local_call = out_of_circuit_context.is_local_frame;
@@ -284,9 +324,21 @@ pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
     drop(ctx);
 
     // storage log specific part
-    hidden_fsm.callstack.current_context.saved_context.reverted_queue_head = aux_params.current_frame_rollback_queue_head;
-    hidden_fsm.callstack.current_context.saved_context.reverted_queue_tail = aux_params.current_frame_rollback_queue_tail;
-    hidden_fsm.callstack.current_context.saved_context.reverted_queue_segment_len = aux_params.current_frame_rollback_queue_segment_length;
+    hidden_fsm
+        .callstack
+        .current_context
+        .saved_context
+        .reverted_queue_head = aux_params.current_frame_rollback_queue_head;
+    hidden_fsm
+        .callstack
+        .current_context
+        .saved_context
+        .reverted_queue_tail = aux_params.current_frame_rollback_queue_tail;
+    hidden_fsm
+        .callstack
+        .current_context
+        .saved_context
+        .reverted_queue_segment_len = aux_params.current_frame_rollback_queue_segment_length;
 
     use crate::zkevm_circuits::base_structures::vm_state::ArithmeticFlagsPortWitness;
 
@@ -299,7 +351,11 @@ pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
 
     // registers
     assert_eq!(hidden_fsm.registers.len(), vm_state.registers.len());
-    for (dst, src) in hidden_fsm.registers.iter_mut().zip(vm_state.registers.iter()) {
+    for (dst, src) in hidden_fsm
+        .registers
+        .iter_mut()
+        .zip(vm_state.registers.iter())
+    {
         dst.value = src.value;
         dst.is_pointer = src.is_pointer;
     }
@@ -333,8 +389,8 @@ pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
 }
 
 use crate::witness::oracle::VmInstanceWitness;
-use crate::zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
 use crate::zkevm_circuits::fsm_input_output::circuit_inputs::main_vm::VmCircuitWitness;
+use crate::zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
 
 pub fn vm_instance_witness_to_circuit_formal_input<F: SmallField, O: WitnessOracle<F>>(
     witness: VmInstanceWitness<F, O>,
@@ -347,7 +403,7 @@ pub fn vm_instance_witness_to_circuit_formal_input<F: SmallField, O: WitnessOrac
         witness_oracle,
         auxilary_initial_parameters,
         cycles_range: _,
-    
+
         // final state for test purposes
         final_state,
         auxilary_final_parameters,
@@ -355,15 +411,11 @@ pub fn vm_instance_witness_to_circuit_formal_input<F: SmallField, O: WitnessOrac
 
     use crate::witness::oracle::VmInCircuitAuxilaryParameters;
 
-    let hidden_fsm_input = vm_instance_witness_to_vm_formal_state(
-        &initial_state,
-        &auxilary_initial_parameters
-    );
+    let hidden_fsm_input =
+        vm_instance_witness_to_vm_formal_state(&initial_state, &auxilary_initial_parameters);
 
-    let hidden_fsm_output = vm_instance_witness_to_vm_formal_state(
-        &final_state,
-        &auxilary_final_parameters
-    );
+    let hidden_fsm_output =
+        vm_instance_witness_to_vm_formal_state(&final_state, &auxilary_final_parameters);
 
     use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
     use crate::zkevm_circuits::fsm_input_output::circuit_inputs::main_vm::*;
@@ -419,7 +471,7 @@ pub fn produce_fs_challenges<
 >(
     unsorted_tail: QueueTailStateWitness<F, N>,
     sorted_tail: QueueTailStateWitness<F, N>,
-    _round_function: &R
+    _round_function: &R,
 ) -> [[F; NUM_CHALLENGES]; NUM_REPETITIONS] {
     let mut fs_input = vec![];
     fs_input.extend_from_slice(&unsorted_tail.tail);
@@ -471,7 +523,7 @@ pub(crate) fn compute_grand_product_chains<F: SmallField, const N: usize, const 
     rhs_contributions: &Vec<[F; N]>,
     challenges: &[F; M],
 ) -> (Vec<F>, Vec<F>) {
-    assert_eq!(N+1, M);
+    assert_eq!(N + 1, M);
     let mut lhs_grand_product_chain: Vec<F> = vec![F::ZERO; lhs_contributions.len()];
     let mut rhs_grand_product_chain: Vec<F> = vec![F::ZERO; rhs_contributions.len()];
 
@@ -479,64 +531,74 @@ pub(crate) fn compute_grand_product_chains<F: SmallField, const N: usize, const 
 
     use rayon::prelude::*;
 
-    lhs_grand_product_chain.par_chunks_mut(PARALLELIZATION_CHUNK_SIZE).zip(lhs_contributions.par_chunks(PARALLELIZATION_CHUNK_SIZE)).for_each(
-        |(dst, src)| {
+    lhs_grand_product_chain
+        .par_chunks_mut(PARALLELIZATION_CHUNK_SIZE)
+        .zip(lhs_contributions.par_chunks(PARALLELIZATION_CHUNK_SIZE))
+        .for_each(|(dst, src)| {
             let mut grand_product = F::ONE;
             for (dst, src) in dst.iter_mut().zip(src.iter()) {
-                let mut acc = challenges[M-1];
+                let mut acc = challenges[M - 1];
 
-                debug_assert_eq!(challenges[..(M-1)].len(), src.len());
+                debug_assert_eq!(challenges[..(M - 1)].len(), src.len());
 
-                for (a, b) in src.iter().zip(challenges[..(M-1)].iter()) {
+                for (a, b) in src.iter().zip(challenges[..(M - 1)].iter()) {
                     let mut tmp = *a;
                     tmp.mul_assign(b);
                     acc.add_assign(&tmp);
                 }
 
                 grand_product.mul_assign(&acc);
-    
+
                 *dst = grand_product;
             }
-        }
-    );
+        });
 
-    rhs_grand_product_chain.par_chunks_mut(PARALLELIZATION_CHUNK_SIZE).zip(rhs_contributions.par_chunks(PARALLELIZATION_CHUNK_SIZE)).for_each(
-        |(dst, src)| {
+    rhs_grand_product_chain
+        .par_chunks_mut(PARALLELIZATION_CHUNK_SIZE)
+        .zip(rhs_contributions.par_chunks(PARALLELIZATION_CHUNK_SIZE))
+        .for_each(|(dst, src)| {
             let mut grand_product = F::ONE;
             for (dst, src) in dst.iter_mut().zip(src.iter()) {
-                let mut acc = challenges[M-1];
+                let mut acc = challenges[M - 1];
 
-                debug_assert_eq!(challenges[..(M-1)].len(), src.len());
+                debug_assert_eq!(challenges[..(M - 1)].len(), src.len());
 
-                for (a, b) in src.iter().zip(challenges[..(M-1)].iter()) {
+                for (a, b) in src.iter().zip(challenges[..(M - 1)].iter()) {
                     let mut tmp = *a;
                     tmp.mul_assign(b);
                     acc.add_assign(&tmp);
                 }
 
                 grand_product.mul_assign(&acc);
-    
+
                 *dst = grand_product;
             }
-        }
-    );
+        });
 
     // elementwise products are done, now must fold
 
-    let mut lhs_intermediates: Vec<F> = lhs_grand_product_chain.par_chunks(PARALLELIZATION_CHUNK_SIZE).map(
-        |slice: &[F]| {
-            *slice.last().unwrap()
-        }
-    ).collect();
+    let mut lhs_intermediates: Vec<F> = lhs_grand_product_chain
+        .par_chunks(PARALLELIZATION_CHUNK_SIZE)
+        .map(|slice: &[F]| *slice.last().unwrap())
+        .collect();
 
-    let mut rhs_intermediates: Vec<F> = rhs_grand_product_chain.par_chunks(PARALLELIZATION_CHUNK_SIZE).map(
-        |slice: &[F]| {
-            *slice.last().unwrap()
-        }
-    ).collect();
+    let mut rhs_intermediates: Vec<F> = rhs_grand_product_chain
+        .par_chunks(PARALLELIZATION_CHUNK_SIZE)
+        .map(|slice: &[F]| *slice.last().unwrap())
+        .collect();
 
-    assert_eq!(lhs_intermediates.len(), lhs_grand_product_chain.chunks(PARALLELIZATION_CHUNK_SIZE).len());
-    assert_eq!(rhs_intermediates.len(), rhs_grand_product_chain.chunks(PARALLELIZATION_CHUNK_SIZE).len());
+    assert_eq!(
+        lhs_intermediates.len(),
+        lhs_grand_product_chain
+            .chunks(PARALLELIZATION_CHUNK_SIZE)
+            .len()
+    );
+    assert_eq!(
+        rhs_intermediates.len(),
+        rhs_grand_product_chain
+            .chunks(PARALLELIZATION_CHUNK_SIZE)
+            .len()
+    );
 
     // accumulate intermediate products
     // we should multiply element [1] by element [0],
@@ -559,47 +621,49 @@ pub(crate) fn compute_grand_product_chains<F: SmallField, const N: usize, const 
     match (lhs_intermediates.last(), rhs_intermediates.last()) {
         (Some(lhs), Some(rhs)) => {
             assert_eq!(lhs, rhs);
-        },
-        (None, None) => {
-        },
+        }
+        (None, None) => {}
         _ => unreachable!(),
     }
 
-    lhs_grand_product_chain.par_chunks_mut(PARALLELIZATION_CHUNK_SIZE).skip(1).zip(lhs_intermediates.par_chunks(1)).for_each(
-        |(dst, src)| {
+    lhs_grand_product_chain
+        .par_chunks_mut(PARALLELIZATION_CHUNK_SIZE)
+        .skip(1)
+        .zip(lhs_intermediates.par_chunks(1))
+        .for_each(|(dst, src)| {
             let src = src[0];
             for dst in dst.iter_mut() {
                 dst.mul_assign(&src);
             }
-        }
-    );
+        });
 
-    rhs_grand_product_chain.par_chunks_mut(PARALLELIZATION_CHUNK_SIZE).skip(1).zip(rhs_intermediates.par_chunks(1)).for_each(
-        |(dst, src)| {
+    rhs_grand_product_chain
+        .par_chunks_mut(PARALLELIZATION_CHUNK_SIZE)
+        .skip(1)
+        .zip(rhs_intermediates.par_chunks(1))
+        .for_each(|(dst, src)| {
             let src = src[0];
             for dst in dst.iter_mut() {
                 dst.mul_assign(&src);
             }
-        }
-    );
+        });
 
     // sanity check
-    match (lhs_grand_product_chain.last(), rhs_grand_product_chain.last()) {
+    match (
+        lhs_grand_product_chain.last(),
+        rhs_grand_product_chain.last(),
+    ) {
         (Some(lhs), Some(rhs)) => {
             assert_eq!(lhs, rhs);
-        },
-        (None, None) => {
-        },
+        }
+        (None, None) => {}
         _ => unreachable!(),
     }
 
     (lhs_grand_product_chain, rhs_grand_product_chain)
 }
 
-pub fn transpose_chunks<T: Clone>(
-    original: &Vec<Vec<T>>,
-    chunk_size: usize,
-) -> Vec<Vec<&[T]>> {
+pub fn transpose_chunks<T: Clone>(original: &Vec<Vec<T>>, chunk_size: usize) -> Vec<Vec<&[T]>> {
     let capacity = original[0].chunks(chunk_size).len();
     let mut transposed = vec![Vec::with_capacity(original.len()); capacity];
     for outer in original.iter() {

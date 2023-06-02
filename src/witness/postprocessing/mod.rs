@@ -1,38 +1,38 @@
-use super::*;
 use super::full_block_artifact::BlockBasicCircuitsPublicInputs;
+use super::*;
 
-use crate::witness::oracle::VmInstanceWitness;
-use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
-use crate::witness::full_block_artifact::FullBlockArtifacts;
-use crate::witness::full_block_artifact::BlockBasicCircuits;
-use crate::toolset::GeometryConfig;
 use crate::ethereum_types::U256;
+use crate::toolset::GeometryConfig;
+use crate::witness::full_block_artifact::BlockBasicCircuits;
 use crate::witness::full_block_artifact::BlockBasicCircuitsPublicCompactFormsWitnesses;
+use crate::witness::full_block_artifact::FullBlockArtifacts;
+use crate::witness::oracle::VmInstanceWitness;
 use crate::witness::utils::*;
+use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use circuit_definitions::circuit_definitions::base_layer::*;
 
-use std::sync::Arc;
 use crate::boojum::algebraic_props::round_function;
 use crossbeam::atomic::AtomicCell;
+use std::sync::Arc;
 
 pub const L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH: bool = false;
 
 use crate::boojum::algebraic_props::round_function::AlgebraicRoundFunction;
-use crate::boojum::gadgets::traits::round_function::*;
 use crate::boojum::field::SmallField;
 use crate::boojum::gadgets::traits::allocatable::CSAllocatableExt;
+use crate::boojum::gadgets::traits::round_function::*;
 
 pub fn create_leaf_level_circuits_and_scheduler_witness<
-F: SmallField, 
+F: SmallField,
 R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
 >(
     zkporter_is_available: bool,
     default_aa_code_hash: U256,
-    vm_instances_witness: Vec<VmInstanceWitness<F, VmWitnessOracle<F>>>, 
+    vm_instances_witness: Vec<VmInstanceWitness<F, VmWitnessOracle<F>>>,
     artifacts: FullBlockArtifacts<F>,
     geometry: GeometryConfig,
     round_function: &R,
-) -> (BlockBasicCircuits<F, R>, BlockBasicCircuitsPublicInputs<F>, BlockBasicCircuitsPublicCompactFormsWitnesses<F>) 
+) -> (BlockBasicCircuits<F, R>, BlockBasicCircuitsPublicInputs<F>, BlockBasicCircuitsPublicCompactFormsWitnesses<F>)
 where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <zkevm_circuits::base_structures::memory_query::MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <zkevm_circuits::base_structures::decommit_query::DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
@@ -68,8 +68,8 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
         default_aa_code_hash,
     };
 
-    use crate::witness::utils::simulate_public_input_value_from_witness;
     use crate::witness::utils::create_cs_for_witness_generation;
+    use crate::witness::utils::simulate_public_input_value_from_witness;
 
     let mut cs_for_witness_generation = create_cs_for_witness_generation::<F, R>(
         TRACE_LEN_LOG_2_FOR_CALCULATION,
@@ -100,7 +100,8 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
             assert!(is_first);
             observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
         } else {
-            circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
+            circuit_input.closed_form_input.observable_input =
+                observable_input.as_ref().unwrap().clone();
         }
 
         let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
@@ -112,7 +113,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
         cycles_used += 1;
         if cycles_used == CYCLES_PER_SCRATCH_SPACE {
             cs_for_witness_generation = create_cs_for_witness_generation(
-                TRACE_LEN_LOG_2_FOR_CALCULATION, 
+                TRACE_LEN_LOG_2_FOR_CALCULATION,
                 MAX_VARS_LOG_2_FOR_CALCULATION,
             );
         }
@@ -136,7 +137,10 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
     let mut code_decommittments_sorter_circuits_compact_forms_witnesses = vec![];
     let num_instances = decommittments_deduplicator_circuits_data.len();
     let mut observable_input = None;
-    for (instance_idx, mut circuit_input) in decommittments_deduplicator_circuits_data.into_iter().enumerate() {
+    for (instance_idx, mut circuit_input) in decommittments_deduplicator_circuits_data
+        .into_iter()
+        .enumerate()
+    {
         let is_first = instance_idx == 0;
         let _is_last = instance_idx == num_instances - 1;
 
@@ -144,7 +148,8 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
             assert!(is_first);
             observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
         } else {
-            circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
+            circuit_input.closed_form_input.observable_input =
+                observable_input.as_ref().unwrap().clone();
         }
 
         let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
@@ -156,7 +161,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
         cycles_used += 1;
         if cycles_used == CYCLES_PER_SCRATCH_SPACE {
             cs_for_witness_generation = create_cs_for_witness_generation(
-                TRACE_LEN_LOG_2_FOR_CALCULATION, 
+                TRACE_LEN_LOG_2_FOR_CALCULATION,
                 MAX_VARS_LOG_2_FOR_CALCULATION,
             );
         }
@@ -180,7 +185,8 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
     let mut code_decommitter_circuits_compact_forms_witnesses = vec![];
     let num_instances = code_decommitter_circuits_data.len();
     let mut observable_input = None;
-    for (instance_idx, mut circuit_input) in code_decommitter_circuits_data.into_iter().enumerate() {
+    for (instance_idx, mut circuit_input) in code_decommitter_circuits_data.into_iter().enumerate()
+    {
         let is_first = instance_idx == 0;
         let _is_last = instance_idx == num_instances - 1;
 
@@ -188,7 +194,8 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
             assert!(is_first);
             observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
         } else {
-            circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
+            circuit_input.closed_form_input.observable_input =
+                observable_input.as_ref().unwrap().clone();
         }
 
         let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
@@ -200,7 +207,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
         cycles_used += 1;
         if cycles_used == CYCLES_PER_SCRATCH_SPACE {
             cs_for_witness_generation = create_cs_for_witness_generation(
-                TRACE_LEN_LOG_2_FOR_CALCULATION, 
+                TRACE_LEN_LOG_2_FOR_CALCULATION,
                 MAX_VARS_LOG_2_FOR_CALCULATION,
             );
         }
@@ -232,7 +239,8 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
             assert!(is_first);
             observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
         } else {
-            circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
+            circuit_input.closed_form_input.observable_input =
+                observable_input.as_ref().unwrap().clone();
         }
 
         let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
@@ -244,7 +252,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
         cycles_used += 1;
         if cycles_used == CYCLES_PER_SCRATCH_SPACE {
             cs_for_witness_generation = create_cs_for_witness_generation(
-                TRACE_LEN_LOG_2_FOR_CALCULATION, 
+                TRACE_LEN_LOG_2_FOR_CALCULATION,
                 MAX_VARS_LOG_2_FOR_CALCULATION,
             );
         }
@@ -276,7 +284,8 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
             assert!(is_first);
             observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
         } else {
-            circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
+            circuit_input.closed_form_input.observable_input =
+                observable_input.as_ref().unwrap().clone();
         }
 
         let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
@@ -288,7 +297,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
         cycles_used += 1;
         if cycles_used == CYCLES_PER_SCRATCH_SPACE {
             cs_for_witness_generation = create_cs_for_witness_generation(
-                TRACE_LEN_LOG_2_FOR_CALCULATION, 
+                TRACE_LEN_LOG_2_FOR_CALCULATION,
                 MAX_VARS_LOG_2_FOR_CALCULATION,
             );
         }
@@ -320,7 +329,8 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
             assert!(is_first);
             observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
         } else {
-            circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
+            circuit_input.closed_form_input.observable_input =
+                observable_input.as_ref().unwrap().clone();
         }
 
         let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
@@ -332,7 +342,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
         cycles_used += 1;
         if cycles_used == CYCLES_PER_SCRATCH_SPACE {
             cs_for_witness_generation = create_cs_for_witness_generation(
-                TRACE_LEN_LOG_2_FOR_CALCULATION, 
+                TRACE_LEN_LOG_2_FOR_CALCULATION,
                 MAX_VARS_LOG_2_FOR_CALCULATION,
             );
         }
@@ -348,7 +358,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
         sha256_precompile_circuits_inputs.push(proof_system_input);
         sha256_precompile_circuits_compact_forms_witnesses.push(compact_form_witness);
     }
-    
+
     // ecrecover precompiles
 
     let mut ecrecover_precompile_circuits = vec![];
@@ -364,7 +374,8 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
             assert!(is_first);
             observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
         } else {
-            circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
+            circuit_input.closed_form_input.observable_input =
+                observable_input.as_ref().unwrap().clone();
         }
 
         let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
@@ -376,7 +387,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
         cycles_used += 1;
         if cycles_used == CYCLES_PER_SCRATCH_SPACE {
             cs_for_witness_generation = create_cs_for_witness_generation(
-                TRACE_LEN_LOG_2_FOR_CALCULATION, 
+                TRACE_LEN_LOG_2_FOR_CALCULATION,
                 MAX_VARS_LOG_2_FOR_CALCULATION,
             );
         }
@@ -408,7 +419,8 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
             assert!(is_first);
             observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
         } else {
-            circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
+            circuit_input.closed_form_input.observable_input =
+                observable_input.as_ref().unwrap().clone();
         }
 
         let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
@@ -420,7 +432,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
         cycles_used += 1;
         if cycles_used == CYCLES_PER_SCRATCH_SPACE {
             cs_for_witness_generation = create_cs_for_witness_generation(
-                TRACE_LEN_LOG_2_FOR_CALCULATION, 
+                TRACE_LEN_LOG_2_FOR_CALCULATION,
                 MAX_VARS_LOG_2_FOR_CALCULATION,
             );
         }
@@ -444,7 +456,9 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
     let mut storage_sorter_circuit_compact_form_witnesses = vec![];
     let num_instances = storage_deduplicator_circuit_data.len();
     let mut observable_input = None;
-    for (instance_idx, mut circuit_input) in storage_deduplicator_circuit_data.into_iter().enumerate() {
+    for (instance_idx, mut circuit_input) in
+        storage_deduplicator_circuit_data.into_iter().enumerate()
+    {
         let is_first = instance_idx == 0;
         let _is_last = instance_idx == num_instances - 1;
 
@@ -452,7 +466,8 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
             assert!(is_first);
             observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
         } else {
-            circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
+            circuit_input.closed_form_input.observable_input =
+                observable_input.as_ref().unwrap().clone();
         }
 
         let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
@@ -464,7 +479,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
         cycles_used += 1;
         if cycles_used == CYCLES_PER_SCRATCH_SPACE {
             cs_for_witness_generation = create_cs_for_witness_generation(
-                TRACE_LEN_LOG_2_FOR_CALCULATION, 
+                TRACE_LEN_LOG_2_FOR_CALCULATION,
                 MAX_VARS_LOG_2_FOR_CALCULATION,
             );
         }
@@ -480,7 +495,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
         storage_sorter_circuit_inputs.push(proof_system_input);
         storage_sorter_circuit_compact_form_witnesses.push(compact_form_witness);
     }
-  
+
     // storage application
 
     let mut storage_application_circuits = vec![];
@@ -488,7 +503,10 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
     let mut storage_application_circuits_compact_forms_witnesses = vec![];
     let num_instances = rollup_storage_application_circuit_data.len();
     let mut observable_input = None;
-    for (instance_idx, mut circuit_input) in rollup_storage_application_circuit_data.into_iter().enumerate() {
+    for (instance_idx, mut circuit_input) in rollup_storage_application_circuit_data
+        .into_iter()
+        .enumerate()
+    {
         let is_first = instance_idx == 0;
         let _is_last = instance_idx == num_instances - 1;
 
@@ -496,7 +514,8 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
             assert!(is_first);
             observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
         } else {
-            circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
+            circuit_input.closed_form_input.observable_input =
+                observable_input.as_ref().unwrap().clone();
         }
 
         let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
@@ -508,7 +527,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
         cycles_used += 1;
         if cycles_used == CYCLES_PER_SCRATCH_SPACE {
             cs_for_witness_generation = create_cs_for_witness_generation(
-                TRACE_LEN_LOG_2_FOR_CALCULATION, 
+                TRACE_LEN_LOG_2_FOR_CALCULATION,
                 MAX_VARS_LOG_2_FOR_CALCULATION,
             );
         }
@@ -527,7 +546,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
 
     // // initial writes rehasher
 
-    // assert!(initial_writes_pubdata_hasher_circuit_data.len() == 1);        
+    // assert!(initial_writes_pubdata_hasher_circuit_data.len() == 1);
     // let circuit_input = initial_writes_pubdata_hasher_circuit_data.into_iter().next().unwrap();
 
     // let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
@@ -546,7 +565,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
 
     // // repetated writes
 
-    // assert!(repeated_writes_pubdata_hasher_circuit_data.len() == 1);        
+    // assert!(repeated_writes_pubdata_hasher_circuit_data.len() == 1);
     // let circuit_input = repeated_writes_pubdata_hasher_circuit_data.into_iter().next().unwrap();
 
     // let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
@@ -570,7 +589,9 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
     let mut events_sorter_circuits_compact_forms_witnesses = vec![];
     let num_instances = events_deduplicator_circuit_data.len();
     let mut observable_input = None;
-    for (instance_idx, mut circuit_input) in events_deduplicator_circuit_data.into_iter().enumerate() {
+    for (instance_idx, mut circuit_input) in
+        events_deduplicator_circuit_data.into_iter().enumerate()
+    {
         let is_first = instance_idx == 0;
         let _is_last = instance_idx == num_instances - 1;
 
@@ -578,7 +599,8 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
             assert!(is_first);
             observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
         } else {
-            circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
+            circuit_input.closed_form_input.observable_input =
+                observable_input.as_ref().unwrap().clone();
         }
 
         let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
@@ -590,7 +612,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
         cycles_used += 1;
         if cycles_used == CYCLES_PER_SCRATCH_SPACE {
             cs_for_witness_generation = create_cs_for_witness_generation(
-                TRACE_LEN_LOG_2_FOR_CALCULATION, 
+                TRACE_LEN_LOG_2_FOR_CALCULATION,
                 MAX_VARS_LOG_2_FOR_CALCULATION,
             );
         }
@@ -614,7 +636,10 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
     let mut l1_messages_sorter_circuits_compact_forms_witnesses = vec![];
     let num_instances = l1_messages_deduplicator_circuit_data.len();
     let mut observable_input = None;
-    for (instance_idx, mut circuit_input) in l1_messages_deduplicator_circuit_data.into_iter().enumerate() {
+    for (instance_idx, mut circuit_input) in l1_messages_deduplicator_circuit_data
+        .into_iter()
+        .enumerate()
+    {
         let is_first = instance_idx == 0;
         let _is_last = instance_idx == num_instances - 1;
 
@@ -622,7 +647,8 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
             assert!(is_first);
             observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
         } else {
-            circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
+            circuit_input.closed_form_input.observable_input =
+                observable_input.as_ref().unwrap().clone();
         }
 
         let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
@@ -634,7 +660,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
         cycles_used += 1;
         if cycles_used == CYCLES_PER_SCRATCH_SPACE {
             cs_for_witness_generation = create_cs_for_witness_generation(
-                TRACE_LEN_LOG_2_FOR_CALCULATION, 
+                TRACE_LEN_LOG_2_FOR_CALCULATION,
                 MAX_VARS_LOG_2_FOR_CALCULATION,
             );
         }
@@ -666,7 +692,8 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
             assert!(is_first);
             observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
         } else {
-            circuit_input.closed_form_input.observable_input = observable_input.as_ref().unwrap().clone();
+            circuit_input.closed_form_input.observable_input =
+                observable_input.as_ref().unwrap().clone();
         }
 
         let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
@@ -678,7 +705,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
         cycles_used += 1;
         if cycles_used == CYCLES_PER_SCRATCH_SPACE {
             cs_for_witness_generation = create_cs_for_witness_generation(
-                TRACE_LEN_LOG_2_FOR_CALCULATION, 
+                TRACE_LEN_LOG_2_FOR_CALCULATION,
                 MAX_VARS_LOG_2_FOR_CALCULATION,
             );
         }
@@ -731,7 +758,8 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
 
     let basic_circuits_public_inputs = BlockBasicCircuitsPublicCompactFormsWitnesses {
         main_vm_circuits: main_vm_circuits_compact_forms_witnesses,
-        code_decommittments_sorter_circuits: code_decommittments_sorter_circuits_compact_forms_witnesses,
+        code_decommittments_sorter_circuits:
+            code_decommittments_sorter_circuits_compact_forms_witnesses,
         code_decommitter_circuits: code_decommitter_circuits_compact_forms_witnesses,
         log_demux_circuits: log_demux_circuits_compact_forms_witnesses,
         keccak_precompile_circuits: keccak_precompile_circuits_compact_forms_witnesses,
@@ -745,5 +773,9 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
         l1_messages_hasher_circuits_compact_forms_witnesses,
     };
 
-    (basic_circuits, basic_circuits_inputs, basic_circuits_public_inputs)
+    (
+        basic_circuits,
+        basic_circuits_inputs,
+        basic_circuits_public_inputs,
+    )
 }

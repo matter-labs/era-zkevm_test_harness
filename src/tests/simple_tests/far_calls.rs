@@ -55,15 +55,21 @@ fn test_far_call_and_read_fat_pointer() {
         ret.ok r0
     "#;
 
-    let entry_bytecode = Assembly::try_from(asm.to_owned()).unwrap().compile_to_bytecode().unwrap();
+    let entry_bytecode = Assembly::try_from(asm.to_owned())
+        .unwrap()
+        .compile_to_bytecode()
+        .unwrap();
     use crate::ethereum_types::Address;
     let other_address = Address::from_low_u64_be(1u64 << 16);
-    let other_bytecode = Assembly::try_from(other_asm.to_owned()).unwrap().compile_to_bytecode().unwrap();
+    let other_bytecode = Assembly::try_from(other_asm.to_owned())
+        .unwrap()
+        .compile_to_bytecode()
+        .unwrap();
 
     run_and_try_create_witness_for_extended_state(
-        entry_bytecode, 
-        vec![(other_address, other_bytecode)], 
-        50
+        entry_bytecode,
+        vec![(other_address, other_bytecode)],
+        50,
     );
 }
 
@@ -127,18 +133,23 @@ fn test_far_call_and_return_large_data() {
         ret.ok r1
     "#;
 
-    let entry_bytecode = Assembly::try_from(asm.to_owned()).unwrap().compile_to_bytecode().unwrap();
+    let entry_bytecode = Assembly::try_from(asm.to_owned())
+        .unwrap()
+        .compile_to_bytecode()
+        .unwrap();
     use crate::ethereum_types::Address;
     let other_address = Address::from_low_u64_be(1u64 << 16);
-    let other_bytecode = Assembly::try_from(other_asm.to_owned()).unwrap().compile_to_bytecode().unwrap();
+    let other_bytecode = Assembly::try_from(other_asm.to_owned())
+        .unwrap()
+        .compile_to_bytecode()
+        .unwrap();
 
     run_and_try_create_witness_for_extended_state(
-        entry_bytecode, 
-        vec![(other_address, other_bytecode)], 
-        50
+        entry_bytecode,
+        vec![(other_address, other_bytecode)],
+        50,
     );
 }
-
 
 #[test_log::test]
 fn test_far_call_and_panic_on_return_large_data() {
@@ -204,15 +215,21 @@ fn test_far_call_and_panic_on_return_large_data() {
         ret.ok r1
     "#;
 
-    let entry_bytecode = Assembly::try_from(asm.to_owned()).unwrap().compile_to_bytecode().unwrap();
+    let entry_bytecode = Assembly::try_from(asm.to_owned())
+        .unwrap()
+        .compile_to_bytecode()
+        .unwrap();
     use crate::ethereum_types::Address;
     let other_address = Address::from_low_u64_be(1u64 << 16);
-    let other_bytecode = Assembly::try_from(other_asm.to_owned()).unwrap().compile_to_bytecode().unwrap();
+    let other_bytecode = Assembly::try_from(other_asm.to_owned())
+        .unwrap()
+        .compile_to_bytecode()
+        .unwrap();
 
     run_and_try_create_witness_for_extended_state(
-        entry_bytecode, 
-        vec![(other_address, other_bytecode)], 
-        50
+        entry_bytecode,
+        vec![(other_address, other_bytecode)],
+        50,
     );
 }
 
@@ -296,21 +313,30 @@ fn test_far_call_pay_for_memory_growth() {
         ret.ok r1
     "#;
 
-    let entry_bytecode = Assembly::try_from(asm.to_owned()).unwrap().compile_to_bytecode().unwrap();
+    let entry_bytecode = Assembly::try_from(asm.to_owned())
+        .unwrap()
+        .compile_to_bytecode()
+        .unwrap();
     use crate::ethereum_types::Address;
     let other_address = Address::from_low_u64_be(1u64 << 16);
-    let other_bytecode = Assembly::try_from(other_asm.to_owned()).unwrap().compile_to_bytecode().unwrap();
+    let other_bytecode = Assembly::try_from(other_asm.to_owned())
+        .unwrap()
+        .compile_to_bytecode()
+        .unwrap();
 
     let other_address_1 = Address::from_low_u64_be((1u64 << 16) + 1);
     // let other_address_1 = Address::from_low_u64_be(1u64 << 16 + 1);
-    let other_bytecode_1 = Assembly::try_from(other_asm_1.to_owned()).unwrap().compile_to_bytecode().unwrap();
+    let other_bytecode_1 = Assembly::try_from(other_asm_1.to_owned())
+        .unwrap()
+        .compile_to_bytecode()
+        .unwrap();
 
     run_and_try_create_witness_for_extended_state(
-        entry_bytecode, 
+        entry_bytecode,
         vec![
             (other_address, other_bytecode),
-            (other_address_1, other_bytecode_1)
+            (other_address_1, other_bytecode_1),
         ],
-        50
+        50,
     );
 }

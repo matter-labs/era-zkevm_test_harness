@@ -83,7 +83,6 @@ fn test_rollback_to_same_value_no_reads() {
     run_and_try_create_witness_inner(asm, 50);
 }
 
-
 #[test_log::test]
 fn test_rollback_to_same_value_with_reads() {
     let asm = r#"

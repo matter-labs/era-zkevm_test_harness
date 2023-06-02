@@ -3,25 +3,29 @@ use std::panic;
 use crate::boojum::cs::CSGeometry;
 use crate::boojum::field::goldilocks::GoldilocksField;
 
+use crate::boojum::cs::traits::circuit::CircuitBuilder;
 use crate::ZkSyncDefaultRoundFunction;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
-use crate::boojum::cs::traits::circuit::CircuitBuilder;
 use circuit_definitions::circuit_definitions::base_layer::*;
 use circuit_definitions::circuit_definitions::ZkSyncUniformSynthesisFunction;
 
 pub(crate) fn compute_size_inner<
     SF: ZkSyncUniformSynthesisFunction<GoldilocksField, RoundFunction = ZkSyncDefaultRoundFunction>,
-    F: Fn(usize) -> SF::Config
+    F: Fn(usize) -> SF::Config,
 >(
     geometry: CSGeometry,
     max_trace_len_log_2: usize,
     start_hint: Option<usize>,
     config_fn: F,
-) -> usize 
-    where SF: Send + 'static,
-        SF::Config: Send + 'static,
+) -> usize
+where
+    SF: Send + 'static,
+    SF::Config: Send + 'static,
 {
-    println!("Will try to estimate capacity for {}", std::any::type_name::<SF>());
+    println!(
+        "Will try to estimate capacity for {}",
+        std::any::type_name::<SF>()
+    );
     let start_size = start_hint.unwrap_or(1024);
 
     // kind-of binary search
@@ -31,7 +35,11 @@ pub(crate) fn compute_size_inner<
 
     loop {
         // we just try to make one
-        println!("Trying size {} for circuit {}", next_size, std::any::type_name::<SF>());
+        println!(
+            "Trying size {} for circuit {}",
+            next_size,
+            std::any::type_name::<SF>()
+        );
 
         if size == next_size {
             break;
@@ -40,19 +48,20 @@ pub(crate) fn compute_size_inner<
         let config = (config_fn)(next_size);
 
         let join_result = std::thread::spawn(move || {
-            use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
             use crate::boojum::config::SetupCSConfig;
             use crate::boojum::cs::cs_builder::new_builder;
-        
+            use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
+
             type P = GoldilocksField;
-        
-            let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, SetupCSConfig>::new(
-                geometry, 
-                1, // resolver is inactive in this mode
-                1 << max_trace_len_log_2,
-            );
+
+            let builder_impl =
+                CsReferenceImplementationBuilder::<GoldilocksField, P, SetupCSConfig>::new(
+                    geometry,
+                    1, // resolver is inactive in this mode
+                    1 << max_trace_len_log_2,
+                );
             let builder = new_builder::<_, GoldilocksField>(builder_impl);
-    
+
             let witness = SF::Witness::default();
             let round_function = ZkSyncDefaultRoundFunction::default();
             let config = config;
@@ -67,12 +76,13 @@ pub(crate) fn compute_size_inner<
             cs.print_gate_stats();
 
             max_trace_len
-        }).join();
+        })
+        .join();
 
         match join_result {
             Ok(max_trace_len) => {
                 println!("Size {} requires {} rows", next_size, max_trace_len);
-                if max_trace_len <= (1 << (max_trace_len_log_2-1)) {
+                if max_trace_len <= (1 << (max_trace_len_log_2 - 1)) {
                     size = next_size;
                     next_size *= 2;
                 } else {
@@ -89,7 +99,7 @@ pub(crate) fn compute_size_inner<
 
                     if ((next_size - size) as f64) / (size as f64) < 0.03 {
                         size = next_size;
-                        break
+                        break;
                     }
 
                     let mut next_size_binsearch = (next_size - size) / 2 + next_size;
@@ -99,7 +109,7 @@ pub(crate) fn compute_size_inner<
                     size = next_size;
                     next_size = next_size_binsearch;
                 }
-            },
+            }
             Err(_e) => {
                 if next_size == start_size {
                     panic!("Initial search point is too large");
@@ -117,201 +127,100 @@ pub(crate) fn compute_size_inner<
         }
     }
 
-    println!("{} has capacity of {} cycles", std::any::type_name::<SF>(), size);
+    println!(
+        "{} has capacity of {} cycles",
+        std::any::type_name::<SF>(),
+        size
+    );
 
     size
 }
 
 pub fn main_vm_capacity() -> usize {
-    type SF = VmMainInstanceSynthesisFunction<GoldilocksField, VmWitnessOracle<GoldilocksField>, ZkSyncDefaultRoundFunction>;
+    type SF = VmMainInstanceSynthesisFunction<
+        GoldilocksField,
+        VmWitnessOracle<GoldilocksField>,
+        ZkSyncDefaultRoundFunction,
+    >;
 
-    compute_size_inner::<
-        SF,
-        _,
-    > (
-        SF::geometry(),
-        20,
-        Some(5500),
-        |x: usize| {
-            x
-        },
-    )
+    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(5500), |x: usize| x)
 }
 
 pub fn code_decommittments_sorter_capacity() -> usize {
-    type SF = CodeDecommittmentsSorterSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+    type SF =
+        CodeDecommittmentsSorterSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
 
-    compute_size_inner::<
-        SF,
-        _,
-    > (
-        SF::geometry(),
-        20,
-        Some(40000),
-        |x: usize| {
-            x
-        },
-    )
+    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(40000), |x: usize| x)
 }
 
 pub fn code_decommitter_capacity() -> usize {
     type SF = CodeDecommitterInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
 
-    compute_size_inner::<
-        SF,
-        _,
-    > (
-        SF::geometry(),
-        20,
-        Some(2048),
-        |x: usize| {
-            x
-        },
-    )
+    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(2048), |x: usize| x)
 }
 
 pub fn log_demuxer_capacity() -> usize {
     type SF = LogDemuxInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
 
-    compute_size_inner::<
-        SF,
-        _,
-    > (
-        SF::geometry(),
-        20,
-        Some(20000),
-        |x: usize| {
-            x
-        },
-    )
+    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(20000), |x: usize| x)
 }
 
 pub fn keccak256_rf_capacity() -> usize {
-    type SF = Keccak256RoundFunctionInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+    type SF = Keccak256RoundFunctionInstanceSynthesisFunction<
+        GoldilocksField,
+        ZkSyncDefaultRoundFunction,
+    >;
 
-    compute_size_inner::<
-        SF,
-        _,
-    > (
-        SF::geometry(),
-        20,
-        Some(512),
-        |x: usize| {
-            x
-        },
-    )
+    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(512), |x: usize| x)
 }
 
 pub fn sha256_rf_capacity() -> usize {
-    type SF = Sha256RoundFunctionInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+    type SF =
+        Sha256RoundFunctionInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
 
-    compute_size_inner::<
-        SF,
-        _,
-    > (
-        SF::geometry(),
-        20,
-        Some(2048),
-        |x: usize| {
-            x
-        },
-    )
+    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(2048), |x: usize| x)
 }
 
 pub fn ecrecover_capacity() -> usize {
-    type SF = ECRecoverFunctionInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+    type SF =
+        ECRecoverFunctionInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
 
-    compute_size_inner::<
-        SF,
-        _,
-    > (
-        SF::geometry(),
-        20,
-        Some(2),
-        |x: usize| {
-            x
-        },
-    )
+    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(2), |x: usize| x)
 }
 
 pub fn ram_permutation_capacity() -> usize {
     type SF = RAMPermutationInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
 
-    compute_size_inner::<
-        SF,
-        _,
-    > (
-        SF::geometry(),
-        20,
-        Some(70000),
-        |x: usize| {
-            x
-        },
-    )
+    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(70000), |x: usize| x)
 }
 
 pub fn event_sorter_capacity() -> usize {
-    type SF = EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+    type SF = EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction<
+        GoldilocksField,
+        ZkSyncDefaultRoundFunction,
+    >;
 
-    compute_size_inner::<
-        SF,
-        _,
-    > (
-        SF::geometry(),
-        20,
-        Some(20000),
-        |x: usize| {
-            x
-        },
-    )
+    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(20000), |x: usize| x)
 }
 
 pub fn storage_sorter_capacity() -> usize {
-    type SF = StorageSortAndDedupInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+    type SF =
+        StorageSortAndDedupInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
 
-    compute_size_inner::<
-        SF,
-        _,
-    > (
-        SF::geometry(),
-        20,
-        Some(22000),
-        |x: usize| {
-            x
-        },
-    )
+    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(22000), |x: usize| x)
 }
 
 pub fn storage_application_capacity() -> usize {
-    type SF = StorageApplicationInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+    type SF =
+        StorageApplicationInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
 
-    compute_size_inner::<
-        SF,
-        _,
-    > (
-        SF::geometry(),
-        20,
-        Some(32),
-        |x: usize| {
-            x
-        },
-    )
+    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(32), |x: usize| x)
 }
 
 pub fn l1_messages_hasher_capacity() -> usize {
     type SF = LinearHasherInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
 
-    compute_size_inner::<
-        SF,
-        _,
-    > (
-        SF::geometry(),
-        20,
-        Some(512),
-        |x: usize| {
-            x
-        },
-    )
+    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(512), |x: usize| x)
 }
 
 #[cfg(test)]

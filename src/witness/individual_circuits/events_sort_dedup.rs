@@ -1,23 +1,27 @@
-use crate::zk_evm::aux_structures::*;
-use crate::zkevm_circuits::DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS;
-use crate::zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
-use crate::ethereum_types::U256;
 use super::*;
-use crate::zkevm_circuits::base_structures::log_query::{LOG_QUERY_PACKED_WIDTH, LOG_QUERY_ABSORBTION_ROUNDS};
+use crate::ethereum_types::U256;
+use crate::zk_evm::aux_structures::*;
+use crate::zkevm_circuits::base_structures::log_query::{
+    LOG_QUERY_ABSORBTION_ROUNDS, LOG_QUERY_PACKED_WIDTH,
+};
+use crate::zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
 use crate::zkevm_circuits::log_sorter::input::*;
-use std::cmp::Ordering;
-use smallvec::SmallVec;
-use rayon::prelude::*;
+use crate::zkevm_circuits::DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS;
 use circuit_definitions::encodings::*;
+use rayon::prelude::*;
+use smallvec::SmallVec;
+use std::cmp::Ordering;
 
 pub fn compute_events_dedup_and_sort<
-F: SmallField,
-R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+    F: SmallField,
+    R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     unsorted_queries: &Vec<LogQuery>,
     target_deduplicated_queries: &mut Vec<LogQuery>,
     unsorted_simulator: &LogQueueSimulator<F>,
-    unsorted_simulator_states: &Vec<QueueIntermediateStates<F, QUEUE_STATE_WIDTH, 12, LOG_QUERY_ABSORBTION_ROUNDS>>,
+    unsorted_simulator_states: &Vec<
+        QueueIntermediateStates<F, QUEUE_STATE_WIDTH, 12, LOG_QUERY_ABSORBTION_ROUNDS>,
+    >,
     result_queue_simulator: &mut LogQueueSimulator<F>,
     per_circuit_capacity: usize,
     round_function: &R,
@@ -30,10 +34,14 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 
         let initial_fsm_state = EventsDeduplicatorFSMInputOutput::<F>::placeholder_witness();
 
-        assert_eq!(take_queue_state_from_simulator(&unsorted_simulator), QueueState::placeholder_witness());
+        assert_eq!(
+            take_queue_state_from_simulator(&unsorted_simulator),
+            QueueState::placeholder_witness()
+        );
 
         let mut passthrough_input = EventsDeduplicatorInputData::placeholder_witness();
-        passthrough_input.initial_log_queue_state = take_queue_state_from_simulator(&unsorted_simulator);
+        passthrough_input.initial_log_queue_state =
+            take_queue_state_from_simulator(&unsorted_simulator);
         passthrough_input.intermediate_sorted_queue_state = QueueState::placeholder_witness();
 
         let final_fsm_state = EventsDeduplicatorFSMInputOutput::<F>::placeholder_witness();
@@ -50,8 +58,12 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
                 hidden_fsm_input: initial_fsm_state.clone(),
                 hidden_fsm_output: final_fsm_state.clone(),
             },
-            initial_queue_witness: CircuitQueueRawWitness { elements: VecDeque::new() },
-            intermediate_sorted_queue_witness: CircuitQueueRawWitness { elements: VecDeque::new() },
+            initial_queue_witness: CircuitQueueRawWitness {
+                elements: VecDeque::new(),
+            },
+            intermediate_sorted_queue_witness: CircuitQueueRawWitness {
+                elements: VecDeque::new(),
+            },
         };
 
         return vec![wit];
@@ -63,41 +75,54 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 
     let mut sorted_queries: Vec<_> = unsorted_queries.clone();
 
-    sorted_queries.par_sort_by(|a, b| {
-        match a.timestamp.0.cmp(&b.timestamp.0) {
-            Ordering::Equal => {
-                if b.rollback {
-                    Ordering::Less
-                } else {
-                    Ordering::Greater
-                }
+    sorted_queries.par_sort_by(|a, b| match a.timestamp.0.cmp(&b.timestamp.0) {
+        Ordering::Equal => {
+            if b.rollback {
+                Ordering::Less
+            } else {
+                Ordering::Greater
             }
-            r @ _ => r
         }
+        r @ _ => r,
     });
 
     let mut intermediate_sorted_simulator = LogQueueSimulator::<F>::empty();
     let mut intermediate_sorted_log_simulator_states = Vec::with_capacity(sorted_queries.len());
     for el in sorted_queries.iter() {
-        let (_, states) = intermediate_sorted_simulator.push_and_output_intermediate_data(*el, round_function);
+        let (_, states) =
+            intermediate_sorted_simulator.push_and_output_intermediate_data(*el, round_function);
         intermediate_sorted_log_simulator_states.push(states);
     }
 
-    let intermediate_sorted_simulator_final_state = take_queue_state_from_simulator(&intermediate_sorted_simulator);
+    let intermediate_sorted_simulator_final_state =
+        take_queue_state_from_simulator(&intermediate_sorted_simulator);
     let sorted_queries = sort_and_dedup_events_log(sorted_queries);
 
     let unsorted_simulator_final_state = take_queue_state_from_simulator(unsorted_simulator);
 
-    let challenges = produce_fs_challenges::<F, R, QUEUE_STATE_WIDTH, {LOG_QUERY_PACKED_WIDTH + 1}, DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS>(
+    let challenges = produce_fs_challenges::<
+        F,
+        R,
+        QUEUE_STATE_WIDTH,
+        { LOG_QUERY_PACKED_WIDTH + 1 },
+        DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS,
+    >(
         take_queue_state_from_simulator(&unsorted_simulator).tail,
         take_queue_state_from_simulator(&intermediate_sorted_simulator).tail,
-        round_function
+        round_function,
     );
 
-    assert_eq!(unsorted_simulator_final_state.tail.length, intermediate_sorted_simulator_final_state.tail.length);
+    assert_eq!(
+        unsorted_simulator_final_state.tail.length,
+        intermediate_sorted_simulator_final_state.tail.length
+    );
 
     let lhs_contributions: Vec<_> = unsorted_simulator.witness.iter().map(|el| el.0).collect();
-    let rhs_contributions: Vec<_> = intermediate_sorted_simulator.witness.iter().map(|el| el.0).collect();
+    let rhs_contributions: Vec<_> = intermediate_sorted_simulator
+        .witness
+        .iter()
+        .map(|el| el.0)
+        .collect();
 
     // --------------------
 
@@ -105,8 +130,15 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
     let mut rhs_grand_product_chains = vec![];
 
     for idx in 0..DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS {
-        let (lhs_grand_product_chain, rhs_grand_product_chain) =
-            compute_grand_product_chains::<F, LOG_QUERY_PACKED_WIDTH, {LOG_QUERY_PACKED_WIDTH + 1}>(&lhs_contributions, &rhs_contributions, &challenges[idx]);
+        let (lhs_grand_product_chain, rhs_grand_product_chain) = compute_grand_product_chains::<
+            F,
+            LOG_QUERY_PACKED_WIDTH,
+            { LOG_QUERY_PACKED_WIDTH + 1 },
+        >(
+            &lhs_contributions,
+            &rhs_contributions,
+            &challenges[idx],
+        );
 
         assert_eq!(
             lhs_grand_product_chain.len(),
@@ -126,19 +158,58 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 
     assert!(unsorted_simulator_states.len() > 0);
     assert!(unsorted_simulator_states.chunks(per_circuit_capacity).len() > 0);
-    assert_eq!(unsorted_simulator_states.chunks(per_circuit_capacity).len(), intermediate_sorted_log_simulator_states.chunks(per_circuit_capacity).len());
-    assert_eq!(unsorted_simulator_states.chunks(per_circuit_capacity).len(), transposed_lhs_chains.len());
-    assert_eq!(unsorted_simulator_states.chunks(per_circuit_capacity).len(), transposed_rhs_chains.len());
-    assert_eq!(unsorted_simulator_states.chunks(per_circuit_capacity).len(), unsorted_simulator.witness.as_slices().0.chunks(per_circuit_capacity).len());
-    assert_eq!(unsorted_simulator_states.chunks(per_circuit_capacity).len(), intermediate_sorted_simulator.witness.as_slices().0.chunks(per_circuit_capacity).len());
+    assert_eq!(
+        unsorted_simulator_states.chunks(per_circuit_capacity).len(),
+        intermediate_sorted_log_simulator_states
+            .chunks(per_circuit_capacity)
+            .len()
+    );
+    assert_eq!(
+        unsorted_simulator_states.chunks(per_circuit_capacity).len(),
+        transposed_lhs_chains.len()
+    );
+    assert_eq!(
+        unsorted_simulator_states.chunks(per_circuit_capacity).len(),
+        transposed_rhs_chains.len()
+    );
+    assert_eq!(
+        unsorted_simulator_states.chunks(per_circuit_capacity).len(),
+        unsorted_simulator
+            .witness
+            .as_slices()
+            .0
+            .chunks(per_circuit_capacity)
+            .len()
+    );
+    assert_eq!(
+        unsorted_simulator_states.chunks(per_circuit_capacity).len(),
+        intermediate_sorted_simulator
+            .witness
+            .as_slices()
+            .0
+            .chunks(per_circuit_capacity)
+            .len()
+    );
 
-    let it = unsorted_simulator_states.chunks(per_circuit_capacity)
+    let it = unsorted_simulator_states
+        .chunks(per_circuit_capacity)
         .zip(intermediate_sorted_log_simulator_states.chunks(per_circuit_capacity))
         .zip(transposed_lhs_chains.into_iter())
         .zip(transposed_rhs_chains.into_iter())
-        .zip(unsorted_simulator.witness.as_slices().0.chunks(per_circuit_capacity))
-        .zip(intermediate_sorted_simulator.witness.as_slices().0.chunks(per_circuit_capacity));
-
+        .zip(
+            unsorted_simulator
+                .witness
+                .as_slices()
+                .0
+                .chunks(per_circuit_capacity),
+        )
+        .zip(
+            intermediate_sorted_simulator
+                .witness
+                .as_slices()
+                .0
+                .chunks(per_circuit_capacity),
+        );
 
     let num_circuits = it.len();
     let mut results = vec![];
@@ -165,35 +236,64 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 
     let mut deduplicated_queries_it = sorted_queries.iter();
 
-    let mut current_final_sorted_queue_state = take_queue_state_from_simulator(&result_queue_simulator);
+    let mut current_final_sorted_queue_state =
+        take_queue_state_from_simulator(&result_queue_simulator);
 
     let mut current_lhs_product = [F::ONE; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS];
     let mut current_rhs_product = [F::ONE; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS];
 
-    for (idx, ((((
-        (unsorted_sponge_states, sorted_sponge_states),
-        lhs_grand_product), 
-        rhs_grand_product), 
-        unsorted_states), 
-        sorted_states)
-    ) in it.enumerate() {
+    for (
+        idx,
+        (
+            (
+                (
+                    ((unsorted_sponge_states, sorted_sponge_states), lhs_grand_product),
+                    rhs_grand_product,
+                ),
+                unsorted_states,
+            ),
+            sorted_states,
+        ),
+    ) in it.enumerate()
+    {
         // we need witnesses to pop elements from the front of the queue
 
-        let unsorted_queue_witness: VecDeque<_> = unsorted_states.iter().map(|(encoding, old_tail, element)| {
-            let as_storage_log = log_query_into_circuit_log_query_witness(element);
+        let unsorted_queue_witness: VecDeque<_> = unsorted_states
+            .iter()
+            .map(|(encoding, old_tail, element)| {
+                let as_storage_log = log_query_into_circuit_log_query_witness(element);
 
-            (as_storage_log, *old_tail)
-        }).collect();
+                (as_storage_log, *old_tail)
+            })
+            .collect();
 
-        let unsorted_witness = CircuitQueueRawWitness::<F, zkevm_circuits::base_structures::log_query::LogQuery<F>, 4, LOG_QUERY_PACKED_WIDTH> { elements: unsorted_queue_witness };
+        let unsorted_witness = CircuitQueueRawWitness::<
+            F,
+            zkevm_circuits::base_structures::log_query::LogQuery<F>,
+            4,
+            LOG_QUERY_PACKED_WIDTH,
+        > {
+            elements: unsorted_queue_witness,
+        };
 
-        let intermediate_sorted_queue_witness: VecDeque<_> = sorted_states.iter().map(|(encoding, old_tail, element)| {
-            let as_timestamped_storage_witness = log_query_into_circuit_log_query_witness(element);
+        let intermediate_sorted_queue_witness: VecDeque<_> = sorted_states
+            .iter()
+            .map(|(encoding, old_tail, element)| {
+                let as_timestamped_storage_witness =
+                    log_query_into_circuit_log_query_witness(element);
 
-            (as_timestamped_storage_witness, *old_tail)
-        }).collect();
+                (as_timestamped_storage_witness, *old_tail)
+            })
+            .collect();
 
-        let intermediate_sorted_queue_witness = CircuitQueueRawWitness::<F, zkevm_circuits::base_structures::log_query::LogQuery<F>, 4, LOG_QUERY_PACKED_WIDTH> { elements: intermediate_sorted_queue_witness };
+        let intermediate_sorted_queue_witness = CircuitQueueRawWitness::<
+            F,
+            zkevm_circuits::base_structures::log_query::LogQuery<F>,
+            4,
+            LOG_QUERY_PACKED_WIDTH,
+        > {
+            elements: intermediate_sorted_queue_witness,
+        };
 
         // now we need to have final grand product value that will also become an input for the next circuit
 
@@ -203,14 +303,21 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
         let last_unsorted_state = unsorted_sponge_states.last().unwrap().clone();
         let last_sorted_state = sorted_sponge_states.last().unwrap().clone();
 
-        let accumulated_lhs: [F; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS] = lhs_grand_product.iter().map(|el| *el.last().unwrap()).collect::<Vec<_>>().try_into().unwrap();
-        let accumulated_rhs: [F; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS] = rhs_grand_product.iter().map(|el| *el.last().unwrap()).collect::<Vec<_>>().try_into().unwrap();
+        let accumulated_lhs: [F; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS] = lhs_grand_product
+            .iter()
+            .map(|el| *el.last().unwrap())
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+        let accumulated_rhs: [F; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS] = rhs_grand_product
+            .iter()
+            .map(|el| *el.last().unwrap())
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
 
-        // simulate the logic 
-        let (
-            new_last_key,
-            new_last_item,
-        ) = {
+        // simulate the logic
+        let (new_last_key, new_last_item) = {
             let mut new_last_key = previous_key;
             let mut new_last_item = previous_item;
             let mut current_timestamp = previous_item.timestamp.0;
@@ -240,7 +347,8 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
                                 assert_eq!(next_query.address, new_last_item.address);
                                 assert_eq!(next_query.key, new_last_item.key);
                                 assert_eq!(next_query.written_value, new_last_item.written_value);
-                                let _ = result_queue_simulator.push_and_output_intermediate_data(*next_query, round_function);
+                                let _ = result_queue_simulator
+                                    .push_and_output_intermediate_data(*next_query, round_function);
                             } else {
                                 assert!(is_last);
                                 assert!(exhausted == false);
@@ -259,44 +367,52 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
                     if !exhausted {
                         if new_last_item.rollback == false {
                             let next_query = deduplicated_queries_it.next().unwrap();
-                            let _ = result_queue_simulator.push_and_output_intermediate_data(*next_query, round_function);
+                            let _ = result_queue_simulator
+                                .push_and_output_intermediate_data(*next_query, round_function);
                         }
                     }
                 }
             }
-        
-            (
-                new_last_key,
-                new_last_item
-            )
+
+            (new_last_key, new_last_item)
         };
 
         use crate::boojum::gadgets::queue::QueueState;
         let placeholder_witness = QueueState::<F, QUEUE_STATE_WIDTH>::placeholder_witness();
 
-        let (current_unsorted_queue_state, current_intermediate_sorted_queue_state) = results.last().map(|el: &EventsDeduplicatorInstanceWitness<F>| {
-            let tmp = &el.closed_form_input.hidden_fsm_output;
+        let (current_unsorted_queue_state, current_intermediate_sorted_queue_state) = results
+            .last()
+            .map(|el: &EventsDeduplicatorInstanceWitness<F>| {
+                let tmp = &el.closed_form_input.hidden_fsm_output;
 
-            (tmp.initial_unsorted_queue_state.clone(), tmp.intermediate_sorted_queue_state.clone())
-        }).unwrap_or(
-            (placeholder_witness.clone(), placeholder_witness)
-        );
-
+                (
+                    tmp.initial_unsorted_queue_state.clone(),
+                    tmp.intermediate_sorted_queue_state.clone(),
+                )
+            })
+            .unwrap_or((placeholder_witness.clone(), placeholder_witness));
 
         // we use current final state as the intermediate head
         let mut final_unsorted_state = transform_queue_state(last_unsorted_state);
         final_unsorted_state.head = final_unsorted_state.tail.tail;
         final_unsorted_state.tail.tail = unsorted_simulator_final_state.tail.tail;
-        final_unsorted_state.tail.length = unsorted_simulator_final_state.tail.length - final_unsorted_state.tail.length;
+        final_unsorted_state.tail.length =
+            unsorted_simulator_final_state.tail.length - final_unsorted_state.tail.length;
 
         let mut final_intermediate_sorted_state = transform_queue_state(last_sorted_state);
         final_intermediate_sorted_state.head = last_sorted_state.tail;
-        final_intermediate_sorted_state.tail.tail = intermediate_sorted_simulator_final_state.tail.tail;
-        final_intermediate_sorted_state.tail.length = intermediate_sorted_simulator_final_state.tail.length - last_sorted_state.num_items;
+        final_intermediate_sorted_state.tail.tail =
+            intermediate_sorted_simulator_final_state.tail.tail;
+        final_intermediate_sorted_state.tail.length =
+            intermediate_sorted_simulator_final_state.tail.length - last_sorted_state.num_items;
 
-        assert_eq!(final_unsorted_state.tail.length, final_intermediate_sorted_state.tail.length);
+        assert_eq!(
+            final_unsorted_state.tail.length,
+            final_intermediate_sorted_state.tail.length
+        );
 
-        let last_final_sorted_queue_state = take_queue_state_from_simulator(&result_queue_simulator);
+        let last_final_sorted_queue_state =
+            take_queue_state_from_simulator(&result_queue_simulator);
 
         let mut instance_witness = EventsDeduplicatorInstanceWitness::<F> {
             closed_form_input: ClosedFormInputWitness {
@@ -304,7 +420,8 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
                 completion_flag: is_last,
                 observable_input: EventsDeduplicatorInputDataWitness {
                     initial_log_queue_state: unsorted_simulator_final_state.clone(),
-                    intermediate_sorted_queue_state: intermediate_sorted_simulator_final_state.clone(),
+                    intermediate_sorted_queue_state: intermediate_sorted_simulator_final_state
+                        .clone(),
                 },
                 observable_output: EventsDeduplicatorOutputData::placeholder_witness(),
                 hidden_fsm_input: EventsDeduplicatorFSMInputOutputWitness {
@@ -330,14 +447,24 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
             intermediate_sorted_queue_witness: intermediate_sorted_queue_witness,
         };
 
-        assert_eq!(instance_witness.initial_queue_witness.elements.len(), instance_witness.intermediate_sorted_queue_witness.elements.len());
+        assert_eq!(
+            instance_witness.initial_queue_witness.elements.len(),
+            instance_witness
+                .intermediate_sorted_queue_witness
+                .elements
+                .len()
+        );
 
         if sorted_states.len() % per_circuit_capacity != 0 {
             // circuit does padding, so all previous values must be reset
-            instance_witness.closed_form_input.hidden_fsm_output.previous_key = 0u32;
-            instance_witness.closed_form_input.hidden_fsm_output.previous_item = log_query_into_circuit_log_query_witness(
-                &empty_log_item
-            );
+            instance_witness
+                .closed_form_input
+                .hidden_fsm_output
+                .previous_key = 0u32;
+            instance_witness
+                .closed_form_input
+                .hidden_fsm_output
+                .previous_item = log_query_into_circuit_log_query_witness(&empty_log_item);
         }
 
         current_lhs_product = accumulated_lhs;
@@ -357,7 +484,12 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 
     let final_sorted_queue_state = take_queue_state_from_simulator(&result_queue_simulator);
 
-    results.last_mut().unwrap().closed_form_input.observable_output.final_queue_state = final_sorted_queue_state.clone();
+    results
+        .last_mut()
+        .unwrap()
+        .closed_form_input
+        .observable_output
+        .final_queue_state = final_sorted_queue_state.clone();
 
     *target_deduplicated_queries = sorted_queries;
 
@@ -389,8 +521,8 @@ pub fn sort_and_dedup_events_log(sorted_history: Vec<LogQuery>) -> Vec<LogQuery>
                 assert_eq!(previous.written_value, el.written_value);
                 assert_eq!(previous.is_service, el.is_service);
                 // do nothing, it's rolled back
-                
-                continue
+
+                continue;
             } else {
                 assert!(el.rollback == false);
                 stack.push(el);
@@ -442,23 +574,21 @@ pub fn sort_and_dedup_events_log(sorted_history: Vec<LogQuery>) -> Vec<LogQuery>
 // For server side use convenience
 pub fn simulate_events_log_for_commitment<
     F: SmallField,
-    R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,  
+    R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
-    history: Vec<LogQuery>, 
+    history: Vec<LogQuery>,
     round_function: &R,
 ) -> (Vec<LogQuery>, (u32, [F; QUEUE_STATE_WIDTH])) {
     let mut sorted_history = history;
-    sorted_history.sort_by(|a, b| {
-        match a.timestamp.0.cmp(&b.timestamp.0) {
-            Ordering::Equal => {
-                if b.rollback {
-                    Ordering::Less
-                } else {
-                    Ordering::Greater
-                }
+    sorted_history.sort_by(|a, b| match a.timestamp.0.cmp(&b.timestamp.0) {
+        Ordering::Equal => {
+            if b.rollback {
+                Ordering::Less
+            } else {
+                Ordering::Greater
             }
-            r @ _ => r
         }
+        r @ _ => r,
     });
 
     let net_history = sort_and_dedup_events_log(sorted_history);

@@ -1,9 +1,9 @@
-use crate::zk_evm::reference_impls::event_sink::InMemoryEventSink;
-use crate::zk_evm::precompiles::DefaultPrecompilesProcessor;
-use crate::zk_evm::reference_impls::decommitter::SimpleDecommitter;
-use crate::zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS;
 use crate::witness::tracer::WitnessTracer;
 use crate::zk_evm::abstractions::Storage;
+use crate::zk_evm::precompiles::DefaultPrecompilesProcessor;
+use crate::zk_evm::reference_impls::decommitter::SimpleDecommitter;
+use crate::zk_evm::reference_impls::event_sink::InMemoryEventSink;
+use crate::zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS;
 use std::hash::Hash;
 
 /// Set should only differ due to another storage that would be sustituted from outside,
@@ -52,16 +52,16 @@ pub fn create_tools<S: Storage>(storage: S, config: &GeometryConfig) -> ProvingT
         precompiles_processor,
         decommittment_processor,
         witness_tracer,
-        config: config.clone()
+        config: config.clone(),
     }
 }
 
+use crate::entry_point::initial_out_of_circuit_context;
 use crate::ethereum_types::Address;
 use crate::zk_evm::block_properties::BlockProperties;
-use crate::zk_evm::vm_state::{VmState, PrimitiveValue};
-use crate::entry_point::initial_out_of_circuit_context;
-use crate::zk_evm::zkevm_opcode_defs::*;
 use crate::zk_evm::reference_impls::memory::SimpleMemory;
+use crate::zk_evm::vm_state::{PrimitiveValue, VmState};
+use crate::zk_evm::zkevm_opcode_defs::*;
 
 /// We expect that storage/memory/decommitter were prefilled
 pub fn create_out_of_circuit_vm<'a, S: Storage>(
@@ -96,7 +96,7 @@ pub fn create_out_of_circuit_vm<'a, S: Storage>(
         entry_point_address,
     );
 
-    vm.push_bootloader_context(crate::INITIAL_MONOTONIC_CYCLE_COUNTER-1, initial_context);
+    vm.push_bootloader_context(crate::INITIAL_MONOTONIC_CYCLE_COUNTER - 1, initial_context);
 
     vm.local_state.current_ergs_per_pubdata_byte = 0; // uninitialized yet, but we do not care
     vm.local_state.timestamp = STARTING_TIMESTAMP;
@@ -108,7 +108,7 @@ pub fn create_out_of_circuit_vm<'a, S: Storage>(
         offset: 0,
         memory_page: crate::zk_evm::zkevm_opcode_defs::BOOTLOADER_CALLDATA_PAGE,
         start: 0,
-        length: 0
+        length: 0,
     };
     let formal_ptr_encoding = formal_ptr.to_u256();
     vm.local_state.registers[0] = PrimitiveValue {

@@ -11,35 +11,57 @@ use crate::zk_evm::precompiles::keccak256::Keccak256RoundWitness;
 use crate::zk_evm::precompiles::sha256::Sha256RoundWitness;
 
 use crate::zk_evm::zkevm_opcode_defs::decoding::EncodingModeProduction;
-use tracing;
 use crate::zk_evm::zkevm_opcode_defs::system_params::NUM_SPONGES;
 use crate::zk_evm::zkevm_opcode_defs::system_params::STORAGE_AUX_BYTE;
 use crate::zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS;
 use crate::zk_evm::zkevm_opcode_defs::system_params::VM_MAX_STACK_DEPTH;
+use tracing;
 
 // cycle indicators below are not timestamps!
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum QueryMarker {
-    ForwardNoRollback{unique_query_id: u64, in_frame: usize, index: usize, cycle: u32},
-    Forward{unique_query_id: u64, in_frame: usize, index: usize, cycle: u32},
-    Rollback{unique_query_id: u64, in_frame: usize, index: usize, cycle_of_declaration: u32, cycle_of_applied_rollback: Option<u32>},
+    ForwardNoRollback {
+        unique_query_id: u64,
+        in_frame: usize,
+        index: usize,
+        cycle: u32,
+    },
+    Forward {
+        unique_query_id: u64,
+        in_frame: usize,
+        index: usize,
+        cycle: u32,
+    },
+    Rollback {
+        unique_query_id: u64,
+        in_frame: usize,
+        index: usize,
+        cycle_of_declaration: u32,
+        cycle_of_applied_rollback: Option<u32>,
+    },
 }
 
 impl QueryMarker {
     pub fn frame_index(&self) -> usize {
         match self {
-            QueryMarker::ForwardNoRollback {in_frame, ..} => *in_frame,
-            QueryMarker::Forward {in_frame, ..} => *in_frame,
-            QueryMarker::Rollback {in_frame, ..} => *in_frame,
+            QueryMarker::ForwardNoRollback { in_frame, .. } => *in_frame,
+            QueryMarker::Forward { in_frame, .. } => *in_frame,
+            QueryMarker::Rollback { in_frame, .. } => *in_frame,
         }
     }
 
     pub fn query_id(&self) -> u64 {
         match self {
-            QueryMarker::ForwardNoRollback {unique_query_id, ..} => *unique_query_id,
-            QueryMarker::Forward {unique_query_id, ..} => *unique_query_id,
-            QueryMarker::Rollback {unique_query_id, ..} => *unique_query_id,
+            QueryMarker::ForwardNoRollback {
+                unique_query_id, ..
+            } => *unique_query_id,
+            QueryMarker::Forward {
+                unique_query_id, ..
+            } => *unique_query_id,
+            QueryMarker::Rollback {
+                unique_query_id, ..
+            } => *unique_query_id,
         }
     }
 }
@@ -50,7 +72,7 @@ pub struct WitnessTracer {
     pub current_cycle_counter: u32,
     pub cycle_counter_of_last_snapshot: u32,
     pub memory_queries: Vec<(u32, MemoryQuery)>, // flattened memory queries, with cycle indicators
-    pub storage_queries: Vec<(u32, LogQuery)>, // storage read queries with cycle indicators
+    pub storage_queries: Vec<(u32, LogQuery)>,   // storage read queries with cycle indicators
     pub refunds_logs: Vec<(u32, LogQuery, u32)>,
     pub decommittment_queries: Vec<(u32, DecommittmentQuery, Vec<U256>)>,
     pub keccak_round_function_witnesses: Vec<(u32, LogQuery, Vec<Keccak256RoundWitness>)>,
@@ -119,7 +141,7 @@ impl WitnessTracer {
             monotonic_query_counter: 0,
             // log_frames_stack: vec![ApplicationData::empty()],
             callstack_with_aux_data: CallstackWithAuxData::empty(),
-            sponge_busy_range:  HashSet::with_capacity(8),
+            sponge_busy_range: HashSet::with_capacity(8),
             vm_snapshots: vec![],
         }
     }
@@ -162,7 +184,7 @@ impl AuxCallstackProto {
         new_entry: CallStackEntry,
     ) {
         let new_counter = self.monotonic_frame_counter;
-        let current_counter = self.current.0.1;
+        let current_counter = self.current.0 .1;
         self.monotonic_frame_counter += 1;
         let mut old = std::mem::replace(
             &mut self.current,
@@ -208,27 +230,35 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
             // make the initial one
             let snapshot = VmSnapshot {
                 local_state: current_state.clone(),
-                at_cycle: self.current_cycle_counter
+                at_cycle: self.current_cycle_counter,
             };
             self.vm_snapshots.push(snapshot);
-            tracing::debug!("Made INITIAL snapshot at cycle {:?}", self.current_cycle_counter);
+            tracing::debug!(
+                "Made INITIAL snapshot at cycle {:?}",
+                self.current_cycle_counter
+            );
             println!("Made INITIAL at cycle {:?}", self.current_cycle_counter);
             self.cycle_counter_of_last_snapshot = current_state.monotonic_cycle_counter;
         }
 
-        assert_eq!(self.current_cycle_counter, current_state.monotonic_cycle_counter);
+        assert_eq!(
+            self.current_cycle_counter,
+            current_state.monotonic_cycle_counter
+        );
 
-        if self.current_cycle_counter >= self.cycle_counter_of_last_snapshot + self.cycles_to_use_per_snapshot {
+        if self.current_cycle_counter
+            >= self.cycle_counter_of_last_snapshot + self.cycles_to_use_per_snapshot
+        {
             // do it immediatelly
             let snapshot = VmSnapshot {
                 local_state: current_state.clone(),
-                at_cycle: self.current_cycle_counter
+                at_cycle: self.current_cycle_counter,
             };
             self.vm_snapshots.push(snapshot);
             tracing::debug!("Made snapshot at cycle {:?}", self.current_cycle_counter);
             println!("Made snapshot at cycle {:?}", self.current_cycle_counter);
 
-            // we made a snapshot now, but the cycle itself will be the first one for the next snapshot 
+            // we made a snapshot now, but the cycle itself will be the first one for the next snapshot
             self.cycle_counter_of_last_snapshot = current_state.monotonic_cycle_counter;
         }
 
@@ -248,20 +278,21 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
         }
         // println!("Cycle ends");
     }
-    
+
     fn add_memory_query(&mut self, monotonic_cycle_counter: u32, memory_query: MemoryQuery) {
         self.memory_queries
             .push((monotonic_cycle_counter, memory_query));
     }
 
     fn record_refund_for_query(
-        &mut self, 
-        monotonic_cycle_counter: u32, 
-        log_query: LogQuery, 
-        refund: crate::zk_evm::abstractions::RefundType
+        &mut self,
+        monotonic_cycle_counter: u32,
+        log_query: LogQuery,
+        refund: crate::zk_evm::abstractions::RefundType,
     ) {
         assert!(log_query.aux_byte == STORAGE_AUX_BYTE);
-        self.refunds_logs.push((monotonic_cycle_counter, log_query, refund.pubdata_refund()));
+        self.refunds_logs
+            .push((monotonic_cycle_counter, log_query, refund.pubdata_refund()));
     }
 
     fn add_log_query(&mut self, monotonic_cycle_counter: u32, log_query: LogQuery) {

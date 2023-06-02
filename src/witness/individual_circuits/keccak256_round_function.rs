@@ -1,8 +1,10 @@
 use super::*;
-use derivative::*;
-use crate::zkevm_circuits::keccak256_round_function::{input::*, Keccak256PrecompileCallParamsWitness};
 use crate::zkevm_circuits::base_structures::log_query::*;
+use crate::zkevm_circuits::keccak256_round_function::{
+    input::*, Keccak256PrecompileCallParamsWitness,
+};
 use circuit_definitions::encodings::*;
+use derivative::*;
 
 #[derive(Derivative)]
 #[derivative(Clone, Copy, Debug, PartialEq, Eq)]
@@ -17,15 +19,21 @@ pub enum Keccak256PrecompileState {
 // In practice the only difficulty is buffer state, everything else is provided by out-of-circuit VM
 
 pub fn keccak256_decompose_into_per_circuit_witness<
-F: SmallField,
-R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+    F: SmallField,
+    R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     artifacts: &mut FullBlockArtifacts<F>,
     num_rounds_per_circuit: usize,
     round_function: &R,
 ) -> Vec<Keccak256RoundFunctionCircuitInstanceWitness<F>> {
-    assert_eq!(artifacts.all_memory_queries_accumulated.len(), artifacts.all_memory_queue_states.len());
-    assert_eq!(artifacts.all_memory_queries_accumulated.len(), artifacts.memory_queue_simulator.num_items as usize);
+    assert_eq!(
+        artifacts.all_memory_queries_accumulated.len(),
+        artifacts.all_memory_queue_states.len()
+    );
+    assert_eq!(
+        artifacts.all_memory_queries_accumulated.len(),
+        artifacts.memory_queue_simulator.num_items as usize
+    );
 
     // split into aux witness, don't mix with the memory
     use crate::zk_evm::precompiles::keccak256::Keccak256RoundWitness;
@@ -44,7 +52,9 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
             }
 
             if let Some(writes) = writes.as_ref() {
-                artifacts.keccak_256_memory_queries.extend_from_slice(writes);
+                artifacts
+                    .keccak_256_memory_queries
+                    .extend_from_slice(writes);
             }
         }
     }
@@ -57,20 +67,29 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
         &mut artifacts.demuxed_keccak_precompile_queue_states,
         vec![],
     );
-    let simulator_witness: Vec<_> = artifacts.demuxed_keccak_precompile_queue_simulator.witness.clone().into();
+    let simulator_witness: Vec<_> = artifacts
+        .demuxed_keccak_precompile_queue_simulator
+        .witness
+        .clone()
+        .into();
     let round_function_witness =
         std::mem::replace(&mut artifacts.keccak_round_function_witnesses, vec![]);
 
     let memory_queries = std::mem::replace(&mut artifacts.keccak_256_memory_queries, vec![]);
 
     // check basic consistency
-    assert_eq!(keccak_precompile_calls.len(), keccak_precompile_calls_queue_states.len());
+    assert_eq!(
+        keccak_precompile_calls.len(),
+        keccak_precompile_calls_queue_states.len()
+    );
     assert_eq!(keccak_precompile_calls.len(), round_function_witness.len());
 
     if keccak_precompile_calls.len() == 0 {
         // we can not skip the circuit (at least for now), so we have to create a dummy on
-        let log_queue_input_state = take_queue_state_from_simulator(&artifacts.demuxed_keccak_precompile_queue_simulator);
-        let memory_queue_input_state = take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
+        let log_queue_input_state =
+            take_queue_state_from_simulator(&artifacts.demuxed_keccak_precompile_queue_simulator);
+        let memory_queue_input_state =
+            take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
         let current_memory_queue_state = memory_queue_input_state.clone();
 
         let mut observable_input_data = PrecompileFunctionInputData::placeholder_witness();
@@ -93,8 +112,9 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
         let empty_block = [0u8; KECCAK_RATE_IN_U64_WORDS * 8];
         use crate::zk_evm::precompiles::keccak256::Digest;
         internal_state_over_empty_buffer.update(&empty_block);
-        let empty_state_inner =
-            zk_evm::precompiles::keccak256::transmute_state(internal_state_over_empty_buffer.clone());
+        let empty_state_inner = zk_evm::precompiles::keccak256::transmute_state(
+            internal_state_over_empty_buffer.clone(),
+        );
 
         let keccak_internal_state = encode_kecca256_inner_state(empty_state_inner);
         hidden_fsm_output_state.keccak_internal_state = keccak_internal_state;
@@ -112,11 +132,20 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
                 },
                 hidden_fsm_output: Keccak256RoundFunctionFSMInputOutputWitness::<F> {
                     internal_fsm: hidden_fsm_output_state,
-                    log_queue_state: take_queue_state_from_simulator(&artifacts.demuxed_keccak_precompile_queue_simulator),
+                    log_queue_state: take_queue_state_from_simulator(
+                        &artifacts.demuxed_keccak_precompile_queue_simulator,
+                    ),
                     memory_queue_state: current_memory_queue_state.clone(),
                 },
             },
-            requests_queue_witness: CircuitQueueRawWitness::<F, LogQuery<F>, 4, LOG_QUERY_PACKED_WIDTH> { elements: VecDeque::new() },
+            requests_queue_witness: CircuitQueueRawWitness::<
+                F,
+                LogQuery<F>,
+                4,
+                LOG_QUERY_PACKED_WIDTH,
+            > {
+                elements: VecDeque::new(),
+            },
             memory_reads_witness: VecDeque::new(),
         };
         result.push(witness);
@@ -128,7 +157,8 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
     let num_requests = keccak_precompile_calls.len();
 
     // convension
-    let mut log_queue_input_state = take_queue_state_from_simulator(&artifacts.demuxed_keccak_precompile_queue_simulator);
+    let mut log_queue_input_state =
+        take_queue_state_from_simulator(&artifacts.demuxed_keccak_precompile_queue_simulator);
 
     let mut hidden_fsm_input_state = Keccak256RoundFunctionFSM::<F>::placeholder_witness();
     hidden_fsm_input_state.read_precompile_call = true;
@@ -142,7 +172,8 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
     let mut request_ranges = vec![];
     let mut starting_request_idx = 0;
 
-    let mut memory_queue_input_state = take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
+    let mut memory_queue_input_state =
+        take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
     let mut current_memory_queue_state = memory_queue_input_state.clone();
 
     for (request_idx, ((request, _queue_transition_state), per_request_work)) in
@@ -154,11 +185,13 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
     {
         // request level. Each request can be broken into few rounds
 
-        let _ = artifacts.demuxed_keccak_precompile_queue_simulator.pop_and_output_intermediate_data(round_function);
+        let _ = artifacts
+            .demuxed_keccak_precompile_queue_simulator
+            .pop_and_output_intermediate_data(round_function);
 
         use crate::zk_evm::precompiles::keccak256::Keccak256;
         let mut internal_state = Keccak256::default();
-    
+
         let mut memory_reads_per_request = vec![];
 
         assert_eq!(
@@ -210,9 +243,13 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
                     memory_reads_per_request.push(read_query.value);
 
                     artifacts.all_memory_queries_accumulated.push(read);
-                    let (_, intermediate_info) = artifacts.memory_queue_simulator.push_and_output_intermediate_data(read, round_function);
+                    let (_, intermediate_info) = artifacts
+                        .memory_queue_simulator
+                        .push_and_output_intermediate_data(read, round_function);
                     artifacts.all_memory_queue_states.push(intermediate_info);
-                    current_memory_queue_state = take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
+                    current_memory_queue_state = take_sponge_like_queue_state_from_simulator(
+                        &artifacts.memory_queue_simulator,
+                    );
 
                     precompile_request.input_memory_offset += 1;
                 }
@@ -242,9 +279,12 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
                 assert_eq!(write, write_query);
 
                 artifacts.all_memory_queries_accumulated.push(write);
-                let (_, intermediate_info) = artifacts.memory_queue_simulator.push_and_output_intermediate_data(write, round_function);
+                let (_, intermediate_info) = artifacts
+                    .memory_queue_simulator
+                    .push_and_output_intermediate_data(write, round_function);
                 artifacts.all_memory_queue_states.push(intermediate_info);
-                current_memory_queue_state = take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
+                current_memory_queue_state =
+                    take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
 
                 if is_last_request {
                     precompile_state = Keccak256PrecompileState::Finished;
@@ -266,7 +306,8 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 
                 let state_inner =
                     zk_evm::precompiles::keccak256::transmute_state(internal_state.clone());
-                let mut u64_words_buffer_markers = [false; zkevm_circuits::keccak256_round_function::BUFFER_SIZE_IN_U64_WORDS];
+                let mut u64_words_buffer_markers =
+                    [false; zkevm_circuits::keccak256_round_function::BUFFER_SIZE_IN_U64_WORDS];
                 for i in 0..input_buffer.filled {
                     u64_words_buffer_markers[i] = true;
                 }
@@ -280,7 +321,7 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
                     // Even though any work of the circuit after requests are done is NOT observable
                     // and doesn't affect the correctness, we have a strict check that simulated input + output
                     // matches to what output circuit produced by itself based on the common input only
-                    for el in u64_words_buffer_markers.iter_mut () {
+                    for el in u64_words_buffer_markers.iter_mut() {
                         *el = false;
                     }
                     for el in input_buffer.words.iter_mut() {
@@ -291,8 +332,9 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
                     let empty_block = [0u8; KECCAK_RATE_IN_U64_WORDS * 8];
                     use crate::zk_evm::precompiles::keccak256::Digest;
                     internal_state_over_empty_buffer.update(&empty_block);
-                    let empty_state_inner =
-                        zk_evm::precompiles::keccak256::transmute_state(internal_state_over_empty_buffer.clone());
+                    let empty_state_inner = zk_evm::precompiles::keccak256::transmute_state(
+                        internal_state_over_empty_buffer.clone(),
+                    );
 
                     keccak_internal_state = encode_kecca256_inner_state(empty_state_inner);
                 }
@@ -326,12 +368,15 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
                     },
                 };
 
-                let range = starting_request_idx..(request_idx+1);
-                let wit: VecDeque<_> = (&simulator_witness[range]).iter().map(|el| {
-                    let mapped = log_query_into_circuit_log_query_witness(&el.2);
+                let range = starting_request_idx..(request_idx + 1);
+                let wit: VecDeque<_> = (&simulator_witness[range])
+                    .iter()
+                    .map(|el| {
+                        let mapped = log_query_into_circuit_log_query_witness(&el.2);
 
-                    (mapped, el.1)
-                }).collect();
+                        (mapped, el.1)
+                    })
+                    .collect();
 
                 let current_reads = std::mem::replace(&mut memory_reads_per_request, vec![]);
                 let mut current_witness = std::mem::replace(&mut memory_read_witnesses, vec![]);
@@ -340,10 +385,12 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
                 let mut observable_input_data = PrecompileFunctionInputData::placeholder_witness();
                 if result.len() == 0 {
                     observable_input_data.initial_log_queue_state = log_queue_input_state.clone();
-                    observable_input_data.initial_memory_queue_state = memory_queue_input_state.clone();
+                    observable_input_data.initial_memory_queue_state =
+                        memory_queue_input_state.clone();
                 }
 
-                let mut observable_output_data = PrecompileFunctionOutputData::placeholder_witness();
+                let mut observable_output_data =
+                    PrecompileFunctionOutputData::placeholder_witness();
                 if finished {
                     observable_output_data.final_memory_state = current_memory_queue_state.clone();
                 }
@@ -361,21 +408,32 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
                         },
                         hidden_fsm_output: Keccak256RoundFunctionFSMInputOutputWitness::<F> {
                             internal_fsm: hidden_fsm_output_state.clone(),
-                            log_queue_state: take_queue_state_from_simulator(&artifacts.demuxed_keccak_precompile_queue_simulator),
+                            log_queue_state: take_queue_state_from_simulator(
+                                &artifacts.demuxed_keccak_precompile_queue_simulator,
+                            ),
                             memory_queue_state: current_memory_queue_state.clone(),
                         },
                     },
-                    requests_queue_witness: CircuitQueueRawWitness::<F, LogQuery<F>, 4, LOG_QUERY_PACKED_WIDTH> { elements: wit },
+                    requests_queue_witness: CircuitQueueRawWitness::<
+                        F,
+                        LogQuery<F>,
+                        4,
+                        LOG_QUERY_PACKED_WIDTH,
+                    > {
+                        elements: wit,
+                    },
                     memory_reads_witness: current_witness.into_iter().flatten().collect(),
                 };
 
                 // make non-inclusize
-                request_ranges.push(starting_request_idx..(request_idx+1));
-                starting_request_idx = request_idx+1;
+                request_ranges.push(starting_request_idx..(request_idx + 1));
+                starting_request_idx = request_idx + 1;
 
                 result.push(witness);
 
-                log_queue_input_state = take_queue_state_from_simulator(&artifacts.demuxed_keccak_precompile_queue_simulator);
+                log_queue_input_state = take_queue_state_from_simulator(
+                    &artifacts.demuxed_keccak_precompile_queue_simulator,
+                );
                 hidden_fsm_input_state = hidden_fsm_output_state;
                 memory_queue_input_state = current_memory_queue_state.clone();
             }
@@ -387,8 +445,14 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
         }
     }
 
-    assert_eq!(artifacts.all_memory_queries_accumulated.len(), artifacts.all_memory_queue_states.len());
-    assert_eq!(artifacts.all_memory_queries_accumulated.len(), artifacts.memory_queue_simulator.num_items as usize);
+    assert_eq!(
+        artifacts.all_memory_queries_accumulated.len(),
+        artifacts.all_memory_queue_states.len()
+    );
+    assert_eq!(
+        artifacts.all_memory_queries_accumulated.len(),
+        artifacts.memory_queue_simulator.num_items as usize
+    );
 
     result
 }
@@ -406,8 +470,13 @@ pub(crate) fn encode_kecca256_inner_state(state: [u64; 25]) -> [[[u8; 8]; 5]; 5]
     result
 }
 
-fn buffer_to_bytes(buffer: &zk_evm::precompiles::keccak256::Buffer) -> [u8; zkevm_circuits::keccak256_round_function::BYTES_BUFFER_SIZE] {
-    assert_eq!(zkevm_circuits::keccak256_round_function::BUFFER_SIZE_IN_U64_WORDS, buffer.words.len());
+fn buffer_to_bytes(
+    buffer: &zk_evm::precompiles::keccak256::Buffer,
+) -> [u8; zkevm_circuits::keccak256_round_function::BYTES_BUFFER_SIZE] {
+    assert_eq!(
+        zkevm_circuits::keccak256_round_function::BUFFER_SIZE_IN_U64_WORDS,
+        buffer.words.len()
+    );
 
     let mut result = [0u8; zkevm_circuits::keccak256_round_function::BYTES_BUFFER_SIZE];
     for (dst, src) in result.array_chunks_mut::<8>().zip(buffer.words.iter()) {

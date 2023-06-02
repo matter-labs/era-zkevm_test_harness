@@ -1,27 +1,26 @@
 use super::*;
 use crate::boojum::field::SmallField;
 
-pub mod run_manually;
 pub mod complex_tests;
+pub mod run_manually;
 pub mod simple_tests;
 
-
-use crate::boojum::field::goldilocks::MixedGL;
-use crate::boojum::worker::Worker;
-use circuit_definitions::circuit_definitions::recursion_layer::ZkSyncRecursiveLayerCircuit;
-use crate::zk_evm::testing::storage::InMemoryStorage;
-use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
-use crate::witness::tree::BinarySparseStorageTree;
-use crate::ethereum_types::U256;
-use crate::ethereum_types::Address;
-use crate::ethereum_types::H160;
-use crate::zk_evm::bytecode_to_code_hash;
-use crate::zk_evm::aux_structures::LogQuery;
-use crate::witness::tree::ZkSyncStorageLeaf;
-use std::collections::HashMap;
 use crate::blake2::Blake2s256;
 use crate::boojum::cs::traits::circuit::Circuit;
+use crate::boojum::field::goldilocks::MixedGL;
+use crate::boojum::worker::Worker;
+use crate::ethereum_types::Address;
+use crate::ethereum_types::H160;
+use crate::ethereum_types::U256;
+use crate::witness::tree::BinarySparseStorageTree;
+use crate::witness::tree::ZkSyncStorageLeaf;
+use crate::zk_evm::aux_structures::LogQuery;
+use crate::zk_evm::bytecode_to_code_hash;
+use crate::zk_evm::testing::storage::InMemoryStorage;
+use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit;
+use circuit_definitions::circuit_definitions::recursion_layer::ZkSyncRecursiveLayerCircuit;
+use std::collections::HashMap;
 
 const ACCOUNT_CODE_STORAGE_ADDRESS: Address = H160([
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -33,7 +32,11 @@ const KNOWN_CODE_HASHES_ADDRESS: Address = H160([
     0x00, 0x00, 0x80, 0x04,
 ]);
 
-pub(crate) fn save_predeployed_contracts(storage: &mut InMemoryStorage, tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>, contracts: &HashMap<Address, Vec<[u8; 32]>>) {
+pub(crate) fn save_predeployed_contracts(
+    storage: &mut InMemoryStorage,
+    tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
+    contracts: &HashMap<Address, Vec<[u8; 32]>>,
+) {
     let mut sorted_contracts = vec![];
     let mut keys: Vec<_> = contracts.keys().cloned().collect();
     keys.sort();
@@ -49,13 +52,26 @@ pub(crate) fn save_predeployed_contracts(storage: &mut InMemoryStorage, tree: &m
         .map(|(address, bytecode)| {
             let hash = bytecode_to_code_hash(&bytecode).unwrap();
 
-            println!("Have address {:?} with code hash {:x}", address, U256::from(hash));
+            println!(
+                "Have address {:?} with code hash {:x}",
+                address,
+                U256::from(hash)
+            );
 
             vec![
-                (0, ACCOUNT_CODE_STORAGE_ADDRESS, U256::from_big_endian(address.as_bytes()), U256::from(hash)),
-                (0, KNOWN_CODE_HASHES_ADDRESS, U256::from(hash), U256::from(1u64))
+                (
+                    0,
+                    ACCOUNT_CODE_STORAGE_ADDRESS,
+                    U256::from_big_endian(address.as_bytes()),
+                    U256::from(hash),
+                ),
+                (
+                    0,
+                    KNOWN_CODE_HASHES_ADDRESS,
+                    U256::from(hash),
+                    U256::from(1u64),
+                ),
             ]
-
         })
         .flatten()
         .collect();
@@ -77,11 +93,15 @@ pub(crate) fn save_predeployed_contracts(storage: &mut InMemoryStorage, tree: &m
 }
 
 pub(crate) fn base_test_circuit(
-    circuit: ZkSyncBaseLayerCircuit<GoldilocksField, VmWitnessOracle<GoldilocksField>, ZkSyncDefaultRoundFunction>
+    circuit: ZkSyncBaseLayerCircuit<
+        GoldilocksField,
+        VmWitnessOracle<GoldilocksField>,
+        ZkSyncDefaultRoundFunction,
+    >,
 ) {
-    use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
     use crate::boojum::config::DevCSConfig;
     use crate::boojum::cs::cs_builder::new_builder;
+    use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
 
     type P = GoldilocksField;
     // type P = MixedGL;
@@ -92,8 +112,8 @@ pub(crate) fn base_test_circuit(
     let (max_trace_len, num_vars) = circuit.size_hint();
 
     let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
-        geometry, 
-        num_vars.unwrap(), 
+        geometry,
+        num_vars.unwrap(),
         max_trace_len.unwrap(),
     );
     let builder = new_builder::<_, GoldilocksField>(builder_impl);
@@ -106,7 +126,7 @@ pub(crate) fn base_test_circuit(
             inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
-        },
+        }
         ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {
             let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
@@ -114,7 +134,7 @@ pub(crate) fn base_test_circuit(
             inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
-        },
+        }
         ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {
             let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
@@ -122,7 +142,7 @@ pub(crate) fn base_test_circuit(
             inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
-        },
+        }
         ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {
             let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
@@ -130,7 +150,7 @@ pub(crate) fn base_test_circuit(
             inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
-        },
+        }
         ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {
             let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
@@ -138,7 +158,7 @@ pub(crate) fn base_test_circuit(
             inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
-        },
+        }
         ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {
             let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
@@ -146,7 +166,7 @@ pub(crate) fn base_test_circuit(
             inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
-        },
+        }
         ZkSyncBaseLayerCircuit::ECRecover(inner) => {
             let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
@@ -154,7 +174,7 @@ pub(crate) fn base_test_circuit(
             inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
-        },
+        }
         ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {
             let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
@@ -162,7 +182,7 @@ pub(crate) fn base_test_circuit(
             inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
-        },
+        }
         ZkSyncBaseLayerCircuit::StorageSorter(inner) => {
             let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
@@ -170,7 +190,7 @@ pub(crate) fn base_test_circuit(
             inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
-        },
+        }
         ZkSyncBaseLayerCircuit::StorageApplication(inner) => {
             let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
@@ -178,7 +198,7 @@ pub(crate) fn base_test_circuit(
             inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
-        },
+        }
         ZkSyncBaseLayerCircuit::EventsSorter(inner) => {
             let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
@@ -186,7 +206,7 @@ pub(crate) fn base_test_circuit(
             inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
-        },
+        }
         ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {
             let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
@@ -194,7 +214,7 @@ pub(crate) fn base_test_circuit(
             inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
-        },
+        }
         ZkSyncBaseLayerCircuit::L1MessagesHasher(inner) => {
             let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
@@ -202,19 +222,17 @@ pub(crate) fn base_test_circuit(
             inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
-        },
+        }
     };
 
     let is_satisfied = cs.check_if_satisfied(&worker);
     assert!(is_satisfied);
 }
 
-pub(crate) fn test_recursive_circuit(
-    circuit: ZkSyncRecursiveLayerCircuit
-) {
-    use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
+pub(crate) fn test_recursive_circuit(circuit: ZkSyncRecursiveLayerCircuit) {
     use crate::boojum::config::DevCSConfig;
     use crate::boojum::cs::cs_builder::new_builder;
+    use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
 
     type P = GoldilocksField;
     // type P = MixedGL;
@@ -225,8 +243,8 @@ pub(crate) fn test_recursive_circuit(
     let (max_trace_len, num_vars) = circuit.size_hint();
 
     let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
-        geometry, 
-        num_vars.unwrap(), 
+        geometry,
+        num_vars.unwrap(),
         max_trace_len.unwrap(),
     );
     let builder = new_builder::<_, GoldilocksField>(builder_impl);
@@ -240,7 +258,7 @@ pub(crate) fn test_recursive_circuit(
             inner.synthesize_into_cs(&mut cs, &round_function);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
-        },
+        }
         ZkSyncRecursiveLayerCircuit::NodeLayerCircuit(inner) => {
             let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
@@ -248,7 +266,7 @@ pub(crate) fn test_recursive_circuit(
             inner.synthesize_into_cs(&mut cs, &round_function);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
-        },
+        }
         ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForMainVM(inner)
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForCodeDecommittmentsSorter(inner)
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForCodeDecommitter(inner)
@@ -268,7 +286,7 @@ pub(crate) fn test_recursive_circuit(
             inner.synthesize_into_cs(&mut cs, &round_function);
             let _ = cs.pad_and_shrink();
             cs.into_assembly()
-        },
+        }
     };
 
     let is_satisfied = cs.check_if_satisfied(&worker);

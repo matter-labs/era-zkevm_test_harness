@@ -1,6 +1,5 @@
 use super::*;
 
-
 #[test_log::test]
 fn test_ptr_on_valid_input() {
     let asm = r#"

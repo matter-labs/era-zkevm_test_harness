@@ -1,28 +1,28 @@
 use std::collections::HashMap;
 
 use super::*;
-use crate::entry_point::{create_out_of_circuit_global_context};
+use crate::entry_point::create_out_of_circuit_global_context;
 
-use crate::ethereum_types::*;
-use crate::external_calls::run_with_fixed_params;
-use crate::witness::oracle::create_artifacts_from_tracer;
-use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
-use crate::boojum::config::{SetupCSConfig, ProvingCSConfig};
+use crate::boojum::config::{ProvingCSConfig, SetupCSConfig};
 use crate::boojum::cs::implementations::prover::ProofConfig;
 use crate::boojum::cs::traits::cs::ConstraintSystem;
+use crate::boojum::cs::traits::gate::GatePlacementStrategy;
 use crate::boojum::field::traits::field_like::TrivialContext;
-use crate::zkevm_circuits::base_structures::vm_state::GlobalContextWitness;
-use crate::zkevm_circuits::main_vm::main_vm_entry_point;
+use crate::ethereum_types::*;
+use crate::external_calls::run_with_fixed_params;
+use crate::toolset::create_tools;
+use crate::witness::oracle::create_artifacts_from_tracer;
 use crate::zk_evm::abstractions::*;
 use crate::zk_evm::aux_structures::DecommittmentQuery;
 use crate::zk_evm::aux_structures::*;
+use crate::zk_evm::testing::storage::InMemoryStorage;
 use crate::zk_evm::utils::{bytecode_to_code_hash, contract_bytecode_to_words};
 use crate::zk_evm::witness_trace::VmWitnessTracer;
 use crate::zk_evm::GenericNoopTracer;
+use crate::zkevm_circuits::base_structures::vm_state::GlobalContextWitness;
+use crate::zkevm_circuits::main_vm::main_vm_entry_point;
+use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use zkevm_assembly::Assembly;
-use crate::zk_evm::testing::storage::InMemoryStorage;
-use crate::toolset::create_tools;
-use crate::boojum::cs::traits::gate::GatePlacementStrategy;
 
 #[test]
 fn run_and_try_create_witness() {
@@ -53,8 +53,6 @@ fn run_and_try_create_witness() {
     //     sstore r1, r2
     //     ret.revert r0
     // "#;
-
-
 
     let asm = r#"
         .text
@@ -172,20 +170,16 @@ pub(crate) fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
     let mut assembly = Assembly::try_from(asm.to_owned()).unwrap();
     let bytecode = assembly.compile_to_bytecode().unwrap();
 
-    run_and_try_create_witness_for_extended_state(
-        bytecode,
-        vec![],
-        cycle_limit
-    )
+    run_and_try_create_witness_for_extended_state(bytecode, vec![], cycle_limit)
 }
 
 pub(crate) fn run_and_try_create_witness_for_extended_state(
     entry_point_bytecode: Vec<[u8; 32]>,
     other_contracts: Vec<(H160, Vec<[u8; 32]>)>,
-    cycle_limit: usize
+    cycle_limit: usize,
 ) {
-    use crate::zk_evm::zkevm_opcode_defs::system_params::BOOTLOADER_FORMAL_ADDRESS;
     use crate::external_calls::run;
+    use crate::zk_evm::zkevm_opcode_defs::system_params::BOOTLOADER_FORMAL_ADDRESS;
 
     use crate::toolset::GeometryConfig;
 
@@ -202,12 +196,12 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         cycles_per_keccak256_circuit: 1,
         cycles_per_sha256_circuit: 1,
         cycles_per_ecrecover_circuit: 1,
-        
+
         limit_for_l1_messages_pudata_hasher: 8,
     };
 
-    use crate::witness::tree::ZKSyncTestingTree;
     use crate::witness::tree::BinarySparseStorageTree;
+    use crate::witness::tree::ZKSyncTestingTree;
 
     let mut used_bytecodes_and_hashes = HashMap::new();
     used_bytecodes_and_hashes.extend(other_contracts.iter().cloned().map(|(_, code)| {
@@ -222,34 +216,24 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
     let mut known_contracts = HashMap::new();
     known_contracts.extend(other_contracts.iter().cloned());
 
-    save_predeployed_contracts(
-        &mut storage_impl,
-        &mut tree,
-        &known_contracts
-    );
+    save_predeployed_contracts(&mut storage_impl, &mut tree, &known_contracts);
 
     // let (basic_block_circuits, basic_block_circuits_inputs, scheduler_input) = run(
-    let (
-        basic_block_circuits, 
-        basic_block_circuits_inputs, 
-        closed_form_inputs,
-        _,
-        _,
-    ) = 
-    run_with_fixed_params(
-        Address::zero(),
-        *BOOTLOADER_FORMAL_ADDRESS,
-        entry_point_bytecode,
-        vec![],
-        false,
-        U256::zero(),
-        used_bytecodes_and_hashes,
-        vec![],
-        cycle_limit,
-        geometry,
-        storage_impl,
-        &mut tree
-    );
+    let (basic_block_circuits, basic_block_circuits_inputs, closed_form_inputs, _, _) =
+        run_with_fixed_params(
+            Address::zero(),
+            *BOOTLOADER_FORMAL_ADDRESS,
+            entry_point_bytecode,
+            vec![],
+            false,
+            U256::zero(),
+            used_bytecodes_and_hashes,
+            vec![],
+            cycle_limit,
+            geometry,
+            storage_impl,
+            &mut tree,
+        );
 
     println!("Simulation and witness creation are completed");
 

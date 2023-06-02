@@ -1,22 +1,22 @@
 use super::*;
-use crate::witness::full_block_artifact::FullBlockArtifacts;
+use crate::boojum::gadgets::queue::full_state_queue::FullStateCircuitQueueRawWitness;
 use crate::boojum::gadgets::u256::recompose_u256_as_u32x8;
-use rayon::prelude::*;
+use crate::witness::full_block_artifact::FullBlockArtifacts;
+use crate::zk_evm::aux_structures::MemoryIndex;
+use crate::zk_evm::aux_structures::MemoryQuery;
 use crate::zk_evm::ethereum_types::U256;
+use crate::zkevm_circuits::base_structures::decommit_query::DecommitQueryWitness;
+use crate::zkevm_circuits::base_structures::decommit_query::DECOMMIT_QUERY_PACKED_WIDTH;
+use crate::zkevm_circuits::code_unpacker_sha256::input::*;
+use crate::zkevm_circuits::code_unpacker_sha256::*;
+use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::sync::Arc;
-use crate::zk_evm::aux_structures::MemoryIndex;
-use crate::zk_evm::aux_structures::MemoryQuery;
-use crate::zkevm_circuits::code_unpacker_sha256::input::*;
-use crate::zkevm_circuits::code_unpacker_sha256::*;
-use crate::boojum::gadgets::queue::full_state_queue::FullStateCircuitQueueRawWitness;
-use crate::zkevm_circuits::base_structures::decommit_query::DECOMMIT_QUERY_PACKED_WIDTH;
-use crate::zkevm_circuits::base_structures::decommit_query::DecommitQueryWitness;
 
 pub fn compute_decommitter_circuit_snapshots<
-F: SmallField,
-R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+    F: SmallField,
+    R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     artifacts: &mut FullBlockArtifacts<F>,
     round_function: &R,
@@ -66,13 +66,10 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
                 .push_and_output_intermediate_data(*query, round_function);
 
             artifacts.all_memory_queue_states.push(intermediate_info);
-
         }
 
         // and plain test memory queues
-        artifacts
-            .all_memory_queries_accumulated
-            .extend(as_queries);
+        artifacts.all_memory_queries_accumulated.extend(as_queries);
     }
 
     assert_eq!(
@@ -92,7 +89,8 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
     }
 
     let final_deduplicated_queue_state = transform_sponge_like_queue_state(
-        artifacts.deduplicated_decommittment_queue_states
+        artifacts
+            .deduplicated_decommittment_queue_states
             .last()
             .unwrap()
             .clone(),
@@ -112,13 +110,22 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 
     assert_eq!(
         artifacts.deduplicated_decommit_requests_with_data.len(),
-        artifacts.deduplicated_decommittment_queue_simulator.witness.len(),
+        artifacts
+            .deduplicated_decommittment_queue_simulator
+            .witness
+            .len(),
     );
 
-    let mut it = artifacts.deduplicated_decommit_requests_with_data
+    let mut it = artifacts
+        .deduplicated_decommit_requests_with_data
         .drain(..)
         .zip(artifacts.deduplicated_decommittment_queue_states.iter())
-        .zip(artifacts.deduplicated_decommittment_queue_simulator.witness.iter())
+        .zip(
+            artifacts
+                .deduplicated_decommittment_queue_simulator
+                .witness
+                .iter(),
+        )
         .peekable();
 
     let mut fsm_state = DecommitterState::BeginNew;
@@ -146,7 +153,12 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
                 hidden_fsm_input: CodeDecommitterFSMInputOutput::placeholder_witness(),
                 hidden_fsm_output: CodeDecommitterFSMInputOutput::placeholder_witness(),
             },
-            sorted_requests_queue_witness: FullStateCircuitQueueRawWitness::<F, zkevm_circuits::base_structures::decommit_query::DecommitQuery<F>, FULL_SPONGE_QUEUE_STATE_WIDTH, DECOMMIT_QUERY_PACKED_WIDTH> {
+            sorted_requests_queue_witness: FullStateCircuitQueueRawWitness::<
+                F,
+                zkevm_circuits::base_structures::decommit_query::DecommitQuery<F>,
+                FULL_SPONGE_QUEUE_STATE_WIDTH,
+                DECOMMIT_QUERY_PACKED_WIDTH,
+            > {
                 elements: VecDeque::new(),
             },
             code_words: vec![],
@@ -318,7 +330,7 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
                         for (dst, src) in buffer.array_chunks_mut::<4>().zip(raw_state.iter()) {
                             *dst = src.to_be_bytes();
                         }
-                        
+
                         let word = U256::from_big_endian(&buffer);
 
                         assert!(

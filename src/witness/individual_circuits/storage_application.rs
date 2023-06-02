@@ -1,29 +1,29 @@
 use super::*;
-use crate::boojum::sha3::Keccak256;
-use crate::boojum::sha3::digest::{FixedOutput, Update};
-use crate::zk_evm::precompiles::keccak256::{BUFFER_SIZE, transmute_state};
-use crate::witness::tree::*;
-use blake2::Blake2s256;
-use tracing;
-use crate::witness::individual_circuits::keccak256_round_function::encode_kecca256_inner_state;
-use crate::zkevm_circuits::storage_application::input::*;
-use crate::zkevm_circuits::base_structures::state_diff_record::NUM_KECCAK256_ROUNDS_PER_RECORD_ACCUMULATION;
 use crate::boojum::gadgets::keccak256::{self};
+use crate::boojum::sha3::digest::{FixedOutput, Update};
+use crate::boojum::sha3::Keccak256;
+use crate::witness::individual_circuits::keccak256_round_function::encode_kecca256_inner_state;
+use crate::witness::tree::*;
+use crate::zk_evm::precompiles::keccak256::{transmute_state, BUFFER_SIZE};
+use crate::zkevm_circuits::base_structures::state_diff_record::NUM_KECCAK256_ROUNDS_PER_RECORD_ACCUMULATION;
+use crate::zkevm_circuits::storage_application::input::*;
+use blake2::Blake2s256;
 use circuit_definitions::encodings::state_diff_record::StateDiffRecord;
+use tracing;
 
 use crate::sha3::Digest;
 
 pub fn decompose_into_storage_application_witnesses<
-F: SmallField,
-R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+    F: SmallField,
+    R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     artifacts: &mut FullBlockArtifacts<F>,
     tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
     round_function: &R,
     num_rounds_per_circuit: usize,
 ) -> Vec<StorageApplicationCircuitInstanceWitness<F>> {
-    use crate::witness::tree::ZkSyncStorageLeaf;
     use crate::witness::tree::EnumeratedBinaryLeaf;
+    use crate::witness::tree::ZkSyncStorageLeaf;
 
     const SHARD_ID_TO_PROCEED: u8 = 0; // rollup shard ID
 
@@ -33,10 +33,12 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
         let initial_fsm_state = StorageApplicationFSMInputOutput::<F>::placeholder_witness();
 
         let mut passthrough_input = StorageApplicationInputData::placeholder_witness();
-        passthrough_input.initial_next_enumeration_counter = u64_as_u32_le(tree.next_enumeration_index());
+        passthrough_input.initial_next_enumeration_counter =
+            u64_as_u32_le(tree.next_enumeration_index());
         passthrough_input.initial_root_hash = tree.root();
         passthrough_input.shard = SHARD_ID_TO_PROCEED;
-        passthrough_input.storage_application_log_state = take_queue_state_from_simulator(&artifacts.deduplicated_rollup_storage_queue_simulator);
+        passthrough_input.storage_application_log_state =
+            take_queue_state_from_simulator(&artifacts.deduplicated_rollup_storage_queue_simulator);
 
         let hasher = <Keccak256 as Digest>::new();
         let mut accumulator = [0u8; 32];
@@ -47,11 +49,14 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
         let mut final_fsm_state = StorageApplicationFSMInputOutput::<F>::placeholder_witness();
         final_fsm_state.next_enumeration_counter = u64_as_u32_le(tree.next_enumeration_index());
         final_fsm_state.current_root_hash = tree.root();
-        final_fsm_state.current_storage_application_log_state = take_queue_state_from_simulator(&&artifacts.deduplicated_rollup_storage_queue_simulator);
+        final_fsm_state.current_storage_application_log_state = take_queue_state_from_simulator(
+            &&artifacts.deduplicated_rollup_storage_queue_simulator,
+        );
         final_fsm_state.current_diffs_keccak_accumulator_state = encode_kecca256_inner_state(state);
 
         let mut passthrough_output = StorageApplicationOutputData::placeholder_witness();
-        passthrough_output.new_next_enumeration_counter = u64_as_u32_le(tree.next_enumeration_index());
+        passthrough_output.new_next_enumeration_counter =
+            u64_as_u32_le(tree.next_enumeration_index());
         passthrough_output.new_root_hash = tree.root();
         passthrough_output.state_diffs_keccak256_hash = accumulator;
 
@@ -64,7 +69,9 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
                 hidden_fsm_input: initial_fsm_state.clone(),
                 hidden_fsm_output: final_fsm_state.clone(),
             },
-            storage_queue_witness: CircuitQueueRawWitness { elements: VecDeque::new() },
+            storage_queue_witness: CircuitQueueRawWitness {
+                elements: VecDeque::new(),
+            },
             merkle_paths: VecDeque::new(),
             leaf_indexes_for_reads: VecDeque::new(),
         };
@@ -108,8 +115,8 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 
     // now proceed as FSM over individual circuits
 
-    use crate::witness::tree::BinarySparseStorageTree;
     use crate::bytes_to_u32_le;
+    use crate::witness::tree::BinarySparseStorageTree;
 
     let mut initial_fsm_state = StorageApplicationFSMInputOutput::<F>::placeholder_witness();
     // queue states are trivial for a start
@@ -120,9 +127,14 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 
     let num_chunks = chunks.len();
 
-    let mut storage_application_simulator = artifacts.deduplicated_rollup_storage_queue_simulator.clone();
+    let mut storage_application_simulator = artifacts
+        .deduplicated_rollup_storage_queue_simulator
+        .clone();
 
-    tracing::debug!("Initial enumeration index = {}", tree.next_enumeration_index());
+    tracing::debug!(
+        "Initial enumeration index = {}",
+        tree.next_enumeration_index()
+    );
     tracing::debug!("Initial root = {}", hex::encode(&tree.root()));
 
     for (idx, chunk) in chunks.into_iter().enumerate() {
@@ -133,10 +145,13 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
 
         let mut passthrough_input = StorageApplicationInputData::placeholder_witness();
         if idx == 0 {
-            passthrough_input.initial_next_enumeration_counter = u64_as_u32_le(tree.next_enumeration_index());
+            passthrough_input.initial_next_enumeration_counter =
+                u64_as_u32_le(tree.next_enumeration_index());
             passthrough_input.initial_root_hash = tree.root();
             passthrough_input.shard = SHARD_ID_TO_PROCEED;
-            passthrough_input.storage_application_log_state = take_queue_state_from_simulator(&artifacts.deduplicated_rollup_storage_queue_simulator);
+            passthrough_input.storage_application_log_state = take_queue_state_from_simulator(
+                &artifacts.deduplicated_rollup_storage_queue_simulator,
+            );
         }
 
         let chunk_len = chunk.len();
@@ -184,10 +199,11 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
                     final_value: el.written_value,
                 };
 
-                let mut extended_state_diff_encoding =
-                    [0u8; keccak256::KECCAK_RATE_BYTES * NUM_KECCAK256_ROUNDS_PER_RECORD_ACCUMULATION];
+                let mut extended_state_diff_encoding = [0u8; keccak256::KECCAK_RATE_BYTES
+                    * NUM_KECCAK256_ROUNDS_PER_RECORD_ACCUMULATION];
                 let packed_encoding = state_diff.encode();
-                extended_state_diff_encoding[0..packed_encoding.len()].copy_from_slice(&packed_encoding);
+                extended_state_diff_encoding[0..packed_encoding.len()]
+                    .copy_from_slice(&packed_encoding);
                 // dbg!(hex::encode(&extended_state_diff_encoding));
 
                 Digest::update(&mut hasher, &extended_state_diff_encoding);
@@ -221,11 +237,17 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
         let mut final_fsm_state = StorageApplicationFSMInputOutput::<F>::placeholder_witness();
         final_fsm_state.next_enumeration_counter = u64_as_u32_le(tree.next_enumeration_index());
         final_fsm_state.current_root_hash = tree.root();
-        final_fsm_state.current_storage_application_log_state = take_queue_state_from_simulator(&storage_application_simulator);
+        final_fsm_state.current_storage_application_log_state =
+            take_queue_state_from_simulator(&storage_application_simulator);
         final_fsm_state.current_diffs_keccak_accumulator_state = encode_kecca256_inner_state(state);
 
         let wit = transform_queue_witness(
-            artifacts.deduplicated_rollup_storage_queue_simulator.witness.iter().skip(storage_queue_state_idx).take(chunk_len)
+            artifacts
+                .deduplicated_rollup_storage_queue_simulator
+                .witness
+                .iter()
+                .skip(storage_queue_state_idx)
+                .take(chunk_len),
         );
 
         storage_queue_state_idx += chunk_len;
@@ -235,7 +257,8 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
             let mut accumulator = [0u8; 32];
             accumulator.copy_from_slice(hasher.clone().finalize().as_slice());
 
-            passthrough_output.new_next_enumeration_counter = u64_as_u32_le(tree.next_enumeration_index());
+            passthrough_output.new_next_enumeration_counter =
+                u64_as_u32_le(tree.next_enumeration_index());
             passthrough_output.new_root_hash = tree.root();
             passthrough_output.state_diffs_keccak256_hash = accumulator;
         }
@@ -249,7 +272,9 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
                 hidden_fsm_input: initial_fsm_state.clone(),
                 hidden_fsm_output: final_fsm_state.clone(),
             },
-            storage_queue_witness: CircuitQueueRawWitness { elements: wit.elements.into_inner().unwrap() },
+            storage_queue_witness: CircuitQueueRawWitness {
+                elements: wit.elements.into_inner().unwrap(),
+            },
             merkle_paths: merkle_paths,
             leaf_indexes_for_reads: leaf_enumeration_index_for_read,
         };
@@ -259,7 +284,10 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
         result.push(input);
     }
 
-    tracing::debug!("Final enumeration index = {}", tree.next_enumeration_index());
+    tracing::debug!(
+        "Final enumeration index = {}",
+        tree.next_enumeration_index()
+    );
     tracing::debug!("Final root = {}", hex::encode(&tree.root()));
 
     result

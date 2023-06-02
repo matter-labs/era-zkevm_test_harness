@@ -1,10 +1,8 @@
 use super::*;
+use crate::boojum::field::SmallField;
+use crate::boojum::gadgets::traits::round_function::*;
 use crate::ethereum_types::U256;
 use crate::toolset::GeometryConfig;
-use derivative::Derivative;
-use rayon::slice::ParallelSliceMut;
-use crate::zkevm_circuits::scheduler::aux::NUM_CIRCUIT_TYPES_TO_SCHEDULE;
-use std::cmp::Ordering;
 use crate::zk_evm::aux_structures::DecommittmentQuery;
 use crate::zk_evm::aux_structures::LogQuery;
 use crate::zk_evm::aux_structures::MemoryIndex;
@@ -12,27 +10,29 @@ use crate::zk_evm::aux_structures::MemoryQuery;
 use crate::zk_evm::precompiles::ecrecover::ECRecoverRoundWitness;
 use crate::zk_evm::precompiles::keccak256::Keccak256RoundWitness;
 use crate::zk_evm::precompiles::sha256::Sha256RoundWitness;
-use tracing;
-use crate::boojum::field::SmallField;
-use crate::zkevm_circuits::demux_log_queue::input::LogDemuxerCircuitInstanceWitness;
-use crate::zkevm_circuits::sha256_round_function::input::Sha256RoundFunctionCircuitInstanceWitness;
-use crate::zkevm_circuits::keccak256_round_function::input::Keccak256RoundFunctionCircuitInstanceWitness;
-use crate::zkevm_circuits::ecrecover::EcrecoverCircuitInstanceWitness;
-use crate::boojum::gadgets::traits::round_function::*;
-use crate::zkevm_circuits::ram_permutation::input::RamPermutationCircuitInstanceWitness;
 use crate::zkevm_circuits::code_unpacker_sha256::input::CodeDecommitterCircuitInstanceWitness;
-use crate::zkevm_circuits::sort_decommittment_requests::input::CodeDecommittmentsDeduplicatorInstanceWitness;
-use crate::zkevm_circuits::storage_validity_by_grand_product::input::StorageDeduplicatorInstanceWitness;
-use crate::zkevm_circuits::log_sorter::input::EventsDeduplicatorInstanceWitness;
-use crate::zkevm_circuits::storage_application::input::StorageApplicationCircuitInstanceWitness;
+use crate::zkevm_circuits::demux_log_queue::input::LogDemuxerCircuitInstanceWitness;
+use crate::zkevm_circuits::ecrecover::EcrecoverCircuitInstanceWitness;
+use crate::zkevm_circuits::keccak256_round_function::input::Keccak256RoundFunctionCircuitInstanceWitness;
 use crate::zkevm_circuits::linear_hasher::input::LinearHasherCircuitInstanceWitness;
+use crate::zkevm_circuits::log_sorter::input::EventsDeduplicatorInstanceWitness;
+use crate::zkevm_circuits::ram_permutation::input::RamPermutationCircuitInstanceWitness;
+use crate::zkevm_circuits::scheduler::aux::NUM_CIRCUIT_TYPES_TO_SCHEDULE;
+use crate::zkevm_circuits::sha256_round_function::input::Sha256RoundFunctionCircuitInstanceWitness;
+use crate::zkevm_circuits::sort_decommittment_requests::input::CodeDecommittmentsDeduplicatorInstanceWitness;
+use crate::zkevm_circuits::storage_application::input::StorageApplicationCircuitInstanceWitness;
+use crate::zkevm_circuits::storage_validity_by_grand_product::input::StorageDeduplicatorInstanceWitness;
 use circuit_definitions::circuit_definitions::base_layer::*;
-use circuit_definitions::encodings::*;
-use circuit_definitions::encodings::recursion_request::*;
-use circuit_definitions::encodings::memory_query::MemoryQueueState;
-use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
-use circuit_definitions::encodings::decommittment_request::DecommittmentQueueState;
 use circuit_definitions::encodings::decommittment_request::DecommittmentQueueSimulator;
+use circuit_definitions::encodings::decommittment_request::DecommittmentQueueState;
+use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
+use circuit_definitions::encodings::memory_query::MemoryQueueState;
+use circuit_definitions::encodings::recursion_request::*;
+use circuit_definitions::encodings::*;
+use derivative::Derivative;
+use rayon::slice::ParallelSliceMut;
+use std::cmp::Ordering;
+use tracing;
 
 #[derive(Derivative)]
 #[derivative(Clone, Default(bound = ""))]
@@ -110,7 +110,7 @@ pub struct FullBlockArtifacts<F: SmallField> {
     pub deduplicated_to_l1_queue_simulator: LogQueueSimulator<F>,
     pub deduplicated_to_l1_queue_states: Vec<LogQueueState<F>>,
 
-    // 
+    //
     pub special_initial_decommittment_queries: Vec<(DecommittmentQuery, Vec<U256>)>,
 
     // keep precompile round functions data
@@ -134,7 +134,8 @@ pub struct FullBlockArtifacts<F: SmallField> {
     pub ram_permutation_circuits_data: Vec<RamPermutationCircuitInstanceWitness<F>>,
     // processed code decommitter circuits, as well as sorting circuit
     pub code_decommitter_circuits_data: Vec<CodeDecommitterCircuitInstanceWitness<F>>,
-    pub decommittments_deduplicator_circuits_data: Vec<CodeDecommittmentsDeduplicatorInstanceWitness<F>>,
+    pub decommittments_deduplicator_circuits_data:
+        Vec<CodeDecommittmentsDeduplicatorInstanceWitness<F>>,
     //
     pub log_demuxer_circuit_data: Vec<LogDemuxerCircuitInstanceWitness<F>>,
     // IO related circuits
@@ -143,9 +144,9 @@ pub struct FullBlockArtifacts<F: SmallField> {
     pub l1_messages_deduplicator_circuit_data: Vec<EventsDeduplicatorInstanceWitness<F>>,
     //
     pub rollup_storage_application_circuit_data: Vec<StorageApplicationCircuitInstanceWitness<F>>,
-    // 
+    //
     pub keccak256_circuits_data: Vec<Keccak256RoundFunctionCircuitInstanceWitness<F>>,
-    // 
+    //
     pub sha256_circuits_data: Vec<Sha256RoundFunctionCircuitInstanceWitness<F>>,
     //
     pub ecrecover_circuits_data: Vec<EcrecoverCircuitInstanceWitness<F>>,
@@ -153,16 +154,16 @@ pub struct FullBlockArtifacts<F: SmallField> {
     pub l1_messages_linear_hash_data: Vec<LinearHasherCircuitInstanceWitness<F>>,
 }
 
+use crate::boojum::algebraic_props::round_function::AlgebraicRoundFunction;
 use crate::witness::tree::*;
 use blake2::Blake2s256;
-use crate::boojum::algebraic_props::round_function::AlgebraicRoundFunction;
 
 impl<F: SmallField> FullBlockArtifacts<F> {
     pub fn process<
-    R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+        R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
     >(
-        &mut self, 
-        round_function: &R, 
+        &mut self,
+        round_function: &R,
         geometry: &GeometryConfig,
         tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
         num_non_deterministic_heap_queries: usize,
@@ -174,8 +175,9 @@ impl<F: SmallField> FullBlockArtifacts<F> {
         for (cycle, query) in self.vm_memory_queries_accumulated.iter() {
             self.all_memory_queries_accumulated.push(*query);
 
-            let (_old_tail, intermediate_info) =
-                self.memory_queue_simulator.push_and_output_intermediate_data(*query, round_function);
+            let (_old_tail, intermediate_info) = self
+                .memory_queue_simulator
+                .push_and_output_intermediate_data(*query, round_function);
 
             self.vm_memory_queue_states
                 .push((*cycle, false, intermediate_info));
@@ -183,16 +185,22 @@ impl<F: SmallField> FullBlockArtifacts<F> {
         }
 
         assert!(
-            self.memory_queue_simulator.num_items as usize == self.vm_memory_queries_accumulated.len()
+            self.memory_queue_simulator.num_items as usize
+                == self.vm_memory_queries_accumulated.len()
         );
 
         // ----------------------------
 
         {
-            assert_eq!(self.all_memory_queries_accumulated.len(), self.all_memory_queue_states.len());
-            assert_eq!(self.all_memory_queries_accumulated.len(), self.memory_queue_simulator.num_items as usize);
+            assert_eq!(
+                self.all_memory_queries_accumulated.len(),
+                self.all_memory_queue_states.len()
+            );
+            assert_eq!(
+                self.all_memory_queries_accumulated.len(),
+                self.memory_queue_simulator.num_items as usize
+            );
         }
-
 
         // ----------------------------
 
@@ -231,7 +239,7 @@ impl<F: SmallField> FullBlockArtifacts<F> {
         let log_demuxer_witness = compute_logs_demux(
             self,
             geometry.cycles_per_log_demuxer as usize,
-            round_function
+            round_function,
         );
 
         self.log_demuxer_circuit_data = log_demuxer_witness;
@@ -245,7 +253,7 @@ impl<F: SmallField> FullBlockArtifacts<F> {
         let keccak256_circuits_data = keccak256_decompose_into_per_circuit_witness(
             self,
             geometry.cycles_per_keccak256_circuit as usize,
-            round_function
+            round_function,
         );
         self.keccak256_circuits_data = keccak256_circuits_data;
 
@@ -258,7 +266,7 @@ impl<F: SmallField> FullBlockArtifacts<F> {
         let sha256_circuits_data = sha256_decompose_into_per_circuit_witness(
             self,
             geometry.cycles_per_sha256_circuit as usize,
-            round_function
+            round_function,
         );
         self.sha256_circuits_data = sha256_circuits_data;
 
@@ -271,7 +279,7 @@ impl<F: SmallField> FullBlockArtifacts<F> {
         let ecrecover_circuits_data = ecrecover_decompose_into_per_circuit_witness(
             self,
             geometry.cycles_per_ecrecover_circuit as usize,
-            round_function
+            round_function,
         );
         self.ecrecover_circuits_data = ecrecover_circuits_data;
 
@@ -299,7 +307,7 @@ impl<F: SmallField> FullBlockArtifacts<F> {
         let storage_deduplicator_circuit_data = compute_storage_dedup_and_sort(
             self,
             geometry.cycles_per_storage_sorter as usize,
-            round_function
+            round_function,
         );
         self.storage_deduplicator_circuit_data = storage_deduplicator_circuit_data;
 
@@ -314,7 +322,7 @@ impl<F: SmallField> FullBlockArtifacts<F> {
             &self.demuxed_event_queue_states,
             &mut self.deduplicated_event_queue_simulator,
             geometry.cycles_per_events_or_l1_messages_sorter as usize,
-            round_function
+            round_function,
         );
 
         self.events_deduplicator_circuit_data = events_deduplicator_circuit_data;
@@ -328,7 +336,7 @@ impl<F: SmallField> FullBlockArtifacts<F> {
             &self.demuxed_to_l1_queue_states,
             &mut self.deduplicated_to_l1_queue_simulator,
             geometry.cycles_per_events_or_l1_messages_sorter as usize,
-            round_function
+            round_function,
         );
 
         self.l1_messages_deduplicator_circuit_data = l1_messages_deduplicator_circuit_data;
@@ -337,7 +345,11 @@ impl<F: SmallField> FullBlockArtifacts<F> {
 
         tracing::debug!("Running L1 messages linear hash simulation");
 
-        assert!(self.deduplicated_to_l1_queue_simulator.num_items <= geometry.limit_for_l1_messages_pudata_hasher, "too many L1 messages to linearly hash by single circuit");
+        assert!(
+            self.deduplicated_to_l1_queue_simulator.num_items
+                <= geometry.limit_for_l1_messages_pudata_hasher,
+            "too many L1 messages to linearly hash by single circuit"
+        );
 
         use crate::witness::individual_circuits::data_hasher_and_merklizer::compute_linear_keccak256;
 
@@ -358,7 +370,7 @@ impl<F: SmallField> FullBlockArtifacts<F> {
             self,
             tree,
             round_function,
-            geometry.cycles_per_storage_application as usize
+            geometry.cycles_per_storage_application as usize,
         );
 
         self.rollup_storage_application_circuit_data = rollup_storage_application_circuit_data;
@@ -367,8 +379,8 @@ impl<F: SmallField> FullBlockArtifacts<F> {
     }
 }
 
-use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use crate::boojum::gadgets::traits::allocatable::*;
+use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone)]
@@ -376,7 +388,7 @@ use crate::boojum::gadgets::traits::allocatable::*;
 pub struct BlockBasicCircuits<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
-> 
+>
 where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <zkevm_circuits::base_structures::memory_query::MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <zkevm_circuits::base_structures::decommit_query::DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
@@ -417,7 +429,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
 impl<
 F: SmallField,
 R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
-> BlockBasicCircuits<F, R> 
+> BlockBasicCircuits<F, R>
 where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <zkevm_circuits::base_structures::memory_query::MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <zkevm_circuits::base_structures::decommit_query::DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
@@ -427,20 +439,20 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
     [(); <zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
 {
     pub fn into_flattened_set(self) -> Vec<ZkSyncBaseLayerCircuit<F, VmWitnessOracle<F>, R>> {
-        let BlockBasicCircuits { 
-            main_vm_circuits, 
-            code_decommittments_sorter_circuits, 
-            code_decommitter_circuits, 
-            log_demux_circuits, 
-            keccak_precompile_circuits, 
-            sha256_precompile_circuits, 
-            ecrecover_precompile_circuits, 
-            ram_permutation_circuits, 
-            storage_sorter_circuits, 
-            storage_application_circuits, 
-            events_sorter_circuits, 
+        let BlockBasicCircuits {
+            main_vm_circuits,
+            code_decommittments_sorter_circuits,
+            code_decommitter_circuits,
+            log_demux_circuits,
+            keccak_precompile_circuits,
+            sha256_precompile_circuits,
+            ecrecover_precompile_circuits,
+            ram_permutation_circuits,
+            storage_sorter_circuits,
+            storage_application_circuits,
+            events_sorter_circuits,
             l1_messages_sorter_circuits,
-            l1_messages_hasher_circuits, 
+            l1_messages_hasher_circuits,
         } = self;
 
         let mut result = vec![];
@@ -457,17 +469,17 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
         result.extend(ecrecover_precompile_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuit::ECRecover(el)));
 
         result.extend(ram_permutation_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuit::RAMPermutation(el)));
-        
+
         result.extend(storage_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuit::StorageSorter(el)));
 
         result.extend(storage_application_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuit::StorageApplication(el)));
 
         result.extend(events_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuit::EventsSorter(el)));
-        
+
         result.extend(l1_messages_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuit::L1MessagesSorter(el)));
-        
+
         result.extend(l1_messages_hasher_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuit::L1MessagesHasher(el)));
-        
+
         result
     }
 }
@@ -509,45 +521,97 @@ pub struct BlockBasicCircuitsPublicInputs<F: SmallField> {
 
 impl<F: SmallField> BlockBasicCircuitsPublicInputs<F> {
     pub fn into_flattened_set(self) -> Vec<ZkSyncBaseLayerCircuitInput<F>> {
-        let BlockBasicCircuitsPublicInputs { 
-            main_vm_circuits, 
-            code_decommittments_sorter_circuits, 
-            code_decommitter_circuits, 
-            log_demux_circuits, 
-            keccak_precompile_circuits, 
-            sha256_precompile_circuits, 
-            ecrecover_precompile_circuits, 
-            ram_permutation_circuits, 
-            storage_sorter_circuits, 
-            storage_application_circuits, 
-            events_sorter_circuits, 
-            l1_messages_sorter_circuits, 
+        let BlockBasicCircuitsPublicInputs {
+            main_vm_circuits,
+            code_decommittments_sorter_circuits,
+            code_decommitter_circuits,
+            log_demux_circuits,
+            keccak_precompile_circuits,
+            sha256_precompile_circuits,
+            ecrecover_precompile_circuits,
+            ram_permutation_circuits,
+            storage_sorter_circuits,
+            storage_application_circuits,
+            events_sorter_circuits,
+            l1_messages_sorter_circuits,
             l1_messages_hasher_circuits_inputs,
         } = self;
 
         let mut result = vec![];
-        result.extend(main_vm_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuitInput::MainVM(el)));
+        result.extend(
+            main_vm_circuits
+                .into_iter()
+                .map(|el| ZkSyncBaseLayerCircuitInput::MainVM(el)),
+        );
 
-        result.extend(code_decommittments_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuitInput::CodeDecommittmentsSorter(el)));
+        result.extend(
+            code_decommittments_sorter_circuits
+                .into_iter()
+                .map(|el| ZkSyncBaseLayerCircuitInput::CodeDecommittmentsSorter(el)),
+        );
 
-        result.extend(code_decommitter_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuitInput::CodeDecommitter(el)));
+        result.extend(
+            code_decommitter_circuits
+                .into_iter()
+                .map(|el| ZkSyncBaseLayerCircuitInput::CodeDecommitter(el)),
+        );
 
-        result.extend(log_demux_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuitInput::LogDemuxer(el)));
+        result.extend(
+            log_demux_circuits
+                .into_iter()
+                .map(|el| ZkSyncBaseLayerCircuitInput::LogDemuxer(el)),
+        );
 
-        result.extend(keccak_precompile_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuitInput::KeccakRoundFunction(el)));
-        result.extend(sha256_precompile_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuitInput::Sha256RoundFunction(el)));
-        result.extend(ecrecover_precompile_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuitInput::ECRecover(el)));
+        result.extend(
+            keccak_precompile_circuits
+                .into_iter()
+                .map(|el| ZkSyncBaseLayerCircuitInput::KeccakRoundFunction(el)),
+        );
+        result.extend(
+            sha256_precompile_circuits
+                .into_iter()
+                .map(|el| ZkSyncBaseLayerCircuitInput::Sha256RoundFunction(el)),
+        );
+        result.extend(
+            ecrecover_precompile_circuits
+                .into_iter()
+                .map(|el| ZkSyncBaseLayerCircuitInput::ECRecover(el)),
+        );
 
-        result.extend(ram_permutation_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuitInput::RAMPermutation(el)));
+        result.extend(
+            ram_permutation_circuits
+                .into_iter()
+                .map(|el| ZkSyncBaseLayerCircuitInput::RAMPermutation(el)),
+        );
 
-        result.extend(storage_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuitInput::StorageSorter(el)));
+        result.extend(
+            storage_sorter_circuits
+                .into_iter()
+                .map(|el| ZkSyncBaseLayerCircuitInput::StorageSorter(el)),
+        );
 
-        result.extend(storage_application_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuitInput::StorageApplication(el)));
+        result.extend(
+            storage_application_circuits
+                .into_iter()
+                .map(|el| ZkSyncBaseLayerCircuitInput::StorageApplication(el)),
+        );
 
-        result.extend(events_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuitInput::EventsSorter(el)));
-        result.extend(l1_messages_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerCircuitInput::L1MessagesSorter(el)));
+        result.extend(
+            events_sorter_circuits
+                .into_iter()
+                .map(|el| ZkSyncBaseLayerCircuitInput::EventsSorter(el)),
+        );
+        result.extend(
+            l1_messages_sorter_circuits
+                .into_iter()
+                .map(|el| ZkSyncBaseLayerCircuitInput::L1MessagesSorter(el)),
+        );
 
-        result.extend(l1_messages_hasher_circuits_inputs.into_iter().map(|el| ZkSyncBaseLayerCircuitInput::L1MessagesHasher(el)));
+        result.extend(
+            l1_messages_hasher_circuits_inputs
+                .into_iter()
+                .map(|el| ZkSyncBaseLayerCircuitInput::L1MessagesHasher(el)),
+        );
 
         result
     }
@@ -558,8 +622,13 @@ impl<F: SmallField> BlockBasicCircuitsPublicInputs<F> {
         self,
         closed_forms_wits: BlockBasicCircuitsPublicCompactFormsWitnesses<F>,
         round_function: &R,
-    ) -> [(u64, RecursionQueueSimulator<F>, Vec<ZkSyncBaseLayerClosedFormInput<F>>); NUM_CIRCUIT_TYPES_TO_SCHEDULE] {
-        let mut simulators = vec![(0u64, RecursionQueueSimulator::empty(), vec![]); NUM_CIRCUIT_TYPES_TO_SCHEDULE];
+    ) -> [(
+        u64,
+        RecursionQueueSimulator<F>,
+        Vec<ZkSyncBaseLayerClosedFormInput<F>>,
+    ); NUM_CIRCUIT_TYPES_TO_SCHEDULE] {
+        let mut simulators =
+            vec![(0u64, RecursionQueueSimulator::empty(), vec![]); NUM_CIRCUIT_TYPES_TO_SCHEDULE];
         let flattened_set = self.into_flattened_set();
         let wits_set = closed_forms_wits.into_flattened_set();
         assert_eq!(flattened_set.len(), wits_set.len());
@@ -621,50 +690,103 @@ pub struct BlockBasicCircuitsPublicCompactFormsWitnesses<F: SmallField> {
     // sort and dedup L1 messages
     pub l1_messages_sorter_circuits: Vec<ClosedFormInputCompactFormWitness<F>>,
     // hash l1 messages into pubdata
-    pub l1_messages_hasher_circuits_compact_forms_witnesses: Vec<ClosedFormInputCompactFormWitness<F>>,
+    pub l1_messages_hasher_circuits_compact_forms_witnesses:
+        Vec<ClosedFormInputCompactFormWitness<F>>,
 }
 
 impl<F: SmallField> BlockBasicCircuitsPublicCompactFormsWitnesses<F> {
     pub fn into_flattened_set(self) -> Vec<ZkSyncBaseLayerClosedFormInput<F>> {
-        let BlockBasicCircuitsPublicCompactFormsWitnesses { 
-            main_vm_circuits, 
-            code_decommittments_sorter_circuits, 
-            code_decommitter_circuits, 
-            log_demux_circuits, 
-            keccak_precompile_circuits, 
-            sha256_precompile_circuits, 
-            ecrecover_precompile_circuits, 
-            ram_permutation_circuits, 
-            storage_sorter_circuits, 
-            storage_application_circuits, 
-            events_sorter_circuits, 
+        let BlockBasicCircuitsPublicCompactFormsWitnesses {
+            main_vm_circuits,
+            code_decommittments_sorter_circuits,
+            code_decommitter_circuits,
+            log_demux_circuits,
+            keccak_precompile_circuits,
+            sha256_precompile_circuits,
+            ecrecover_precompile_circuits,
+            ram_permutation_circuits,
+            storage_sorter_circuits,
+            storage_application_circuits,
+            events_sorter_circuits,
             l1_messages_sorter_circuits,
             l1_messages_hasher_circuits_compact_forms_witnesses,
         } = self;
 
         let mut result = vec![];
-        result.extend(main_vm_circuits.into_iter().map(|el| ZkSyncBaseLayerClosedFormInput::MainVM(el)));
+        result.extend(
+            main_vm_circuits
+                .into_iter()
+                .map(|el| ZkSyncBaseLayerClosedFormInput::MainVM(el)),
+        );
 
-        result.extend(code_decommittments_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerClosedFormInput::CodeDecommittmentsSorter(el)));
+        result.extend(
+            code_decommittments_sorter_circuits
+                .into_iter()
+                .map(|el| ZkSyncBaseLayerClosedFormInput::CodeDecommittmentsSorter(el)),
+        );
 
-        result.extend(code_decommitter_circuits.into_iter().map(|el| ZkSyncBaseLayerClosedFormInput::CodeDecommitter(el)));
+        result.extend(
+            code_decommitter_circuits
+                .into_iter()
+                .map(|el| ZkSyncBaseLayerClosedFormInput::CodeDecommitter(el)),
+        );
 
-        result.extend(log_demux_circuits.into_iter().map(|el| ZkSyncBaseLayerClosedFormInput::LogDemuxer(el)));
+        result.extend(
+            log_demux_circuits
+                .into_iter()
+                .map(|el| ZkSyncBaseLayerClosedFormInput::LogDemuxer(el)),
+        );
 
-        result.extend(keccak_precompile_circuits.into_iter().map(|el| ZkSyncBaseLayerClosedFormInput::KeccakRoundFunction(el)));
-        result.extend(sha256_precompile_circuits.into_iter().map(|el| ZkSyncBaseLayerClosedFormInput::Sha256RoundFunction(el)));
-        result.extend(ecrecover_precompile_circuits.into_iter().map(|el| ZkSyncBaseLayerClosedFormInput::ECRecover(el)));
+        result.extend(
+            keccak_precompile_circuits
+                .into_iter()
+                .map(|el| ZkSyncBaseLayerClosedFormInput::KeccakRoundFunction(el)),
+        );
+        result.extend(
+            sha256_precompile_circuits
+                .into_iter()
+                .map(|el| ZkSyncBaseLayerClosedFormInput::Sha256RoundFunction(el)),
+        );
+        result.extend(
+            ecrecover_precompile_circuits
+                .into_iter()
+                .map(|el| ZkSyncBaseLayerClosedFormInput::ECRecover(el)),
+        );
 
-        result.extend(ram_permutation_circuits.into_iter().map(|el| ZkSyncBaseLayerClosedFormInput::RAMPermutation(el)));
+        result.extend(
+            ram_permutation_circuits
+                .into_iter()
+                .map(|el| ZkSyncBaseLayerClosedFormInput::RAMPermutation(el)),
+        );
 
-        result.extend(storage_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerClosedFormInput::StorageSorter(el)));
+        result.extend(
+            storage_sorter_circuits
+                .into_iter()
+                .map(|el| ZkSyncBaseLayerClosedFormInput::StorageSorter(el)),
+        );
 
-        result.extend(storage_application_circuits.into_iter().map(|el| ZkSyncBaseLayerClosedFormInput::StorageApplication(el)));
+        result.extend(
+            storage_application_circuits
+                .into_iter()
+                .map(|el| ZkSyncBaseLayerClosedFormInput::StorageApplication(el)),
+        );
 
-        result.extend(events_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerClosedFormInput::EventsSorter(el)));
-        result.extend(l1_messages_sorter_circuits.into_iter().map(|el| ZkSyncBaseLayerClosedFormInput::L1MessagesSorter(el)));
+        result.extend(
+            events_sorter_circuits
+                .into_iter()
+                .map(|el| ZkSyncBaseLayerClosedFormInput::EventsSorter(el)),
+        );
+        result.extend(
+            l1_messages_sorter_circuits
+                .into_iter()
+                .map(|el| ZkSyncBaseLayerClosedFormInput::L1MessagesSorter(el)),
+        );
 
-        result.extend(l1_messages_hasher_circuits_compact_forms_witnesses.into_iter().map(|el| ZkSyncBaseLayerClosedFormInput::L1MessagesHasher(el)));
+        result.extend(
+            l1_messages_hasher_circuits_compact_forms_witnesses
+                .into_iter()
+                .map(|el| ZkSyncBaseLayerClosedFormInput::L1MessagesHasher(el)),
+        );
 
         result
     }

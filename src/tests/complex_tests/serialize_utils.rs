@@ -1,6 +1,6 @@
-use std::{collections::HashMap, str::FromStr};
-use serde::{de, Deserialize, Deserializer};
 use crate::zk_evm::ethereum_types::Address;
+use serde::{de, Deserialize, Deserializer};
+use std::{collections::HashMap, str::FromStr};
 
 fn hex_string_to_bytecode<'de, D>(deserialized_string: &str) -> Result<Vec<[u8; 32]>, D::Error>
 where
@@ -34,14 +34,21 @@ where
     hex_string_to_bytecode::<D>(&deserialized_string)
 }
 
-pub fn deserialize_bytecodes_with_addresses<'de, D>(deserializer: D) -> Result<HashMap<Address, Vec<[u8; 32]>>, D::Error>
+pub fn deserialize_bytecodes_with_addresses<'de, D>(
+    deserializer: D,
+) -> Result<HashMap<Address, Vec<[u8; 32]>>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
     let deserialized_strings: HashMap<String, String> = HashMap::deserialize(deserializer)?;
-    let result : Result<HashMap<_, Vec<[u8; 32]>>, _> = deserialized_strings
+    let result: Result<HashMap<_, Vec<[u8; 32]>>, _> = deserialized_strings
         .iter()
-        .map(|(key, value)| Ok((Address::from_str(key).unwrap(), hex_string_to_bytecode::<D>(value)?)))
+        .map(|(key, value)| {
+            Ok((
+                Address::from_str(key).unwrap(),
+                hex_string_to_bytecode::<D>(value)?,
+            ))
+        })
         .collect();
 
     result

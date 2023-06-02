@@ -1,20 +1,17 @@
 use std::ops::Add;
 
-use crate::witness::tree::BinaryHasher;
-use crate::boojum::{algebraic_props::round_function, field::SmallField};
 use crate::boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
+use crate::boojum::config::*;
 use crate::boojum::cs::implementations::setup::FinalizationHintsForProver;
 use crate::boojum::field::goldilocks::GoldilocksExt2;
-use num_bigint::BigUint;
+use crate::boojum::{algebraic_props::round_function, field::SmallField};
+use crate::witness::tree::BinaryHasher;
 use crate::zk_evm::{address_to_u256, ethereum_types::*};
-use crate::boojum::config::*;
 use circuit_definitions::encodings::{BytesSerializable, QueueSimulator};
+use num_bigint::BigUint;
 
 pub fn u64_as_u32_le(value: u64) -> [u32; 2] {
-    [
-        value as u32,
-        (value >> 32) as u32,
-    ]
+    [value as u32, (value >> 32) as u32]
 }
 
 pub fn u128_as_u32_le(value: u128) -> [u32; 4] {
@@ -80,11 +77,11 @@ pub fn bytes_to_u128_le<const N: usize, const M: usize>(bytes: &[u8; N]) -> [u12
 }
 
 pub fn binary_merklize_set<
-    'a, 
-    const N: usize, 
-    T: BytesSerializable<N> + 'a, 
+    'a,
+    const N: usize,
+    T: BytesSerializable<N> + 'a,
     H: BinaryHasher<32>,
-    I: Iterator<Item = &'a T> + ExactSizeIterator
+    I: Iterator<Item = &'a T> + ExactSizeIterator,
 >(
     input: I,
     tree_size: usize,
@@ -92,7 +89,7 @@ pub fn binary_merklize_set<
     let input_len = input.len();
     assert!(tree_size >= input_len);
     assert!(tree_size.is_power_of_two());
-    let mut leaf_hashes =  Vec::with_capacity(tree_size);
+    let mut leaf_hashes = Vec::with_capacity(tree_size);
 
     for el in input {
         let encoding = el.serialize();
@@ -102,7 +99,7 @@ pub fn binary_merklize_set<
 
     let trivial_leaf_hash = H::leaf_hash(&[0u8; N]);
     leaf_hashes.resize(tree_size, trivial_leaf_hash);
-    
+
     let mut previous_layer_hashes = leaf_hashes;
     let mut node_hashes = vec![];
 
@@ -115,7 +112,7 @@ pub fn binary_merklize_set<
         }
 
         let p = std::mem::replace(&mut node_hashes, vec![]);
-        previous_layer_hashes = p;   
+        previous_layer_hashes = p;
     }
 
     assert_eq!(previous_layer_hashes.len(), 1);
@@ -128,15 +125,15 @@ pub const BASE_LAYER_FRI_LDE_FACTOR: usize = 2;
 pub const BASE_LAYER_CAP_SIZE: usize = 32;
 pub const SECURITY_BITS_TARGET: usize = 100;
 
-use crate::zkevm_circuits::scheduler::QUEUE_FINAL_STATE_COMMITMENT_LENGTH;
-use crate::boojum::gadgets::traits::round_function::BuildableCircuitRoundFunction;
 use crate::boojum::algebraic_props::round_function::AlgebraicRoundFunction;
+use crate::boojum::gadgets::traits::round_function::BuildableCircuitRoundFunction;
+use crate::zkevm_circuits::scheduler::QUEUE_FINAL_STATE_COMMITMENT_LENGTH;
 use circuit_definitions::encodings::OutOfCircuitFixedLengthEncodable;
 
 pub fn finalize_queue_state<
-F: SmallField,
-R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
-const N: usize,
+    F: SmallField,
+    R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+    const N: usize,
 >(
     tail: [F; N],
     _round_function: &R,
@@ -149,13 +146,15 @@ const N: usize,
     let mut state = R::initial_state();
     use crate::boojum::algebraic_props::round_function::absorb_into_state_vararg;
     absorb_into_state_vararg::<F, R, AbsorbtionModeOverwrite, 8, 12, 4>(&mut state, &to_absorb);
-    let commitment = <R as AlgebraicRoundFunction<F, 8, 12, 4>>::state_into_committment::<QUEUE_FINAL_STATE_COMMITMENT_LENGTH>(&state);
+    let commitment = <R as AlgebraicRoundFunction<F, 8, 12, 4>>::state_into_committment::<
+        QUEUE_FINAL_STATE_COMMITMENT_LENGTH,
+    >(&state);
 
     commitment
 }
 
 pub fn finalized_queue_state_as_bytes<F: SmallField>(
-    input: [F; QUEUE_FINAL_STATE_COMMITMENT_LENGTH]
+    input: [F; QUEUE_FINAL_STATE_COMMITMENT_LENGTH],
 ) -> [u8; 32] {
     let mut result = [0u8; 32];
     for (dst, src) in result.array_chunks_mut::<8>().zip(input.into_iter()) {

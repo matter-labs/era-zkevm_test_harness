@@ -1,4 +1,4 @@
-use std::{collections::HashMap};
+use std::collections::HashMap;
 
 use crate::witness::tracer::QueryMarker;
 use crate::zk_evm::{aux_structures::LogQuery, vm_state::CallStackEntry};
@@ -11,14 +11,24 @@ pub enum RenumeratedQueryIndex {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum LogAction {
-    ForwardAndRolledBack {forward_counter: usize, renumerated_rollback_counter_as_forward: usize},
-    ForwardAndNotRolledBack {forward_coutner: usize, rollback_counter: usize},
+    ForwardAndRolledBack {
+        forward_counter: usize,
+        renumerated_rollback_counter_as_forward: usize,
+    },
+    ForwardAndNotRolledBack {
+        forward_coutner: usize,
+        rollback_counter: usize,
+    },
     ForwardNoRollback(usize),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ExtendedLogQuery {
-    Query{marker: QueryMarker, cycle: u32, query: LogQuery},
+    Query {
+        marker: QueryMarker,
+        cycle: u32,
+        query: LogQuery,
+    },
     FrameForwardHeadMarker(usize),
     FrameForwardTailMarker(usize),
     FrameRollbackHeadMarker(usize),
@@ -51,7 +61,7 @@ impl CallstackEntryWithAuxData {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum OutOfScopeReason {
     Fresh,
-    Exited{ panic: bool },
+    Exited { panic: bool },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -60,8 +70,6 @@ pub enum CallstackAction {
     OutOfScope(OutOfScopeReason),
     PopFromStack { panic: bool },
 }
-
-
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CallstackActionHistoryEntry {
@@ -90,7 +98,7 @@ impl CallstackActionHistoryEntry {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum MergeIntention {
     IntoForwardTail,
-    IntoRollbackHead
+    IntoRollbackHead,
 }
 
 // special cases: if we merge (potentially empty) segment of the current frame
@@ -152,7 +160,10 @@ impl CallstackWithAuxData {
         new
     }
 
-    pub fn from_initial_callstack(monotonic_cycle_counter: u32, simple_entry: CallStackEntry) -> Self {
+    pub fn from_initial_callstack(
+        monotonic_cycle_counter: u32,
+        simple_entry: CallStackEntry,
+    ) -> Self {
         let mut new = Self::empty();
         let current = new.current_entry.entry.clone();
         new.push_entry(monotonic_cycle_counter, current, simple_entry);
@@ -166,7 +177,8 @@ impl CallstackWithAuxData {
         previous_simple_entry: CallStackEntry,
         new_simple_entry: CallStackEntry,
     ) {
-        self.flat_new_frames_history.push((monotonic_cycle_counter, new_simple_entry));
+        self.flat_new_frames_history
+            .push((monotonic_cycle_counter, new_simple_entry));
 
         let new_counter = self.monotonic_frame_counter;
         self.monotonic_frame_counter += 1;
@@ -240,19 +252,22 @@ impl CallstackWithAuxData {
         // work with the rollback parts
         if panicked {
             self.current_entry.forward_queue.extend(forward_queue);
-            self.current_entry.forward_queue.push(ExtendedLogQuery::FrameForwardTailMarker(frame_index));
+            self.current_entry
+                .forward_queue
+                .push(ExtendedLogQuery::FrameForwardTailMarker(frame_index));
 
             rollback_queue.push(ExtendedLogQuery::FrameRollbackHeadMarker(frame_index));
 
             let adjusted_rollbacks = rollback_queue.into_iter().rev().map(|mut el| {
                 match &mut el {
-                    ExtendedLogQuery::Query { mut marker, .. } => {
-                        match &mut marker {
-                            QueryMarker::Rollback { cycle_of_applied_rollback, .. } => {
-                                *cycle_of_applied_rollback = Some(monotonic_cycle_counter);
-                            },
-                            _ => {}
+                    ExtendedLogQuery::Query { mut marker, .. } => match &mut marker {
+                        QueryMarker::Rollback {
+                            cycle_of_applied_rollback,
+                            ..
+                        } => {
+                            *cycle_of_applied_rollback = Some(monotonic_cycle_counter);
                         }
+                        _ => {}
                     },
                     _ => {}
                 }
@@ -260,9 +275,7 @@ impl CallstackWithAuxData {
                 el
             });
 
-            self.current_entry
-                .forward_queue
-                .extend(adjusted_rollbacks);
+            self.current_entry.forward_queue.extend(adjusted_rollbacks);
 
             // count adjustment
             let mut num_rollbacks = 0;
@@ -271,29 +284,33 @@ impl CallstackWithAuxData {
                 match el {
                     LogAction::ForwardAndNotRolledBack { .. } => {
                         num_rollbacks += 1;
-                    },
+                    }
                     _ => {}
                 }
             }
 
             for (_cycle, el) in history_of_current.actions.iter_mut() {
                 let adjusted_el = match &*el {
-                    LogAction::ForwardAndNotRolledBack { forward_coutner, rollback_counter } => {
+                    LogAction::ForwardAndNotRolledBack {
+                        forward_coutner,
+                        rollback_counter,
+                    } => {
                         // we enumerate rollback counter from the very end of the flattened queue
                         // and instead it should become an element from the forward queue
-                        LogAction::ForwardAndRolledBack { 
-                            forward_counter: *forward_coutner, 
-                            renumerated_rollback_counter_as_forward: self.forward_flattened_counter + *rollback_counter
+                        LogAction::ForwardAndRolledBack {
+                            forward_counter: *forward_coutner,
+                            renumerated_rollback_counter_as_forward: self.forward_flattened_counter
+                                + *rollback_counter,
                         }
-                    },
+                    }
                     a @ LogAction::ForwardAndRolledBack { .. } => {
                         // it has become the element of the forward queue already
                         *a
-                    },
-                    a @ LogAction::ForwardNoRollback (..) => {
+                    }
+                    a @ LogAction::ForwardNoRollback(..) => {
                         // never affected
                         *a
-                    },
+                    }
                 };
 
                 *el = adjusted_el;
@@ -308,13 +325,18 @@ impl CallstackWithAuxData {
 
             // just glue
             self.current_entry.forward_queue.extend(forward_queue);
-            self.current_entry.forward_queue.push(ExtendedLogQuery::FrameForwardTailMarker(frame_index));
+            self.current_entry
+                .forward_queue
+                .push(ExtendedLogQuery::FrameForwardTailMarker(frame_index));
             self.current_entry.rollback_queue.extend(rollback_queue);
-            self.current_entry.rollback_queue.push(ExtendedLogQuery::FrameRollbackHeadMarker(frame_index));
+            self.current_entry
+                .rollback_queue
+                .push(ExtendedLogQuery::FrameRollbackHeadMarker(frame_index));
         }
 
         // update the current history
-        history_of_current.action = CallstackAction::OutOfScope(OutOfScopeReason::Exited { panic: panicked } );
+        history_of_current.action =
+            CallstackAction::OutOfScope(OutOfScopeReason::Exited { panic: panicked });
         history_of_current.end_cycle = Some(monotonic_cycle_counter);
 
         self.full_history.push(history_of_current);
@@ -333,27 +355,46 @@ impl CallstackWithAuxData {
             let query_index = self.rollbackable_monotonic_counter;
             self.rollbackable_monotonic_counter += 1;
 
-            let marker = QueryMarker::Forward {unique_query_id, in_frame: current_frame_index, index: query_index, cycle: monotonic_cycle_counter};
-            let full_query = ExtendedLogQuery::Query { marker, cycle: monotonic_cycle_counter, query: log_query };
+            let marker = QueryMarker::Forward {
+                unique_query_id,
+                in_frame: current_frame_index,
+                index: query_index,
+                cycle: monotonic_cycle_counter,
+            };
+            let full_query = ExtendedLogQuery::Query {
+                marker,
+                cycle: monotonic_cycle_counter,
+                query: log_query,
+            };
 
-            self.current_entry
-                .forward_queue
-                .push(full_query);
+            self.current_entry.forward_queue.push(full_query);
 
             let mut rollback_query = log_query;
             rollback_query.rollback = true;
 
-            self.log_access_history.push((monotonic_cycle_counter, marker));
+            self.log_access_history
+                .push((monotonic_cycle_counter, marker));
 
             let unique_query_id = self.unique_query_id_counter;
             self.unique_query_id_counter += 1;
 
-            let marker = QueryMarker::Rollback {unique_query_id, in_frame: current_frame_index, index: query_index, cycle_of_declaration: monotonic_cycle_counter, cycle_of_applied_rollback: None};
-            let full_query = ExtendedLogQuery::Query { marker, cycle: monotonic_cycle_counter, query: rollback_query };
+            let marker = QueryMarker::Rollback {
+                unique_query_id,
+                in_frame: current_frame_index,
+                index: query_index,
+                cycle_of_declaration: monotonic_cycle_counter,
+                cycle_of_applied_rollback: None,
+            };
+            let full_query = ExtendedLogQuery::Query {
+                marker,
+                cycle: monotonic_cycle_counter,
+                query: rollback_query,
+            };
 
             self.current_entry.rollback_queue.push(full_query);
 
-            self.log_access_history.push((monotonic_cycle_counter, marker));
+            self.log_access_history
+                .push((monotonic_cycle_counter, marker));
 
             let forward_flattened_counter = self.forward_flattened_counter;
             let rollback_flattened_counter = self.rollback_flattened_counter;
@@ -361,22 +402,19 @@ impl CallstackWithAuxData {
             self.forward_flattened_counter += 1;
             self.rollback_flattened_counter += 1;
 
-            self.current_entry.current_history_record.actions.push(
-                (
-                    monotonic_cycle_counter, 
-                    LogAction::ForwardAndNotRolledBack { forward_coutner: forward_flattened_counter, rollback_counter: rollback_flattened_counter }
-                )
-            );
+            self.current_entry.current_history_record.actions.push((
+                monotonic_cycle_counter,
+                LogAction::ForwardAndNotRolledBack {
+                    forward_coutner: forward_flattened_counter,
+                    rollback_counter: rollback_flattened_counter,
+                },
+            ));
 
             // snapshot it
-            self.log_queue_access_snapshots.push(
-                (
-                    monotonic_cycle_counter, 
-                    RenumeratedQueryIndex::ForwardIndexAndRollbackIndex(
-                        query_index
-                    )
-                )
-            );
+            self.log_queue_access_snapshots.push((
+                monotonic_cycle_counter,
+                RenumeratedQueryIndex::ForwardIndexAndRollbackIndex(query_index),
+            ));
         } else {
             assert!(log_query.rollback == false);
 
@@ -386,30 +424,34 @@ impl CallstackWithAuxData {
             let forward_flattened_counter = self.forward_flattened_counter;
             self.forward_flattened_counter += 1;
 
-            self.current_entry.current_history_record.actions.push(
-                (
-                    monotonic_cycle_counter, 
-                    LogAction::ForwardNoRollback(forward_flattened_counter)
-                )
-            );
+            self.current_entry.current_history_record.actions.push((
+                monotonic_cycle_counter,
+                LogAction::ForwardNoRollback(forward_flattened_counter),
+            ));
 
             // snapshot it
-            self.log_queue_access_snapshots.push(
-                (
-                    monotonic_cycle_counter, 
-                    RenumeratedQueryIndex::ForwardNoRollbackIndex(query_index)
-                )
-            );
+            self.log_queue_access_snapshots.push((
+                monotonic_cycle_counter,
+                RenumeratedQueryIndex::ForwardNoRollbackIndex(query_index),
+            ));
 
             // just add
-            let marker = QueryMarker::ForwardNoRollback{unique_query_id, in_frame: current_frame_index, index: query_index, cycle: monotonic_cycle_counter};
-            let full_query = ExtendedLogQuery::Query { marker, cycle: monotonic_cycle_counter, query: log_query };
+            let marker = QueryMarker::ForwardNoRollback {
+                unique_query_id,
+                in_frame: current_frame_index,
+                index: query_index,
+                cycle: monotonic_cycle_counter,
+            };
+            let full_query = ExtendedLogQuery::Query {
+                marker,
+                cycle: monotonic_cycle_counter,
+                query: log_query,
+            };
 
-            self.current_entry
-                .forward_queue
-                .push(full_query);
+            self.current_entry.forward_queue.push(full_query);
 
-            self.log_access_history.push((monotonic_cycle_counter, marker));
+            self.log_access_history
+                .push((monotonic_cycle_counter, marker));
         }
     }
 }

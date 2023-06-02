@@ -1,13 +1,13 @@
 use super::*;
-use derivative::*;
-use crate::zkevm_circuits::linear_hasher::{input::*};
-use crate::zkevm_circuits::base_structures::log_query::*;
-use circuit_definitions::encodings::*;
 use crate::sha3::*;
+use crate::zkevm_circuits::base_structures::log_query::*;
+use crate::zkevm_circuits::linear_hasher::input::*;
+use circuit_definitions::encodings::*;
+use derivative::*;
 
 pub fn compute_linear_keccak256<
-F: SmallField,
-R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+    F: SmallField,
+    R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     simulator: &LogQueueSimulator<F>,
     capacity: usize,
@@ -22,9 +22,12 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
         let serialized = el.serialize();
         assert_eq!(serialized.len(), L2_TO_L1_MESSAGE_BYTE_LENGTH);
         full_bytestring.extend(serialized);
-    } 
+    }
 
-    let pubdata_hash: [u8; 32] = Keccak256::digest(&full_bytestring).as_slice().try_into().unwrap();
+    let pubdata_hash: [u8; 32] = Keccak256::digest(&full_bytestring)
+        .as_slice()
+        .try_into()
+        .unwrap();
 
     // in general we have everything ready, just form the witness
 
@@ -35,26 +38,29 @@ R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12,
     let mut output_passthrough_data = LinearHasherOutputData::placeholder_witness();
     output_passthrough_data.keccak256_hash = pubdata_hash;
 
+    let input_queue_witness: VecDeque<_> = simulator
+        .witness
+        .iter()
+        .map(|(_encoding, old_tail, element)| {
+            let circuit_witness = element.reflect();
 
-    let input_queue_witness: VecDeque<_> = simulator.witness.iter().map(|(_encoding, old_tail, element)| {
-        let circuit_witness = element.reflect();
+            (circuit_witness, *old_tail)
+        })
+        .collect();
 
-        (circuit_witness, *old_tail)
-    }).collect();
-    
     let witness = LinearHasherCircuitInstanceWitness {
-        closed_form_input: ClosedFormInputWitness { 
-            start_flag: true, 
-            completion_flag: true, 
-            observable_input: input_passthrough_data, 
-            observable_output: output_passthrough_data, 
-            hidden_fsm_input: (), 
-            hidden_fsm_output: (), 
+        closed_form_input: ClosedFormInputWitness {
+            start_flag: true,
+            completion_flag: true,
+            observable_input: input_passthrough_data,
+            observable_output: output_passthrough_data,
+            hidden_fsm_input: (),
+            hidden_fsm_output: (),
         },
 
         queue_witness: CircuitQueueRawWitness {
             elements: input_queue_witness,
-        }
+        },
     };
 
     vec![witness]

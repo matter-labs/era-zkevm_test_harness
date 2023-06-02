@@ -18,14 +18,18 @@ pub trait BinaryHasher<const HASH_OUTPUT_WIDTH: usize>: Clone + Send + Sync {
     // fn update(&mut self, input: &[u8]);
     // fn finalize(self) -> [u8; HASH_OUTPUT_WIDTH];
     // there function takes &mut self, but should internally cleanup if necessary (reset state)
-    fn node_hash(depth: usize, left_node: &[u8; HASH_OUTPUT_WIDTH], right_node: &[u8; HASH_OUTPUT_WIDTH]) -> [u8; HASH_OUTPUT_WIDTH];
+    fn node_hash(
+        depth: usize,
+        left_node: &[u8; HASH_OUTPUT_WIDTH],
+        right_node: &[u8; HASH_OUTPUT_WIDTH],
+    ) -> [u8; HASH_OUTPUT_WIDTH];
     fn leaf_hash(leaf: &[u8]) -> [u8; HASH_OUTPUT_WIDTH];
 }
 
 pub struct LeafQuery<
-    const DEPTH: usize, 
+    const DEPTH: usize,
     const INDEX_BYTES: usize,
-    const LEAF_DATA_WIDTH: usize, 
+    const LEAF_DATA_WIDTH: usize,
     const HASH_OUTPUT_WIDTH: usize,
     L: EnumeratedBinaryLeaf<LEAF_DATA_WIDTH>,
 > {
@@ -36,21 +40,33 @@ pub struct LeafQuery<
 }
 
 pub trait BinarySparseStorageTree<
-    const DEPTH: usize, 
+    const DEPTH: usize,
     const INDEX_BYTES: usize,
-    const LEAF_DATA_WIDTH: usize, 
+    const LEAF_DATA_WIDTH: usize,
     const LEAF_METADATA_WIDTH: usize,
     const HASH_OUTPUT_WIDTH: usize,
     H: BinaryHasher<HASH_OUTPUT_WIDTH>,
     L: EnumeratedBinaryLeaf<LEAF_DATA_WIDTH>,
-> {
+>
+{
     fn empty() -> Self;
     fn next_enumeration_index(&self) -> u64;
     fn set_next_enumeration_index(&mut self, value: u64);
     fn root(&self) -> [u8; HASH_OUTPUT_WIDTH];
-    fn get_leaf(&mut self, index: &[u8; INDEX_BYTES]) -> LeafQuery<DEPTH, INDEX_BYTES, LEAF_DATA_WIDTH, HASH_OUTPUT_WIDTH, L>;
-    fn insert_leaf(&mut self, index: &[u8; INDEX_BYTES], leaf: L) -> LeafQuery<DEPTH, INDEX_BYTES, LEAF_DATA_WIDTH, HASH_OUTPUT_WIDTH, L>;
-    fn insert_many_leafs(&mut self, indexes: &[[u8; INDEX_BYTES]], leafs: Vec<L>) -> Vec<LeafQuery<DEPTH, INDEX_BYTES, LEAF_DATA_WIDTH, HASH_OUTPUT_WIDTH, L>> {
+    fn get_leaf(
+        &mut self,
+        index: &[u8; INDEX_BYTES],
+    ) -> LeafQuery<DEPTH, INDEX_BYTES, LEAF_DATA_WIDTH, HASH_OUTPUT_WIDTH, L>;
+    fn insert_leaf(
+        &mut self,
+        index: &[u8; INDEX_BYTES],
+        leaf: L,
+    ) -> LeafQuery<DEPTH, INDEX_BYTES, LEAF_DATA_WIDTH, HASH_OUTPUT_WIDTH, L>;
+    fn insert_many_leafs(
+        &mut self,
+        indexes: &[[u8; INDEX_BYTES]],
+        leafs: Vec<L>,
+    ) -> Vec<LeafQuery<DEPTH, INDEX_BYTES, LEAF_DATA_WIDTH, HASH_OUTPUT_WIDTH, L>> {
         assert_eq!(indexes.len(), leafs.len());
         // let mut uniqueness_checker = std::collections::HashSet::new();
         let mut result = Vec::with_capacity(indexes.len());
@@ -64,23 +80,34 @@ pub trait BinarySparseStorageTree<
         result
     }
     // fn filter_renumerate(&self, indexes: &[[u8; INDEX_BYTES]], leafs: &[L]) -> (u64, Vec<L>, Vec<L>);
-    fn filter_renumerate<'a>(&self, indexes: impl Iterator<Item=&'a [u8; INDEX_BYTES]>, leafs: impl Iterator<Item=L>) -> (u64, Vec<([u8; INDEX_BYTES], L)>, Vec<L>);
-    fn verify_inclusion(root: &[u8; 32], query: &LeafQuery<DEPTH, INDEX_BYTES, LEAF_DATA_WIDTH, HASH_OUTPUT_WIDTH, L>) -> bool;
-    fn verify_inclusion_proxy(&self, root: &[u8; 32], query: &LeafQuery<DEPTH, INDEX_BYTES, LEAF_DATA_WIDTH, HASH_OUTPUT_WIDTH, L>) -> bool {
+    fn filter_renumerate<'a>(
+        &self,
+        indexes: impl Iterator<Item = &'a [u8; INDEX_BYTES]>,
+        leafs: impl Iterator<Item = L>,
+    ) -> (u64, Vec<([u8; INDEX_BYTES], L)>, Vec<L>);
+    fn verify_inclusion(
+        root: &[u8; 32],
+        query: &LeafQuery<DEPTH, INDEX_BYTES, LEAF_DATA_WIDTH, HASH_OUTPUT_WIDTH, L>,
+    ) -> bool;
+    fn verify_inclusion_proxy(
+        &self,
+        root: &[u8; 32],
+        query: &LeafQuery<DEPTH, INDEX_BYTES, LEAF_DATA_WIDTH, HASH_OUTPUT_WIDTH, L>,
+    ) -> bool {
         Self::verify_inclusion(root, query)
     }
 }
 
-pub type ZKSyncTestingTree = InMemoryStorageTree::<256, 32, 8, Blake2s256, ZkSyncStorageLeaf>;
+pub type ZKSyncTestingTree = InMemoryStorageTree<256, 32, 8, Blake2s256, ZkSyncStorageLeaf>;
 
-use std::{collections::HashMap};
+use std::collections::HashMap;
 
 pub struct InMemoryStorageTree<
-    const DEPTH: usize, 
+    const DEPTH: usize,
     const INDEX_BYTES: usize,
-    const LEAF_METADATA_WIDTH: usize,     
+    const LEAF_METADATA_WIDTH: usize,
     H: BinaryHasher<32>,
-    L: EnumeratedBinaryLeaf<32>
+    L: EnumeratedBinaryLeaf<32>,
 > {
     pub hasher: H,
     // pub empty_leaf_hash: [u8; 32],
@@ -113,12 +140,13 @@ fn is_right_side_node<const N: usize>(index: &[u8; N], depth: usize) -> bool {
 }
 
 impl<
-    const DEPTH: usize, 
-    const INDEX_BYTES: usize,
-    const LEAF_METADATA_WIDTH: usize,     
-    H: BinaryHasher<32>,
-    L: EnumeratedBinaryLeaf<32>
-> InMemoryStorageTree<DEPTH, INDEX_BYTES, LEAF_METADATA_WIDTH, H, L> {
+        const DEPTH: usize,
+        const INDEX_BYTES: usize,
+        const LEAF_METADATA_WIDTH: usize,
+        H: BinaryHasher<32>,
+        L: EnumeratedBinaryLeaf<32>,
+    > InMemoryStorageTree<DEPTH, INDEX_BYTES, LEAF_METADATA_WIDTH, H, L>
+{
     pub fn new() -> Self {
         assert!(INDEX_BYTES * 8 == DEPTH);
         assert!(DEPTH > 0);
@@ -194,7 +222,7 @@ impl<
             L::empty()
         };
 
-        let mut path: Box::<[[u8; 32]; DEPTH]> = Box::new([[0u8; 32]; DEPTH]);
+        let mut path: Box<[[u8; 32]; DEPTH]> = Box::new([[0u8; 32]; DEPTH]);
         for level in 0..DEPTH {
             let pair_idx = create_neighbour_index(index, level);
             let pair_node_hash = self.get_path_element(level, pair_idx);
@@ -205,7 +233,7 @@ impl<
             leaf,
             first_write: false,
             index: *index,
-            merkle_path: path
+            merkle_path: path,
         }
     }
 
@@ -214,7 +242,8 @@ impl<
         leaf_bytes[LEAF_METADATA_WIDTH..].copy_from_slice(query.leaf.value());
 
         let leaf_index_bytes = query.leaf.current_index().to_be_bytes();
-        leaf_bytes[(LEAF_METADATA_WIDTH - 8)..LEAF_METADATA_WIDTH].copy_from_slice(&leaf_index_bytes);
+        leaf_bytes[(LEAF_METADATA_WIDTH - 8)..LEAF_METADATA_WIDTH]
+            .copy_from_slice(&leaf_index_bytes);
 
         let leaf_hash = H::leaf_hash(&leaf_bytes);
 
@@ -232,11 +261,14 @@ impl<
         }
 
         root == &current_hash
-
     }
 
     // fn filter_renumerate(&self, indexes: &[[u8; INDEX_BYTES]], leafs: &[L]) -> (u64, Vec<L>, Vec<L>) {
-    fn filter_renumerate<'a>(&self, mut indexes: impl Iterator<Item = &'a [u8; INDEX_BYTES]>, mut leafs: impl Iterator<Item = L>) -> (u64, Vec<([u8; INDEX_BYTES], L)>, Vec<L>) { 
+    fn filter_renumerate<'a>(
+        &self,
+        mut indexes: impl Iterator<Item = &'a [u8; INDEX_BYTES]>,
+        mut leafs: impl Iterator<Item = L>,
+    ) -> (u64, Vec<([u8; INDEX_BYTES], L)>, Vec<L>) {
         // we assume that we want to write leafs and quickly get which of those will be unique writes, and which will be updates
         let mut first_writes = vec![];
         let mut updates = vec![];
@@ -259,7 +291,11 @@ impl<
         (next_index, first_writes, updates)
     }
 
-    fn insert_leaf(&mut self, index: &[u8; INDEX_BYTES], leaf: L) -> LeafQuery<DEPTH, INDEX_BYTES, 32, 32, L> {
+    fn insert_leaf(
+        &mut self,
+        index: &[u8; INDEX_BYTES],
+        leaf: L,
+    ) -> LeafQuery<DEPTH, INDEX_BYTES, 32, 32, L> {
         // first decide if we enumerate
 
         let mut first_write = false;
@@ -281,17 +317,18 @@ impl<
         leaf_bytes[LEAF_METADATA_WIDTH..].copy_from_slice(leaf.value());
 
         let leaf_index_bytes = leaf.current_index().to_be_bytes();
-        leaf_bytes[(LEAF_METADATA_WIDTH - 8)..LEAF_METADATA_WIDTH].copy_from_slice(&leaf_index_bytes);
+        leaf_bytes[(LEAF_METADATA_WIDTH - 8)..LEAF_METADATA_WIDTH]
+            .copy_from_slice(&leaf_index_bytes);
 
         let leaf_hash = H::leaf_hash(&leaf_bytes);
 
         let mut current_hash = leaf_hash;
-        let mut path: Box::<[[u8; 32]; DEPTH]> = Box::new([[0u8; 32]; DEPTH]);
+        let mut path: Box<[[u8; 32]; DEPTH]> = Box::new([[0u8; 32]; DEPTH]);
         for level in 0..DEPTH {
             self.insert_path_element(level, *index, current_hash);
             let pair_idx = create_neighbour_index(index, level);
             let pair_node_hash = self.get_path_element(level, pair_idx);
-           
+
             path[level] = *pair_node_hash;
 
             let (l, r) = if is_right_side_node(index, level) {
@@ -310,26 +347,20 @@ impl<
             leaf: leaf,
             first_write,
             index: *index,
-            merkle_path: path
+            merkle_path: path,
         }
     }
 }
 
 impl<
-    const DEPTH: usize, 
-    const INDEX_BYTES: usize,
-    const LEAF_METADATA_WIDTH: usize,
-    H: BinaryHasher<32>,
-    L: EnumeratedBinaryLeaf<32>,
-> BinarySparseStorageTree<
-    DEPTH,
-    INDEX_BYTES,
-    32,
-    LEAF_METADATA_WIDTH,
-    32,
-    H,
-    L,
-> for InMemoryStorageTree<DEPTH, INDEX_BYTES, LEAF_METADATA_WIDTH, H, L> {
+        const DEPTH: usize,
+        const INDEX_BYTES: usize,
+        const LEAF_METADATA_WIDTH: usize,
+        H: BinaryHasher<32>,
+        L: EnumeratedBinaryLeaf<32>,
+    > BinarySparseStorageTree<DEPTH, INDEX_BYTES, 32, LEAF_METADATA_WIDTH, 32, H, L>
+    for InMemoryStorageTree<DEPTH, INDEX_BYTES, LEAF_METADATA_WIDTH, H, L>
+{
     fn empty() -> Self {
         Self::new()
     }
@@ -345,11 +376,19 @@ impl<
     fn get_leaf(&mut self, index: &[u8; INDEX_BYTES]) -> LeafQuery<DEPTH, INDEX_BYTES, 32, 32, L> {
         Self::get_leaf(self, index)
     }
-    fn insert_leaf(&mut self, index: &[u8; INDEX_BYTES], leaf: L) -> LeafQuery<DEPTH, INDEX_BYTES, 32, 32, L> {
+    fn insert_leaf(
+        &mut self,
+        index: &[u8; INDEX_BYTES],
+        leaf: L,
+    ) -> LeafQuery<DEPTH, INDEX_BYTES, 32, 32, L> {
         Self::insert_leaf(self, index, leaf)
     }
     // fn filter_renumerate(&self, indexes: &[[u8; INDEX_BYTES]], leafs: &[L]) -> (u64, Vec<L>, Vec<L>) {
-    fn filter_renumerate<'a>(&self, indexes: impl Iterator<Item = &'a [u8; INDEX_BYTES]>, leafs: impl Iterator<Item = L>) -> (u64, Vec<([u8; INDEX_BYTES], L)>, Vec<L>) {
+    fn filter_renumerate<'a>(
+        &self,
+        indexes: impl Iterator<Item = &'a [u8; INDEX_BYTES]>,
+        leafs: impl Iterator<Item = L>,
+    ) -> (u64, Vec<([u8; INDEX_BYTES], L)>, Vec<L>) {
         Self::filter_renumerate(&self, indexes, leafs)
     }
     fn verify_inclusion(root: &[u8; 32], query: &LeafQuery<DEPTH, INDEX_BYTES, 32, 32, L>) -> bool {
@@ -413,21 +452,18 @@ use derivative::Derivative;
 #[derivative(Clone, Copy, Hash, Debug)]
 pub struct ZkSyncStorageLeaf {
     pub index: u64,
-    pub value: [u8; 32]
+    pub value: [u8; 32],
 }
 
 impl EnumeratedBinaryLeaf<32> for ZkSyncStorageLeaf {
     fn empty() -> Self {
         Self {
             index: 0,
-            value: [0u8; 32]
+            value: [0u8; 32],
         }
     }
     fn from_value(value: [u8; 32]) -> Self {
-        Self {
-            index: 0,
-            value
-        }
+        Self { index: 0, value }
     }
     fn current_index(&self) -> u64 {
         self.index
@@ -590,7 +626,7 @@ impl EnumeratedBinaryLeaf<32> for ZkSyncStorageLeaf {
 //             let address = Address::from_low_u64_be(u64::MAX/2 + (i as u64));
 //             let key = U256::from_big_endian(&[255 - i; 32]);
 //             let index = LogQuery::derive_final_address_for_params(&address, &key);
-    
+
 //             println!("Equivalence of query with address = {:?} and key = {}", address, key);
 //             println!("Will insert a leaf with value {} at index (hashed index) {}", hex::encode(&dummy_leaf.value()), hex::encode(&index));
 
@@ -685,7 +721,7 @@ impl EnumeratedBinaryLeaf<32> for ZkSyncStorageLeaf {
 
 //         let new_root = tree.root();
 //         let new_enumeration_idnex = tree.next_enumeration_index();
-        
+
 //         // form a witness
 
 //         let (mut cs, round_function, _) = create_test_artifacts_with_optimized_gate();

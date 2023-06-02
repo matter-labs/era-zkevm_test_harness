@@ -2,8 +2,8 @@ use crate::zk_evm::aux_structures::*;
 use crate::zk_evm::ethereum_types::*;
 use crate::zk_evm::vm_state::CallStackEntry;
 use crate::zk_evm::vm_state::VmState;
-use crate::zk_evm::zkevm_opcode_defs::*;
 use crate::zk_evm::zkevm_opcode_defs::system_params::INITIAL_FRAME_FORMAL_EH_LOCATION;
+use crate::zk_evm::zkevm_opcode_defs::*;
 
 use super::*;
 
@@ -32,7 +32,7 @@ pub fn initial_out_of_circuit_context(
         is_static: false,
         is_local_frame: false,
         context_u128_value: 0,
-        heap_bound: u32::MAX, // so bootloader doesn't pay for resizes
+        heap_bound: u32::MAX,     // so bootloader doesn't pay for resizes
         aux_heap_bound: u32::MAX, // so bootloader doesn't pay for resizes
     }
 }
