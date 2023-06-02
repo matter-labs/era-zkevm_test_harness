@@ -1,7 +1,7 @@
 use crate::boojum::cs::implementations::pow::NoPow;
 use derivative::*;
-use crate::boojum::gadgets::recursion::recursive_tree_hasher::*;
-use crate::boojum::gadgets::recursion::recursive_transcript::*;
+
+
 use crate::boojum::gadgets::recursion::circuit_pow::*;
 use crate::boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
 use zkevm_circuits::base_structures::recursion_query::RecursionQuery;
