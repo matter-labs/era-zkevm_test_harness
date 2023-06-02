@@ -10,7 +10,9 @@ pub struct RecursionRequest<F: SmallField> {
     pub public_input: [F; INPUT_OUTPUT_COMMITMENT_LENGTH],
 }
 
-impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, RECURSION_QUERY_PACKED_WIDTH> for RecursionRequest<F> {
+impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, RECURSION_QUERY_PACKED_WIDTH>
+    for RecursionRequest<F>
+{
     fn encoding_witness(&self) -> [F; RECURSION_QUERY_PACKED_WIDTH] {
         [
             self.circuit_type,
@@ -35,5 +37,12 @@ impl<F: SmallField> CircuitEquivalentReflection<F> for RecursionRequest<F> {
     }
 }
 
-pub type RecursionQueueSimulator<F> = FullWidthQueueSimulator<F, RecursionRequest<F>, RECURSION_QUERY_PACKED_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH, 1>;
-pub type RecursionQueueState<F> = FullWidthQueueIntermediateStates<F, FULL_SPONGE_QUEUE_STATE_WIDTH, 1>;
+pub type RecursionQueueSimulator<F> = FullWidthQueueSimulator<
+    F,
+    RecursionRequest<F>,
+    RECURSION_QUERY_PACKED_WIDTH,
+    FULL_SPONGE_QUEUE_STATE_WIDTH,
+    1,
+>;
+pub type RecursionQueueState<F> =
+    FullWidthQueueIntermediateStates<F, FULL_SPONGE_QUEUE_STATE_WIDTH, 1>;

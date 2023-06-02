@@ -7,15 +7,14 @@
 #![feature(iter_next_chunk)]
 #![feature(associated_type_defaults)]
 #![feature(return_position_impl_trait_in_trait)]
-
 #![allow(clippy::drop_ref)]
 
-pub mod circuit_definitions;
 pub mod aux_definitions;
+pub mod circuit_definitions;
 pub mod encodings;
 
-pub use zk_evm::ethereum_types;
 use crate::boojum::implementations::poseidon2::Poseidon2Goldilocks;
+pub use zk_evm::ethereum_types;
 
 pub type ZkSyncDefaultRoundFunction = Poseidon2Goldilocks;
 

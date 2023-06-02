@@ -1,17 +1,17 @@
 use super::*;
 use crate::boojum::cs::implementations::proof::Proof;
-use crate::boojum::field::goldilocks::{GoldilocksField, GoldilocksExt2};
+use crate::boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
+use crate::boojum::field::goldilocks::{GoldilocksExt2, GoldilocksField};
+use crate::boojum::gadgets::recursion::recursive_transcript::CircuitAlgebraicSpongeBasedTranscript;
+use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
+use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
 use zkevm_circuits::recursion::leaf_layer::input::RecursionLeafParametersWitness;
 use zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
-use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
 use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord;
-use crate::boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
-use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
-use crate::boojum::gadgets::recursion::recursive_transcript::CircuitAlgebraicSpongeBasedTranscript;
 
+pub mod circuit_def;
 pub mod leaf_layer;
 pub mod node_layer;
-pub mod circuit_def;
 pub mod scheduler;
 
 use self::leaf_layer::*;
@@ -68,7 +68,9 @@ pub enum ZkSyncRecursionLayerStorageType {
 #[derivative(Clone(bound = ""), Debug)]
 #[serde(bound = "")]
 #[repr(u8)]
-pub enum ZkSyncRecursionLayerStorage<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned> {
+pub enum ZkSyncRecursionLayerStorage<
+    T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned,
+> {
     SchedulerCircuit(T) = 1,
     NodeLayerCircuit(T) = 2,
     LeafLayerCircuitForMainVM(T) = 3,
@@ -86,47 +88,101 @@ pub enum ZkSyncRecursionLayerStorage<T: Clone + std::fmt::Debug + serde::Seriali
     LeafLayerCircuitForL1MessagesHasher(T) = 15,
 }
 
-impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned> ZkSyncRecursionLayerStorage<T> {
+impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned>
+    ZkSyncRecursionLayerStorage<T>
+{
     pub fn short_description(&self) -> &'static str {
         match &self {
             ZkSyncRecursionLayerStorage::SchedulerCircuit(..) => "Scheduler",
             ZkSyncRecursionLayerStorage::NodeLayerCircuit(..) => "Node",
             ZkSyncRecursionLayerStorage::LeafLayerCircuitForMainVM(..) => "Leaf for Main VM",
-            ZkSyncRecursionLayerStorage::LeafLayerCircuitForCodeDecommittmentsSorter(..) => "Leaf for Decommitts sorter",
-            ZkSyncRecursionLayerStorage::LeafLayerCircuitForCodeDecommitter(..) => "Leaf for Code decommitter",
-            ZkSyncRecursionLayerStorage::LeafLayerCircuitForLogDemuxer(..) => "Leaf for Log demuxer",
-            ZkSyncRecursionLayerStorage::LeafLayerCircuitForKeccakRoundFunction(..) => "Leaf for Keccak",
-            ZkSyncRecursionLayerStorage::LeafLayerCircuitForSha256RoundFunction(..) => "Leaf for SHA256",
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForCodeDecommittmentsSorter(..) => {
+                "Leaf for Decommitts sorter"
+            }
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForCodeDecommitter(..) => {
+                "Leaf for Code decommitter"
+            }
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForLogDemuxer(..) => {
+                "Leaf for Log demuxer"
+            }
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForKeccakRoundFunction(..) => {
+                "Leaf for Keccak"
+            }
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForSha256RoundFunction(..) => {
+                "Leaf for SHA256"
+            }
             ZkSyncRecursionLayerStorage::LeafLayerCircuitForECRecover(..) => "Leaf for ECRecover",
-            ZkSyncRecursionLayerStorage::LeafLayerCircuitForRAMPermutation(..) => "Leaf for RAM permutation",
-            ZkSyncRecursionLayerStorage::LeafLayerCircuitForStorageSorter(..) => "Leaf for Storage sorter",
-            ZkSyncRecursionLayerStorage::LeafLayerCircuitForStorageApplication(..) => "Leaf for Storage application",
-            ZkSyncRecursionLayerStorage::LeafLayerCircuitForEventsSorter(..) => "Leaf for Events sorter",
-            ZkSyncRecursionLayerStorage::LeafLayerCircuitForL1MessagesSorter(..) => "Leaf for L1 messages sorter",
-            ZkSyncRecursionLayerStorage::LeafLayerCircuitForL1MessagesHasher(..) => "Leaf for L1 messages hasher",
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForRAMPermutation(..) => {
+                "Leaf for RAM permutation"
+            }
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForStorageSorter(..) => {
+                "Leaf for Storage sorter"
+            }
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForStorageApplication(..) => {
+                "Leaf for Storage application"
+            }
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForEventsSorter(..) => {
+                "Leaf for Events sorter"
+            }
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForL1MessagesSorter(..) => {
+                "Leaf for L1 messages sorter"
+            }
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForL1MessagesHasher(..) => {
+                "Leaf for L1 messages hasher"
+            }
         }
     }
 
     pub fn numeric_circuit_type(&self) -> u8 {
         match &self {
-            ZkSyncRecursionLayerStorage::SchedulerCircuit(..) => ZkSyncRecursionLayerStorageType::SchedulerCircuit as u8,
-            ZkSyncRecursionLayerStorage::NodeLayerCircuit(..) => ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8,
-            ZkSyncRecursionLayerStorage::LeafLayerCircuitForMainVM(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForMainVM as u8,
-            ZkSyncRecursionLayerStorage::LeafLayerCircuitForCodeDecommittmentsSorter(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForCodeDecommittmentsSorter as u8,
-            ZkSyncRecursionLayerStorage::LeafLayerCircuitForCodeDecommitter(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForCodeDecommitter as u8,
-            ZkSyncRecursionLayerStorage::LeafLayerCircuitForLogDemuxer(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForLogDemuxer as u8,
-            ZkSyncRecursionLayerStorage::LeafLayerCircuitForKeccakRoundFunction(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForKeccakRoundFunction as u8,
-            ZkSyncRecursionLayerStorage::LeafLayerCircuitForSha256RoundFunction(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForSha256RoundFunction as u8,
-            ZkSyncRecursionLayerStorage::LeafLayerCircuitForECRecover(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForECRecover as u8,
-            ZkSyncRecursionLayerStorage::LeafLayerCircuitForRAMPermutation(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForRAMPermutation as u8,
-            ZkSyncRecursionLayerStorage::LeafLayerCircuitForStorageSorter(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForStorageSorter as u8,
-            ZkSyncRecursionLayerStorage::LeafLayerCircuitForStorageApplication(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForStorageApplication as u8,
-            ZkSyncRecursionLayerStorage::LeafLayerCircuitForEventsSorter(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForEventsSorter as u8,
-            ZkSyncRecursionLayerStorage::LeafLayerCircuitForL1MessagesSorter(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesSorter as u8,
-            ZkSyncRecursionLayerStorage::LeafLayerCircuitForL1MessagesHasher(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesHasher as u8,
+            ZkSyncRecursionLayerStorage::SchedulerCircuit(..) => {
+                ZkSyncRecursionLayerStorageType::SchedulerCircuit as u8
+            }
+            ZkSyncRecursionLayerStorage::NodeLayerCircuit(..) => {
+                ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8
+            }
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForMainVM(..) => {
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForMainVM as u8
+            }
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForCodeDecommittmentsSorter(..) => {
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForCodeDecommittmentsSorter as u8
+            }
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForCodeDecommitter(..) => {
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForCodeDecommitter as u8
+            }
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForLogDemuxer(..) => {
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForLogDemuxer as u8
+            }
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForKeccakRoundFunction(..) => {
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForKeccakRoundFunction as u8
+            }
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForSha256RoundFunction(..) => {
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForSha256RoundFunction as u8
+            }
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForECRecover(..) => {
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForECRecover as u8
+            }
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForRAMPermutation(..) => {
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForRAMPermutation as u8
+            }
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForStorageSorter(..) => {
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForStorageSorter as u8
+            }
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForStorageApplication(..) => {
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForStorageApplication as u8
+            }
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForEventsSorter(..) => {
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForEventsSorter as u8
+            }
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForL1MessagesSorter(..) => {
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesSorter as u8
+            }
+            ZkSyncRecursionLayerStorage::LeafLayerCircuitForL1MessagesHasher(..) => {
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesHasher as u8
+            }
         }
     }
-    
+
     pub fn into_inner(self) -> T {
         match self {
             Self::SchedulerCircuit(inner) => inner,
@@ -149,66 +205,99 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
 
     pub fn from_inner(numeric_type: u8, inner: T) -> Self {
         match numeric_type {
-            a if a == ZkSyncRecursionLayerStorageType::SchedulerCircuit as u8 => Self::SchedulerCircuit(inner),
-            a if a == ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8 => Self::NodeLayerCircuit(inner),
-            a if a == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForMainVM as u8 => Self::LeafLayerCircuitForMainVM(inner),
-            a if a == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForCodeDecommittmentsSorter as u8 => Self::LeafLayerCircuitForCodeDecommittmentsSorter(inner),
-            a if a == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForCodeDecommitter as u8 => Self::LeafLayerCircuitForCodeDecommitter(inner),
-            a if a == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForLogDemuxer as u8 => Self::LeafLayerCircuitForLogDemuxer(inner),
-            a if a == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForKeccakRoundFunction as u8 => Self::LeafLayerCircuitForKeccakRoundFunction(inner),
-            a if a == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForSha256RoundFunction as u8 => Self::LeafLayerCircuitForSha256RoundFunction(inner),
-            a if a == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForECRecover as u8 => Self::LeafLayerCircuitForECRecover(inner),
-            a if a == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForRAMPermutation as u8 => Self::LeafLayerCircuitForRAMPermutation(inner),
-            a if a == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForStorageSorter as u8 => Self::LeafLayerCircuitForStorageSorter(inner),
-            a if a == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForStorageApplication as u8 => Self::LeafLayerCircuitForStorageApplication(inner),
-            a if a == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForEventsSorter as u8 => Self::LeafLayerCircuitForEventsSorter(inner),
-            a if a == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesSorter as u8 => Self::LeafLayerCircuitForL1MessagesSorter(inner),
-            a if a == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesHasher as u8 => Self::LeafLayerCircuitForL1MessagesHasher(inner),
-            a @ _ => panic!("unknown numeric type {}", a)
+            a if a == ZkSyncRecursionLayerStorageType::SchedulerCircuit as u8 => {
+                Self::SchedulerCircuit(inner)
+            }
+            a if a == ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8 => {
+                Self::NodeLayerCircuit(inner)
+            }
+            a if a == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForMainVM as u8 => {
+                Self::LeafLayerCircuitForMainVM(inner)
+            }
+            a if a
+                == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForCodeDecommittmentsSorter
+                    as u8 =>
+            {
+                Self::LeafLayerCircuitForCodeDecommittmentsSorter(inner)
+            }
+            a if a == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForCodeDecommitter as u8 => {
+                Self::LeafLayerCircuitForCodeDecommitter(inner)
+            }
+            a if a == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForLogDemuxer as u8 => {
+                Self::LeafLayerCircuitForLogDemuxer(inner)
+            }
+            a if a
+                == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForKeccakRoundFunction
+                    as u8 =>
+            {
+                Self::LeafLayerCircuitForKeccakRoundFunction(inner)
+            }
+            a if a
+                == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForSha256RoundFunction
+                    as u8 =>
+            {
+                Self::LeafLayerCircuitForSha256RoundFunction(inner)
+            }
+            a if a == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForECRecover as u8 => {
+                Self::LeafLayerCircuitForECRecover(inner)
+            }
+            a if a == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForRAMPermutation as u8 => {
+                Self::LeafLayerCircuitForRAMPermutation(inner)
+            }
+            a if a == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForStorageSorter as u8 => {
+                Self::LeafLayerCircuitForStorageSorter(inner)
+            }
+            a if a
+                == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForStorageApplication as u8 =>
+            {
+                Self::LeafLayerCircuitForStorageApplication(inner)
+            }
+            a if a == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForEventsSorter as u8 => {
+                Self::LeafLayerCircuitForEventsSorter(inner)
+            }
+            a if a
+                == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesSorter as u8 =>
+            {
+                Self::LeafLayerCircuitForL1MessagesSorter(inner)
+            }
+            a if a
+                == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesHasher as u8 =>
+            {
+                Self::LeafLayerCircuitForL1MessagesHasher(inner)
+            }
+            a @ _ => panic!("unknown numeric type {}", a),
         }
     }
 
-    pub fn leaf_circuit_from_base_type(base_type: BaseLayerCircuitType, inner: T) -> Self { 
+    pub fn leaf_circuit_from_base_type(base_type: BaseLayerCircuitType, inner: T) -> Self {
         match base_type {
-            BaseLayerCircuitType::VM => {
-                Self::LeafLayerCircuitForMainVM(inner)
-            },
+            BaseLayerCircuitType::VM => Self::LeafLayerCircuitForMainVM(inner),
             BaseLayerCircuitType::DecommitmentsFilter => {
                 Self::LeafLayerCircuitForCodeDecommittmentsSorter(inner)
-            },
-            BaseLayerCircuitType::Decommiter => {
-                Self::LeafLayerCircuitForCodeDecommitter(inner)
-            },
-            BaseLayerCircuitType::LogDemultiplexer => {
-                Self::LeafLayerCircuitForLogDemuxer(inner)
-            },
+            }
+            BaseLayerCircuitType::Decommiter => Self::LeafLayerCircuitForCodeDecommitter(inner),
+            BaseLayerCircuitType::LogDemultiplexer => Self::LeafLayerCircuitForLogDemuxer(inner),
             BaseLayerCircuitType::KeccakPrecompile => {
                 Self::LeafLayerCircuitForKeccakRoundFunction(inner)
-            },
+            }
             BaseLayerCircuitType::Sha256Precompile => {
                 Self::LeafLayerCircuitForSha256RoundFunction(inner)
-            },
-            BaseLayerCircuitType::EcrecoverPrecompile => {
-                Self::LeafLayerCircuitForECRecover(inner)
-            },
-            BaseLayerCircuitType::RamValidation => {
-                Self::LeafLayerCircuitForRAMPermutation(inner)
-            },
-            BaseLayerCircuitType::StorageFilter => {
-                Self::LeafLayerCircuitForStorageSorter(inner)
-            },
+            }
+            BaseLayerCircuitType::EcrecoverPrecompile => Self::LeafLayerCircuitForECRecover(inner),
+            BaseLayerCircuitType::RamValidation => Self::LeafLayerCircuitForRAMPermutation(inner),
+            BaseLayerCircuitType::StorageFilter => Self::LeafLayerCircuitForStorageSorter(inner),
             BaseLayerCircuitType::StorageApplicator => {
                 Self::LeafLayerCircuitForStorageApplication(inner)
-            },
+            }
             BaseLayerCircuitType::EventsRevertsFilter => {
                 Self::LeafLayerCircuitForEventsSorter(inner)
-            },
+            }
             BaseLayerCircuitType::L1MessagesRevertsFilter => {
                 Self::LeafLayerCircuitForL1MessagesSorter(inner)
-            },
+            }
             BaseLayerCircuitType::L1MessagesHasher => {
                 Self::LeafLayerCircuitForL1MessagesHasher(inner)
-            },
+            }
             circuit_type => {
                 panic!("unknown base circuit type for leaf: {:?}", circuit_type);
             }
@@ -218,10 +307,11 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
 
 use crate::boojum::cs::implementations::setup::FinalizationHintsForProver;
 
-pub type ZkSyncRecursionLayerFinalizationHint = ZkSyncRecursionLayerStorage<FinalizationHintsForProver>;
+pub type ZkSyncRecursionLayerFinalizationHint =
+    ZkSyncRecursionLayerStorage<FinalizationHintsForProver>;
 
-use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
 use crate::boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
+use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
 
 pub type RecursiveProofsTreeHasher = GoldilocksPoseidon2Sponge<AbsorbtionModeOverwrite>;
 
@@ -230,11 +320,14 @@ pub type ZkSyncRecursionProof = Proof<GoldilocksField, RecursiveProofsTreeHasher
 pub type ZkSyncRecursionLayerProof = ZkSyncRecursionLayerStorage<ZkSyncRecursionProof>;
 
 use crate::boojum::cs::implementations::verifier::VerificationKey;
-pub type ZkSyncRecursionVerificationKey = VerificationKey<GoldilocksField, RecursiveProofsTreeHasher>;
+pub type ZkSyncRecursionVerificationKey =
+    VerificationKey<GoldilocksField, RecursiveProofsTreeHasher>;
 
-pub type ZkSyncRecursionLayerVerificationKey = ZkSyncRecursionLayerStorage<ZkSyncRecursionVerificationKey>;
+pub type ZkSyncRecursionLayerVerificationKey =
+    ZkSyncRecursionLayerStorage<ZkSyncRecursionVerificationKey>;
 
-pub type ZkSyncRecursionLayerLeafParameters = ZkSyncRecursionLayerStorage<RecursionLeafParametersWitness<GoldilocksField>>;
+pub type ZkSyncRecursionLayerLeafParameters =
+    ZkSyncRecursionLayerStorage<RecursionLeafParametersWitness<GoldilocksField>>;
 
 type F = GoldilocksField;
 type P = GoldilocksField;
@@ -262,7 +355,7 @@ impl ZkSyncRecursiveLayerCircuit {
             Self::LeafLayerCircuitForStorageApplication(..) => "Leaf for Storage application",
             Self::LeafLayerCircuitForEventsSorter(..) => "Leaf for Events sorter",
             Self::LeafLayerCircuitForL1MessagesSorter(..) => "Leaf for L1 messages sorter",
-            Self::LeafLayerCircuitForL1MessagesHasher(..) => "Leaf for L1 messages hasher",   
+            Self::LeafLayerCircuitForL1MessagesHasher(..) => "Leaf for L1 messages hasher",
         }
     }
 
@@ -270,26 +363,52 @@ impl ZkSyncRecursiveLayerCircuit {
         match &self {
             Self::SchedulerCircuit(..) => ZkSyncRecursionLayerStorageType::SchedulerCircuit as u8,
             Self::NodeLayerCircuit(..) => ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8,
-            Self::LeafLayerCircuitForMainVM(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForMainVM as u8,
-            Self::LeafLayerCircuitForCodeDecommittmentsSorter(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForCodeDecommittmentsSorter as u8,
-            Self::LeafLayerCircuitForCodeDecommitter(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForCodeDecommitter as u8,
-            Self::LeafLayerCircuitForLogDemuxer(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForLogDemuxer as u8,
-            Self::LeafLayerCircuitForKeccakRoundFunction(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForKeccakRoundFunction as u8,
-            Self::LeafLayerCircuitForSha256RoundFunction(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForSha256RoundFunction as u8,
-            Self::LeafLayerCircuitForECRecover(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForECRecover as u8,
-            Self::LeafLayerCircuitForRAMPermutation(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForRAMPermutation as u8,
-            Self::LeafLayerCircuitForStorageSorter(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForStorageSorter as u8,
-            Self::LeafLayerCircuitForStorageApplication(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForStorageApplication as u8,
-            Self::LeafLayerCircuitForEventsSorter(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForEventsSorter as u8,
-            Self::LeafLayerCircuitForL1MessagesSorter(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesSorter as u8,
-            Self::LeafLayerCircuitForL1MessagesHasher(..) => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesHasher as u8,
+            Self::LeafLayerCircuitForMainVM(..) => {
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForMainVM as u8
+            }
+            Self::LeafLayerCircuitForCodeDecommittmentsSorter(..) => {
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForCodeDecommittmentsSorter as u8
+            }
+            Self::LeafLayerCircuitForCodeDecommitter(..) => {
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForCodeDecommitter as u8
+            }
+            Self::LeafLayerCircuitForLogDemuxer(..) => {
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForLogDemuxer as u8
+            }
+            Self::LeafLayerCircuitForKeccakRoundFunction(..) => {
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForKeccakRoundFunction as u8
+            }
+            Self::LeafLayerCircuitForSha256RoundFunction(..) => {
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForSha256RoundFunction as u8
+            }
+            Self::LeafLayerCircuitForECRecover(..) => {
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForECRecover as u8
+            }
+            Self::LeafLayerCircuitForRAMPermutation(..) => {
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForRAMPermutation as u8
+            }
+            Self::LeafLayerCircuitForStorageSorter(..) => {
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForStorageSorter as u8
+            }
+            Self::LeafLayerCircuitForStorageApplication(..) => {
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForStorageApplication as u8
+            }
+            Self::LeafLayerCircuitForEventsSorter(..) => {
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForEventsSorter as u8
+            }
+            Self::LeafLayerCircuitForL1MessagesSorter(..) => {
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesSorter as u8
+            }
+            Self::LeafLayerCircuitForL1MessagesHasher(..) => {
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesHasher as u8
+            }
         }
     }
 
     pub fn size_hint(&self) -> (Option<usize>, Option<usize>) {
         match &self {
-            Self::SchedulerCircuit(inner) => {inner.size_hint()},
-            Self::NodeLayerCircuit(inner) => {inner.size_hint()},
+            Self::SchedulerCircuit(inner) => inner.size_hint(),
+            Self::NodeLayerCircuit(inner) => inner.size_hint(),
             Self::LeafLayerCircuitForMainVM(inner)
             | Self::LeafLayerCircuitForCodeDecommittmentsSorter(inner)
             | Self::LeafLayerCircuitForCodeDecommitter(inner)
@@ -301,10 +420,8 @@ impl ZkSyncRecursiveLayerCircuit {
             | Self::LeafLayerCircuitForStorageSorter(inner)
             | Self::LeafLayerCircuitForStorageApplication(inner)
             | Self::LeafLayerCircuitForEventsSorter(inner)
-            | Self::LeafLayerCircuitForL1MessagesSorter(inner) 
-            | Self::LeafLayerCircuitForL1MessagesHasher(inner) => {
-                inner.size_hint()
-            },
+            | Self::LeafLayerCircuitForL1MessagesSorter(inner)
+            | Self::LeafLayerCircuitForL1MessagesHasher(inner) => inner.size_hint(),
         }
     }
 
@@ -312,8 +429,8 @@ impl ZkSyncRecursiveLayerCircuit {
         use crate::boojum::cs::traits::circuit::CircuitBuilder;
 
         match &self {
-            Self::SchedulerCircuit(..) => {ZkSyncSchedulerCircuit::geometry()},
-            Self::NodeLayerCircuit(..) => {ZkSyncNodeLayerRecursiveCircuit::geometry()},
+            Self::SchedulerCircuit(..) => ZkSyncSchedulerCircuit::geometry(),
+            Self::NodeLayerCircuit(..) => ZkSyncNodeLayerRecursiveCircuit::geometry(),
             Self::LeafLayerCircuitForMainVM(..)
             | Self::LeafLayerCircuitForCodeDecommittmentsSorter(..)
             | Self::LeafLayerCircuitForCodeDecommitter(..)
@@ -328,14 +445,20 @@ impl ZkSyncRecursiveLayerCircuit {
             | Self::LeafLayerCircuitForL1MessagesSorter(..)
             | Self::LeafLayerCircuitForL1MessagesHasher(..) => {
                 ZkSyncLeafLayerRecursiveCircuit::geometry()
-            },
+            }
         }
     }
 
-    pub fn into_dyn_verifier_builder(&self) -> Box<dyn crate::boojum::cs::traits::circuit::ErasedBuilderForVerifier<F, EXT>> {
+    pub fn into_dyn_verifier_builder(
+        &self,
+    ) -> Box<dyn crate::boojum::cs::traits::circuit::ErasedBuilderForVerifier<F, EXT>> {
         match &self {
-            Self::SchedulerCircuit(..) => {ConcreteSchedulerCircuitBuilder::dyn_verifier_builder::<EXT>()},
-            Self::NodeLayerCircuit(..) => {ConcreteLeafLayerCircuitBuilder::dyn_verifier_builder::<EXT>()},
+            Self::SchedulerCircuit(..) => {
+                ConcreteSchedulerCircuitBuilder::dyn_verifier_builder::<EXT>()
+            }
+            Self::NodeLayerCircuit(..) => {
+                ConcreteLeafLayerCircuitBuilder::dyn_verifier_builder::<EXT>()
+            }
             Self::LeafLayerCircuitForMainVM(..)
             | Self::LeafLayerCircuitForCodeDecommittmentsSorter(..)
             | Self::LeafLayerCircuitForCodeDecommitter(..)
@@ -354,10 +477,17 @@ impl ZkSyncRecursiveLayerCircuit {
         }
     }
 
-    pub fn into_dyn_recursive_verifier_builder<CS: ConstraintSystem<F> + 'static>(&self) -> Box<dyn crate::boojum::cs::traits::circuit::ErasedBuilderForRecursiveVerifier<F, EXT, CS>> {
+    pub fn into_dyn_recursive_verifier_builder<CS: ConstraintSystem<F> + 'static>(
+        &self,
+    ) -> Box<dyn crate::boojum::cs::traits::circuit::ErasedBuilderForRecursiveVerifier<F, EXT, CS>>
+    {
         match &self {
-            Self::SchedulerCircuit(..) => {ConcreteSchedulerCircuitBuilder::dyn_recursive_verifier_builder::<EXT, CS>()},
-            Self::NodeLayerCircuit(..) => {ConcreteLeafLayerCircuitBuilder::dyn_recursive_verifier_builder::<EXT, CS>()},
+            Self::SchedulerCircuit(..) => {
+                ConcreteSchedulerCircuitBuilder::dyn_recursive_verifier_builder::<EXT, CS>()
+            }
+            Self::NodeLayerCircuit(..) => {
+                ConcreteLeafLayerCircuitBuilder::dyn_recursive_verifier_builder::<EXT, CS>()
+            }
             Self::LeafLayerCircuitForMainVM(..)
             | Self::LeafLayerCircuitForCodeDecommittmentsSorter(..)
             | Self::LeafLayerCircuitForCodeDecommitter(..)
@@ -376,47 +506,38 @@ impl ZkSyncRecursiveLayerCircuit {
         }
     }
 
-    pub fn leaf_circuit_from_base_type(base_type: BaseLayerCircuitType, inner: ZkSyncLeafLayerRecursiveCircuit) -> Self { 
+    pub fn leaf_circuit_from_base_type(
+        base_type: BaseLayerCircuitType,
+        inner: ZkSyncLeafLayerRecursiveCircuit,
+    ) -> Self {
         match base_type {
-            BaseLayerCircuitType::VM => {
-                Self::LeafLayerCircuitForMainVM(inner)
-            },
+            BaseLayerCircuitType::VM => Self::LeafLayerCircuitForMainVM(inner),
             BaseLayerCircuitType::DecommitmentsFilter => {
                 Self::LeafLayerCircuitForCodeDecommittmentsSorter(inner)
-            },
-            BaseLayerCircuitType::Decommiter => {
-                Self::LeafLayerCircuitForCodeDecommitter(inner)
-            },
-            BaseLayerCircuitType::LogDemultiplexer => {
-                Self::LeafLayerCircuitForLogDemuxer(inner)
-            },
+            }
+            BaseLayerCircuitType::Decommiter => Self::LeafLayerCircuitForCodeDecommitter(inner),
+            BaseLayerCircuitType::LogDemultiplexer => Self::LeafLayerCircuitForLogDemuxer(inner),
             BaseLayerCircuitType::KeccakPrecompile => {
                 Self::LeafLayerCircuitForKeccakRoundFunction(inner)
-            },
+            }
             BaseLayerCircuitType::Sha256Precompile => {
                 Self::LeafLayerCircuitForSha256RoundFunction(inner)
-            },
-            BaseLayerCircuitType::EcrecoverPrecompile => {
-                Self::LeafLayerCircuitForECRecover(inner)
-            },
-            BaseLayerCircuitType::RamValidation => {
-                Self::LeafLayerCircuitForRAMPermutation(inner)
-            },
-            BaseLayerCircuitType::StorageFilter => {
-                Self::LeafLayerCircuitForStorageSorter(inner)
-            },
+            }
+            BaseLayerCircuitType::EcrecoverPrecompile => Self::LeafLayerCircuitForECRecover(inner),
+            BaseLayerCircuitType::RamValidation => Self::LeafLayerCircuitForRAMPermutation(inner),
+            BaseLayerCircuitType::StorageFilter => Self::LeafLayerCircuitForStorageSorter(inner),
             BaseLayerCircuitType::StorageApplicator => {
                 Self::LeafLayerCircuitForStorageApplication(inner)
-            },
+            }
             BaseLayerCircuitType::EventsRevertsFilter => {
                 Self::LeafLayerCircuitForEventsSorter(inner)
-            },
+            }
             BaseLayerCircuitType::L1MessagesRevertsFilter => {
                 Self::LeafLayerCircuitForL1MessagesSorter(inner)
-            },
+            }
             BaseLayerCircuitType::L1MessagesHasher => {
                 Self::LeafLayerCircuitForL1MessagesHasher(inner)
-            },
+            }
             circuit_type => {
                 panic!("unknown base circuit type for leaf: {:?}", circuit_type);
             }
@@ -425,22 +546,48 @@ impl ZkSyncRecursiveLayerCircuit {
 }
 
 pub fn base_circuit_type_into_recursive_leaf_circuit_type(
-    value: BaseLayerCircuitType
+    value: BaseLayerCircuitType,
 ) -> ZkSyncRecursionLayerStorageType {
     match value {
-        BaseLayerCircuitType::None => {panic!("None is not a proper type")},
+        BaseLayerCircuitType::None => {
+            panic!("None is not a proper type")
+        }
         BaseLayerCircuitType::VM => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForMainVM,
-        BaseLayerCircuitType::DecommitmentsFilter => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForCodeDecommittmentsSorter,
-        BaseLayerCircuitType::Decommiter => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForCodeDecommitter,
-        BaseLayerCircuitType::LogDemultiplexer => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForLogDemuxer,
-        BaseLayerCircuitType::KeccakPrecompile => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForKeccakRoundFunction,
-        BaseLayerCircuitType::Sha256Precompile => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForSha256RoundFunction,
-        BaseLayerCircuitType::EcrecoverPrecompile => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForECRecover,
-        BaseLayerCircuitType::RamValidation => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForRAMPermutation,
-        BaseLayerCircuitType::StorageFilter => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForStorageSorter,
-        BaseLayerCircuitType::StorageApplicator => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForStorageApplication,
-        BaseLayerCircuitType::EventsRevertsFilter => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForEventsSorter,
-        BaseLayerCircuitType::L1MessagesRevertsFilter => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesSorter,
-        BaseLayerCircuitType::L1MessagesHasher => ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesHasher,
+        BaseLayerCircuitType::DecommitmentsFilter => {
+            ZkSyncRecursionLayerStorageType::LeafLayerCircuitForCodeDecommittmentsSorter
+        }
+        BaseLayerCircuitType::Decommiter => {
+            ZkSyncRecursionLayerStorageType::LeafLayerCircuitForCodeDecommitter
+        }
+        BaseLayerCircuitType::LogDemultiplexer => {
+            ZkSyncRecursionLayerStorageType::LeafLayerCircuitForLogDemuxer
+        }
+        BaseLayerCircuitType::KeccakPrecompile => {
+            ZkSyncRecursionLayerStorageType::LeafLayerCircuitForKeccakRoundFunction
+        }
+        BaseLayerCircuitType::Sha256Precompile => {
+            ZkSyncRecursionLayerStorageType::LeafLayerCircuitForSha256RoundFunction
+        }
+        BaseLayerCircuitType::EcrecoverPrecompile => {
+            ZkSyncRecursionLayerStorageType::LeafLayerCircuitForECRecover
+        }
+        BaseLayerCircuitType::RamValidation => {
+            ZkSyncRecursionLayerStorageType::LeafLayerCircuitForRAMPermutation
+        }
+        BaseLayerCircuitType::StorageFilter => {
+            ZkSyncRecursionLayerStorageType::LeafLayerCircuitForStorageSorter
+        }
+        BaseLayerCircuitType::StorageApplicator => {
+            ZkSyncRecursionLayerStorageType::LeafLayerCircuitForStorageApplication
+        }
+        BaseLayerCircuitType::EventsRevertsFilter => {
+            ZkSyncRecursionLayerStorageType::LeafLayerCircuitForEventsSorter
+        }
+        BaseLayerCircuitType::L1MessagesRevertsFilter => {
+            ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesSorter
+        }
+        BaseLayerCircuitType::L1MessagesHasher => {
+            ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesHasher
+        }
     }
 }

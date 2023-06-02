@@ -22,7 +22,9 @@ pub struct CallstackEntryRollbackState<F: SmallField> {
 
 use zkevm_circuits::base_structures::vm_state::saved_context::EXECUTION_CONTEXT_RECORD_ENCODING_WIDTH;
 
-impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, EXECUTION_CONTEXT_RECORD_ENCODING_WIDTH> for ExtendedCallstackEntry<F> {
+impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, EXECUTION_CONTEXT_RECORD_ENCODING_WIDTH>
+    for ExtendedCallstackEntry<F>
+{
     fn encoding_witness(&self) -> [F; EXECUTION_CONTEXT_RECORD_ENCODING_WIDTH] {
         debug_assert!(F::CAPACITY_BITS >= 57);
         // full field elements first for simplicity
@@ -84,89 +86,86 @@ impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, EXECUTION_CONTEXT_RECORD
 
         // as usual, take u32 and add something on top
 
-        let v27 = linear_combination(
-            &[
-                (self.callstack_entry.code_page.0.into_field(), F::ONE),
-                (self.callstack_entry.pc.into_field(), F::from_u64_unchecked(1u64 << 32)),
-                (
-                    self.callstack_entry.this_shard_id.into_field(),
-                    F::from_u64_unchecked(1u64 << 48),
-                ),
-                (
-                    self.callstack_entry.is_static.into_field(),
-                    F::from_u64_unchecked(1u64 << 56),
-                ),
-            ],
-        );
+        let v27 = linear_combination(&[
+            (self.callstack_entry.code_page.0.into_field(), F::ONE),
+            (
+                self.callstack_entry.pc.into_field(),
+                F::from_u64_unchecked(1u64 << 32),
+            ),
+            (
+                self.callstack_entry.this_shard_id.into_field(),
+                F::from_u64_unchecked(1u64 << 48),
+            ),
+            (
+                self.callstack_entry.is_static.into_field(),
+                F::from_u64_unchecked(1u64 << 56),
+            ),
+        ]);
 
         let is_kernel_mode = self.callstack_entry.is_kernel_mode();
 
-        let v28 = linear_combination(
-            &[
-                (self.callstack_entry.base_memory_page.0.into_field(), F::ONE),
-                (self.callstack_entry.sp.into_field(), F::from_u64_unchecked(1u64 << 32)),
-                (
-                    self.callstack_entry.caller_shard_id.into_field(),
-                    F::from_u64_unchecked(1u64 << 48),
-                ),
-                (
-                    is_kernel_mode.into_field(),
-                    F::from_u64_unchecked(1u64 << 56),
-                ),
-            ],
-        );
+        let v28 = linear_combination(&[
+            (self.callstack_entry.base_memory_page.0.into_field(), F::ONE),
+            (
+                self.callstack_entry.sp.into_field(),
+                F::from_u64_unchecked(1u64 << 32),
+            ),
+            (
+                self.callstack_entry.caller_shard_id.into_field(),
+                F::from_u64_unchecked(1u64 << 48),
+            ),
+            (
+                is_kernel_mode.into_field(),
+                F::from_u64_unchecked(1u64 << 56),
+            ),
+        ]);
 
-        let v29 = linear_combination(
-            &[
-                (self.callstack_entry.ergs_remaining.into_field(), F::ONE),
-                (
-                    self.callstack_entry.exception_handler_location.into_field(),
-                    F::from_u64_unchecked(1u64 << 32),
-                ),
-                (
-                    self.callstack_entry.code_shard_id.into_field(),
-                    F::from_u64_unchecked(1u64 << 48),
-                ),
-                (
-                    self.callstack_entry.is_local_frame.into_field(),
-                    F::from_u64_unchecked(1u64 << 56),
-                ),
-            ],
-        );
+        let v29 = linear_combination(&[
+            (self.callstack_entry.ergs_remaining.into_field(), F::ONE),
+            (
+                self.callstack_entry.exception_handler_location.into_field(),
+                F::from_u64_unchecked(1u64 << 32),
+            ),
+            (
+                self.callstack_entry.code_shard_id.into_field(),
+                F::from_u64_unchecked(1u64 << 48),
+            ),
+            (
+                self.callstack_entry.is_local_frame.into_field(),
+                F::from_u64_unchecked(1u64 << 56),
+            ),
+        ]);
 
         // now we have left
         // - heap_upper_bound
         // - aux_heap_upper_bound
         // - reverted_queue_segment_len
 
-        let reverted_queue_segment_len_decomposition = self.rollback_queue_segment_length.to_le_bytes();
-        let v30 = linear_combination(
-            &[
-                (self.callstack_entry.heap_bound.into_field(), F::ONE),
-                (
-                    reverted_queue_segment_len_decomposition[0].into_field(),
-                    F::from_u64_unchecked(1u64 << 32),
-                ),
-                (
-                    reverted_queue_segment_len_decomposition[1].into_field(),
-                    F::from_u64_unchecked(1u64 << 40),
-                ),
-            ],
-        );
+        let reverted_queue_segment_len_decomposition =
+            self.rollback_queue_segment_length.to_le_bytes();
+        let v30 = linear_combination(&[
+            (self.callstack_entry.heap_bound.into_field(), F::ONE),
+            (
+                reverted_queue_segment_len_decomposition[0].into_field(),
+                F::from_u64_unchecked(1u64 << 32),
+            ),
+            (
+                reverted_queue_segment_len_decomposition[1].into_field(),
+                F::from_u64_unchecked(1u64 << 40),
+            ),
+        ]);
 
-        let v31 = linear_combination(
-            &[
-                (self.callstack_entry.aux_heap_bound.into_field(), F::ONE),
-                (
-                    reverted_queue_segment_len_decomposition[2].into_field(),
-                    F::from_u64_unchecked(1u64 << 32),
-                ),
-                (
-                    reverted_queue_segment_len_decomposition[3].into_field(),
-                    F::from_u64_unchecked(1u64 << 40),
-                ),
-            ],
-        );
+        let v31 = linear_combination(&[
+            (self.callstack_entry.aux_heap_bound.into_field(), F::ONE),
+            (
+                reverted_queue_segment_len_decomposition[2].into_field(),
+                F::from_u64_unchecked(1u64 << 32),
+            ),
+            (
+                reverted_queue_segment_len_decomposition[3].into_field(),
+                F::from_u64_unchecked(1u64 << 40),
+            ),
+        ]);
 
         [
             v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18,
@@ -175,5 +174,12 @@ impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, EXECUTION_CONTEXT_RECORD
     }
 }
 
-pub type CallstackSimulator<F> = FullWidthStackSimulator<F, ExtendedCallstackEntry<F>, EXECUTION_CONTEXT_RECORD_ENCODING_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH, 4>;
-pub type CallstackSimulatorState<F> = FullWidthStackIntermediateStates<F, FULL_SPONGE_QUEUE_STATE_WIDTH, 4>;
+pub type CallstackSimulator<F> = FullWidthStackSimulator<
+    F,
+    ExtendedCallstackEntry<F>,
+    EXECUTION_CONTEXT_RECORD_ENCODING_WIDTH,
+    FULL_SPONGE_QUEUE_STATE_WIDTH,
+    4,
+>;
+pub type CallstackSimulatorState<F> =
+    FullWidthStackIntermediateStates<F, FULL_SPONGE_QUEUE_STATE_WIDTH, 4>;

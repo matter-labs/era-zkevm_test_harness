@@ -1,12 +1,14 @@
-use std::collections::VecDeque;
+use crate::boojum::algebraic_props::round_function::{
+    absorb_multiple_rounds, AbsorbtionModeOverwrite, AlgebraicRoundFunction,
+};
 use crate::boojum::field::SmallField;
 use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
-use derivative::Derivative;
-use crate::boojum::algebraic_props::round_function::{AlgebraicRoundFunction, absorb_multiple_rounds, AbsorbtionModeOverwrite};
 use crate::boojum::gadgets::traits::round_function::*;
-use zkevm_circuits::base_structures::vm_state::{QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH};
-use crate::boojum::gadgets::u256::decompose_u256_as_u32x8;
 use crate::boojum::gadgets::u160::decompose_address_as_u32x5;
+use crate::boojum::gadgets::u256::decompose_u256_as_u32x8;
+use derivative::Derivative;
+use std::collections::VecDeque;
+use zkevm_circuits::base_structures::vm_state::{FULL_SPONGE_QUEUE_STATE_WIDTH, QUEUE_STATE_WIDTH};
 
 // for we need to encode some structures as packed field elements
 pub trait OutOfCircuitFixedLengthEncodable<F: SmallField, const N: usize>: Clone {
@@ -18,18 +20,14 @@ pub mod callstack_entry;
 pub mod decommittment_request;
 pub mod log_query;
 pub mod memory_query;
-pub mod state_diff_record;
 pub mod recursion_request;
+pub mod state_diff_record;
 
 pub use self::log_query::*;
 
-pub(crate) fn make_round_function_pairs<
-    F: SmallField,
-    const N: usize,
-    const ROUNDS: usize
->(
+pub(crate) fn make_round_function_pairs<F: SmallField, const N: usize, const ROUNDS: usize>(
     initial: [F; N],
-    intermediates: [[F; N]; ROUNDS]
+    intermediates: [[F; N]; ROUNDS],
 ) -> [([F; N], [F; N]); ROUNDS] {
     let mut result = [([F::ZERO; N], [F::ZERO; N]); ROUNDS];
     result[0].0 = initial;
@@ -44,7 +42,12 @@ pub(crate) fn make_round_function_pairs<
 
 #[derive(Derivative)]
 #[derivative(Debug, Clone(bound = ""), Copy(bound = ""))]
-pub struct QueueIntermediateStates<F: SmallField, const T: usize, const SW: usize, const ROUNDS: usize> {
+pub struct QueueIntermediateStates<
+    F: SmallField,
+    const T: usize,
+    const SW: usize,
+    const ROUNDS: usize,
+> {
     pub head: [F; T],
     pub tail: [F; T],
     pub previous_head: [F; T],
@@ -53,7 +56,9 @@ pub struct QueueIntermediateStates<F: SmallField, const T: usize, const SW: usiz
     pub round_function_execution_pairs: [([F; SW], [F; SW]); ROUNDS],
 }
 
-impl<F: SmallField, const T: usize, const SW: usize, const ROUNDS: usize> QueueIntermediateStates<F, T, SW, ROUNDS> {
+impl<F: SmallField, const T: usize, const SW: usize, const ROUNDS: usize>
+    QueueIntermediateStates<F, T, SW, ROUNDS>
+{
     pub fn empty() -> Self {
         Self {
             head: [F::ZERO; T],
@@ -67,7 +72,11 @@ impl<F: SmallField, const T: usize, const SW: usize, const ROUNDS: usize> QueueI
 }
 
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
-#[derivative(Clone(bound = ""), Default(bound = "[F; T]: Default, [F; N]: Default"), Debug)]
+#[derivative(
+    Clone(bound = ""),
+    Default(bound = "[F; T]: Default, [F; N]: Default"),
+    Debug
+)]
 #[serde(bound = "")]
 pub struct QueueSimulator<
     F: SmallField,
@@ -77,25 +86,30 @@ pub struct QueueSimulator<
     const ROUNDS: usize,
 > {
     #[serde(bound(serialize = "[F; T]: serde::Serialize, I: serde::Serialize"))]
-    #[serde(bound(deserialize = "[F; T]: serde::de::DeserializeOwned, I: serde::de::DeserializeOwned"))]
+    #[serde(bound(
+        deserialize = "[F; T]: serde::de::DeserializeOwned, I: serde::de::DeserializeOwned"
+    ))]
     pub head: [F; T],
     #[serde(bound(serialize = "[F; T]: serde::Serialize, I: serde::Serialize"))]
-    #[serde(bound(deserialize = "[F; T]: serde::de::DeserializeOwned, I: serde::de::DeserializeOwned"))]
+    #[serde(bound(
+        deserialize = "[F; T]: serde::de::DeserializeOwned, I: serde::de::DeserializeOwned"
+    ))]
     pub tail: [F; T],
     pub num_items: u32,
     #[serde(bound(serialize = "[F; N]: serde::Serialize, I: serde::Serialize"))]
-    #[serde(bound(deserialize = "[F; N]: serde::de::DeserializeOwned, I: serde::de::DeserializeOwned"))]
+    #[serde(bound(
+        deserialize = "[F; N]: serde::de::DeserializeOwned, I: serde::de::DeserializeOwned"
+    ))]
     pub witness: VecDeque<([F; N], [F; T], I)>,
 }
 
 impl<
-    F: SmallField, 
-    I: OutOfCircuitFixedLengthEncodable<F, N>, 
-    const T: usize, 
-    const N: usize, 
-    const ROUNDS: usize
->
-    QueueSimulator<F, I, T, N, ROUNDS>
+        F: SmallField,
+        I: OutOfCircuitFixedLengthEncodable<F, N>,
+        const T: usize,
+        const N: usize,
+        const ROUNDS: usize,
+    > QueueSimulator<F, I, T, N, ROUNDS>
 {
     pub fn empty() -> Self {
         Self {
@@ -111,7 +125,7 @@ impl<
             let mut artificial_empty = Self::empty();
             artificial_empty.head = self.tail;
             artificial_empty.tail = self.tail;
-            return (self, artificial_empty)
+            return (self, artificial_empty);
         }
 
         let first_wit: VecDeque<_> = self.witness.drain(..(at as usize)).collect();
@@ -128,11 +142,11 @@ impl<
 
         let rest = Self {
             head: splitting_point,
-            tail: self.tail, 
+            tail: self.tail,
             num_items: self.num_items - at,
             witness: rest_wit,
         };
-        
+
         (first, rest)
     }
 
@@ -146,15 +160,15 @@ impl<
             head: first.head,
             tail: second.tail,
             num_items: first.num_items + second.num_items,
-            witness: wit
+            witness: wit,
         }
     }
 
     pub fn push<
         R: CircuitRoundFunction<F, AW, SW, CW> + AlgebraicRoundFunction<F, AW, SW, CW>,
-        const AW: usize, 
+        const AW: usize,
         const SW: usize,
-        const CW: usize
+        const CW: usize,
     >(
         &mut self,
         element: I,
@@ -173,7 +187,7 @@ impl<
         element: I,
         _round_function: &R,
     ) -> (
-        [F; T],                                  // old tail
+        [F; T],                                    // old tail
         QueueIntermediateStates<F, T, SW, ROUNDS>, // new head/tail, as well as round function ins/outs
     ) {
         let old_tail = self.tail;
@@ -183,14 +197,14 @@ impl<
         to_hash.extend(self.tail);
 
         let mut state = R::initial_state();
-        let states = absorb_multiple_rounds::<F, R, AbsorbtionModeOverwrite, AW, SW, CW, ROUNDS>(&mut state, &to_hash);
-        let new_tail = <R as AlgebraicRoundFunction<F, AW, SW, CW>>::state_into_committment::<T>(&state);
+        let states = absorb_multiple_rounds::<F, R, AbsorbtionModeOverwrite, AW, SW, CW, ROUNDS>(
+            &mut state, &to_hash,
+        );
+        let new_tail =
+            <R as AlgebraicRoundFunction<F, AW, SW, CW>>::state_into_committment::<T>(&state);
         self.witness.push_back((encoding, old_tail, element));
 
-        let states = make_round_function_pairs(
-            R::initial_state(),
-            states
-        );
+        let states = make_round_function_pairs(R::initial_state(), states);
 
         self.num_items += 1;
         self.tail = new_tail;
@@ -215,10 +229,7 @@ impl<
     >(
         &mut self,
         _round_function: &R,
-    ) -> (
-        I,
-        QueueIntermediateStates<F, T, SW, ROUNDS>,
-    ) {
+    ) -> (I, QueueIntermediateStates<F, T, SW, ROUNDS>) {
         let old_head = self.head;
         let (_, _, element) = self.witness.pop_front().unwrap();
 
@@ -228,13 +239,13 @@ impl<
         to_hash.extend(self.head);
 
         let mut state = R::initial_state();
-        let states = absorb_multiple_rounds::<F, R, AbsorbtionModeOverwrite, AW, SW, CW, ROUNDS>(&mut state, &to_hash);
-        let new_head = <R as AlgebraicRoundFunction<F, AW, SW, CW>>::state_into_committment::<T>(&state);
-
-        let states = make_round_function_pairs(
-            R::initial_state(),
-            states
+        let states = absorb_multiple_rounds::<F, R, AbsorbtionModeOverwrite, AW, SW, CW, ROUNDS>(
+            &mut state, &to_hash,
         );
+        let new_head =
+            <R as AlgebraicRoundFunction<F, AW, SW, CW>>::state_into_committment::<T>(&state);
+
+        let states = make_round_function_pairs(R::initial_state(), states);
 
         self.num_items -= 1;
         self.head = new_head;
@@ -261,7 +272,7 @@ impl<
         const SW: usize,
         const CW: usize,
     >(
-        mut self, 
+        mut self,
         chunk_size: usize,
         round_function: &R,
     ) -> Vec<Self> {
@@ -320,25 +331,25 @@ pub struct FullWidthQueueSimulator<
 }
 
 impl<
-    F: SmallField,
-    I: OutOfCircuitFixedLengthEncodable<F, N>,
-    const N: usize,
-    const SW: usize,
-    const ROUNDS: usize,
-> Default for FullWidthQueueSimulator<F, I, N, SW, ROUNDS>
-{ 
+        F: SmallField,
+        I: OutOfCircuitFixedLengthEncodable<F, N>,
+        const N: usize,
+        const SW: usize,
+        const ROUNDS: usize,
+    > Default for FullWidthQueueSimulator<F, I, N, SW, ROUNDS>
+{
     fn default() -> Self {
         Self::empty()
     }
 }
 
 impl<
-    F: SmallField,
-    I: OutOfCircuitFixedLengthEncodable<F, N>,
-    const N: usize,
-    const SW: usize,
-    const ROUNDS: usize,
-> FullWidthQueueSimulator<F, I, N, SW, ROUNDS>
+        F: SmallField,
+        I: OutOfCircuitFixedLengthEncodable<F, N>,
+        const N: usize,
+        const SW: usize,
+        const ROUNDS: usize,
+    > FullWidthQueueSimulator<F, I, N, SW, ROUNDS>
 {
     pub fn empty() -> Self {
         Self {
@@ -359,7 +370,7 @@ impl<
             head: first.head,
             tail: second.tail,
             num_items: first.num_items + second.num_items,
-            witness: wit
+            witness: wit,
         }
     }
 
@@ -392,13 +403,12 @@ impl<
         let encoding = element.encoding_witness();
 
         let mut state = old_tail;
-        let states = absorb_multiple_rounds::<F, R, AbsorbtionModeOverwrite, AW, SW, CW, ROUNDS>(&mut state, &encoding);
+        let states = absorb_multiple_rounds::<F, R, AbsorbtionModeOverwrite, AW, SW, CW, ROUNDS>(
+            &mut state, &encoding,
+        );
         let new_tail = state;
 
-        let states = make_round_function_pairs(
-            old_tail,
-            states
-        );
+        let states = make_round_function_pairs(old_tail, states);
 
         self.witness.push_back((encoding, new_tail, element));
         self.num_items += 1;
@@ -423,23 +433,19 @@ impl<
     >(
         &mut self,
         _round_function: &R,
-    ) -> (
-        I,
-        FullWidthQueueIntermediateStates<F, SW, ROUNDS>,
-    ) {
+    ) -> (I, FullWidthQueueIntermediateStates<F, SW, ROUNDS>) {
         let old_head = self.head;
         assert!(N % AW == 0);
         let (_, _, element) = self.witness.pop_front().unwrap();
         let encoding = element.encoding_witness();
 
         let mut state = old_head;
-        let states = absorb_multiple_rounds::<F, R, AbsorbtionModeOverwrite, AW, SW, CW, ROUNDS>(&mut state, &encoding);
+        let states = absorb_multiple_rounds::<F, R, AbsorbtionModeOverwrite, AW, SW, CW, ROUNDS>(
+            &mut state, &encoding,
+        );
         let new_head = state;
 
-        let states = make_round_function_pairs(
-            old_head,
-            states
-        );
+        let states = make_round_function_pairs(old_head, states);
 
         self.num_items -= 1;
         self.head = new_head;
@@ -465,7 +471,7 @@ impl<
         const AW: usize,
         const CW: usize,
     >(
-        mut self, 
+        mut self,
         chunk_size: usize,
         round_function: &R,
     ) -> Vec<Self> {
@@ -512,7 +518,8 @@ pub struct FullWidthStackIntermediateStates<F: SmallField, const SW: usize, cons
     pub round_function_execution_pairs: [([F; SW], [F; SW]); ROUNDS],
 }
 
-fn empty_array_of_arrays<F: SmallField, const SW: usize, const ROUNDS: usize>() -> [([F; SW], [F; SW]); ROUNDS] {
+fn empty_array_of_arrays<F: SmallField, const SW: usize, const ROUNDS: usize>(
+) -> [([F; SW], [F; SW]); ROUNDS] {
     [([F::ZERO; SW], [F::ZERO; SW]); ROUNDS]
 }
 
@@ -529,12 +536,12 @@ pub struct FullWidthStackSimulator<
 }
 
 impl<
-    F: SmallField,
-    I: OutOfCircuitFixedLengthEncodable<F, N>,
-    const N: usize,
-    const SW: usize,
-    const ROUNDS: usize,
-> FullWidthStackSimulator<F, I, N, SW, ROUNDS>
+        F: SmallField,
+        I: OutOfCircuitFixedLengthEncodable<F, N>,
+        const N: usize,
+        const SW: usize,
+        const ROUNDS: usize,
+    > FullWidthStackSimulator<F, I, N, SW, ROUNDS>
 {
     pub fn empty() -> Self {
         Self {
@@ -571,13 +578,12 @@ impl<
         let old_state = self.state;
 
         let mut state = old_state;
-        let states = absorb_multiple_rounds::<F, R, AbsorbtionModeOverwrite, AW, SW, CW, ROUNDS>(&mut state, &encoding);
+        let states = absorb_multiple_rounds::<F, R, AbsorbtionModeOverwrite, AW, SW, CW, ROUNDS>(
+            &mut state, &encoding,
+        );
         let new_state = state;
 
-        let states = make_round_function_pairs(
-            old_state,
-            states
-        );
+        let states = make_round_function_pairs(old_state, states);
 
         self.witness.push((encoding, self.state, element));
         self.num_items += 1;
@@ -613,14 +619,13 @@ impl<
         let encoding = element.encoding_witness();
 
         let mut state = previous_state;
-        let states = absorb_multiple_rounds::<F, R, AbsorbtionModeOverwrite, AW, SW, CW, ROUNDS>(&mut state, &encoding);
+        let states = absorb_multiple_rounds::<F, R, AbsorbtionModeOverwrite, AW, SW, CW, ROUNDS>(
+            &mut state, &encoding,
+        );
         let new_state = state;
         assert_eq!(new_state, self.state);
 
-        let states = make_round_function_pairs(
-            previous_state,
-            states
-        );
+        let states = make_round_function_pairs(previous_state, states);
 
         self.state = previous_state;
 
@@ -635,7 +640,6 @@ impl<
         (element, intermediate_info)
     }
 }
-
 
 pub trait CircuitEquivalentReflection<F: SmallField>: Clone {
     type Destination: Clone + CSAllocatable<F>;
@@ -684,9 +688,9 @@ impl<F: SmallField> IntoSmallField<F> for u32 {
 
 #[inline(always)]
 pub(crate) fn scale_and_accumulate<F: SmallField, T: IntoSmallField<F>>(
-    dst: &mut F, 
+    dst: &mut F,
     src: T,
-    shift: usize
+    shift: usize,
 ) {
     let mut tmp = src.into_field();
     tmp.mul_assign(&F::SHIFTS[shift]);
@@ -694,9 +698,7 @@ pub(crate) fn scale_and_accumulate<F: SmallField, T: IntoSmallField<F>>(
 }
 
 #[inline(always)]
-pub(crate) fn linear_combination<F: SmallField>(
-    input: &[(F, F)]
-) -> F {
+pub(crate) fn linear_combination<F: SmallField>(input: &[(F, F)]) -> F {
     let mut result = F::ZERO;
     for (a, b) in input.iter() {
         let mut tmp = *a;

@@ -1,14 +1,14 @@
 use crate::boojum::field::SmallField;
+use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
+use crate::encodings::callstack_entry::*;
+use crate::ethereum_types::U256;
 use derivative::*;
-use zk_evm::aux_structures::MemoryQuery;
-use zk_evm::vm_state::CallStackEntry;
 use std::collections::VecDeque;
 use zk_evm::aux_structures::DecommittmentQuery;
 use zk_evm::aux_structures::LogQuery;
+use zk_evm::aux_structures::MemoryQuery;
+use zk_evm::vm_state::CallStackEntry;
 use zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
-use crate::encodings::callstack_entry::*;
-use crate::ethereum_types::U256;
-use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 
 pub fn u128_as_u32_le(value: u128) -> [u32; 4] {
     [
@@ -30,17 +30,16 @@ pub struct VmWitnessOracle<F: SmallField> {
     pub rollback_queue_initial_tails_for_new_frames: VecDeque<(u32, [F; QUEUE_STATE_WIDTH])>,
     pub storage_queries: VecDeque<(u32, LogQuery)>, // cycle, query
     pub storage_refund_queries: VecDeque<(u32, LogQuery, u32)>, // cycle, query, pubdata refund
-    pub callstack_new_frames_witnesses:
-        VecDeque<(u32, CallStackEntry)>,
+    pub callstack_new_frames_witnesses: VecDeque<(u32, CallStackEntry)>,
     pub callstack_values_witnesses:
         VecDeque<(u32, (ExtendedCallstackEntry<F>, CallstackSimulatorState<F>))>,
 }
 
-use zkevm_circuits::main_vm::witness_oracle::MemoryWitness;
-use zkevm_circuits::base_structures::memory_query::MemoryQueryWitness;
-use zkevm_circuits::base_structures::log_query::LogQueryWitness;
-use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecordWitness;
 use zkevm_circuits::base_structures::decommit_query::DecommitQueryWitness;
+use zkevm_circuits::base_structures::log_query::LogQueryWitness;
+use zkevm_circuits::base_structures::memory_query::MemoryQueryWitness;
+use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecordWitness;
+use zkevm_circuits::main_vm::witness_oracle::MemoryWitness;
 use zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
 
 impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
@@ -55,9 +54,7 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
             if self.memory_read_witness.is_empty() {
                 panic!(
                     "should have a witness to read at timestamp {}, page {}, index {}",
-                    timestamp,
-                    memory_page,
-                    index,
+                    timestamp, memory_page, index,
                 );
             }
             let (_cycle, query) = self.memory_read_witness.pop_front().unwrap();
@@ -105,11 +102,7 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
             }
         }
     }
-    fn push_memory_witness(
-        &mut self, 
-        memory_query: &MemoryQueryWitness<F>,
-        execute: bool
-    ) {
+    fn push_memory_witness(&mut self, memory_query: &MemoryQueryWitness<F>, execute: bool) {
         if let Some(write_witness) = self.memory_write_witness.as_mut() {
             if execute {
                 let wit = memory_query;
@@ -180,10 +173,7 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
     ) -> U256 {
         if execute && needs_witness {
             if self.storage_queries.is_empty() {
-                panic!(
-                    "should have a witness for storage read at {:?}",
-                    key
-                );
+                panic!("should have a witness for storage read at {:?}", key);
             }
             let (_cycle, query) = self.storage_queries.pop_front().unwrap();
 
@@ -250,9 +240,11 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
             [F::ZERO; 4]
         }
     }
-    fn get_rollback_queue_tail_witness_for_call(&mut self, _timestamp: u32, execute: bool)
-        -> [F; 4] 
-    {
+    fn get_rollback_queue_tail_witness_for_call(
+        &mut self,
+        _timestamp: u32,
+        execute: bool,
+    ) -> [F; 4] {
         if execute {
             let (_cycle_idx, tail) = self
                 .rollback_queue_initial_tails_for_new_frames
@@ -294,7 +286,7 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
                 &witness,
                 &extended_entry,
             );
-            
+
             assert_eq!(
                 current_depth + 1,
                 witness_depth as u32,
@@ -320,7 +312,10 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
 
             assert_eq!(rollback_queue_head, witness.reverted_queue_head);
             assert_eq!(rollback_queue_tail, witness.reverted_queue_tail);
-            assert_eq!(rollback_queue_segment_length, witness.reverted_queue_segment_len);
+            assert_eq!(
+                rollback_queue_segment_length,
+                witness.reverted_queue_segment_len
+            );
 
             assert_eq!(entry.pc, witness.pc);
             assert_eq!(entry.sp, witness.sp);
@@ -328,7 +323,10 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
             assert_eq!(entry.heap_bound, witness.heap_upper_bound);
             assert_eq!(entry.aux_heap_bound, witness.aux_heap_upper_bound);
 
-            assert_eq!(entry.exception_handler_location, witness.exception_handler_loc);
+            assert_eq!(
+                entry.exception_handler_location,
+                witness.exception_handler_loc
+            );
             assert_eq!(entry.ergs_remaining, witness.ergs_remaining);
 
             assert_eq!(entry.is_static, witness.is_static_execution);
@@ -339,11 +337,19 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
             assert_eq!(entry.code_shard_id, witness.code_shard_id);
 
             let witness_composite = [
-                (witness.context_u128_value_composite[0] as u64) + ((witness.context_u128_value_composite[1] as u64) << 32),
-                (witness.context_u128_value_composite[2] as u64) + ((witness.context_u128_value_composite[3] as u64) << 32),
+                (witness.context_u128_value_composite[0] as u64)
+                    + ((witness.context_u128_value_composite[1] as u64) << 32),
+                (witness.context_u128_value_composite[2] as u64)
+                    + ((witness.context_u128_value_composite[3] as u64) << 32),
             ];
 
-            assert_eq!([entry.context_u128_value as u64, (entry.context_u128_value >> 64) as u64], witness_composite);
+            assert_eq!(
+                [
+                    entry.context_u128_value as u64,
+                    (entry.context_u128_value >> 64) as u64
+                ],
+                witness_composite
+            );
 
             assert_eq!(entry.is_local_frame, witness.is_local_call);
         }
@@ -370,7 +376,7 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
                 _cycle_idx,
                 &extended_entry,
             );
-            
+
             assert_eq!(
                 depth - 1,
                 witness_depth as u32,
@@ -407,7 +413,7 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
                 caller_shard_id: entry.caller_shard_id,
                 code_shard_id: entry.code_shard_id,
                 context_u128_value_composite: [
-                    entry.context_u128_value as u32, 
+                    entry.context_u128_value as u32,
                     (entry.context_u128_value >> 32) as u32,
                     (entry.context_u128_value >> 64) as u32,
                     (entry.context_u128_value >> 96) as u32,
@@ -421,10 +427,7 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
         } else {
             use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
 
-            (
-                ExecutionContextRecord::placeholder_witness(),
-                [F::ZERO; 12],
-            )
+            (ExecutionContextRecord::placeholder_witness(), [F::ZERO; 12])
         }
     }
     fn report_new_callstack_frame(
@@ -435,8 +438,7 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
         execute: bool,
     ) {
         if execute && is_call {
-            let (_cycle_idx, entry) = 
-                self.callstack_new_frames_witnesses.pop_front().unwrap();
+            let (_cycle_idx, entry) = self.callstack_new_frames_witnesses.pop_front().unwrap();
 
             // compare
             let witness = new_record;
@@ -454,7 +456,10 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
             assert_eq!(entry.heap_bound, witness.heap_upper_bound);
             assert_eq!(entry.aux_heap_bound, witness.aux_heap_upper_bound);
 
-            assert_eq!(entry.exception_handler_location, witness.exception_handler_loc);
+            assert_eq!(
+                entry.exception_handler_location,
+                witness.exception_handler_loc
+            );
             assert_eq!(entry.ergs_remaining, witness.ergs_remaining);
 
             assert_eq!(entry.is_static, witness.is_static_execution);
@@ -464,7 +469,10 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
             assert_eq!(entry.caller_shard_id, witness.caller_shard_id);
             assert_eq!(entry.code_shard_id, witness.code_shard_id);
 
-            assert_eq!(u128_as_u32_le(entry.context_u128_value), witness.context_u128_value_composite);
+            assert_eq!(
+                u128_as_u32_le(entry.context_u128_value),
+                witness.context_u128_value_composite
+            );
 
             assert_eq!(entry.is_local_frame, witness.is_local_call);
         }
@@ -487,7 +495,12 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
                 });
 
             assert_eq!(request.timestamp, query.timestamp.0);
-            assert!(request.code_hash == query.hash, "circuit expected hash 0x{:064x}, while witness had 0x{:064x}", request.code_hash, query.hash);
+            assert!(
+                request.code_hash == query.hash,
+                "circuit expected hash 0x{:064x}, while witness had 0x{:064x}",
+                request.code_hash,
+                query.hash
+            );
 
             query.memory_page.0
         } else {
@@ -496,37 +509,61 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
     }
     fn at_completion(self) {
         if self.memory_read_witness.is_empty() == false {
-            panic!("Too many memory queries in witness: have left\n{:?}", self.memory_read_witness);
+            panic!(
+                "Too many memory queries in witness: have left\n{:?}",
+                self.memory_read_witness
+            );
         }
 
         if let Some(memory_write_witness) = self.memory_write_witness {
             if memory_write_witness.is_empty() == false {
-                panic!("Too many memory write queries in witness: have left\n{:?}", memory_write_witness);
+                panic!(
+                    "Too many memory write queries in witness: have left\n{:?}",
+                    memory_write_witness
+                );
             }
         }
 
         if self.storage_queries.is_empty() == false {
-            panic!("Too many storage queries in witness: have left\n{:?}", self.storage_queries);
+            panic!(
+                "Too many storage queries in witness: have left\n{:?}",
+                self.storage_queries
+            );
         }
 
         if self.storage_refund_queries.is_empty() == false {
-            panic!("Too many storage queries for refunds in witness: have left\n{:?}", self.storage_refund_queries);
+            panic!(
+                "Too many storage queries for refunds in witness: have left\n{:?}",
+                self.storage_refund_queries
+            );
         }
 
         if self.callstack_values_witnesses.is_empty() == false {
-            panic!("Too many callstack sponge witnesses: have left\n{:?}", self.callstack_values_witnesses);
+            panic!(
+                "Too many callstack sponge witnesses: have left\n{:?}",
+                self.callstack_values_witnesses
+            );
         }
 
         if self.decommittment_requests_witness.is_empty() == false {
-            panic!("Too many decommittment request witnesses: have left\n{:?}", self.decommittment_requests_witness);
+            panic!(
+                "Too many decommittment request witnesses: have left\n{:?}",
+                self.decommittment_requests_witness
+            );
         }
 
         if self.rollback_queue_head_segments.is_empty() == false {
-            panic!("Too many rollback queue heads in witnesses: have left\n{:?}", self.rollback_queue_head_segments);
+            panic!(
+                "Too many rollback queue heads in witnesses: have left\n{:?}",
+                self.rollback_queue_head_segments
+            );
         }
 
         if self.rollback_queue_initial_tails_for_new_frames.is_empty() == false {
-            panic!("Too many rollback queue heads new stack frames in witnesses: have left\n{:?}", self.rollback_queue_initial_tails_for_new_frames);
+            panic!(
+                "Too many rollback queue heads new stack frames in witnesses: have left\n{:?}",
+                self.rollback_queue_initial_tails_for_new_frames
+            );
         }
     }
 }

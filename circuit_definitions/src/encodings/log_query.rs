@@ -1,7 +1,7 @@
 use zk_evm::aux_structures::LogQuery;
+use zk_evm::aux_structures::Timestamp;
 use zk_evm::ethereum_types::H160;
 use zk_evm::ethereum_types::U256;
-use zk_evm::aux_structures::Timestamp;
 
 // Proxy, as we just need read-only
 pub trait LogQueryLike: 'static + Clone + Send + Sync + std::fmt::Debug {
@@ -72,7 +72,7 @@ impl LogQueryLike for LogQuery {
 #[derive(Clone, Debug)]
 pub struct LogQueryLikeWithExtendedEnumeration<L: LogQueryLike> {
     pub raw_query: L,
-    pub extended_timestamp: u32
+    pub extended_timestamp: u32,
 }
 
 use super::*;
@@ -84,28 +84,15 @@ pub fn comparison_key(query: &LogQuery) -> Key<PACKED_KEY_LENGTH> {
     let address = decompose_address_as_u32x5(query.address);
 
     let le_words = [
-        key[0],
-        key[1],
-        key[2],
-        key[3],
-        key[4],
-        key[5],
-        key[6],
-        key[7],
-        address[0],
-        address[1],
-        address[2],
-        address[3],
-        address[4],
+        key[0], key[1], key[2], key[3], key[4], key[5], key[6], key[7], address[0], address[1],
+        address[2], address[3], address[4],
     ];
 
     Key(le_words)
 }
 
 pub fn event_comparison_key(query: &LogQuery) -> Key<1> {
-    let le_words = [
-        query.timestamp.0,
-    ];
+    let le_words = [query.timestamp.0];
 
     Key(le_words)
 }
@@ -128,240 +115,274 @@ impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, LOG_QUERY_PACKED_WIDTH> 
 
         // we want to pack tightly, so we "base" our packing on read and written values
 
-        let v0 = linear_combination(
-            &[
-                (read_value[0].into_field(), F::ONE),
-                (key_bytes[0].into_field(), F::from_u64_unchecked(1u64 << 32)),
-                (key_bytes[1].into_field(), F::from_u64_unchecked(1u64 << 40)),
-                (key_bytes[2].into_field(), F::from_u64_unchecked(1u64 << 48)),
-            ],
-        );
+        let v0 = linear_combination(&[
+            (read_value[0].into_field(), F::ONE),
+            (key_bytes[0].into_field(), F::from_u64_unchecked(1u64 << 32)),
+            (key_bytes[1].into_field(), F::from_u64_unchecked(1u64 << 40)),
+            (key_bytes[2].into_field(), F::from_u64_unchecked(1u64 << 48)),
+        ]);
 
-        let v1 = linear_combination(
-            &[
-                (read_value[1].into_field(), F::ONE),
-                (key_bytes[3].into_field(), F::from_u64_unchecked(1u64 << 32)),
-                (key_bytes[4].into_field(), F::from_u64_unchecked(1u64 << 40)),
-                (key_bytes[5].into_field(), F::from_u64_unchecked(1u64 << 48)),
-            ],
-        );
+        let v1 = linear_combination(&[
+            (read_value[1].into_field(), F::ONE),
+            (key_bytes[3].into_field(), F::from_u64_unchecked(1u64 << 32)),
+            (key_bytes[4].into_field(), F::from_u64_unchecked(1u64 << 40)),
+            (key_bytes[5].into_field(), F::from_u64_unchecked(1u64 << 48)),
+        ]);
 
-        let v2 = linear_combination(
-            &[
-                (read_value[2].into_field(), F::ONE),
-                (key_bytes[6].into_field(), F::from_u64_unchecked(1u64 << 32)),
-                (key_bytes[7].into_field(), F::from_u64_unchecked(1u64 << 40)),
-                (key_bytes[8].into_field(), F::from_u64_unchecked(1u64 << 48)),
-            ],
-        );
+        let v2 = linear_combination(&[
+            (read_value[2].into_field(), F::ONE),
+            (key_bytes[6].into_field(), F::from_u64_unchecked(1u64 << 32)),
+            (key_bytes[7].into_field(), F::from_u64_unchecked(1u64 << 40)),
+            (key_bytes[8].into_field(), F::from_u64_unchecked(1u64 << 48)),
+        ]);
 
-        let v3 = linear_combination(
-            &[
-                (read_value[3].into_field(), F::ONE),
-                (key_bytes[9].into_field(), F::from_u64_unchecked(1u64 << 32)),
-                (key_bytes[10].into_field(), F::from_u64_unchecked(1u64 << 40)),
-                (key_bytes[11].into_field(), F::from_u64_unchecked(1u64 << 48)),
-            ],
-        );
+        let v3 = linear_combination(&[
+            (read_value[3].into_field(), F::ONE),
+            (key_bytes[9].into_field(), F::from_u64_unchecked(1u64 << 32)),
+            (
+                key_bytes[10].into_field(),
+                F::from_u64_unchecked(1u64 << 40),
+            ),
+            (
+                key_bytes[11].into_field(),
+                F::from_u64_unchecked(1u64 << 48),
+            ),
+        ]);
 
-        let v4 = linear_combination(
-            &[
-                (read_value[4].into_field(), F::ONE),
-                (key_bytes[12].into_field(), F::from_u64_unchecked(1u64 << 32)),
-                (key_bytes[13].into_field(), F::from_u64_unchecked(1u64 << 40)),
-                (key_bytes[14].into_field(), F::from_u64_unchecked(1u64 << 48)),
-            ],
-        );
+        let v4 = linear_combination(&[
+            (read_value[4].into_field(), F::ONE),
+            (
+                key_bytes[12].into_field(),
+                F::from_u64_unchecked(1u64 << 32),
+            ),
+            (
+                key_bytes[13].into_field(),
+                F::from_u64_unchecked(1u64 << 40),
+            ),
+            (
+                key_bytes[14].into_field(),
+                F::from_u64_unchecked(1u64 << 48),
+            ),
+        ]);
 
-        let v5 = linear_combination(
-            &[
-                (read_value[5].into_field(), F::ONE),
-                (key_bytes[15].into_field(), F::from_u64_unchecked(1u64 << 32)),
-                (key_bytes[16].into_field(), F::from_u64_unchecked(1u64 << 40)),
-                (key_bytes[17].into_field(), F::from_u64_unchecked(1u64 << 48)),
-            ],
-        );
+        let v5 = linear_combination(&[
+            (read_value[5].into_field(), F::ONE),
+            (
+                key_bytes[15].into_field(),
+                F::from_u64_unchecked(1u64 << 32),
+            ),
+            (
+                key_bytes[16].into_field(),
+                F::from_u64_unchecked(1u64 << 40),
+            ),
+            (
+                key_bytes[17].into_field(),
+                F::from_u64_unchecked(1u64 << 48),
+            ),
+        ]);
 
-        let v6 = linear_combination(
-            &[
-                (read_value[6].into_field(), F::ONE),
-                (key_bytes[18].into_field(), F::from_u64_unchecked(1u64 << 32)),
-                (key_bytes[19].into_field(), F::from_u64_unchecked(1u64 << 40)),
-                (key_bytes[20].into_field(), F::from_u64_unchecked(1u64 << 48)),
-            ],
-        );
+        let v6 = linear_combination(&[
+            (read_value[6].into_field(), F::ONE),
+            (
+                key_bytes[18].into_field(),
+                F::from_u64_unchecked(1u64 << 32),
+            ),
+            (
+                key_bytes[19].into_field(),
+                F::from_u64_unchecked(1u64 << 40),
+            ),
+            (
+                key_bytes[20].into_field(),
+                F::from_u64_unchecked(1u64 << 48),
+            ),
+        ]);
 
-        let v7 = linear_combination(
-            &[
-                (read_value[7].into_field(), F::ONE),
-                (key_bytes[21].into_field(), F::from_u64_unchecked(1u64 << 32)),
-                (key_bytes[22].into_field(), F::from_u64_unchecked(1u64 << 40)),
-                (key_bytes[23].into_field(), F::from_u64_unchecked(1u64 << 48)),
-            ],
-        );
+        let v7 = linear_combination(&[
+            (read_value[7].into_field(), F::ONE),
+            (
+                key_bytes[21].into_field(),
+                F::from_u64_unchecked(1u64 << 32),
+            ),
+            (
+                key_bytes[22].into_field(),
+                F::from_u64_unchecked(1u64 << 40),
+            ),
+            (
+                key_bytes[23].into_field(),
+                F::from_u64_unchecked(1u64 << 48),
+            ),
+        ]);
 
         // continue with written value
 
-        let v8 = linear_combination(
-            &[
-                (written_value[0].into_field(), F::ONE),
-                (key_bytes[24].into_field(), F::from_u64_unchecked(1u64 << 32)),
-                (key_bytes[25].into_field(), F::from_u64_unchecked(1u64 << 40)),
-                (key_bytes[26].into_field(), F::from_u64_unchecked(1u64 << 48)),
-            ],
-        );
+        let v8 = linear_combination(&[
+            (written_value[0].into_field(), F::ONE),
+            (
+                key_bytes[24].into_field(),
+                F::from_u64_unchecked(1u64 << 32),
+            ),
+            (
+                key_bytes[25].into_field(),
+                F::from_u64_unchecked(1u64 << 40),
+            ),
+            (
+                key_bytes[26].into_field(),
+                F::from_u64_unchecked(1u64 << 48),
+            ),
+        ]);
 
-        let v9 = linear_combination(
-            &[
-                (written_value[1].into_field(), F::ONE),
-                (key_bytes[27].into_field(), F::from_u64_unchecked(1u64 << 32)),
-                (key_bytes[28].into_field(), F::from_u64_unchecked(1u64 << 40)),
-                (key_bytes[29].into_field(), F::from_u64_unchecked(1u64 << 48)),
-            ],
-        );
+        let v9 = linear_combination(&[
+            (written_value[1].into_field(), F::ONE),
+            (
+                key_bytes[27].into_field(),
+                F::from_u64_unchecked(1u64 << 32),
+            ),
+            (
+                key_bytes[28].into_field(),
+                F::from_u64_unchecked(1u64 << 40),
+            ),
+            (
+                key_bytes[29].into_field(),
+                F::from_u64_unchecked(1u64 << 48),
+            ),
+        ]);
 
         // continue mixing bytes, now from "address"
 
-        let v10 = linear_combination(
-            &[
-                (written_value[2].into_field(), F::ONE),
-                (key_bytes[30].into_field(), F::from_u64_unchecked(1u64 << 32)),
-                (key_bytes[31].into_field(), F::from_u64_unchecked(1u64 << 40)),
-                (
-                    address_bytes[0].into_field(),
-                    F::from_u64_unchecked(1u64 << 48),
-                ),
-            ],
-        );
+        let v10 = linear_combination(&[
+            (written_value[2].into_field(), F::ONE),
+            (
+                key_bytes[30].into_field(),
+                F::from_u64_unchecked(1u64 << 32),
+            ),
+            (
+                key_bytes[31].into_field(),
+                F::from_u64_unchecked(1u64 << 40),
+            ),
+            (
+                address_bytes[0].into_field(),
+                F::from_u64_unchecked(1u64 << 48),
+            ),
+        ]);
 
-        let v11 = linear_combination(
-            &[
-                (written_value[3].into_field(), F::ONE),
-                (
-                    address_bytes[1].into_field(),
-                    F::from_u64_unchecked(1u64 << 32),
-                ),
-                (
-                    address_bytes[2].into_field(),
-                    F::from_u64_unchecked(1u64 << 40),
-                ),
-                (
-                    address_bytes[3].into_field(),
-                    F::from_u64_unchecked(1u64 << 48),
-                ),
-            ],
-        );
+        let v11 = linear_combination(&[
+            (written_value[3].into_field(), F::ONE),
+            (
+                address_bytes[1].into_field(),
+                F::from_u64_unchecked(1u64 << 32),
+            ),
+            (
+                address_bytes[2].into_field(),
+                F::from_u64_unchecked(1u64 << 40),
+            ),
+            (
+                address_bytes[3].into_field(),
+                F::from_u64_unchecked(1u64 << 48),
+            ),
+        ]);
 
-        let v12 = linear_combination(
-            &[
-                (written_value[4].into_field(), F::ONE),
-                (
-                    address_bytes[4].into_field(),
-                    F::from_u64_unchecked(1u64 << 32),
-                ),
-                (
-                    address_bytes[5].into_field(),
-                    F::from_u64_unchecked(1u64 << 40),
-                ),
-                (
-                    address_bytes[6].into_field(),
-                    F::from_u64_unchecked(1u64 << 48),
-                ),
-            ],
-        );
+        let v12 = linear_combination(&[
+            (written_value[4].into_field(), F::ONE),
+            (
+                address_bytes[4].into_field(),
+                F::from_u64_unchecked(1u64 << 32),
+            ),
+            (
+                address_bytes[5].into_field(),
+                F::from_u64_unchecked(1u64 << 40),
+            ),
+            (
+                address_bytes[6].into_field(),
+                F::from_u64_unchecked(1u64 << 48),
+            ),
+        ]);
 
-        let v13 = linear_combination(
-            &[
-                (written_value[5].into_field(), F::ONE),
-                (
-                    address_bytes[7].into_field(),
-                    F::from_u64_unchecked(1u64 << 32),
-                ),
-                (
-                    address_bytes[8].into_field(),
-                    F::from_u64_unchecked(1u64 << 40),
-                ),
-                (
-                    address_bytes[9].into_field(),
-                    F::from_u64_unchecked(1u64 << 48),
-                ),
-            ],
-        );
+        let v13 = linear_combination(&[
+            (written_value[5].into_field(), F::ONE),
+            (
+                address_bytes[7].into_field(),
+                F::from_u64_unchecked(1u64 << 32),
+            ),
+            (
+                address_bytes[8].into_field(),
+                F::from_u64_unchecked(1u64 << 40),
+            ),
+            (
+                address_bytes[9].into_field(),
+                F::from_u64_unchecked(1u64 << 48),
+            ),
+        ]);
 
-        let v14 = linear_combination(
-            &[
-                (written_value[6].into_field(), F::ONE),
-                (
-                    address_bytes[10].into_field(),
-                    F::from_u64_unchecked(1u64 << 32),
-                ),
-                (
-                    address_bytes[11].into_field(),
-                    F::from_u64_unchecked(1u64 << 40),
-                ),
-                (
-                    address_bytes[12].into_field(),
-                    F::from_u64_unchecked(1u64 << 48),
-                ),
-            ],
-        );
+        let v14 = linear_combination(&[
+            (written_value[6].into_field(), F::ONE),
+            (
+                address_bytes[10].into_field(),
+                F::from_u64_unchecked(1u64 << 32),
+            ),
+            (
+                address_bytes[11].into_field(),
+                F::from_u64_unchecked(1u64 << 40),
+            ),
+            (
+                address_bytes[12].into_field(),
+                F::from_u64_unchecked(1u64 << 48),
+            ),
+        ]);
 
-        let v15 = linear_combination(
-            &[
-                (written_value[7].into_field(), F::ONE),
-                (
-                    address_bytes[13].into_field(),
-                    F::from_u64_unchecked(1u64 << 32),
-                ),
-                (
-                    address_bytes[14].into_field(),
-                    F::from_u64_unchecked(1u64 << 40),
-                ),
-                (
-                    address_bytes[15].into_field(),
-                    F::from_u64_unchecked(1u64 << 48),
-                ),
-            ],
-        );
+        let v15 = linear_combination(&[
+            (written_value[7].into_field(), F::ONE),
+            (
+                address_bytes[13].into_field(),
+                F::from_u64_unchecked(1u64 << 32),
+            ),
+            (
+                address_bytes[14].into_field(),
+                F::from_u64_unchecked(1u64 << 40),
+            ),
+            (
+                address_bytes[15].into_field(),
+                F::from_u64_unchecked(1u64 << 48),
+            ),
+        ]);
 
         // now we can pack using some other "large" items as base
 
-        let v16 = linear_combination(
-            &[
-                (self.timestamp.0.into_field(), F::ONE),
-                (
-                    address_bytes[16].into_field(),
-                    F::from_u64_unchecked(1u64 << 32),
-                ),
-                (
-                    address_bytes[17].into_field(),
-                    F::from_u64_unchecked(1u64 << 40),
-                ),
-                (
-                    address_bytes[18].into_field(),
-                    F::from_u64_unchecked(1u64 << 48),
-                ),
-            ],
-        );
+        let v16 = linear_combination(&[
+            (self.timestamp.0.into_field(), F::ONE),
+            (
+                address_bytes[16].into_field(),
+                F::from_u64_unchecked(1u64 << 32),
+            ),
+            (
+                address_bytes[17].into_field(),
+                F::from_u64_unchecked(1u64 << 40),
+            ),
+            (
+                address_bytes[18].into_field(),
+                F::from_u64_unchecked(1u64 << 48),
+            ),
+        ]);
 
-        let v17 = linear_combination(
-            &[
-                (self.tx_number_in_block.into_field(), F::ONE), // NOTE: u16 out of circuit and u32 in circuit
-                (
-                    address_bytes[19].into_field(),
-                    F::from_u64_unchecked(1u64 << 32),
-                ),
-                (self.aux_byte.into_field(), F::from_u64_unchecked(1u64 << 40)),
-                (self.shard_id.into_field(), F::from_u64_unchecked(1u64 << 48)),
-            ],
-        );
+        let v17 = linear_combination(&[
+            (self.tx_number_in_block.into_field(), F::ONE), // NOTE: u16 out of circuit and u32 in circuit
+            (
+                address_bytes[19].into_field(),
+                F::from_u64_unchecked(1u64 << 32),
+            ),
+            (
+                self.aux_byte.into_field(),
+                F::from_u64_unchecked(1u64 << 40),
+            ),
+            (
+                self.shard_id.into_field(),
+                F::from_u64_unchecked(1u64 << 48),
+            ),
+        ]);
 
-        let v18 = linear_combination(
-            &[
-                (self.rw_flag.into_field(), F::ONE),
-                (self.is_service.into_field(), F::TWO),
-            ],
-        );
+        let v18 = linear_combination(&[
+            (self.rw_flag.into_field(), F::ONE),
+            (self.is_service.into_field(), F::TWO),
+        ]);
 
         // and the final into_field() is just rollback flag itself
 
@@ -371,43 +392,68 @@ impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, LOG_QUERY_PACKED_WIDTH> 
             v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18,
             v19,
         ]
-
     }
 }
 
 pub type LogQueryWithExtendedEnumeration = LogQueryLikeWithExtendedEnumeration<LogQuery>;
 
-impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, LOG_QUERY_PACKED_WIDTH> for LogQueryWithExtendedEnumeration {
+impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, LOG_QUERY_PACKED_WIDTH>
+    for LogQueryWithExtendedEnumeration
+{
     fn encoding_witness(&self) -> [F; LOG_QUERY_PACKED_WIDTH] {
         let LogQueryWithExtendedEnumeration {
             raw_query,
-            extended_timestamp
+            extended_timestamp,
         } = self;
 
-        let mut result = <LogQuery as OutOfCircuitFixedLengthEncodable<F, LOG_QUERY_PACKED_WIDTH>>::encoding_witness(raw_query);
+        let mut result = <LogQuery as OutOfCircuitFixedLengthEncodable<
+            F,
+            LOG_QUERY_PACKED_WIDTH,
+        >>::encoding_witness(raw_query);
         use zkevm_circuits::storage_validity_by_grand_product::EXTENDED_TIMESTAMP_ENCODING_OFFSET;
 
         let mut shift = EXTENDED_TIMESTAMP_ENCODING_OFFSET;
         use zkevm_circuits::storage_validity_by_grand_product::EXTENDED_TIMESTAMP_ENCODING_ELEMENT;
-        scale_and_accumulate::<F, _>(&mut result[EXTENDED_TIMESTAMP_ENCODING_ELEMENT], *extended_timestamp, shift);
+        scale_and_accumulate::<F, _>(
+            &mut result[EXTENDED_TIMESTAMP_ENCODING_ELEMENT],
+            *extended_timestamp,
+            shift,
+        );
         shift += 32;
         assert!(shift <= F::CAPACITY_BITS as usize);
-        
+
         result
     }
 }
 
 use zkevm_circuits::base_structures::log_query::LOG_QUERY_ABSORBTION_ROUNDS;
 
-pub type LogQueueSimulator<F> = QueueSimulator<F, LogQuery, QUEUE_STATE_WIDTH, LOG_QUERY_PACKED_WIDTH, LOG_QUERY_ABSORBTION_ROUNDS>;
-pub type LogQueueState<F> = QueueIntermediateStates<F, QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH, LOG_QUERY_ABSORBTION_ROUNDS>;
+pub type LogQueueSimulator<F> = QueueSimulator<
+    F,
+    LogQuery,
+    QUEUE_STATE_WIDTH,
+    LOG_QUERY_PACKED_WIDTH,
+    LOG_QUERY_ABSORBTION_ROUNDS,
+>;
+pub type LogQueueState<F> = QueueIntermediateStates<
+    F,
+    QUEUE_STATE_WIDTH,
+    FULL_SPONGE_QUEUE_STATE_WIDTH,
+    LOG_QUERY_ABSORBTION_ROUNDS,
+>;
 
-pub type LogWithExtendedEnumerationQueueSimulator<F> = QueueSimulator<F, LogQueryWithExtendedEnumeration, QUEUE_STATE_WIDTH, LOG_QUERY_PACKED_WIDTH, LOG_QUERY_ABSORBTION_ROUNDS>;
+pub type LogWithExtendedEnumerationQueueSimulator<F> = QueueSimulator<
+    F,
+    LogQueryWithExtendedEnumeration,
+    QUEUE_STATE_WIDTH,
+    LOG_QUERY_PACKED_WIDTH,
+    LOG_QUERY_ABSORBTION_ROUNDS,
+>;
 // pub type LogQueueState<F> = QueueIntermediateStates<F, QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH, LOG_QUERY_ABSORBTION_ROUNDS>;
 
-
-pub fn log_query_into_circuit_log_query_witness<F: SmallField>(query: &LogQuery) 
-    -> <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocatable<F>>::Witness {
+pub fn log_query_into_circuit_log_query_witness<F: SmallField>(
+    query: &LogQuery,
+) -> <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocatable<F>>::Witness {
     use zkevm_circuits::base_structures::log_query::LogQueryWitness;
 
     LogQueryWitness {
@@ -434,7 +480,7 @@ impl<F: SmallField> CircuitEquivalentReflection<F> for LogQuery {
 
 pub fn log_query_into_timestamped_storage_record_witness<F: SmallField>(
     query: &LogQueryWithExtendedEnumeration
-) -> <zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord<F> as CSAllocatable<F>>::Witness {
+) -> <zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord<F> as CSAllocatable<F>>::Witness{
     use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecordWitness;
 
     TimestampedStorageLogRecordWitness {
@@ -444,7 +490,8 @@ pub fn log_query_into_timestamped_storage_record_witness<F: SmallField>(
 }
 
 impl<F: SmallField> CircuitEquivalentReflection<F> for LogQueryWithExtendedEnumeration {
-    type Destination = zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord<F>;
+    type Destination =
+        zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord<F>;
     fn reflect(&self) -> <Self::Destination as CSAllocatable<F>>::Witness {
         log_query_into_timestamped_storage_record_witness(self)
     }
