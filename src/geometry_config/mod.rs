@@ -6,24 +6,29 @@ use crate::boojum::worker::Worker;
 
 use crate::toolset::GeometryConfig;
 
-pub const fn get_geometry_config() -> GeometryConfig {
-    GeometryConfig {
-        cycles_per_vm_snapshot: 5713,
-        cycles_per_log_demuxer: 39058,
-        cycles_per_storage_sorter: 25436,
-        cycles_per_events_or_l1_messages_sorter: 31287,
-        cycles_per_ram_permutation: 76561,
-        cycles_code_decommitter_sorter: 63122,
-        cycles_per_code_decommitter: 2114,
-        cycles_per_storage_application: 33,
-        cycles_per_keccak256_circuit: 642,
-        cycles_per_sha256_circuit: 2063,
-        cycles_per_ecrecover_circuit: 2,
-        limit_for_l1_messages_pudata_hasher: 717,
-        limit_for_l1_messages_merklizer: 0,
-        limit_for_initial_writes_pubdata_hasher: 0,
-        limit_for_repeated_writes_pubdata_hasher: 0,
-    }
+pub fn get_geometry_config() -> GeometryConfig {
+    let file = std::fs::File::open("config.json").expect("must open file to save config");
+    let config = serde_json::from_reader(file).expect("must deserialize");
+
+    config
+
+    // GeometryConfig {
+    //     cycles_per_vm_snapshot: 5713,
+    //     cycles_per_log_demuxer: 39058,
+    //     cycles_per_storage_sorter: 25436,
+    //     cycles_per_events_or_l1_messages_sorter: 31287,
+    //     cycles_per_ram_permutation: 76561,
+    //     cycles_code_decommitter_sorter: 63122,
+    //     cycles_per_code_decommitter: 2114,
+    //     cycles_per_storage_application: 33,
+    //     cycles_per_keccak256_circuit: 642,
+    //     cycles_per_sha256_circuit: 2063,
+    //     cycles_per_ecrecover_circuit: 2,
+    //     limit_for_l1_messages_pudata_hasher: 717,
+    //     limit_for_l1_messages_merklizer: 0,
+    //     limit_for_initial_writes_pubdata_hasher: 0,
+    //     limit_for_repeated_writes_pubdata_hasher: 0,
+    // }
 }
 
 fn all_runners() -> Vec<Box<dyn Fn() -> usize + Send>> {
