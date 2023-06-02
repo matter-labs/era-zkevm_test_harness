@@ -214,9 +214,6 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
         cycles_per_storage_sorter: 16,
         cycles_per_events_or_l1_messages_sorter: 4,
 
-        limit_for_initial_writes_pubdata_hasher: 16,
-        limit_for_repeated_writes_pubdata_hasher: 16,
-        limit_for_l1_messages_merklizer: 32,
         limit_for_l1_messages_pudata_hasher: 32,
     };
 

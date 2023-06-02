@@ -36,9 +36,6 @@ pub struct GeometryConfig {
     pub cycles_per_ecrecover_circuit: u32,
 
     pub limit_for_l1_messages_pudata_hasher: u32,
-    pub limit_for_l1_messages_merklizer: u32,
-    pub limit_for_initial_writes_pubdata_hasher: u32,
-    pub limit_for_repeated_writes_pubdata_hasher: u32,
 }
 
 pub fn create_tools<S: Storage>(storage: S, config: &GeometryConfig) -> ProvingToolset<S> {

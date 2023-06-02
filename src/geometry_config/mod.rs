@@ -78,18 +78,6 @@ pub fn compute_config() -> GeometryConfig {
 
     assert!(sizes.is_empty());
 
-    // let cycles_per_vm_snapshot = main_vm_capacity() as u32;
-    // let cycles_code_decommitter_sorter = code_decommittments_sorter_capacity() as u32;
-    // let cycles_per_code_decommitter = code_decommitter_capacity() as u32;
-    // let cycles_per_log_demuxer = log_demuxer_capacity() as u32;
-    // let cycles_per_keccak256_circuit = keccak256_rf_capacity() as u32;
-    // let cycles_per_sha256_circuit = sha256_rf_capacity() as u32;
-    // let cycles_per_ecrecover_circuit = ecrecover_capacity() as u32;
-    // let cycles_per_ram_permutation = ram_permutation_capacity() as u32;
-    // let cycles_per_events_or_l1_messages_sorter = event_sorter_capacity() as u32;
-    // let cycles_per_storage_sorter = storage_sorter_capacity() as u32;
-    // let cycles_per_storage_application = storage_application_capacity() as u32;
-
     let config = GeometryConfig {
         cycles_per_vm_snapshot,
         cycles_code_decommitter_sorter,
@@ -102,9 +90,7 @@ pub fn compute_config() -> GeometryConfig {
         cycles_per_keccak256_circuit,
         cycles_per_sha256_circuit,
         cycles_per_ecrecover_circuit,
-        limit_for_initial_writes_pubdata_hasher: 0,
-        limit_for_repeated_writes_pubdata_hasher: 0,
-        limit_for_l1_messages_merklizer: 0,
+
         limit_for_l1_messages_pudata_hasher,
     };
 
