@@ -116,6 +116,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
                 TRACE_LEN_LOG_2_FOR_CALCULATION,
                 MAX_VARS_LOG_2_FOR_CALCULATION,
             );
+            cycles_used = 0;
         }
 
         let instance = VMMainCircuit {
@@ -164,6 +165,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
                 TRACE_LEN_LOG_2_FOR_CALCULATION,
                 MAX_VARS_LOG_2_FOR_CALCULATION,
             );
+            cycles_used = 0;
         }
 
         let instance = CodeDecommittsSorterCircuit {
@@ -210,6 +212,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
                 TRACE_LEN_LOG_2_FOR_CALCULATION,
                 MAX_VARS_LOG_2_FOR_CALCULATION,
             );
+            cycles_used = 0;
         }
 
         let instance = CodeDecommitterCircuit {
@@ -255,6 +258,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
                 TRACE_LEN_LOG_2_FOR_CALCULATION,
                 MAX_VARS_LOG_2_FOR_CALCULATION,
             );
+            cycles_used = 0;
         }
 
         let instance = LogDemuxerCircuit {
@@ -300,6 +304,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
                 TRACE_LEN_LOG_2_FOR_CALCULATION,
                 MAX_VARS_LOG_2_FOR_CALCULATION,
             );
+            cycles_used = 0;
         }
 
         let instance = Keccak256RoundFunctionCircuit {
@@ -345,6 +350,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
                 TRACE_LEN_LOG_2_FOR_CALCULATION,
                 MAX_VARS_LOG_2_FOR_CALCULATION,
             );
+            cycles_used = 0;
         }
 
         let instance = Sha256RoundFunctionCircuit {
@@ -390,6 +396,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
                 TRACE_LEN_LOG_2_FOR_CALCULATION,
                 MAX_VARS_LOG_2_FOR_CALCULATION,
             );
+            cycles_used = 0;
         }
 
         let instance = ECRecoverFunctionCircuit {
@@ -435,6 +442,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
                 TRACE_LEN_LOG_2_FOR_CALCULATION,
                 MAX_VARS_LOG_2_FOR_CALCULATION,
             );
+            cycles_used = 0;
         }
 
         let instance = RAMPermutationCircuit {
@@ -482,6 +490,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
                 TRACE_LEN_LOG_2_FOR_CALCULATION,
                 MAX_VARS_LOG_2_FOR_CALCULATION,
             );
+            cycles_used = 0;
         }
 
         let instance = StorageSorterCircuit {
@@ -530,6 +539,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
                 TRACE_LEN_LOG_2_FOR_CALCULATION,
                 MAX_VARS_LOG_2_FOR_CALCULATION,
             );
+            cycles_used = 0;
         }
 
         let instance = StorageApplicationCircuit {
@@ -615,6 +625,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
                 TRACE_LEN_LOG_2_FOR_CALCULATION,
                 MAX_VARS_LOG_2_FOR_CALCULATION,
             );
+            cycles_used = 0;
         }
 
         let instance = EventsSorterCircuit {
@@ -663,6 +674,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
                 TRACE_LEN_LOG_2_FOR_CALCULATION,
                 MAX_VARS_LOG_2_FOR_CALCULATION,
             );
+            cycles_used = 0;
         }
 
         let instance = L1MessagesSorterCircuit {
@@ -708,6 +720,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
                 TRACE_LEN_LOG_2_FOR_CALCULATION,
                 MAX_VARS_LOG_2_FOR_CALCULATION,
             );
+            cycles_used = 0;
         }
 
         let instance = L1MessagesHasherCircuit {
