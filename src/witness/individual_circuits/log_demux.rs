@@ -142,7 +142,7 @@ pub fn compute_logs_demux<
                 }
                 PRECOMPILE_AUX_BYTE => {
                     assert!(!query.rollback);
-                    use crate::zk_evm::precompiles::*;
+                    use crate::zk_evm::zk_evm_abstractions::precompiles::*;
                     match query.address {
                         a if a == *KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
                             let item = demuxed_keccak_precompile_queries_it

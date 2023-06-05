@@ -126,7 +126,7 @@ round_function: R, // used for all queues implementation
 
     let (entry_point_decommittment_query, entry_point_decommittment_query_witness) = tools
         .decommittment_processor
-        .decommit_into_memory(0, entry_point_decommittment_query, &mut tools.memory);
+        .decommit_into_memory(0, entry_point_decommittment_query, &mut tools.memory).expect("must decommit the extry point");
     let entry_point_decommittment_query_witness = entry_point_decommittment_query_witness.unwrap();
     tools.witness_tracer.add_decommittment(
         0,
@@ -198,7 +198,7 @@ round_function: R, // used for all queues implementation
                 }
             }
         }
-        out_of_circuit_vm.cycle(&mut tracer);
+        out_of_circuit_vm.cycle(&mut tracer).expect("cycle should finish succesfully");
     }
 
     assert!(

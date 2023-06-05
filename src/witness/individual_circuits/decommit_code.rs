@@ -133,9 +133,9 @@ pub fn compute_decommitter_circuit_snapshots<
     let mut start = true;
     let mut memory_queue_state_offset = 0;
 
-    use crate::zk_evm::precompiles::keccak256::Digest;
-    use crate::zk_evm::precompiles::sha256::transmute_state;
-    use crate::zk_evm::precompiles::sha256::Sha256;
+    use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::Digest;
+    use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::transmute_state;
+    use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Sha256;
 
     let mut internal_state = Sha256::default();
     let mut fsm_internals = CodeDecommittmentFSM::<F>::placeholder_witness();

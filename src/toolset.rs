@@ -1,6 +1,6 @@
 use crate::witness::tracer::WitnessTracer;
 use crate::zk_evm::abstractions::Storage;
-use crate::zk_evm::precompiles::DefaultPrecompilesProcessor;
+use crate::zk_evm::zk_evm_abstractions::precompiles::DefaultPrecompilesProcessor;
 use crate::zk_evm::reference_impls::decommitter::SimpleDecommitter;
 use crate::zk_evm::reference_impls::event_sink::InMemoryEventSink;
 use crate::zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS;

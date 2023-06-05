@@ -37,7 +37,7 @@ pub fn sha256_decompose_into_per_circuit_witness<
     );
 
     // split into aux witness, don't mix with the memory
-    use crate::zk_evm::precompiles::sha256::Sha256RoundWitness;
+    use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Sha256RoundWitness;
 
     for (_cycle, _query, witness) in artifacts.sha256_round_function_witnesses.iter() {
         for el in witness.iter() {
@@ -99,14 +99,14 @@ pub fn sha256_decompose_into_per_circuit_witness<
         let mut hidden_fsm_output_state = Sha256RoundFunctionFSM::<F>::placeholder_witness();
         hidden_fsm_output_state.completed = true;
 
-        use crate::zk_evm::precompiles::sha256::Sha256;
+        use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Sha256;
         // internal state is a bit more tricky, it'll be a round over empty input
         let mut internal_state_over_empty_buffer = Sha256::default();
         let empty_block = [0u8; 64];
-        use crate::zk_evm::precompiles::sha256::Digest;
+        use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Digest;
         internal_state_over_empty_buffer.update(&empty_block);
         let sha256_internal_state_over_empty_buffer =
-            zk_evm::precompiles::sha256::transmute_state(internal_state_over_empty_buffer.clone());
+            zk_evm::zk_evm_abstractions::precompiles::sha256::transmute_state(internal_state_over_empty_buffer.clone());
 
         let circuit_hash_internal_state = sha256_internal_state_over_empty_buffer;
 
@@ -178,7 +178,7 @@ pub fn sha256_decompose_into_per_circuit_witness<
             .demuxed_sha256_precompile_queue_simulator
             .pop_and_output_intermediate_data(round_function);
 
-        use crate::zk_evm::precompiles::sha256::Sha256;
+        use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Sha256;
         let mut internal_state = Sha256::default();
 
         let mut memory_reads_per_request: Vec<U256> = vec![];
@@ -188,7 +188,7 @@ pub fn sha256_decompose_into_per_circuit_witness<
         let (_cycle, _req, round_witness) = per_request_work;
         assert_eq!(request, _req);
 
-        use crate::zk_evm::precompiles::precompile_abi_in_log;
+        use crate::zk_evm::zk_evm_abstractions::precompiles::precompile_abi_in_log;
         let mut precompile_request = precompile_abi_in_log(request);
         let num_rounds = precompile_request.precompile_interpreted_data as usize;
         assert_eq!(num_rounds, round_witness.len());
@@ -224,7 +224,7 @@ pub fn sha256_decompose_into_per_circuit_witness<
 
                 precompile_request.input_memory_offset += 1;
             }
-            use crate::zk_evm::precompiles::sha256::Digest;
+            use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Digest;
             internal_state.update(&block);
 
             num_rounds_left -= 1;
@@ -265,7 +265,7 @@ pub fn sha256_decompose_into_per_circuit_witness<
                 }
 
                 let state_inner =
-                    zk_evm::precompiles::sha256::transmute_state(internal_state.clone());
+                    zk_evm::zk_evm_abstractions::precompiles::sha256::transmute_state(internal_state.clone());
 
                 let mut circuit_hash_internal_state = state_inner;
 
@@ -285,10 +285,10 @@ pub fn sha256_decompose_into_per_circuit_witness<
                     // internal state is a bit more tricky, it'll be a round over empty input
                     let mut internal_state_over_empty_buffer = Sha256::default();
                     let empty_block = [0u8; 64];
-                    use crate::zk_evm::precompiles::sha256::Digest;
+                    use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Digest;
                     internal_state_over_empty_buffer.update(&empty_block);
                     let sha256_internal_state_over_empty_buffer =
-                        zk_evm::precompiles::sha256::transmute_state(
+                        zk_evm::zk_evm_abstractions::precompiles::sha256::transmute_state(
                             internal_state_over_empty_buffer.clone(),
                         );
 

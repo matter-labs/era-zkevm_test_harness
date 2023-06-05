@@ -27,7 +27,7 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
 
     // split into aux witness, don't mix with the memory
 
-    use crate::zk_evm::precompiles::ecrecover::ECRecoverRoundWitness;
+    use crate::zk_evm::zk_evm_abstractions::precompiles::ecrecover::ECRecoverRoundWitness;
     for (_cycle, _query, witness) in artifacts.ecrecover_witnesses.iter() {
         let ECRecoverRoundWitness {
             new_request: _,
@@ -139,7 +139,7 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
         let (_cycle, _req, round_witness) = per_request_work;
         assert_eq!(request, _req);
 
-        use crate::zk_evm::precompiles::precompile_abi_in_log;
+        use crate::zk_evm::zk_evm_abstractions::precompiles::precompile_abi_in_log;
         let mut precompile_request = precompile_abi_in_log(request);
         let is_last_request = request_idx == num_requests - 1;
 

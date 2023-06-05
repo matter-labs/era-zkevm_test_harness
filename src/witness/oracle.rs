@@ -15,9 +15,9 @@ use crate::witness::full_block_artifact::FullBlockArtifacts;
 use crate::witness::tracer::{QueryMarker, WitnessTracer};
 use crate::zk_evm::aux_structures::DecommittmentQuery;
 use crate::zk_evm::aux_structures::{LogQuery, MemoryIndex, MemoryPage, MemoryQuery};
-use crate::zk_evm::precompiles::ecrecover::ECRecoverRoundWitness;
-use crate::zk_evm::precompiles::keccak256::Keccak256RoundWitness;
-use crate::zk_evm::precompiles::sha256::Sha256RoundWitness;
+use crate::zk_evm::zk_evm_abstractions::precompiles::ecrecover::ECRecoverRoundWitness;
+use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::Keccak256RoundWitness;
+use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Sha256RoundWitness;
 use crate::zk_evm::reference_impls::event_sink::ApplicationData;
 use crate::zk_evm::vm_state::{CallStackEntry, VmLocalState};
 use crate::zkevm_circuits::base_structures::vm_state::{
@@ -565,7 +565,7 @@ pub fn create_artifacts_from_tracer<
                 }
                 PRECOMPILE_AUX_BYTE => {
                     assert!(!query.rollback);
-                    use crate::zk_evm::precompiles::*;
+                    use crate::zk_evm::zk_evm_abstractions::precompiles::*;
                     match query.address {
                         a if a == *KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
                             demuxed_keccak_precompile_queries.push(query);

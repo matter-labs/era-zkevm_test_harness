@@ -6,9 +6,9 @@ use crate::zk_evm::ethereum_types::U256;
 use crate::zk_evm::reference_impls::event_sink::ApplicationData;
 use crate::zk_evm::vm_state::CallStackEntry;
 
-use crate::zk_evm::precompiles::ecrecover::ECRecoverRoundWitness;
-use crate::zk_evm::precompiles::keccak256::Keccak256RoundWitness;
-use crate::zk_evm::precompiles::sha256::Sha256RoundWitness;
+use crate::zk_evm::zk_evm_abstractions::precompiles::ecrecover::ECRecoverRoundWitness;
+use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::Keccak256RoundWitness;
+use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Sha256RoundWitness;
 
 use crate::zk_evm::zkevm_opcode_defs::decoding::EncodingModeProduction;
 use crate::zk_evm::zkevm_opcode_defs::system_params::NUM_SPONGES;
