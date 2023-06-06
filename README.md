@@ -28,7 +28,7 @@ One can see a lot of `.json` files in the `setup` and `test_proofs` folders. Tho
 ### Running regeneration of setup files
 Will regenerate setup parameters (geometry, verification keys, finalization hints and padding proofs)
 ```shell
-cargo test --release run_capacity_estimation
+cargo run --release --bin geometry_config_generator
 cargo test --release test_run_create_base_layer_vks_and_proofs
 cargo test --release test_run_create_recursion_layer_vks_and_proofs
 ```
