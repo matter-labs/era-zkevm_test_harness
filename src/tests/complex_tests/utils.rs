@@ -1,21 +1,9 @@
-use super::serialize_utils::{deserialize_bytecode, deserialize_bytecodes_with_addresses};
-use crate::zk_evm::ethereum_types::Address;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use crate::helper::serialize_utils::{deserialize_bytecode, deserialize_bytecodes_with_addresses};
 use std::{fs, path::PathBuf};
+use crate::helper::artifact_utils::TestArtifact;
 
 const TEST_ARTIFACTS_DIR: &'static str = "./src/tests/complex_tests/test_artifacts/";
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TestArtifact {
-    pub entry_point_address: Address,
-    #[serde(deserialize_with = "deserialize_bytecode")]
-    pub entry_point_code: Vec<[u8; 32]>,
-    #[serde(deserialize_with = "deserialize_bytecode")]
-    pub default_account_code: Vec<[u8; 32]>,
-    #[serde(deserialize_with = "deserialize_bytecodes_with_addresses")]
-    pub predeployed_contracts: HashMap<Address, Vec<[u8; 32]>>,
-}
 
 pub fn read_test_artifact(test_name: &str) -> TestArtifact {
     let mut path = PathBuf::from(TEST_ARTIFACTS_DIR);

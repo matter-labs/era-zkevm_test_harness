@@ -46,3 +46,4 @@ pub type ZkSyncDefaultRoundFunction = Poseidon2Goldilocks;
 
 // #[cfg(test)]
 pub(crate) mod tests;
+pub mod helper;

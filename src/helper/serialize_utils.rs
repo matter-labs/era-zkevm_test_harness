@@ -2,7 +2,7 @@ use crate::zk_evm::ethereum_types::Address;
 use serde::{de, Deserialize, Deserializer};
 use std::{collections::HashMap, str::FromStr};
 
-fn hex_string_to_bytecode<'de, D>(deserialized_string: &str) -> Result<Vec<[u8; 32]>, D::Error>
+pub fn hex_string_to_bytecode<'de, D>(deserialized_string: &str) -> Result<Vec<[u8; 32]>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
