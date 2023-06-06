@@ -24,11 +24,11 @@ jobs:
       - name: setup rust
         run: |
           rustup set profile minimal
-          rustup toolchain install nightly
-          rustup default nightly
+          rustup toolchain install nightly-2023-04-17
+          rustup default nightly-2023-04-17
 
       - name: build
         run: |
           git config --global --add url."https://${{ secrets.ZKSYNC_ADMIN_BOT_ORG_REPO_WRITE }}:x-oauth-basic@github.com/".insteadOf ssh://git@github.com/
           git config --global --add url."https://${{ secrets.ZKSYNC_ADMIN_BOT_ORG_REPO_WRITE }}:x-oauth-basic@github.com/".insteadOf https://github.com/
-          cargo +nightly build --release
+          cargo +nightly-2023-04-17 build --release
