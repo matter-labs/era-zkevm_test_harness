@@ -34,7 +34,7 @@ where
 {
     fn geometry() -> CSGeometry {
         CSGeometry {
-            num_columns_under_copy_permutation: 80,
+            num_columns_under_copy_permutation: 86,
             num_witness_columns: 0,
             num_constant_columns: 4,
             max_allowed_constraint_degree: 8,
@@ -44,7 +44,7 @@ where
     fn lookup_parameters() -> LookupParameters {
         LookupParameters::UseSpecializedColumnsWithTableIdAsConstant {
             width: 3,
-            num_repetitions: 16,
+            num_repetitions: 14,
             share_table_id: true,
         }
     }
