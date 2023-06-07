@@ -1,5 +1,5 @@
-#![feature(const_eval_limit)]
-#![const_eval_limit = "100000000"]
+#![allow(clippy::drop_ref)]
+
 #![feature(array_chunks)]
 #![feature(stmt_expr_attributes)]
 #![feature(generic_const_exprs)]
@@ -7,7 +7,7 @@
 #![feature(iter_next_chunk)]
 #![feature(associated_type_defaults)]
 #![feature(return_position_impl_trait_in_trait)]
-#![allow(clippy::drop_ref)]
+
 
 pub mod aux_definitions;
 pub mod circuit_definitions;
