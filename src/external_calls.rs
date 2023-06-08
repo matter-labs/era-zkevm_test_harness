@@ -28,12 +28,12 @@ use crate::zkevm_circuits::{
     base_structures::vm_state::FULL_SPONGE_QUEUE_STATE_WIDTH,
     scheduler::input::SchedulerCircuitInstanceWitness,
 };
-use crate::ZkSyncDefaultRoundFunction;
 use crate::{
     ethereum_types::{Address, U256},
     utils::{calldata_to_aligned_data, u64_as_u32_le},
 };
 use ::tracing;
+use circuit_definitions::ZkSyncDefaultRoundFunction;
 
 pub const SCHEDULER_TIMESTAMP: u32 = 1;
 
@@ -126,7 +126,8 @@ round_function: R, // used for all queues implementation
 
     let (entry_point_decommittment_query, entry_point_decommittment_query_witness) = tools
         .decommittment_processor
-        .decommit_into_memory(0, entry_point_decommittment_query, &mut tools.memory).expect("must decommit the extry point");
+        .decommit_into_memory(0, entry_point_decommittment_query, &mut tools.memory)
+        .expect("must decommit the extry point");
     let entry_point_decommittment_query_witness = entry_point_decommittment_query_witness.unwrap();
     tools.witness_tracer.add_decommittment(
         0,
@@ -198,7 +199,9 @@ round_function: R, // used for all queues implementation
                 }
             }
         }
-        out_of_circuit_vm.cycle(&mut tracer).expect("cycle should finish succesfully");
+        out_of_circuit_vm
+            .cycle(&mut tracer)
+            .expect("cycle should finish succesfully");
     }
 
     assert!(
@@ -610,16 +613,4 @@ pub fn run_with_fixed_params<S: Storage>(
         storage,
         tree,
     )
-}
-
-pub fn base_layer_proof_config() -> ProofConfig {
-    use crate::*;
-
-    ProofConfig {
-        fri_lde_factor: BASE_LAYER_FRI_LDE_FACTOR,
-        merkle_tree_cap_size: BASE_LAYER_CAP_SIZE,
-        fri_folding_schedule: None,
-        security_level: SECURITY_BITS_TARGET,
-        pow_bits: 0,
-    }
 }

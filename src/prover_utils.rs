@@ -12,10 +12,10 @@ use crate::boojum::gadgets::recursion::recursive_transcript::CircuitAlgebraicSpo
 use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
 use crate::boojum::worker::Worker;
 use crate::GoldilocksField;
-use crate::ZkSyncDefaultRoundFunction;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit;
 use circuit_definitions::circuit_definitions::recursion_layer::ZkSyncRecursiveLayerCircuit;
+use circuit_definitions::ZkSyncDefaultRoundFunction;
 
 type F = GoldilocksField;
 type P = GoldilocksField;

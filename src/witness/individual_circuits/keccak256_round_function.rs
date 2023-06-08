@@ -112,9 +112,10 @@ pub fn keccak256_decompose_into_per_circuit_witness<
         let empty_block = [0u8; KECCAK_RATE_IN_U64_WORDS * 8];
         use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::Digest;
         internal_state_over_empty_buffer.update(&empty_block);
-        let empty_state_inner = zk_evm::zk_evm_abstractions::precompiles::keccak256::transmute_state(
-            internal_state_over_empty_buffer.clone(),
-        );
+        let empty_state_inner =
+            zk_evm::zk_evm_abstractions::precompiles::keccak256::transmute_state(
+                internal_state_over_empty_buffer.clone(),
+            );
 
         let keccak_internal_state = encode_kecca256_inner_state(empty_state_inner);
         hidden_fsm_output_state.keccak_internal_state = keccak_internal_state;
@@ -305,7 +306,9 @@ pub fn keccak256_decompose_into_per_circuit_witness<
                 }
 
                 let state_inner =
-                    zk_evm::zk_evm_abstractions::precompiles::keccak256::transmute_state(internal_state.clone());
+                    zk_evm::zk_evm_abstractions::precompiles::keccak256::transmute_state(
+                        internal_state.clone(),
+                    );
                 let mut u64_words_buffer_markers =
                     [false; zkevm_circuits::keccak256_round_function::BUFFER_SIZE_IN_U64_WORDS];
                 for i in 0..input_buffer.filled {
@@ -332,9 +335,10 @@ pub fn keccak256_decompose_into_per_circuit_witness<
                     let empty_block = [0u8; KECCAK_RATE_IN_U64_WORDS * 8];
                     use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::Digest;
                     internal_state_over_empty_buffer.update(&empty_block);
-                    let empty_state_inner = zk_evm::zk_evm_abstractions::precompiles::keccak256::transmute_state(
-                        internal_state_over_empty_buffer.clone(),
-                    );
+                    let empty_state_inner =
+                        zk_evm::zk_evm_abstractions::precompiles::keccak256::transmute_state(
+                            internal_state_over_empty_buffer.clone(),
+                        );
 
                     keccak_internal_state = encode_kecca256_inner_state(empty_state_inner);
                 }

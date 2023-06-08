@@ -15,11 +15,11 @@ use crate::witness::full_block_artifact::FullBlockArtifacts;
 use crate::witness::tracer::{QueryMarker, WitnessTracer};
 use crate::zk_evm::aux_structures::DecommittmentQuery;
 use crate::zk_evm::aux_structures::{LogQuery, MemoryIndex, MemoryPage, MemoryQuery};
+use crate::zk_evm::reference_impls::event_sink::ApplicationData;
+use crate::zk_evm::vm_state::{CallStackEntry, VmLocalState};
 use crate::zk_evm::zk_evm_abstractions::precompiles::ecrecover::ECRecoverRoundWitness;
 use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::Keccak256RoundWitness;
 use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Sha256RoundWitness;
-use crate::zk_evm::reference_impls::event_sink::ApplicationData;
-use crate::zk_evm::vm_state::{CallStackEntry, VmLocalState};
 use crate::zkevm_circuits::base_structures::vm_state::{
     GlobalContextWitness, FULL_SPONGE_QUEUE_STATE_WIDTH, QUEUE_STATE_WIDTH,
 };
@@ -29,7 +29,6 @@ use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use circuit_definitions::encodings::callstack_entry::ExtendedCallstackEntry;
 use circuit_definitions::encodings::LogQueueSimulator;
 use derivative::Derivative;
-use num_bigint::BigUint;
 use rayon::slice::ParallelSliceMut;
 use smallvec::SmallVec;
 use std::collections::{BTreeMap, HashMap, VecDeque};

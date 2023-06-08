@@ -1,9 +1,8 @@
+use crate::helper::artifact_utils::TestArtifact;
 use crate::helper::serialize_utils::{deserialize_bytecode, deserialize_bytecodes_with_addresses};
 use std::{fs, path::PathBuf};
-use crate::helper::artifact_utils::TestArtifact;
 
 const TEST_ARTIFACTS_DIR: &'static str = "./src/tests/complex_tests/test_artifacts/";
-
 
 pub fn read_test_artifact(test_name: &str) -> TestArtifact {
     let mut path = PathBuf::from(TEST_ARTIFACTS_DIR);

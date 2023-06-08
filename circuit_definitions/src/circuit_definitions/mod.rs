@@ -18,6 +18,7 @@ use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRe
 use zkevm_circuits::fsm_input_output::circuit_inputs::INPUT_OUTPUT_COMMITMENT_LENGTH;
 use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord;
 
+pub mod aux_layer;
 pub mod base_layer;
 pub mod recursion_layer;
 pub mod verifier_builder;

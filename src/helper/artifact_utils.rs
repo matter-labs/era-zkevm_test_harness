@@ -1,15 +1,14 @@
+use crate::helper::serialize_utils::{deserialize_bytecode, deserialize_bytecodes_with_addresses};
+use crate::zk_evm::aux_structures::LogQuery;
 use crate::zk_evm::ethereum_types::Address;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::helper::serialize_utils::{deserialize_bytecode, deserialize_bytecodes_with_addresses};
-use crate::zk_evm::aux_structures::LogQuery;
 
-use crate::witness::tree::{BinarySparseStorageTree, ZkSyncStorageLeaf};
 use crate::blake2::Blake2s256;
 use crate::ethereum_types::{H160, U256};
+use crate::witness::tree::{BinarySparseStorageTree, ZkSyncStorageLeaf};
 use crate::zk_evm::bytecode_to_code_hash;
 use crate::zk_evm::testing::storage::InMemoryStorage;
-
 
 pub const ACCOUNT_CODE_STORAGE_ADDRESS: Address = H160([
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,

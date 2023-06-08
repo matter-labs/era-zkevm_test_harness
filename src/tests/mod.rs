@@ -20,6 +20,7 @@ use crate::zk_evm::testing::storage::InMemoryStorage;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit;
 use circuit_definitions::circuit_definitions::recursion_layer::ZkSyncRecursiveLayerCircuit;
+use circuit_definitions::ZkSyncDefaultRoundFunction;
 use std::collections::HashMap;
 
 const ACCOUNT_CODE_STORAGE_ADDRESS: Address = H160([

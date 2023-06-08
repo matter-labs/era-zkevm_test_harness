@@ -8,7 +8,6 @@ use crate::boojum::{algebraic_props::round_function, field::SmallField};
 use crate::witness::tree::BinaryHasher;
 use crate::zk_evm::{address_to_u256, ethereum_types::*};
 use circuit_definitions::encodings::{BytesSerializable, QueueSimulator};
-use num_bigint::BigUint;
 
 pub fn u64_as_u32_le(value: u64) -> [u32; 2] {
     [value as u32, (value >> 32) as u32]
@@ -120,10 +119,6 @@ pub fn binary_merklize_set<
 
     root
 }
-
-pub const BASE_LAYER_FRI_LDE_FACTOR: usize = 2;
-pub const BASE_LAYER_CAP_SIZE: usize = 32;
-pub const SECURITY_BITS_TARGET: usize = 100;
 
 use crate::boojum::algebraic_props::round_function::AlgebraicRoundFunction;
 use crate::boojum::gadgets::traits::round_function::BuildableCircuitRoundFunction;

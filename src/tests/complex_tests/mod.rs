@@ -5,15 +5,14 @@ pub mod utils;
 use std::collections::{HashMap, VecDeque};
 
 use super::*;
-use crate::compute_setups::*;
-use crate::entry_point::create_out_of_circuit_global_context;
-
 use crate::boojum::cs::implementations::pow::NoPow;
 use crate::boojum::cs::implementations::prover::ProofConfig;
 use crate::boojum::field::goldilocks::GoldilocksExt2;
 use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
+use crate::compute_setups::*;
+use crate::entry_point::create_out_of_circuit_global_context;
 use crate::ethereum_types::*;
-use crate::external_calls::base_layer_proof_config;
+use crate::helper::artifact_utils::TestArtifact;
 use crate::prover_utils::*;
 use crate::toolset::{create_tools, GeometryConfig};
 use crate::witness::oracle::create_artifacts_from_tracer;
@@ -32,11 +31,12 @@ use circuit_definitions::circuit_definitions::base_layer::*;
 use circuit_definitions::circuit_definitions::recursion_layer::leaf_layer::ZkSyncLeafLayerRecursiveCircuit;
 use circuit_definitions::circuit_definitions::recursion_layer::scheduler::SchedulerCircuit;
 use circuit_definitions::circuit_definitions::recursion_layer::*;
+use circuit_definitions::{
+    base_layer_proof_config, BASE_LAYER_CAP_SIZE, BASE_LAYER_FRI_LDE_FACTOR,
+};
 use utils::read_test_artifact;
-use crate::helper::artifact_utils::TestArtifact;
 
 use zkevm_assembly::Assembly;
-
 
 #[test]
 fn basic_test() {
@@ -44,7 +44,6 @@ fn basic_test() {
     run_and_try_create_witness_inner(test_artifact, 20000);
     // run_and_try_create_witness_inner(test_artifact, 16);
 }
-
 
 use crate::boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
 use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;

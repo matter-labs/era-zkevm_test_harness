@@ -106,7 +106,9 @@ pub fn sha256_decompose_into_per_circuit_witness<
         use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Digest;
         internal_state_over_empty_buffer.update(&empty_block);
         let sha256_internal_state_over_empty_buffer =
-            zk_evm::zk_evm_abstractions::precompiles::sha256::transmute_state(internal_state_over_empty_buffer.clone());
+            zk_evm::zk_evm_abstractions::precompiles::sha256::transmute_state(
+                internal_state_over_empty_buffer.clone(),
+            );
 
         let circuit_hash_internal_state = sha256_internal_state_over_empty_buffer;
 
@@ -264,8 +266,9 @@ pub fn sha256_decompose_into_per_circuit_witness<
                     assert!(memory_queries_it.next().is_none());
                 }
 
-                let state_inner =
-                    zk_evm::zk_evm_abstractions::precompiles::sha256::transmute_state(internal_state.clone());
+                let state_inner = zk_evm::zk_evm_abstractions::precompiles::sha256::transmute_state(
+                    internal_state.clone(),
+                );
 
                 let mut circuit_hash_internal_state = state_inner;
 

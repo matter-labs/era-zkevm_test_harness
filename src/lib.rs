@@ -1,6 +1,5 @@
 #![recursion_limit = "32"]
 #![allow(dropping_references)]
-
 #![feature(array_chunks)]
 #![feature(stmt_expr_attributes)]
 #![feature(generic_const_exprs)]
@@ -41,8 +40,6 @@ pub mod toolset;
 
 pub const INITIAL_MONOTONIC_CYCLE_COUNTER: u32 = 1024;
 
-pub type ZkSyncDefaultRoundFunction = Poseidon2Goldilocks;
-
 // #[cfg(test)]
-pub(crate) mod tests;
 pub mod helper;
+pub(crate) mod tests;

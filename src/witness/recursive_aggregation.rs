@@ -17,6 +17,8 @@ use crate::zkevm_circuits::recursion::{
     node_layer::{input::RecursionNodeInputWitness, NodeLayerRecursionConfig},
     VK_COMMITMENT_LENGTH,
 };
+use circuit_definitions::base_layer_proof_config;
+use circuit_definitions::ZkSyncDefaultRoundFunction;
 use std::collections::VecDeque;
 
 type F = GoldilocksField;
@@ -28,7 +30,6 @@ use crate::boojum::gadgets::recursion::recursive_tree_hasher::RecursiveTreeHashe
 use crate::boojum::gadgets::traits::encodable::CircuitVarLengthEncodable;
 use crate::boojum::gadgets::traits::round_function::BuildableCircuitRoundFunction;
 use crate::boojum::gadgets::traits::witnessable::WitnessHookable;
-use crate::external_calls::base_layer_proof_config;
 use crate::zkevm_circuits::fsm_input_output::commit_variable_length_encodable_item;
 use crate::zkevm_circuits::recursion::leaf_layer::LeafLayerRecursionConfig;
 use crate::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
@@ -163,8 +164,9 @@ pub fn compute_leaf_params(
     base_layer_vk: ZkSyncBaseLayerVerificationKey,
     leaf_layer_vk: ZkSyncRecursionLayerVerificationKey,
 ) -> RecursionLeafParametersWitness<F> {
+    use circuit_definitions::ZkSyncDefaultRoundFunction;
     let round_function = ZkSyncDefaultRoundFunction::default();
-    use crate::witness::utils::create_cs_for_witness_generation;
+
     use crate::witness::utils::*;
 
     assert_eq!(circuit_type, base_layer_vk.numeric_circuit_type());
@@ -215,8 +217,9 @@ pub fn compute_leaf_params(
 pub fn compute_node_vk_commitment(
     node_vk: ZkSyncRecursionLayerVerificationKey,
 ) -> [F; VK_COMMITMENT_LENGTH] {
+    use circuit_definitions::ZkSyncDefaultRoundFunction;
+
     let round_function = ZkSyncDefaultRoundFunction::default();
-    use crate::witness::utils::create_cs_for_witness_generation;
     use crate::witness::utils::*;
     let mut cs_for_witness_generation =
         create_cs_for_witness_generation::<F, ZkSyncDefaultRoundFunction>(

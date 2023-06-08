@@ -1,18 +1,23 @@
 use std::fs::File;
 use std::io::Write;
 
-use codegen::{Function, Import, Scope};
 use codegen::Block;
+use codegen::{Function, Import, Scope};
 use rayon::prelude::*;
 use structopt::StructOpt;
 
-use zkevm_test_harness::capacity_estimator::{code_decommitter_capacity, code_decommittments_sorter_capacity, ecrecover_capacity, event_sorter_capacity, keccak256_rf_capacity, l1_messages_hasher_capacity, log_demuxer_capacity, main_vm_capacity, ram_permutation_capacity, sha256_rf_capacity, storage_application_capacity, storage_sorter_capacity};
+use zkevm_test_harness::capacity_estimator::{
+    code_decommitter_capacity, code_decommittments_sorter_capacity, ecrecover_capacity,
+    event_sorter_capacity, keccak256_rf_capacity, l1_messages_hasher_capacity,
+    log_demuxer_capacity, main_vm_capacity, ram_permutation_capacity, sha256_rf_capacity,
+    storage_application_capacity, storage_sorter_capacity,
+};
 use zkevm_test_harness::toolset::GeometryConfig;
 
 fn save_geometry_config_file(geometry_config: String, filepath: &str) {
-    let file_content = "// This file is auto-generated, do not edit it manually\n\n".to_owned() + &geometry_config;
-    let mut f = File::create(filepath)
-        .expect("Unable to create file");
+    let file_content =
+        "// This file is auto-generated, do not edit it manually\n\n".to_owned() + &geometry_config;
+    let mut f = File::create(filepath).expect("Unable to create file");
     f.write_all(file_content.as_bytes())
         .expect("Unable to write data");
 }
@@ -84,18 +89,54 @@ fn main() {
     function.vis("pub const");
     function.ret("GeometryConfig");
     function.line("GeometryConfig {");
-    function.line(format!("    cycles_per_vm_snapshot: {},", computed_config.cycles_per_vm_snapshot));
-    function.line(format!("    cycles_code_decommitter_sorter: {},", computed_config.cycles_code_decommitter_sorter));
-    function.line(format!("    cycles_per_log_demuxer: {},", computed_config.cycles_per_log_demuxer));
-    function.line(format!("    cycles_per_storage_sorter: {},", computed_config.cycles_per_storage_sorter));
-    function.line(format!("    cycles_per_events_or_l1_messages_sorter: {},", computed_config.cycles_per_events_or_l1_messages_sorter));
-    function.line(format!("    cycles_per_ram_permutation: {},", computed_config.cycles_per_ram_permutation));
-    function.line(format!("    cycles_per_code_decommitter: {},", computed_config.cycles_per_code_decommitter));
-    function.line(format!("    cycles_per_storage_application: {},", computed_config.cycles_per_storage_application));
-    function.line(format!("    cycles_per_keccak256_circuit: {},", computed_config.cycles_per_keccak256_circuit));
-    function.line(format!("    cycles_per_sha256_circuit: {},", computed_config.cycles_per_sha256_circuit));
-    function.line(format!("    cycles_per_ecrecover_circuit: {},", computed_config.cycles_per_ecrecover_circuit));
-    function.line(format!("    limit_for_l1_messages_pudata_hasher: {},", computed_config.limit_for_l1_messages_pudata_hasher));
+    function.line(format!(
+        "    cycles_per_vm_snapshot: {},",
+        computed_config.cycles_per_vm_snapshot
+    ));
+    function.line(format!(
+        "    cycles_code_decommitter_sorter: {},",
+        computed_config.cycles_code_decommitter_sorter
+    ));
+    function.line(format!(
+        "    cycles_per_log_demuxer: {},",
+        computed_config.cycles_per_log_demuxer
+    ));
+    function.line(format!(
+        "    cycles_per_storage_sorter: {},",
+        computed_config.cycles_per_storage_sorter
+    ));
+    function.line(format!(
+        "    cycles_per_events_or_l1_messages_sorter: {},",
+        computed_config.cycles_per_events_or_l1_messages_sorter
+    ));
+    function.line(format!(
+        "    cycles_per_ram_permutation: {},",
+        computed_config.cycles_per_ram_permutation
+    ));
+    function.line(format!(
+        "    cycles_per_code_decommitter: {},",
+        computed_config.cycles_per_code_decommitter
+    ));
+    function.line(format!(
+        "    cycles_per_storage_application: {},",
+        computed_config.cycles_per_storage_application
+    ));
+    function.line(format!(
+        "    cycles_per_keccak256_circuit: {},",
+        computed_config.cycles_per_keccak256_circuit
+    ));
+    function.line(format!(
+        "    cycles_per_sha256_circuit: {},",
+        computed_config.cycles_per_sha256_circuit
+    ));
+    function.line(format!(
+        "    cycles_per_ecrecover_circuit: {},",
+        computed_config.cycles_per_ecrecover_circuit
+    ));
+    function.line(format!(
+        "    limit_for_l1_messages_pudata_hasher: {},",
+        computed_config.limit_for_l1_messages_pudata_hasher
+    ));
     function.line("}");
     println!("Generated config:\n {}", scope.to_string());
     save_geometry_config_file(scope.to_string(), "src/geometry_config/mod.rs");
