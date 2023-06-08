@@ -9,6 +9,7 @@ use crate::boojum::gadgets::recursion::circuit_pow::*;
 use crate::boojum::gadgets::recursion::recursive_transcript::*;
 use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
 use crate::circuit_definitions::gates::*;
+use crate::circuit_definitions::implementations::pow::PoWRunner;
 use crate::circuit_definitions::implementations::proof::Proof;
 use crate::circuit_definitions::recursion_layer::scheduler::SchedulerCircuitBuilder;
 use crate::circuit_definitions::traits::circuit::ErasedBuilderForRecursiveVerifier;
@@ -16,6 +17,7 @@ use crate::circuit_definitions::traits::gate::GatePlacementStrategy;
 use crate::zkevm_circuits::recursion::compression::*;
 use derivative::*;
 use zkevm_circuits::boojum::cs::implementations::prover::ProofConfig;
+use zkevm_circuits::boojum::cs::oracle::TreeHasher;
 
 use super::*;
 
@@ -30,7 +32,14 @@ type RH = CircuitGoldilocksPoseidon2Sponge;
 
 // trait to enumerate different compression modes
 pub trait ProofCompressionFunction {
-    type PoW: RecursivePoWRunner<F>;
+    type PreviousLayerPoW: RecursivePoWRunner<F>;
+
+    type ThisLayerPoW: PoWRunner;
+    type ThisLayerHasher: TreeHasher<F>;
+    type ThisLayerTranscript: Transcript<F>;
+
+    fn this_layer_transcript_parameters(
+    ) -> <Self::ThisLayerTranscript as Transcript<F>>::TransciptParameters;
 
     fn description_for_compression_step() -> String;
 
@@ -59,7 +68,18 @@ pub trait ProofCompressionFunction {
 pub struct CompressionMode1;
 
 impl ProofCompressionFunction for CompressionMode1 {
-    type PoW = NoPow;
+    // no PoW from the previous step
+    type PreviousLayerPoW = NoPow;
+
+    // no PoW on this step too
+    type ThisLayerPoW = NoPow;
+    type ThisLayerHasher = H;
+    type ThisLayerTranscript = TR;
+
+    fn this_layer_transcript_parameters(
+    ) -> <Self::ThisLayerTranscript as Transcript<F>>::TransciptParameters {
+        ();
+    }
 
     fn description_for_compression_step() -> String {
         "Compression mode 1: no lookup, just enough copiable width, moderate LDE factor, still special boolean column, and Poseidon2 gate"
@@ -150,7 +170,8 @@ impl ProofCompressionFunction for CompressionMode1 {
 
     fn previous_step_builder_for_compression<CS: ConstraintSystem<F> + 'static>(
     ) -> Box<dyn ErasedBuilderForRecursiveVerifier<GoldilocksField, EXT, CS>> {
-        SchedulerCircuitBuilder::<Self::PoW>::dyn_recursive_verifier_builder::<EXT, CS>()
+        SchedulerCircuitBuilder::<Self::PreviousLayerPoW>::dyn_recursive_verifier_builder::<EXT, CS>(
+        )
     }
 }
 
@@ -226,7 +247,7 @@ impl<CF: ProofCompressionFunction> CompressionLayerCircuit<CF> {
             proof_witness: witness,
         };
 
-        proof_compression_function::<F, CS, RH, EXT, TR, CTR, CF::PoW>(
+        proof_compression_function::<F, CS, RH, EXT, TR, CTR, CF::PreviousLayerPoW>(
             cs,
             compression_witness,
             config,
