@@ -540,6 +540,13 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
                         BASE_LAYER_CAP_SIZE,
                     );
 
+                let other_vk = source.get_recursion_layer_vk(
+                    el.numeric_circuit_type()
+                ).unwrap().into_inner();
+
+                assert_eq!(&other_vk, &vk);
+
+
                 // source
                 //     .set_recursion_layer_vk(ZkSyncRecursionLayerVerificationKey::from_inner(
                 //         el.numeric_circuit_type(),
@@ -774,6 +781,10 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
                         BASE_LAYER_FRI_LDE_FACTOR,
                         BASE_LAYER_CAP_SIZE,
                     );
+
+                    let other_vk = source.get_recursion_layer_node_vk().unwrap().into_inner();
+    
+                    assert_eq!(&other_vk, &vk);
 
                     // // we did it above
                     // source.set_recursion_layer_node_vk(ZkSyncRecursionLayerVerificationKey::NodeLayerCircuit(vk)).unwrap();
