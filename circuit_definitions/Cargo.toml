@@ -7,9 +7,9 @@ edition = "2021"
 
 [dependencies]
 # zk_evm = {path = "../../zk_evm"}
-# zkevm_circuits = {path = "../../zkevm_circuits"}
+zkevm_circuits = {path = "../../zkevm_circuits"}
 
-zkevm_circuits = {git = "https://github.com/matter-labs/zkevm_circuits.git", branch = "main"}
+# zkevm_circuits = {git = "https://github.com/matter-labs/zkevm_circuits.git", branch = "main"}
 zk_evm = {git = "https://github.com/matter-labs/zk_evm.git", branch = "v1.4.0"}
 
 derivative = "*"

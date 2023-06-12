@@ -31,6 +31,7 @@ use circuit_definitions::circuit_definitions::base_layer::*;
 use circuit_definitions::circuit_definitions::recursion_layer::leaf_layer::ZkSyncLeafLayerRecursiveCircuit;
 use circuit_definitions::circuit_definitions::recursion_layer::scheduler::SchedulerCircuit;
 use circuit_definitions::circuit_definitions::recursion_layer::*;
+use circuit_definitions::zkevm_circuits::scheduler::aux::NUM_CIRCUIT_TYPES_TO_SCHEDULE;
 use circuit_definitions::{
     base_layer_proof_config, BASE_LAYER_CAP_SIZE, BASE_LAYER_FRI_LDE_FACTOR,
 };
@@ -359,6 +360,12 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
     let recursion_queues = basic_block_circuits_inputs
         .into_recursion_queues(per_circuit_closed_form_inputs, &round_function);
+
+    for (t, q, _) in recursion_queues.iter() {
+        dbg!(t);
+        dbg!(q.tail);
+        dbg!(q.num_items);
+    }
 
     println!("Assembling keys");
 
@@ -857,6 +864,8 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
         scheduler_proofs.push(v);
     }
 
+    assert_eq!(scheduler_proofs.len(), NUM_CIRCUIT_TYPES_TO_SCHEDULE);
+
     let mut scheduler_witness = scheduler_partial_input;
     // we need to reassign block specific data, and proofs
 
@@ -897,14 +906,16 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
         _marker: std::marker::PhantomData,
     };
 
+    println!("Computing scheduler proof");
+
     let scheduler_circuit = ZkSyncRecursiveLayerCircuit::SchedulerCircuit(scheduler_circuit);
 
     if source.get_scheduler_proof().is_err() {
         let f = std::fs::File::create("tmp.json").unwrap();
         serde_json::to_writer(f, &scheduler_circuit).unwrap();
 
-        // test_recursive_circuit(scheduler_circuit.clone());
-        // println!("Circuit is satisfied");
+        test_recursive_circuit(scheduler_circuit.clone());
+        println!("Circuit is satisfied");
 
         let (setup_base, setup, vk, setup_tree, vars_hint, wits_hint, finalization_hint) =
             create_recursive_layer_setup_data(
@@ -959,7 +970,53 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
 #[test]
 fn run_single() {
+    use circuit_definitions::circuit_definitions::recursion_layer::verifier_builder::dyn_verifier_builder_for_recursive_circuit_type;
+    use crate::data_source::*;
+    use crate::boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
+    use crate::boojum::gadgets::recursion::recursive_transcript::CircuitAlgebraicSpongeBasedTranscript;
+
+    type P = GoldilocksField;
+    type TR = GoldilocksPoisedon2Transcript;
+    type R = Poseidon2Goldilocks;
+    type CTR = CircuitAlgebraicSpongeBasedTranscript<GoldilocksField, 8, 12, 4, R>;
+    type EXT = GoldilocksExt2;
+    type H = GoldilocksPoseidon2Sponge<AbsorbtionModeOverwrite>;
+
     let f = std::fs::File::open("tmp.json").unwrap();
     let circuit: ZkSyncRecursiveLayerCircuit = serde_json::from_reader(f).unwrap();
+    let ZkSyncRecursiveLayerCircuit::SchedulerCircuit(inner) = &circuit else {
+        panic!()
+    };
+
+    assert_eq!(inner.witness.proof_witnesses.len(), NUM_CIRCUIT_TYPES_TO_SCHEDULE);
+
+    let verifier_builder = dyn_verifier_builder_for_recursive_circuit_type(ZkSyncRecursionLayerStorageType::NodeLayerCircuit);
+    let verifier = verifier_builder.create_verifier();
+    let source = LocalFileDataSource;
+    let vk = source.get_recursion_layer_node_vk().unwrap().into_inner();
+
+    for (idx, proof) in inner.witness.proof_witnesses.iter().enumerate() {
+        let is_valid = verifier.verify::<
+            H,
+            TR,
+            NoPow,
+        >((), &vk, &proof);
+        assert!(is_valid, "failed at step {}", idx);
+    }
+
+    for circuit_type in (ZkSyncRecursionLayerStorageType::LeafLayerCircuitForMainVM as u8)..=(ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesHasher as u8) {
+        let proof = source.get_node_layer_proof(
+            circuit_type,
+            0,
+            0,
+        ).unwrap().into_inner();
+        let is_valid = verifier.verify::<
+            H,
+            TR,
+            NoPow,
+        >((), &vk, &proof);
+        assert!(is_valid, "failed for circuit type {}", circuit_type);
+    }
+
     test_recursive_circuit(circuit);
 }
