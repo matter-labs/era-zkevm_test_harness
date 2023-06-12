@@ -361,12 +361,6 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
     let recursion_queues = basic_block_circuits_inputs
         .into_recursion_queues(per_circuit_closed_form_inputs, &round_function);
 
-    for (t, q, _) in recursion_queues.iter() {
-        dbg!(t);
-        dbg!(q.tail);
-        dbg!(q.num_items);
-    }
-
     println!("Assembling keys");
 
     let mut proofs = vec![];
@@ -546,20 +540,20 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
                         BASE_LAYER_CAP_SIZE,
                     );
 
-                source
-                    .set_recursion_layer_vk(ZkSyncRecursionLayerVerificationKey::from_inner(
-                        el.numeric_circuit_type(),
-                        vk.clone(),
-                    ))
-                    .unwrap();
-                source
-                    .set_recursion_layer_finalization_hint(
-                        ZkSyncRecursionLayerFinalizationHint::from_inner(
-                            el.numeric_circuit_type(),
-                            finalization_hint.clone(),
-                        ),
-                    )
-                    .unwrap();
+                // source
+                //     .set_recursion_layer_vk(ZkSyncRecursionLayerVerificationKey::from_inner(
+                //         el.numeric_circuit_type(),
+                //         vk.clone(),
+                //     ))
+                //     .unwrap();
+                // source
+                //     .set_recursion_layer_finalization_hint(
+                //         ZkSyncRecursionLayerFinalizationHint::from_inner(
+                //             el.numeric_circuit_type(),
+                //             finalization_hint.clone(),
+                //         ),
+                //     )
+                //     .unwrap();
 
                 setup_data = Some((
                     setup_base,
