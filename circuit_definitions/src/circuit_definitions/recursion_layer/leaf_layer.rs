@@ -1,5 +1,6 @@
 use crate::boojum::cs::implementations::pow::NoPow;
 use derivative::*;
+use zkevm_circuits::boojum::cs::gates::PublicInputGate;
 
 use super::circuit_def::*;
 use crate::boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
@@ -119,14 +120,25 @@ where
         let verifier_builder = dyn_recursive_verifier_builder_for_circuit_type::<F, EXT, CS, R>(
             self.base_layer_circuit_type as u8,
         );
-        leaf_layer_recursion_entry_point::<F, CS, R, RH, EXT, TR, CTR, POW>(
+
+        // Create public inputs, so we FIX input locations
+        let public_input_vars: [_; INPUT_OUTPUT_COMMITMENT_LENGTH] = cs.alloc_multiple_variables_without_values::<INPUT_OUTPUT_COMMITMENT_LENGTH>(); 
+        let input_commitments = leaf_layer_recursion_entry_point::<F, CS, R, RH, EXT, TR, CTR, POW>(
             cs,
             witness,
             round_function,
             config,
             verifier_builder,
             transcript_params,
-        )
+        );
+
+        for (commit_el, public_input) in input_commitments.into_iter().zip(public_input_vars.iter()) {
+            PublicInputGate::assign_witness_value(cs, commit_el.get_variable(), *public_input);
+            // enforce equality
+            Num::enforce_equal(cs, &commit_el, &Num::from_variable(*public_input));
+        }
+
+        public_input_vars
     }
 }
 

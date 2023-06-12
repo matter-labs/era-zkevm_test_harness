@@ -33,7 +33,7 @@ use circuit_definitions::circuit_definitions::recursion_layer::scheduler::Schedu
 use circuit_definitions::circuit_definitions::recursion_layer::*;
 use circuit_definitions::zkevm_circuits::scheduler::aux::NUM_CIRCUIT_TYPES_TO_SCHEDULE;
 use circuit_definitions::{
-    base_layer_proof_config, BASE_LAYER_CAP_SIZE, BASE_LAYER_FRI_LDE_FACTOR,
+    base_layer_proof_config, BASE_LAYER_CAP_SIZE, BASE_LAYER_FRI_LDE_FACTOR, recursion_layer_proof_config,
 };
 use utils::read_test_artifact;
 
@@ -644,14 +644,15 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
     if source.get_recursion_layer_node_vk().is_err() {
         use crate::zkevm_circuits::recursion::node_layer::input::*;
         let input = RecursionNodeInput::placeholder_witness();
-        let vk = source
+
+        let input_vk = source
             .get_recursion_layer_vk(
                 ZkSyncRecursionLayerStorageType::LeafLayerCircuitForMainVM as u8,
             )
             .unwrap();
         let witness = RecursionNodeInstanceWitness {
             input,
-            vk_witness: vk.clone().into_inner(),
+            vk_witness: input_vk.clone().into_inner(),
             split_points: VecDeque::new(),
             proof_witnesses: VecDeque::new(),
         };
@@ -660,8 +661,8 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
         use crate::zkevm_circuits::recursion::node_layer::NodeLayerRecursionConfig;
         use circuit_definitions::circuit_definitions::recursion_layer::node_layer::ZkSyncNodeLayerRecursiveCircuit;
         let config = NodeLayerRecursionConfig {
-            proof_config: base_layer_proof_config(),
-            vk_fixed_parameters: vk.into_inner().fixed_parameters,
+            proof_config: recursion_layer_proof_config(),
+            vk_fixed_parameters: input_vk.clone().into_inner().fixed_parameters,
             leaf_layer_capacity: RECURSION_ARITY,
             node_layer_capacity: RECURSION_ARITY,
             padding_proof: padding_proof.into_inner(),
@@ -686,10 +687,69 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
         let finalization_hint =
             ZkSyncRecursionLayerFinalizationHint::NodeLayerCircuit(finalization_hint);
         source
-            .set_recursion_layer_node_finalization_hint(finalization_hint)
+            .set_recursion_layer_node_finalization_hint(finalization_hint.clone())
             .unwrap();
         let vk = ZkSyncRecursionLayerVerificationKey::NodeLayerCircuit(vk);
-        source.set_recursion_layer_node_vk(vk).unwrap();
+        source.set_recursion_layer_node_vk(vk.clone()).unwrap();
+
+        let input = RecursionNodeInput::placeholder_witness();
+        let input_vk2 = source
+            .get_recursion_layer_vk(
+                ZkSyncRecursionLayerStorageType::LeafLayerCircuitForCodeDecommittmentsSorter as u8,
+            )
+            .unwrap();
+        let witness = RecursionNodeInstanceWitness {
+            input,
+            vk_witness: input_vk2.clone().into_inner(),
+            split_points: VecDeque::new(),
+            proof_witnesses: VecDeque::new(),
+        };
+
+        let padding_proof = source.get_recursion_layer_leaf_padding_proof().unwrap();
+        let config = NodeLayerRecursionConfig {
+            proof_config: recursion_layer_proof_config(),
+            vk_fixed_parameters: input_vk2.clone().into_inner().fixed_parameters,
+            leaf_layer_capacity: RECURSION_ARITY,
+            node_layer_capacity: RECURSION_ARITY,
+            padding_proof: padding_proof.into_inner(),
+        };
+        let circuit = ZkSyncNodeLayerRecursiveCircuit {
+            witness: witness,
+            config: config,
+            transcript_params: (),
+            _marker: std::marker::PhantomData,
+        };
+
+        assert_eq!(input_vk.clone().into_inner().fixed_parameters, input_vk2.clone().into_inner().fixed_parameters);
+
+        let circuit = ZkSyncRecursiveLayerCircuit::NodeLayerCircuit(circuit);
+
+        let (_setup_base_2, _setup_2, vk_2, _setup_tree_2, _vars_hint_2, _wits_hint_2, finalization_hint_2) =
+            create_recursive_layer_setup_data(
+                circuit,
+                &worker,
+                BASE_LAYER_FRI_LDE_FACTOR,
+                BASE_LAYER_CAP_SIZE,
+            );
+
+        assert_eq!(_vars_hint, _vars_hint_2);
+        assert_eq!(_wits_hint, _wits_hint_2);
+        assert_eq!(finalization_hint.into_inner(), finalization_hint_2);
+
+        for (idx, (a, b)) in _setup_base.constant_columns.iter().zip(_setup_base_2.constant_columns.iter()).enumerate() {
+            assert_eq!(a, b, "failed at index {}", idx);
+        }
+        for (idx, (a, b)) in _setup_base.copy_permutation_polys.iter().zip(_setup_base_2.copy_permutation_polys.iter()).enumerate() {
+            assert_eq!(a, b, "failed at index {}", idx);
+        }
+        for (idx, (a, b)) in _setup_base.lookup_tables_columns.iter().zip(_setup_base_2.lookup_tables_columns.iter()).enumerate() {
+            assert_eq!(a, b, "failed at index {}", idx);
+        }
+        assert_eq!(_setup_base, _setup_base_2);
+        assert_eq!(_setup, _setup_2);
+        assert_eq!(_setup_tree, _setup_tree_2);
+
+        assert_eq!(vk.into_inner(), vk_2);
     }
 
     let node_vk = source.get_recursion_layer_node_vk().unwrap();
