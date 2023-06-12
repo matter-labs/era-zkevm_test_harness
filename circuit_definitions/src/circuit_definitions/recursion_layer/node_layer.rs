@@ -117,7 +117,12 @@ where
             LeafLayerCircuitBuilder::<POW>::dyn_recursive_verifier_builder::<EXT, CS>();
 
         // Create public inputs, so we FIX input locations
-        let public_input_vars: [_; INPUT_OUTPUT_COMMITMENT_LENGTH] = cs.alloc_multiple_variables_without_values::<INPUT_OUTPUT_COMMITMENT_LENGTH>(); 
+        let public_input_vars: [_; INPUT_OUTPUT_COMMITMENT_LENGTH] = cs.alloc_multiple_variables_without_values::<INPUT_OUTPUT_COMMITMENT_LENGTH>();
+        // Actually make them public inputs
+        for var in public_input_vars.iter() {
+            let gate = PublicInputGate::new(*var);
+            gate.add_to_cs(cs);
+        }
         let input_commitments = node_layer_recursion_entry_point::<F, CS, R, RH, EXT, TR, CTR, POW>(
             cs,
             witness,
@@ -133,7 +138,7 @@ where
             Num::enforce_equal(cs, &commit_el, &Num::from_variable(*public_input));
         }
 
-        public_input_vars
+        public_input_vars.map(|el| Num::from_variable(el))
     }
 }
 
