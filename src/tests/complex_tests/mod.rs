@@ -546,6 +546,11 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
                 assert_eq!(&other_vk, &vk);
 
+                let other_finalization_hint = source.get_recursion_layer_finalization_hint(
+                    el.numeric_circuit_type()
+                ).unwrap().into_inner();
+
+                assert_eq!(&other_finalization_hint, &finalization_hint);
 
                 // source
                 //     .set_recursion_layer_vk(ZkSyncRecursionLayerVerificationKey::from_inner(
@@ -691,8 +696,6 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
     use crate::witness::recursive_aggregation::compute_node_vk_commitment;
     let node_vk_commitment = compute_node_vk_commitment(node_vk);
 
-    let mut final_node_proofs = HashMap::new();
-
     println!("Continuing into nodes leaf aggregation circuits");
     for per_circuit_subtree in all_leaf_aggregations.into_iter() {
         let mut depth = 0;
@@ -786,6 +789,10 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
     
                     assert_eq!(&other_vk, &vk);
 
+                    let other_finalization_hint = source.get_recursion_layer_node_finalization_hint().unwrap().into_inner();
+
+                    assert_eq!(&other_finalization_hint, &finalization_hint);
+
                     // // we did it above
                     // source.set_recursion_layer_node_vk(ZkSyncRecursionLayerVerificationKey::NodeLayerCircuit(vk)).unwrap();
                     // source.set_recursion_layer_node_finalization_hint(ZkSyncRecursionLayerFinalizationHint::NodeLayerCircuit(finalization_hint)).unwrap();
@@ -827,7 +834,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
                 assert!(is_valid);
 
-                if idx == 0 {
+                if idx == 0 && depth == 0{
                     source
                         .set_recursion_layer_node_padding_proof(
                             ZkSyncRecursionLayerProof::NodeLayerCircuit(proof.clone()),
@@ -848,11 +855,10 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
             if next_aggregations.len() == 1 {
                 // end
 
-                let proof = source
-                    .get_node_layer_proof(recursive_circuit_type as u8, depth, 0)
-                    .unwrap();
+                // let proof = source
+                //     .get_node_layer_proof(recursive_circuit_type as u8, depth, 0)
+                //     .unwrap();
 
-                final_node_proofs.insert(base_circuit_type, proof);
                 break;
             }
 
@@ -860,13 +866,13 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
         }
     }
 
-    let mut keys: Vec<_> = final_node_proofs.keys().into_iter().cloned().collect();
-    keys.sort();
-
+    // collect for scheduler. We know that is this test depth is 0
     let mut scheduler_proofs = vec![];
-    for key in keys.into_iter() {
-        let v = final_node_proofs.remove(&key).unwrap().into_inner();
-        scheduler_proofs.push(v);
+    for recursive_circuit_type in (ZkSyncRecursionLayerStorageType::LeafLayerCircuitForMainVM as u8)..=(ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesHasher as u8) {
+        let proof = source
+            .get_node_layer_proof(recursive_circuit_type, 0, 0)
+            .unwrap();
+        scheduler_proofs.push(proof.into_inner());
     }
 
     assert_eq!(scheduler_proofs.len(), NUM_CIRCUIT_TYPES_TO_SCHEDULE);
