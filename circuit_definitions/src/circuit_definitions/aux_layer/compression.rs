@@ -19,6 +19,8 @@ use derivative::*;
 use zkevm_circuits::boojum::cs::implementations::prover::ProofConfig;
 use zkevm_circuits::boojum::cs::oracle::TreeHasher;
 
+use super::compression_modes::*;
+
 use super::*;
 
 type F = GoldilocksField;
@@ -63,118 +65,6 @@ pub trait ProofCompressionFunction {
     fn proof_config_for_compression_step() -> ProofConfig;
 }
 
-// no lookup, just enough copiable width, moderate LDE factor, still special boolean column,
-// and Poseidon2 gate
-pub struct CompressionMode1;
-
-impl ProofCompressionFunction for CompressionMode1 {
-    // no PoW from the previous step
-    type PreviousLayerPoW = NoPow;
-
-    // no PoW on this step too
-    type ThisLayerPoW = NoPow;
-    type ThisLayerHasher = H;
-    type ThisLayerTranscript = TR;
-
-    fn this_layer_transcript_parameters(
-    ) -> <Self::ThisLayerTranscript as Transcript<F>>::TransciptParameters {
-        ();
-    }
-
-    fn description_for_compression_step() -> String {
-        "Compression mode 1: no lookup, just enough copiable width, moderate LDE factor, still special boolean column, and Poseidon2 gate"
-        .to_string()
-    }
-
-    fn size_hint_for_compression_step() -> (usize, usize) {
-        (1 << 16, 1 << 20)
-    }
-
-    fn geometry_for_compression_step() -> CSGeometry {
-        CSGeometry {
-            num_columns_under_copy_permutation: 24,
-            num_witness_columns: 96,
-            num_constant_columns: 4,
-            max_allowed_constraint_degree: 8,
-        }
-    }
-
-    fn lookup_parameters_for_compression_step() -> LookupParameters {
-        LookupParameters::NoLookup
-    }
-
-    fn configure_builder_for_compression_step<
-        T: CsBuilderImpl<F, T>,
-        GC: GateConfigurationHolder<F>,
-        TB: StaticToolboxHolder,
-    >(
-        builder: CsBuilder<T, F, GC, TB>,
-    ) -> CsBuilder<T, F, impl GateConfigurationHolder<F>, impl StaticToolboxHolder> {
-        let builder = ConstantsAllocatorGate::configure_builder(
-            builder,
-            GatePlacementStrategy::UseGeneralPurposeColumns,
-        );
-        let builder = BooleanConstraintGate::configure_builder(
-            builder,
-            GatePlacementStrategy::UseSpecializedColumns {
-                num_repetitions: 1,
-                share_constants: false,
-            },
-        );
-        let builder =
-            R::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-        let builder = ZeroCheckGate::configure_builder(
-            builder,
-            GatePlacementStrategy::UseGeneralPurposeColumns,
-            false,
-        );
-        let builder = FmaGateInBaseFieldWithoutConstant::configure_builder(
-            builder,
-            GatePlacementStrategy::UseGeneralPurposeColumns,
-        );
-        let builder = UIntXAddGate::<32>::configure_builder(
-            builder,
-            GatePlacementStrategy::UseGeneralPurposeColumns,
-        );
-        let builder = SelectionGate::configure_builder(
-            builder,
-            GatePlacementStrategy::UseGeneralPurposeColumns,
-        );
-        let builder = ParallelSelectionGate::<4>::configure_builder(
-            builder,
-            GatePlacementStrategy::UseGeneralPurposeColumns,
-        );
-        let builder = PublicInputGate::configure_builder(
-            builder,
-            GatePlacementStrategy::UseGeneralPurposeColumns,
-        );
-        let builder = ReductionGate::<_, 4>::configure_builder(
-            builder,
-            GatePlacementStrategy::UseGeneralPurposeColumns,
-        );
-        let builder =
-            NopGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-
-        builder
-    }
-
-    fn proof_config_for_compression_step() -> ProofConfig {
-        ProofConfig {
-            fri_lde_factor: 8,
-            merkle_tree_cap_size: 64,
-            fri_folding_schedule: None,
-            security_level: crate::SECURITY_BITS_TARGET,
-            pow_bits: 0,
-        }
-    }
-
-    fn previous_step_builder_for_compression<CS: ConstraintSystem<F> + 'static>(
-    ) -> Box<dyn ErasedBuilderForRecursiveVerifier<GoldilocksField, EXT, CS>> {
-        SchedulerCircuitBuilder::<Self::PreviousLayerPoW>::dyn_recursive_verifier_builder::<EXT, CS>(
-        )
-    }
-}
-
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone, Debug(bound = ""))]
 #[serde(bound = "")]
@@ -208,12 +98,17 @@ impl<CF: ProofCompressionFunction> crate::boojum::cs::traits::circuit::CircuitBu
 }
 
 pub type CompressionMode1CircuitBuilder = CompressionLayerCircuit<CompressionMode1>;
-// pub type CompressionMode2CircuitBuilder = CompressionLayerCircuit<ProofCompressionFunction>;
-// pub type CompressionMode3CircuitBuilder = CompressionLayerCircuit<ProofCompressionFunction>;
+pub type CompressionMode2CircuitBuilder = CompressionLayerCircuit<CompressionMode2>;
+pub type CompressionMode3CircuitBuilder = CompressionLayerCircuit<CompressionMode3>;
+pub type CompressionModeToL1CircuitBuilder = CompressionLayerCircuit<CompressionModeToL1>;
 
 impl<CF: ProofCompressionFunction> CompressionLayerCircuit<CF> {
     pub fn description() -> String {
         CF::description_for_compression_step()
+    }
+
+    pub fn geometry(&self) -> CSGeometry {
+        CF::geometry_for_compression_step()
     }
 
     pub fn size_hint(&self) -> (Option<usize>, Option<usize>) {
@@ -256,3 +151,8 @@ impl<CF: ProofCompressionFunction> CompressionLayerCircuit<CF> {
         )
     }
 }
+
+pub type CompressionMode1Circuit = CompressionLayerCircuit<CompressionMode1>;
+pub type CompressionMode2Circuit = CompressionLayerCircuit<CompressionMode2>;
+pub type CompressionMode3Circuit = CompressionLayerCircuit<CompressionMode3>;
+pub type CompressionModeToL1Circuit = CompressionLayerCircuit<CompressionModeToL1>;

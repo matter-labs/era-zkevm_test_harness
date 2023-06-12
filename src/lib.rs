@@ -27,6 +27,7 @@ pub mod geometry_config;
 pub mod prover_utils;
 pub mod utils;
 pub mod witness;
+pub mod proof_compression;
 
 pub use crate::zk_evm::ethereum_types;
 

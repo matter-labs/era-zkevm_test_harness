@@ -13,6 +13,7 @@ pub mod circuit_def;
 pub mod leaf_layer;
 pub mod node_layer;
 pub mod scheduler;
+pub mod verifier_builder;
 
 use self::leaf_layer::*;
 use self::node_layer::*;
