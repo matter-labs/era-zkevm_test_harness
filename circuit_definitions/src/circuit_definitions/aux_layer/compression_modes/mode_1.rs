@@ -24,13 +24,13 @@ impl ProofCompressionFunction for CompressionMode1 {
     }
 
     fn size_hint_for_compression_step() -> (usize, usize) {
-        (1 << 18, 1 << 24)
+        (1 << 16, 1 << 24)
     }
 
     fn geometry_for_compression_step() -> CSGeometry {
         CSGeometry {
-            num_columns_under_copy_permutation: 24,
-            num_witness_columns: 106,
+            num_columns_under_copy_permutation: 52,
+            num_witness_columns: 78,
             num_constant_columns: 4,
             max_allowed_constraint_degree: 8,
         }
@@ -69,6 +69,10 @@ impl ProofCompressionFunction for CompressionMode1 {
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,
         );
+        let builder = FmaGateInExtensionWithoutConstant::<F, EXT>::configure_builder(
+            builder,
+            GatePlacementStrategy::UseGeneralPurposeColumns,
+        );
         let builder = SelectionGate::configure_builder(
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,
@@ -93,7 +97,7 @@ impl ProofCompressionFunction for CompressionMode1 {
 
     fn proof_config_for_compression_step() -> ProofConfig {
         ProofConfig {
-            fri_lde_factor: 8,
+            fri_lde_factor: 16,
             merkle_tree_cap_size: 64,
             fri_folding_schedule: None,
             security_level: crate::SECURITY_BITS_TARGET,
@@ -103,7 +107,6 @@ impl ProofCompressionFunction for CompressionMode1 {
 
     fn previous_step_builder_for_compression<CS: ConstraintSystem<F> + 'static>(
     ) -> Box<dyn ErasedBuilderForRecursiveVerifier<GoldilocksField, EXT, CS>> {
-        SchedulerCircuitBuilder::<Self::PreviousLayerPoW>::dyn_recursive_verifier_builder::<EXT, CS>(
-        )
+        SchedulerCircuitBuilder::<Self::PreviousLayerPoW>::dyn_recursive_verifier_builder::<EXT, CS>()
     }
 }

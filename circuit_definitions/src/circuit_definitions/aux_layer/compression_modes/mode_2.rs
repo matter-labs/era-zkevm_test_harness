@@ -1,5 +1,4 @@
 use super::*;
-use crate::boojum::gadgets::traits::configuration::ConfigurationFunction;
 
 // no lookup, just enough copiable width, moderate LDE factor,
 // and matrix multiplication gate + non-linearity gate
@@ -25,13 +24,14 @@ impl ProofCompressionFunction for CompressionMode2 {
     }
 
     fn size_hint_for_compression_step() -> (usize, usize) {
-        (1 << 16, 1 << 22)
+        (1 << 14, 1 << 22)
     }
 
     fn geometry_for_compression_step() -> CSGeometry {
         CSGeometry {
-            num_columns_under_copy_permutation: 24,
-            num_witness_columns: 0,
+            num_columns_under_copy_permutation: 52,
+            // num_witness_columns: 0,
+            num_witness_columns: 78,
             num_constant_columns: 4,
             max_allowed_constraint_degree: 8,
         }
@@ -56,15 +56,22 @@ impl ProofCompressionFunction for CompressionMode2 {
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,
         );
-        let configuration_function = R::make_specialization_function_0();
         let builder =
-            configuration_function.configure_proxy(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
+            R::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
+        // use crate::boojum::gadgets::traits::configuration::ConfigurationFunction;
+        // let configuration_function = R::make_specialization_function_0();
+        // let builder =
+        //     configuration_function.configure_proxy(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
         let builder = ZeroCheckGate::configure_builder(
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,
-            false,
+            true,
         );
         let builder = FmaGateInBaseFieldWithoutConstant::configure_builder(
+            builder,
+            GatePlacementStrategy::UseGeneralPurposeColumns,
+        );
+        let builder = FmaGateInExtensionWithoutConstant::<F, EXT>::configure_builder(
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,
         );
@@ -92,7 +99,7 @@ impl ProofCompressionFunction for CompressionMode2 {
 
     fn proof_config_for_compression_step() -> ProofConfig {
         ProofConfig {
-            fri_lde_factor: 16,
+            fri_lde_factor: 32,
             merkle_tree_cap_size: 64,
             fri_folding_schedule: None,
             security_level: crate::SECURITY_BITS_TARGET,
@@ -102,7 +109,7 @@ impl ProofCompressionFunction for CompressionMode2 {
 
     fn previous_step_builder_for_compression<CS: ConstraintSystem<F> + 'static>(
     ) -> Box<dyn ErasedBuilderForRecursiveVerifier<GoldilocksField, EXT, CS>> {
-        SchedulerCircuitBuilder::<Self::PreviousLayerPoW>::dyn_recursive_verifier_builder::<EXT, CS>(
-        )
+        use crate::circuit_definitions::aux_layer::compression::CompressionMode1CircuitBuilder;
+        CompressionMode1CircuitBuilder::dyn_recursive_verifier_builder::<EXT, CS>()
     }
 }

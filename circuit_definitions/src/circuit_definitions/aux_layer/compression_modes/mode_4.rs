@@ -1,20 +1,18 @@
 use super::*;
 use crate::boojum::gadgets::traits::configuration::ConfigurationFunction;
-use crate::boojum::sha3::Keccak256;
-use crate::circuit_definitions::implementations::transcript::Keccak256Transcript;
 
 // no lookup, just enough copiable width, moderate LDE factor,
 // and matrix multiplication gate,
-pub struct CompressionModeToL1;
+pub struct CompressionMode4;
 
-impl ProofCompressionFunction for CompressionModeToL1 {
+impl ProofCompressionFunction for CompressionMode4 {
     // no PoW from the previous step
     type PreviousLayerPoW = NoPow;
 
     // no PoW on this step too
-    type ThisLayerPoW = Keccak256;
-    type ThisLayerHasher = Keccak256;
-    type ThisLayerTranscript = Keccak256Transcript;
+    type ThisLayerPoW = NoPow;
+    type ThisLayerHasher = H;
+    type ThisLayerTranscript = TR;
 
     fn this_layer_transcript_parameters(
     ) -> <Self::ThisLayerTranscript as Transcript<F>>::TransciptParameters {
@@ -22,20 +20,20 @@ impl ProofCompressionFunction for CompressionModeToL1 {
     }
 
     fn description_for_compression_step() -> String {
-        "Compression mode to L1: no lookup, just enough copiable width, large LDE factor, PoW"
+        "Compression mode 4: no lookup, just enough copiable width, moderate-high LDE factor, matrix multiplication gate + non-linearity gate"
         .to_string()
     }
 
     fn size_hint_for_compression_step() -> (usize, usize) {
-        (1 << 16, 1 << 22)
+        (1 << 15, 1 << 22)
     }
 
     fn geometry_for_compression_step() -> CSGeometry {
         CSGeometry {
-            num_columns_under_copy_permutation: 28,
+            num_columns_under_copy_permutation: 48,
             num_witness_columns: 0,
             num_constant_columns: 4,
-            max_allowed_constraint_degree: 4,
+            max_allowed_constraint_degree: 8,
         }
     }
 
@@ -98,17 +96,17 @@ impl ProofCompressionFunction for CompressionModeToL1 {
 
     fn proof_config_for_compression_step() -> ProofConfig {
         ProofConfig {
-            fri_lde_factor: 512,
-            merkle_tree_cap_size: 16,
+            fri_lde_factor: 256,
+            merkle_tree_cap_size: 64,
             fri_folding_schedule: None,
             security_level: crate::L1_SECURITY_BITS,
-            pow_bits: 24,
+            pow_bits: 0,
         }
     }
 
     fn previous_step_builder_for_compression<CS: ConstraintSystem<F> + 'static>(
     ) -> Box<dyn ErasedBuilderForRecursiveVerifier<GoldilocksField, EXT, CS>> {
-        use crate::circuit_definitions::aux_layer::compression::CompressionMode4CircuitBuilder;
-        CompressionMode4CircuitBuilder::dyn_recursive_verifier_builder::<EXT, CS>()
+        use crate::circuit_definitions::aux_layer::compression::CompressionMode3CircuitBuilder;
+        CompressionMode3CircuitBuilder::dyn_recursive_verifier_builder::<EXT, CS>()
     }
 }

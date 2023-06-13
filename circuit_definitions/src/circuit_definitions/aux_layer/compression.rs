@@ -37,7 +37,7 @@ pub trait ProofCompressionFunction {
     type PreviousLayerPoW: RecursivePoWRunner<F>;
 
     type ThisLayerPoW: PoWRunner;
-    type ThisLayerHasher: TreeHasher<F>;
+    type ThisLayerHasher: TreeHasher<F, Output = <Self::ThisLayerTranscript as Transcript<F>>::CompatibleCap>;
     type ThisLayerTranscript: Transcript<F>;
 
     fn this_layer_transcript_parameters(
@@ -97,11 +97,6 @@ impl<CF: ProofCompressionFunction> crate::boojum::cs::traits::circuit::CircuitBu
     }
 }
 
-pub type CompressionMode1CircuitBuilder = CompressionLayerCircuit<CompressionMode1>;
-pub type CompressionMode2CircuitBuilder = CompressionLayerCircuit<CompressionMode2>;
-pub type CompressionMode3CircuitBuilder = CompressionLayerCircuit<CompressionMode3>;
-pub type CompressionModeToL1CircuitBuilder = CompressionLayerCircuit<CompressionModeToL1>;
-
 impl<CF: ProofCompressionFunction> CompressionLayerCircuit<CF> {
     pub fn description() -> String {
         CF::description_for_compression_step()
@@ -155,4 +150,13 @@ impl<CF: ProofCompressionFunction> CompressionLayerCircuit<CF> {
 pub type CompressionMode1Circuit = CompressionLayerCircuit<CompressionMode1>;
 pub type CompressionMode2Circuit = CompressionLayerCircuit<CompressionMode2>;
 pub type CompressionMode3Circuit = CompressionLayerCircuit<CompressionMode3>;
+pub type CompressionMode4Circuit = CompressionLayerCircuit<CompressionMode4>;
 pub type CompressionModeToL1Circuit = CompressionLayerCircuit<CompressionModeToL1>;
+
+use crate::circuit_definitions::traits::circuit::CircuitBuilderProxy;
+
+pub type CompressionMode1CircuitBuilder = CircuitBuilderProxy<F, CompressionMode1Circuit>;
+pub type CompressionMode2CircuitBuilder = CircuitBuilderProxy<F, CompressionMode2Circuit>;
+pub type CompressionMode3CircuitBuilder = CircuitBuilderProxy<F, CompressionMode3Circuit>;
+pub type CompressionMode4CircuitBuilder = CircuitBuilderProxy<F, CompressionMode4Circuit>;
+pub type CompressionModeToL1CircuitBuilder = CircuitBuilderProxy<F, CompressionModeToL1Circuit>;

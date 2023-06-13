@@ -20,7 +20,7 @@ impl ProofCompressionFunction for CompressionMode3 {
     }
 
     fn description_for_compression_step() -> String {
-        "Compression mode 3: no lookup, just enough copiable width, moderate-high LDE factor, matrix multiplication gate"
+        "Compression mode 3: no lookup, just enough copiable width, moderate-high LDE factor, matrix multiplication gate + non-linearity gate"
         .to_string()
     }
 
@@ -30,7 +30,7 @@ impl ProofCompressionFunction for CompressionMode3 {
 
     fn geometry_for_compression_step() -> CSGeometry {
         CSGeometry {
-            num_columns_under_copy_permutation: 24,
+            num_columns_under_copy_permutation: 48,
             num_witness_columns: 0,
             num_constant_columns: 4,
             max_allowed_constraint_degree: 8,
@@ -56,7 +56,7 @@ impl ProofCompressionFunction for CompressionMode3 {
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,
         );
-        let configuration_function = R::make_specialization_function_1();
+        let configuration_function = R::make_specialization_function_0();
         let builder =
             configuration_function.configure_proxy(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
         let builder = ZeroCheckGate::configure_builder(
@@ -65,6 +65,10 @@ impl ProofCompressionFunction for CompressionMode3 {
             false,
         );
         let builder = FmaGateInBaseFieldWithoutConstant::configure_builder(
+            builder,
+            GatePlacementStrategy::UseGeneralPurposeColumns,
+        );
+        let builder = FmaGateInExtensionWithoutConstant::<F, EXT>::configure_builder(
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,
         );
@@ -92,7 +96,7 @@ impl ProofCompressionFunction for CompressionMode3 {
 
     fn proof_config_for_compression_step() -> ProofConfig {
         ProofConfig {
-            fri_lde_factor: 32,
+            fri_lde_factor: 128,
             merkle_tree_cap_size: 64,
             fri_folding_schedule: None,
             security_level: crate::SECURITY_BITS_TARGET,
@@ -102,7 +106,7 @@ impl ProofCompressionFunction for CompressionMode3 {
 
     fn previous_step_builder_for_compression<CS: ConstraintSystem<F> + 'static>(
     ) -> Box<dyn ErasedBuilderForRecursiveVerifier<GoldilocksField, EXT, CS>> {
-        SchedulerCircuitBuilder::<Self::PreviousLayerPoW>::dyn_recursive_verifier_builder::<EXT, CS>(
-        )
+        use crate::circuit_definitions::aux_layer::compression::CompressionMode2CircuitBuilder;
+        CompressionMode2CircuitBuilder::dyn_recursive_verifier_builder::<EXT, CS>()
     }
 }
