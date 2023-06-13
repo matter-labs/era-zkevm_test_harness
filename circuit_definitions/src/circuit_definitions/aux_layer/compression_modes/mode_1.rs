@@ -1,7 +1,5 @@
 use super::*;
 
-// no lookup, just enough copiable width, moderate LDE factor, still special boolean column,
-// and Poseidon2 gate
 pub struct CompressionMode1;
 
 impl ProofCompressionFunction for CompressionMode1 {

@@ -1,7 +1,5 @@
 use super::*;
 
-// no lookup, just enough copiable width, moderate LDE factor,
-// and matrix multiplication gate + non-linearity gate
 pub struct CompressionMode2;
 
 impl ProofCompressionFunction for CompressionMode2 {
@@ -19,7 +17,7 @@ impl ProofCompressionFunction for CompressionMode2 {
     }
 
     fn description_for_compression_step() -> String {
-        "Compression mode 2: no lookup, just enough copiable width, moderate LDE factor, matrix multiplication gate + non-linearity gate"
+        "Compression mode 2: no lookup, just enough copiable width, moderate-high LDE factor, Poseidon gate"
         .to_string()
     }
 
@@ -99,10 +97,10 @@ impl ProofCompressionFunction for CompressionMode2 {
 
     fn proof_config_for_compression_step() -> ProofConfig {
         ProofConfig {
-            fri_lde_factor: 32,
-            merkle_tree_cap_size: 64,
+            fri_lde_factor: 64,
+            merkle_tree_cap_size: 32,
             fri_folding_schedule: None,
-            security_level: crate::SECURITY_BITS_TARGET,
+            security_level: crate::L1_SECURITY_BITS,
             pow_bits: 0,
         }
     }

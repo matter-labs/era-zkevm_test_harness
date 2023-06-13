@@ -25,7 +25,7 @@ impl ProofCompressionFunction for CompressionMode4 {
     }
 
     fn size_hint_for_compression_step() -> (usize, usize) {
-        (1 << 15, 1 << 22)
+        (1 << 16, 1 << 22)
     }
 
     fn geometry_for_compression_step() -> CSGeometry {
@@ -96,8 +96,8 @@ impl ProofCompressionFunction for CompressionMode4 {
 
     fn proof_config_for_compression_step() -> ProofConfig {
         ProofConfig {
-            fri_lde_factor: 256,
-            merkle_tree_cap_size: 64,
+            fri_lde_factor: 512,
+            merkle_tree_cap_size: 128,
             fri_folding_schedule: None,
             security_level: crate::L1_SECURITY_BITS,
             pow_bits: 0,

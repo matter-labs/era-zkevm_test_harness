@@ -98,7 +98,7 @@ impl ProofCompressionFunction for CompressionModeToL1 {
 
     fn proof_config_for_compression_step() -> ProofConfig {
         ProofConfig {
-            fri_lde_factor: 512,
+            fri_lde_factor: 1024,
             merkle_tree_cap_size: 16,
             fri_folding_schedule: None,
             security_level: crate::L1_SECURITY_BITS,
