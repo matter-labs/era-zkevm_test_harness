@@ -56,10 +56,6 @@ impl ProofCompressionFunction for CompressionMode2 {
         );
         let builder =
             R::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-        // use crate::boojum::gadgets::traits::configuration::ConfigurationFunction;
-        // let configuration_function = R::make_specialization_function_0();
-        // let builder =
-        //     configuration_function.configure_proxy(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
         let builder = ZeroCheckGate::configure_builder(
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,

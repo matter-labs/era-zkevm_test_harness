@@ -1,11 +1,12 @@
 use crate::boojum::cs::cs_builder::*;
 use crate::boojum::cs::*;
-use crate::boojum::field::goldilocks::GoldilocksField;
+use crate::boojum::field::goldilocks::{GoldilocksField, GoldilocksExt2};
 use crate::boojum::gadgets::traits::round_function::BuildableCircuitRoundFunction;
 use crate::boojum::implementations::poseidon2::Poseidon2Goldilocks;
 
 type F = GoldilocksField;
 type R = Poseidon2Goldilocks;
+type EXT = GoldilocksExt2;
 
 use crate::boojum::cs::gates::*;
 use crate::boojum::cs::traits::gate::GatePlacementStrategy;
@@ -50,6 +51,10 @@ pub fn configure_builder_recursion_step<
         false,
     );
     let builder = FmaGateInBaseFieldWithoutConstant::configure_builder(
+        builder,
+        GatePlacementStrategy::UseGeneralPurposeColumns,
+    );
+    let builder = FmaGateInExtensionWithoutConstant::<F, EXT>::configure_builder(
         builder,
         GatePlacementStrategy::UseGeneralPurposeColumns,
     );

@@ -31,6 +31,21 @@ type EXT = GoldilocksExt2;
 type H = GoldilocksPoseidon2Sponge<AbsorbtionModeOverwrite>;
 type RH = CircuitGoldilocksPoseidon2Sponge;
 
+// We should balance the final verification cost that would be a complex function of:
+// - rate. It decreases number of queries, but increases query depth. Although in practice we
+// always win, e.g. for before-extension depth 16, if we aim for 80 bits of security, and use LDE of 2^5
+// we do 16 queries of depth 21 (assuming cap at 64, it's ~240 hashes), and with LDE of 2^8 we do 10 queries
+// of depth 24 (assuming cap at 64, it's 180 hashes)
+// - circuit surface area. If we have circuit 2x more narrow, and 2x longer we have +1 to query depth (don't forget to
+// multiply by number of queries), but we also have 2x smaller number of elements in the leaf (also mul by number of queries, so we can just compare
+// one against another)
+// - number of columns under copy-permutation. Every such column increases leaf size for setup by 1, and also roughly 2 columns per 8 copied columns
+// in stage 2 of the proof. E.g if we have a circuit with 40 copiable + 90 non-copiable of size 2^14, and one with 48 copiable of 2^16,
+// then we would have witness of 130 in leafs (17 round functions) in witness, 5 round functions from setup, 5 from stage 2 - so 27 round functions
+// in leafs. For 48 x 2^16 case we have 6 round functions in leafs, 6 in setup, and 6 from stage 2 - 18 in total. For that we pay with extra depth
+// in each of those oracles, so +6 more. We still marginally win, but also usually we have "simpler" gates in this case, so we have
+// less terms in quotient
+
 pub mod mode_1;
 pub mod mode_2;
 pub mod mode_3;

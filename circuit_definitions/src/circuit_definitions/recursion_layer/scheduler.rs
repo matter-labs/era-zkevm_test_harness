@@ -98,6 +98,10 @@ where
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,
         );
+        let builder = FmaGateInExtensionWithoutConstant::<F, EXT>::configure_builder(
+            builder,
+            GatePlacementStrategy::UseGeneralPurposeColumns,
+        );
         let builder = UIntXAddGate::<32>::configure_builder(
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,

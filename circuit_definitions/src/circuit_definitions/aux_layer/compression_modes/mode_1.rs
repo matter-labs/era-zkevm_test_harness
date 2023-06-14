@@ -98,7 +98,7 @@ impl ProofCompressionFunction for CompressionMode1 {
             fri_lde_factor: 16,
             merkle_tree_cap_size: 64,
             fri_folding_schedule: None,
-            security_level: crate::SECURITY_BITS_TARGET,
+            security_level: crate::L1_SECURITY_BITS,
             pow_bits: 0,
         }
     }
