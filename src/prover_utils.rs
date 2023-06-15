@@ -14,12 +14,12 @@ use crate::boojum::worker::Worker;
 use crate::GoldilocksField;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit;
+use circuit_definitions::circuit_definitions::recursion_layer::verifier_builder::dyn_verifier_builder_for_recursive_circuit_type;
 use circuit_definitions::circuit_definitions::recursion_layer::ZkSyncRecursionLayerStorageType;
 use circuit_definitions::circuit_definitions::recursion_layer::ZkSyncRecursiveLayerCircuit;
-use circuit_definitions::ZkSyncDefaultRoundFunction;
-use circuit_definitions::circuit_definitions::recursion_layer::verifier_builder::dyn_verifier_builder_for_recursive_circuit_type;
 use circuit_definitions::circuit_definitions::verifier_builder::dyn_verifier_builder_for_circuit_type;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
+use circuit_definitions::ZkSyncDefaultRoundFunction;
 
 type F = GoldilocksField;
 type P = GoldilocksField;
@@ -367,7 +367,8 @@ pub fn verify_base_layer_proof_for_type<POW: PoWRunner>(
     proof: &Proof<F, H, EXT>,
     vk: &VerificationKey<F, H>,
 ) -> bool {
-    let verifier_builder = dyn_verifier_builder_for_circuit_type::<F, EXT, ZkSyncDefaultRoundFunction>(circuit_type);
+    let verifier_builder =
+        dyn_verifier_builder_for_circuit_type::<F, EXT, ZkSyncDefaultRoundFunction>(circuit_type);
     let verifier = verifier_builder.create_verifier();
     verifier.verify::<H, TR, POW>((), vk, proof)
 }
@@ -563,4 +564,3 @@ pub fn verify_recursion_layer_proof_for_type<POW: PoWRunner>(
     let verifier = verifier_builder.create_verifier();
     verifier.verify::<H, TR, POW>((), vk, proof)
 }
-

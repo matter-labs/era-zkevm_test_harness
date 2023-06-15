@@ -1,13 +1,13 @@
 use super::*;
-use circuit_definitions::circuit_definitions::aux_layer::compression::*;
-use crate::zkevm_circuits::recursion::compression::CompressionRecursionConfig;
-use circuit_definitions::circuit_definitions::recursion_layer::verifier_builder::*;
-use crate::boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
-use crate::boojum::gadgets::recursion::recursive_transcript::CircuitAlgebraicSpongeBasedTranscript;
-use crate::boojum::field::goldilocks::GoldilocksExt2;
-use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
 use crate::boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
+use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
+use crate::boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
+use crate::boojum::field::goldilocks::GoldilocksExt2;
+use crate::boojum::gadgets::recursion::recursive_transcript::CircuitAlgebraicSpongeBasedTranscript;
 use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
+use crate::zkevm_circuits::recursion::compression::CompressionRecursionConfig;
+use circuit_definitions::circuit_definitions::aux_layer::compression::*;
+use circuit_definitions::circuit_definitions::recursion_layer::verifier_builder::*;
 
 type F = GoldilocksField;
 type P = GoldilocksField;
@@ -25,27 +25,33 @@ mod test {
     use circuit_definitions::boojum::cs::implementations::verifier::VerificationKey;
     use circuit_definitions::circuit_definitions::aux_layer::compression_modes::*;
     use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit;
-    use circuit_definitions::{circuit_definitions::recursion_layer::ZkSyncRecursionLayerStorageType, base_layer_proof_config};
+    use circuit_definitions::{
+        base_layer_proof_config,
+        circuit_definitions::recursion_layer::ZkSyncRecursionLayerStorageType,
+    };
 
     use super::*;
-    use crate::data_source::{LocalFileDataSource, BlockDataSource, SetupDataSource};
-    use crate::boojum::worker::Worker;
-    use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
     use crate::boojum::config::DevCSConfig;
     use crate::boojum::cs::cs_builder::new_builder;
+    use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
     use crate::boojum::cs::oracle::TreeHasher;
+    use crate::boojum::worker::Worker;
+    use crate::data_source::{BlockDataSource, LocalFileDataSource, SetupDataSource};
 
     fn prove_and_save<CF: ProofCompressionFunction>(
         circuit: CompressionLayerCircuit<CF>,
-        file_prefix: String
-    ) where <CF::ThisLayerHasher as TreeHasher<F>> ::Output: serde::Serialize + serde::de::DeserializeOwned {
+        file_prefix: String,
+    ) where
+        <CF::ThisLayerHasher as TreeHasher<F>>::Output:
+            serde::Serialize + serde::de::DeserializeOwned,
+    {
         let worker = Worker::new();
 
         let geometry = circuit.geometry();
         let (max_trace_len, num_vars) = circuit.size_hint();
         let proof_config = CF::proof_config_for_compression_step();
         let transcript_params = CF::this_layer_transcript_parameters();
-    
+
         let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
             geometry,
             num_vars.unwrap(),
@@ -62,11 +68,12 @@ mod test {
 
         assert!(assembly.check_if_satisfied(&worker));
 
-        let (proof, vk) = assembly.prove_one_shot::<EXT, CF::ThisLayerTranscript, CF::ThisLayerHasher, CF::ThisLayerPoW>(
-            &worker,
-            proof_config,
-            transcript_params
-        );
+        let (proof, vk) = assembly
+            .prove_one_shot::<EXT, CF::ThisLayerTranscript, CF::ThisLayerHasher, CF::ThisLayerPoW>(
+                &worker,
+                proof_config,
+                transcript_params,
+            );
 
         let proof_file = std::fs::File::create(&format!("{}_proof.json", &file_prefix)).unwrap();
         serde_json::to_writer(proof_file, &proof).unwrap();
@@ -79,15 +86,19 @@ mod test {
     fn preform_step_1_compression() {
         let source = LocalFileDataSource;
         let proof = source.get_scheduler_proof().unwrap();
-        let vk = source.get_recursion_layer_vk(ZkSyncRecursionLayerStorageType::SchedulerCircuit as u8).unwrap();
+        let vk = source
+            .get_recursion_layer_vk(ZkSyncRecursionLayerStorageType::SchedulerCircuit as u8)
+            .unwrap();
 
-        let verifier_builder = dyn_verifier_builder_for_recursive_circuit_type(ZkSyncRecursionLayerStorageType::SchedulerCircuit);
+        let verifier_builder = dyn_verifier_builder_for_recursive_circuit_type(
+            ZkSyncRecursionLayerStorageType::SchedulerCircuit,
+        );
         let verifier = verifier_builder.create_verifier();
-        let is_valid = verifier.verify::<
-            H,
-            TR,
-            NoPow,
-        >((), &vk.clone().into_inner(), &proof.clone().into_inner());
+        let is_valid = verifier.verify::<H, TR, NoPow>(
+            (),
+            &vk.clone().into_inner(),
+            &proof.clone().into_inner(),
+        );
         assert!(is_valid);
 
         // make a compression circuit
@@ -108,10 +119,14 @@ mod test {
     #[test]
     fn preform_step_2_compression() {
         let proof_file = std::fs::File::open("compression_1_proof.json").unwrap();
-        let proof: Proof<F, <CompressionMode1 as ProofCompressionFunction>::ThisLayerHasher, EXT> = serde_json::from_reader(proof_file).unwrap();
+        let proof: Proof<F, <CompressionMode1 as ProofCompressionFunction>::ThisLayerHasher, EXT> =
+            serde_json::from_reader(proof_file).unwrap();
 
         let vk_file_file = std::fs::File::open("compression_1_vk.json").unwrap();
-        let vk: VerificationKey<F, <CompressionMode1 as ProofCompressionFunction>::ThisLayerHasher> = serde_json::from_reader(vk_file_file).unwrap();
+        let vk: VerificationKey<
+            F,
+            <CompressionMode1 as ProofCompressionFunction>::ThisLayerHasher,
+        > = serde_json::from_reader(vk_file_file).unwrap();
 
         let verifier_builder = CompressionMode1CircuitBuilder::dyn_verifier_builder();
         let verifier = verifier_builder.create_verifier();
@@ -140,10 +155,14 @@ mod test {
     #[test]
     fn preform_step_3_compression() {
         let proof_file = std::fs::File::open("compression_2_proof.json").unwrap();
-        let proof: Proof<F, <CompressionMode2 as ProofCompressionFunction>::ThisLayerHasher, EXT> = serde_json::from_reader(proof_file).unwrap();
+        let proof: Proof<F, <CompressionMode2 as ProofCompressionFunction>::ThisLayerHasher, EXT> =
+            serde_json::from_reader(proof_file).unwrap();
 
         let vk_file_file = std::fs::File::open("compression_2_vk.json").unwrap();
-        let vk: VerificationKey<F, <CompressionMode2 as ProofCompressionFunction>::ThisLayerHasher> = serde_json::from_reader(vk_file_file).unwrap();
+        let vk: VerificationKey<
+            F,
+            <CompressionMode2 as ProofCompressionFunction>::ThisLayerHasher,
+        > = serde_json::from_reader(vk_file_file).unwrap();
 
         let verifier_builder = CompressionMode2CircuitBuilder::dyn_verifier_builder();
         let verifier = verifier_builder.create_verifier();
@@ -172,10 +191,14 @@ mod test {
     #[test]
     fn preform_step_4_compression() {
         let proof_file = std::fs::File::open("compression_3_proof.json").unwrap();
-        let proof: Proof<F, <CompressionMode3 as ProofCompressionFunction>::ThisLayerHasher, EXT> = serde_json::from_reader(proof_file).unwrap();
+        let proof: Proof<F, <CompressionMode3 as ProofCompressionFunction>::ThisLayerHasher, EXT> =
+            serde_json::from_reader(proof_file).unwrap();
 
         let vk_file_file = std::fs::File::open("compression_3_vk.json").unwrap();
-        let vk: VerificationKey<F, <CompressionMode3 as ProofCompressionFunction>::ThisLayerHasher> = serde_json::from_reader(vk_file_file).unwrap();
+        let vk: VerificationKey<
+            F,
+            <CompressionMode3 as ProofCompressionFunction>::ThisLayerHasher,
+        > = serde_json::from_reader(vk_file_file).unwrap();
 
         let verifier_builder = CompressionMode3CircuitBuilder::dyn_verifier_builder();
         let verifier = verifier_builder.create_verifier();
@@ -204,10 +227,14 @@ mod test {
     #[test]
     fn preform_step_to_l1_compression() {
         let proof_file = std::fs::File::open("compression_4_proof.json").unwrap();
-        let proof: Proof<F, <CompressionMode4 as ProofCompressionFunction>::ThisLayerHasher, EXT> = serde_json::from_reader(proof_file).unwrap();
+        let proof: Proof<F, <CompressionMode4 as ProofCompressionFunction>::ThisLayerHasher, EXT> =
+            serde_json::from_reader(proof_file).unwrap();
 
         let vk_file_file = std::fs::File::open("compression_4_vk.json").unwrap();
-        let vk: VerificationKey<F, <CompressionMode4 as ProofCompressionFunction>::ThisLayerHasher> = serde_json::from_reader(vk_file_file).unwrap();
+        let vk: VerificationKey<
+            F,
+            <CompressionMode4 as ProofCompressionFunction>::ThisLayerHasher,
+        > = serde_json::from_reader(vk_file_file).unwrap();
 
         let verifier_builder = CompressionMode4CircuitBuilder::dyn_verifier_builder();
         let verifier = verifier_builder.create_verifier();
@@ -237,15 +264,19 @@ mod test {
     fn compress_1() {
         let source = LocalFileDataSource;
         let proof = source.get_scheduler_proof().unwrap();
-        let vk = source.get_recursion_layer_vk(ZkSyncRecursionLayerStorageType::SchedulerCircuit as u8).unwrap();
+        let vk = source
+            .get_recursion_layer_vk(ZkSyncRecursionLayerStorageType::SchedulerCircuit as u8)
+            .unwrap();
 
-        let verifier_builder = dyn_verifier_builder_for_recursive_circuit_type(ZkSyncRecursionLayerStorageType::SchedulerCircuit);
+        let verifier_builder = dyn_verifier_builder_for_recursive_circuit_type(
+            ZkSyncRecursionLayerStorageType::SchedulerCircuit,
+        );
         let verifier = verifier_builder.create_verifier();
-        let is_valid = verifier.verify::<
-            H,
-            TR,
-            NoPow,
-        >((), &vk.clone().into_inner(), &proof.clone().into_inner());
+        let is_valid = verifier.verify::<H, TR, NoPow>(
+            (),
+            &vk.clone().into_inner(),
+            &proof.clone().into_inner(),
+        );
         assert!(is_valid);
 
         let circuit = CompressionMode1Circuit {
@@ -263,7 +294,7 @@ mod test {
 
         let geometry = circuit.geometry();
         let (max_trace_len, num_vars) = circuit.size_hint();
-    
+
         let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
             geometry,
             num_vars.unwrap(),

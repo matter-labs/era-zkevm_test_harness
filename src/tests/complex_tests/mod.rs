@@ -33,7 +33,8 @@ use circuit_definitions::circuit_definitions::recursion_layer::scheduler::Schedu
 use circuit_definitions::circuit_definitions::recursion_layer::*;
 use circuit_definitions::zkevm_circuits::scheduler::aux::NUM_CIRCUIT_TYPES_TO_SCHEDULE;
 use circuit_definitions::{
-    base_layer_proof_config, BASE_LAYER_CAP_SIZE, BASE_LAYER_FRI_LDE_FACTOR, recursion_layer_proof_config,
+    base_layer_proof_config, recursion_layer_proof_config, BASE_LAYER_CAP_SIZE,
+    BASE_LAYER_FRI_LDE_FACTOR,
 };
 use utils::read_test_artifact;
 
@@ -151,7 +152,7 @@ pub(crate) fn generate_base_layer(
         basic_block_circuits_inputs,
         closed_form_inputs,
         scheduler_partial_input,
-        aux_data,
+        _aux_data,
     ) = run(
         Address::zero(),
         test_artifact.entry_point_address,
@@ -540,15 +541,17 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
                         BASE_LAYER_CAP_SIZE,
                     );
 
-                let other_vk = source.get_recursion_layer_vk(
-                    el.numeric_circuit_type()
-                ).unwrap().into_inner();
+                let other_vk = source
+                    .get_recursion_layer_vk(el.numeric_circuit_type())
+                    .unwrap()
+                    .into_inner();
 
                 assert_eq!(&other_vk, &vk);
 
-                let other_finalization_hint = source.get_recursion_layer_finalization_hint(
-                    el.numeric_circuit_type()
-                ).unwrap().into_inner();
+                let other_finalization_hint = source
+                    .get_recursion_layer_finalization_hint(el.numeric_circuit_type())
+                    .unwrap()
+                    .into_inner();
 
                 assert_eq!(&other_finalization_hint, &finalization_hint);
 
@@ -720,29 +723,54 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
             _marker: std::marker::PhantomData,
         };
 
-        assert_eq!(input_vk.clone().into_inner().fixed_parameters, input_vk2.clone().into_inner().fixed_parameters);
+        assert_eq!(
+            input_vk.clone().into_inner().fixed_parameters,
+            input_vk2.clone().into_inner().fixed_parameters
+        );
 
         let circuit = ZkSyncRecursiveLayerCircuit::NodeLayerCircuit(circuit);
 
-        let (_setup_base_2, _setup_2, vk_2, _setup_tree_2, _vars_hint_2, _wits_hint_2, finalization_hint_2) =
-            create_recursive_layer_setup_data(
-                circuit,
-                &worker,
-                BASE_LAYER_FRI_LDE_FACTOR,
-                BASE_LAYER_CAP_SIZE,
-            );
+        let (
+            _setup_base_2,
+            _setup_2,
+            vk_2,
+            _setup_tree_2,
+            _vars_hint_2,
+            _wits_hint_2,
+            finalization_hint_2,
+        ) = create_recursive_layer_setup_data(
+            circuit,
+            &worker,
+            BASE_LAYER_FRI_LDE_FACTOR,
+            BASE_LAYER_CAP_SIZE,
+        );
 
         assert_eq!(_vars_hint, _vars_hint_2);
         assert_eq!(_wits_hint, _wits_hint_2);
         assert_eq!(finalization_hint.into_inner(), finalization_hint_2);
 
-        for (idx, (a, b)) in _setup_base.constant_columns.iter().zip(_setup_base_2.constant_columns.iter()).enumerate() {
+        for (idx, (a, b)) in _setup_base
+            .constant_columns
+            .iter()
+            .zip(_setup_base_2.constant_columns.iter())
+            .enumerate()
+        {
             assert_eq!(a, b, "failed at index {}", idx);
         }
-        for (idx, (a, b)) in _setup_base.copy_permutation_polys.iter().zip(_setup_base_2.copy_permutation_polys.iter()).enumerate() {
+        for (idx, (a, b)) in _setup_base
+            .copy_permutation_polys
+            .iter()
+            .zip(_setup_base_2.copy_permutation_polys.iter())
+            .enumerate()
+        {
             assert_eq!(a, b, "failed at index {}", idx);
         }
-        for (idx, (a, b)) in _setup_base.lookup_tables_columns.iter().zip(_setup_base_2.lookup_tables_columns.iter()).enumerate() {
+        for (idx, (a, b)) in _setup_base
+            .lookup_tables_columns
+            .iter()
+            .zip(_setup_base_2.lookup_tables_columns.iter())
+            .enumerate()
+        {
             assert_eq!(a, b, "failed at index {}", idx);
         }
         assert_eq!(_setup_base, _setup_base_2);
@@ -846,10 +874,13 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
                     );
 
                     let other_vk = source.get_recursion_layer_node_vk().unwrap().into_inner();
-    
+
                     assert_eq!(&other_vk, &vk);
 
-                    let other_finalization_hint = source.get_recursion_layer_node_finalization_hint().unwrap().into_inner();
+                    let other_finalization_hint = source
+                        .get_recursion_layer_node_finalization_hint()
+                        .unwrap()
+                        .into_inner();
 
                     assert_eq!(&other_finalization_hint, &finalization_hint);
 
@@ -894,7 +925,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
                 assert!(is_valid);
 
-                if idx == 0 && depth == 0{
+                if idx == 0 && depth == 0 {
                     source
                         .set_recursion_layer_node_padding_proof(
                             ZkSyncRecursionLayerProof::NodeLayerCircuit(proof.clone()),
@@ -928,7 +959,9 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
     // collect for scheduler. We know that is this test depth is 0
     let mut scheduler_proofs = vec![];
-    for recursive_circuit_type in (ZkSyncRecursionLayerStorageType::LeafLayerCircuitForMainVM as u8)..=(ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesHasher as u8) {
+    for recursive_circuit_type in (ZkSyncRecursionLayerStorageType::LeafLayerCircuitForMainVM as u8)
+        ..=(ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesHasher as u8)
+    {
         let proof = source
             .get_node_layer_proof(recursive_circuit_type, 0, 0)
             .unwrap();
@@ -1041,10 +1074,10 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
 #[test]
 fn run_single() {
-    use circuit_definitions::circuit_definitions::recursion_layer::verifier_builder::dyn_verifier_builder_for_recursive_circuit_type;
-    use crate::data_source::*;
     use crate::boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
     use crate::boojum::gadgets::recursion::recursive_transcript::CircuitAlgebraicSpongeBasedTranscript;
+    use crate::data_source::*;
+    use circuit_definitions::circuit_definitions::recursion_layer::verifier_builder::dyn_verifier_builder_for_recursive_circuit_type;
 
     type P = GoldilocksField;
     type TR = GoldilocksPoisedon2Transcript;
@@ -1059,33 +1092,31 @@ fn run_single() {
         panic!()
     };
 
-    assert_eq!(inner.witness.proof_witnesses.len(), NUM_CIRCUIT_TYPES_TO_SCHEDULE);
+    assert_eq!(
+        inner.witness.proof_witnesses.len(),
+        NUM_CIRCUIT_TYPES_TO_SCHEDULE
+    );
 
-    let verifier_builder = dyn_verifier_builder_for_recursive_circuit_type(ZkSyncRecursionLayerStorageType::NodeLayerCircuit);
+    let verifier_builder = dyn_verifier_builder_for_recursive_circuit_type(
+        ZkSyncRecursionLayerStorageType::NodeLayerCircuit,
+    );
     let verifier = verifier_builder.create_verifier();
     let source = LocalFileDataSource;
     let vk = source.get_recursion_layer_node_vk().unwrap().into_inner();
 
     for (idx, proof) in inner.witness.proof_witnesses.iter().enumerate() {
-        let is_valid = verifier.verify::<
-            H,
-            TR,
-            NoPow,
-        >((), &vk, &proof);
+        let is_valid = verifier.verify::<H, TR, NoPow>((), &vk, &proof);
         assert!(is_valid, "failed at step {}", idx);
     }
 
-    for circuit_type in (ZkSyncRecursionLayerStorageType::LeafLayerCircuitForMainVM as u8)..=(ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesHasher as u8) {
-        let proof = source.get_node_layer_proof(
-            circuit_type,
-            0,
-            0,
-        ).unwrap().into_inner();
-        let is_valid = verifier.verify::<
-            H,
-            TR,
-            NoPow,
-        >((), &vk, &proof);
+    for circuit_type in (ZkSyncRecursionLayerStorageType::LeafLayerCircuitForMainVM as u8)
+        ..=(ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesHasher as u8)
+    {
+        let proof = source
+            .get_node_layer_proof(circuit_type, 0, 0)
+            .unwrap()
+            .into_inner();
+        let is_valid = verifier.verify::<H, TR, NoPow>((), &vk, &proof);
         assert!(is_valid, "failed for circuit type {}", circuit_type);
     }
 

@@ -240,7 +240,7 @@ impl CallstackWithAuxData {
         let CallstackEntryWithAuxData {
             entry: _,
             current_history_record: history_of_current,
-            parent_frame_index,
+            parent_frame_index: _,
             frame_index,
             forward_queue,
             rollback_queue,

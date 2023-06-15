@@ -1,10 +1,8 @@
 use std::fs::File;
 use std::io::Write;
 
-use codegen::Block;
-use codegen::{Function, Import, Scope};
+use codegen::Scope;
 use rayon::prelude::*;
-use structopt::StructOpt;
 
 use zkevm_test_harness::capacity_estimator::{
     code_decommitter_capacity, code_decommittments_sorter_capacity, ecrecover_capacity,

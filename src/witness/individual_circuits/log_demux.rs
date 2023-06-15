@@ -106,7 +106,7 @@ pub fn compute_logs_demux<
 
         // simulate the circuit
         for (_encoding, _previous_tail, query) in input_chunk.iter() {
-            let (_, states) = states_iter.next().unwrap();
+            let (_, _states) = states_iter.next().unwrap();
             match query.aux_byte {
                 STORAGE_AUX_BYTE => {
                     // sort rollup and porter

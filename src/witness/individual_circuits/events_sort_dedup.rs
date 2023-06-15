@@ -260,7 +260,7 @@ pub fn compute_events_dedup_and_sort<
 
         let unsorted_queue_witness: VecDeque<_> = unsorted_states
             .iter()
-            .map(|(encoding, old_tail, element)| {
+            .map(|(_encoding, old_tail, element)| {
                 let as_storage_log = log_query_into_circuit_log_query_witness(element);
 
                 (as_storage_log, *old_tail)
@@ -278,7 +278,7 @@ pub fn compute_events_dedup_and_sort<
 
         let intermediate_sorted_queue_witness: VecDeque<_> = sorted_states
             .iter()
-            .map(|(encoding, old_tail, element)| {
+            .map(|(_encoding, old_tail, element)| {
                 let as_timestamped_storage_witness =
                     log_query_into_circuit_log_query_witness(element);
 
