@@ -1,1 +1,1 @@
-{"LeafLayerCircuitForL1MessagesSorter":{"row_finalization_hints":[[16,0,0,0,0,0,0,0]],"column_finalization_hints":[],"nop_gates_to_add":74604,"final_trace_len":524288,"public_inputs":[[0,0],[1,0],[2,0],[3,0]]}}
+{"LeafLayerCircuitForL1MessagesSorter":{"row_finalization_hints":[[0,0,0,0,0,0,0,0]],"column_finalization_hints":[],"nop_gates_to_add":149784,"final_trace_len":1048576,"public_inputs":[[0,0],[1,0],[2,0],[3,0]]}}

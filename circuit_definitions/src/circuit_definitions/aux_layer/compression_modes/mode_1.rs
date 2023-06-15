@@ -79,6 +79,10 @@ impl ProofCompressionFunction for CompressionMode1 {
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,
         );
+        let builder = ConditionalSwapGate::<4>::configure_builder(
+            builder,
+            GatePlacementStrategy::UseGeneralPurposeColumns,
+        );
         let builder = PublicInputGate::configure_builder(
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,
@@ -95,8 +99,8 @@ impl ProofCompressionFunction for CompressionMode1 {
 
     fn proof_config_for_compression_step() -> ProofConfig {
         ProofConfig {
-            fri_lde_factor: 16,
-            merkle_tree_cap_size: 64,
+            fri_lde_factor: 32,
+            merkle_tree_cap_size: 16,
             fri_folding_schedule: None,
             security_level: crate::L1_SECURITY_BITS,
             pow_bits: 0,

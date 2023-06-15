@@ -27,7 +27,7 @@ impl ProofCompressionFunction for CompressionModeToL1 {
     }
 
     fn size_hint_for_compression_step() -> (usize, usize) {
-        (1 << 16, 1 << 22)
+        (1 << 18, 1 << 22)
     }
 
     fn geometry_for_compression_step() -> CSGeometry {
@@ -98,11 +98,11 @@ impl ProofCompressionFunction for CompressionModeToL1 {
 
     fn proof_config_for_compression_step() -> ProofConfig {
         ProofConfig {
-            fri_lde_factor: 1024,
-            merkle_tree_cap_size: 16,
+            fri_lde_factor: 4096,
+            merkle_tree_cap_size: 8,
             fri_folding_schedule: None,
             security_level: crate::L1_SECURITY_BITS,
-            pow_bits: 24,
+            pow_bits: 28,
         }
     }
 

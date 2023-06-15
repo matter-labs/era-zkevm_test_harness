@@ -25,7 +25,7 @@ impl ProofCompressionFunction for CompressionMode4 {
     }
 
     fn size_hint_for_compression_step() -> (usize, usize) {
-        (1 << 16, 1 << 22)
+        (1 << 15, 1 << 22)
     }
 
     fn geometry_for_compression_step() -> CSGeometry {
@@ -52,9 +52,15 @@ impl ProofCompressionFunction for CompressionMode4 {
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,
         );
-        let builder = BooleanConstraintGate::configure_builder(
+        // let builder = BooleanConstraintGate::configure_builder(
+        //     builder,
+        //     GatePlacementStrategy::UseGeneralPurposeColumns,
+        // );
+        // This reduces quotient complexity
+        let builder = BoundedBooleanConstraintGate::configure_builder(
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,
+            10,
         );
         let configuration_function = R::make_specialization_function_0();
         let builder =
@@ -80,6 +86,10 @@ impl ProofCompressionFunction for CompressionMode4 {
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,
         );
+        let builder = ConditionalSwapGate::<4>::configure_builder(
+            builder,
+            GatePlacementStrategy::UseGeneralPurposeColumns,
+        );
         let builder = PublicInputGate::configure_builder(
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,
@@ -96,8 +106,8 @@ impl ProofCompressionFunction for CompressionMode4 {
 
     fn proof_config_for_compression_step() -> ProofConfig {
         ProofConfig {
-            fri_lde_factor: 512,
-            merkle_tree_cap_size: 128,
+            fri_lde_factor: 2048,
+            merkle_tree_cap_size: 256,
             fri_folding_schedule: None,
             security_level: crate::L1_SECURITY_BITS,
             pow_bits: 0,

@@ -22,14 +22,14 @@ impl ProofCompressionFunction for CompressionMode2 {
     }
 
     fn size_hint_for_compression_step() -> (usize, usize) {
-        (1 << 14, 1 << 22)
+        (1 << 13, 1 << 22)
     }
 
     fn geometry_for_compression_step() -> CSGeometry {
         CSGeometry {
-            num_columns_under_copy_permutation: 52,
+            num_columns_under_copy_permutation: 56,
             // num_witness_columns: 0,
-            num_witness_columns: 78,
+            num_witness_columns: 74,
             num_constant_columns: 4,
             max_allowed_constraint_degree: 8,
         }
@@ -50,9 +50,15 @@ impl ProofCompressionFunction for CompressionMode2 {
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,
         );
-        let builder = BooleanConstraintGate::configure_builder(
+        // let builder = BooleanConstraintGate::configure_builder(
+        //     builder,
+        //     GatePlacementStrategy::UseGeneralPurposeColumns,
+        // );
+        // This reduces quotient complexity
+        let builder = BoundedBooleanConstraintGate::configure_builder(
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,
+            10,
         );
         let builder =
             R::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
@@ -77,6 +83,10 @@ impl ProofCompressionFunction for CompressionMode2 {
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,
         );
+        let builder = ConditionalSwapGate::<4>::configure_builder(
+            builder,
+            GatePlacementStrategy::UseGeneralPurposeColumns,
+        );
         let builder = PublicInputGate::configure_builder(
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,
@@ -93,8 +103,8 @@ impl ProofCompressionFunction for CompressionMode2 {
 
     fn proof_config_for_compression_step() -> ProofConfig {
         ProofConfig {
-            fri_lde_factor: 64,
-            merkle_tree_cap_size: 32,
+            fri_lde_factor: 512,
+            merkle_tree_cap_size: 16,
             fri_folding_schedule: None,
             security_level: crate::L1_SECURITY_BITS,
             pow_bits: 0,

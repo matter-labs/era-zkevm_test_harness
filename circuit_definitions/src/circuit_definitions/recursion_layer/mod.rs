@@ -19,8 +19,8 @@ use self::leaf_layer::*;
 use self::node_layer::*;
 use self::scheduler::*;
 
-pub const RECURSION_ARITY: usize = 16;
-pub const SCHEDULER_CAPACITY: usize = 4096;
+pub const RECURSION_ARITY: usize = 32;
+pub const SCHEDULER_CAPACITY: usize = (1 << 14) + (1 << 13);
 
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone(bound = ""))]
