@@ -1,6 +1,6 @@
 use crate::boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
 use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
-use crate::boojum::cs::implementations::pow::NoPow;
+
 use crate::boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
 use crate::boojum::cs::implementations::transcript::Transcript;
 use crate::boojum::field::goldilocks::GoldilocksExt2;
@@ -8,12 +8,12 @@ use crate::boojum::field::goldilocks::GoldilocksField;
 use crate::boojum::gadgets::recursion::circuit_pow::*;
 use crate::boojum::gadgets::recursion::recursive_transcript::*;
 use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
-use crate::circuit_definitions::gates::*;
+
 use crate::circuit_definitions::implementations::pow::PoWRunner;
 use crate::circuit_definitions::implementations::proof::Proof;
-use crate::circuit_definitions::recursion_layer::scheduler::SchedulerCircuitBuilder;
+
 use crate::circuit_definitions::traits::circuit::ErasedBuilderForRecursiveVerifier;
-use crate::circuit_definitions::traits::gate::GatePlacementStrategy;
+
 use crate::zkevm_circuits::recursion::compression::*;
 use derivative::*;
 use zkevm_circuits::boojum::cs::implementations::prover::ProofConfig;
@@ -37,7 +37,10 @@ pub trait ProofCompressionFunction {
     type PreviousLayerPoW: RecursivePoWRunner<F>;
 
     type ThisLayerPoW: PoWRunner;
-    type ThisLayerHasher: TreeHasher<F, Output = <Self::ThisLayerTranscript as Transcript<F>>::CompatibleCap>;
+    type ThisLayerHasher: TreeHasher<
+        F,
+        Output = <Self::ThisLayerTranscript as Transcript<F>>::CompatibleCap,
+    >;
     type ThisLayerTranscript: Transcript<F>;
 
     fn this_layer_transcript_parameters(

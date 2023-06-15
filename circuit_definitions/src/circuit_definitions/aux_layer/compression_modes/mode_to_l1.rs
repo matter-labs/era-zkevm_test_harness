@@ -23,7 +23,7 @@ impl ProofCompressionFunction for CompressionModeToL1 {
 
     fn description_for_compression_step() -> String {
         "Compression mode to L1: no lookup, just enough copiable width, large LDE factor, PoW"
-        .to_string()
+            .to_string()
     }
 
     fn size_hint_for_compression_step() -> (usize, usize) {
@@ -59,8 +59,8 @@ impl ProofCompressionFunction for CompressionModeToL1 {
             GatePlacementStrategy::UseGeneralPurposeColumns,
         );
         let configuration_function = R::make_specialization_function_0();
-        let builder =
-            configuration_function.configure_proxy(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
+        let builder = configuration_function
+            .configure_proxy(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
         let builder = ZeroCheckGate::configure_builder(
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,

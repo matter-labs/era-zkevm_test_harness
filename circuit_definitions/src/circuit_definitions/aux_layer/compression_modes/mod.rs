@@ -7,19 +7,17 @@ use crate::boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcrip
 use crate::boojum::cs::implementations::transcript::Transcript;
 use crate::boojum::field::goldilocks::GoldilocksExt2;
 use crate::boojum::field::goldilocks::GoldilocksField;
-use crate::boojum::gadgets::recursion::circuit_pow::*;
+
 use crate::boojum::gadgets::recursion::recursive_transcript::*;
 use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
 use crate::circuit_definitions::gates::*;
-use crate::circuit_definitions::implementations::pow::PoWRunner;
-use crate::circuit_definitions::implementations::proof::Proof;
+
 use crate::circuit_definitions::recursion_layer::scheduler::SchedulerCircuitBuilder;
 use crate::circuit_definitions::traits::circuit::ErasedBuilderForRecursiveVerifier;
 use crate::circuit_definitions::traits::gate::GatePlacementStrategy;
-use crate::zkevm_circuits::recursion::compression::*;
-use derivative::*;
+
 use zkevm_circuits::boojum::cs::implementations::prover::ProofConfig;
-use zkevm_circuits::boojum::cs::oracle::TreeHasher;
+
 use crate::circuit_definitions::aux_layer::compression::ProofCompressionFunction;
 
 type F = GoldilocksField;

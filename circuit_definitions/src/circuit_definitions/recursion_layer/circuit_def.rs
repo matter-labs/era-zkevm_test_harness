@@ -1,6 +1,6 @@
 use crate::boojum::cs::cs_builder::*;
 use crate::boojum::cs::*;
-use crate::boojum::field::goldilocks::{GoldilocksField, GoldilocksExt2};
+use crate::boojum::field::goldilocks::{GoldilocksExt2, GoldilocksField};
 use crate::boojum::gadgets::traits::round_function::BuildableCircuitRoundFunction;
 use crate::boojum::implementations::poseidon2::Poseidon2Goldilocks;
 

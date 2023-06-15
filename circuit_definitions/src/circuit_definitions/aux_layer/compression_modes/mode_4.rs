@@ -63,8 +63,8 @@ impl ProofCompressionFunction for CompressionMode4 {
             10,
         );
         let configuration_function = R::make_specialization_function_0();
-        let builder =
-            configuration_function.configure_proxy(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
+        let builder = configuration_function
+            .configure_proxy(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
         let builder = ZeroCheckGate::configure_builder(
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,

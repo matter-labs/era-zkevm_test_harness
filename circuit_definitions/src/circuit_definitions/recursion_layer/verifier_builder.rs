@@ -18,13 +18,11 @@ where
     match circuit_type {
         ZkSyncRecursionLayerStorageType::SchedulerCircuit => {
             ConcreteSchedulerCircuitBuilder::dyn_verifier_builder::<EXT>()
-        },
+        }
         ZkSyncRecursionLayerStorageType::NodeLayerCircuit => {
             ConcreteNodeLayerCircuitBuilder::dyn_verifier_builder::<EXT>()
-        },
-        _ => {
-            ConcreteLeafLayerCircuitBuilder::dyn_verifier_builder::<EXT>()
         }
+        _ => ConcreteLeafLayerCircuitBuilder::dyn_verifier_builder::<EXT>(),
     }
 }
 
@@ -45,12 +43,10 @@ where
     match circuit_type {
         ZkSyncRecursionLayerStorageType::SchedulerCircuit => {
             ConcreteSchedulerCircuitBuilder::dyn_recursive_verifier_builder::<EXT, CS>()
-        },
+        }
         ZkSyncRecursionLayerStorageType::NodeLayerCircuit => {
             ConcreteNodeLayerCircuitBuilder::dyn_recursive_verifier_builder::<EXT, CS>()
-        },
-        _ => {
-            ConcreteLeafLayerCircuitBuilder::dyn_recursive_verifier_builder::<EXT, CS>()
         }
+        _ => ConcreteLeafLayerCircuitBuilder::dyn_recursive_verifier_builder::<EXT, CS>(),
     }
 }
