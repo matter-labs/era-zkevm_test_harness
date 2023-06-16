@@ -138,14 +138,12 @@ pub fn generate_recursive_layer_vks_and_proofs(
             proof_witnesses: VecDeque::new(),
         };
 
-        let padding_proof = source.get_base_layer_padding_proof(base_circuit_type)?;
-
         use crate::zkevm_circuits::recursion::leaf_layer::LeafLayerRecursionConfig;
         let config = LeafLayerRecursionConfig {
             proof_config: base_layer_proof_config(),
             vk_fixed_parameters: vk.into_inner().fixed_parameters,
             capacity: RECURSION_ARITY,
-            padding_proof: padding_proof.into_inner(),
+            padding_proof: None,
         };
 
         let circuit = ZkSyncLeafLayerRecursiveCircuit {
@@ -225,7 +223,6 @@ pub fn generate_recursive_layer_vks_and_proofs(
             proof_witnesses: VecDeque::new(),
         };
 
-        let padding_proof = source.get_recursion_layer_leaf_padding_proof()?;
         use crate::zkevm_circuits::recursion::node_layer::NodeLayerRecursionConfig;
         use circuit_definitions::circuit_definitions::recursion_layer::node_layer::ZkSyncNodeLayerRecursiveCircuit;
         let config = NodeLayerRecursionConfig {
@@ -233,7 +230,7 @@ pub fn generate_recursive_layer_vks_and_proofs(
             vk_fixed_parameters: vk.into_inner().fixed_parameters,
             leaf_layer_capacity: RECURSION_ARITY,
             node_layer_capacity: RECURSION_ARITY,
-            padding_proof: padding_proof.into_inner(),
+            padding_proof: None,
         };
         let circuit = ZkSyncNodeLayerRecursiveCircuit {
             witness: witness,
@@ -296,9 +293,9 @@ pub fn generate_recursive_layer_vks_and_proofs(
             .into_inner();
 
         let config = SchedulerConfig {
-            proof_config: base_layer_proof_config(),
+            proof_config: recursion_step_proof_config.clone(),
             vk_fixed_parameters: node_vk.fixed_parameters.clone(),
-            padding_proof: padding_proof,
+            padding_proof: None,
             capacity: SCHEDULER_CAPACITY,
         };
 

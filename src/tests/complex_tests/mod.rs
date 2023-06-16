@@ -246,7 +246,6 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
     let mut previous_circuit_type = 0;
 
-    let proof_config = base_layer_proof_config();
     let mut instance_idx = 0;
 
     let mut setup_data = None;
@@ -320,7 +319,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
         let proof = prove_base_layer_circuit::<NoPow>(
             el.clone(),
             &worker,
-            proof_config.clone(),
+            base_layer_proof_config(),
             &setup_base,
             &setup,
             &setup_tree,
@@ -416,15 +415,12 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
                 proof_witnesses: VecDeque::new(),
             };
 
-            let padding_proof = source
-                .get_base_layer_padding_proof(base_circuit_type)
-                .unwrap();
             use crate::zkevm_circuits::recursion::leaf_layer::LeafLayerRecursionConfig;
             let config = LeafLayerRecursionConfig {
-                proof_config: base_layer_proof_config(),
+                proof_config: recursion_layer_proof_config(),
                 vk_fixed_parameters: vk.into_inner().fixed_parameters,
                 capacity: RECURSION_ARITY,
-                padding_proof: padding_proof.into_inner(),
+                padding_proof: None,
             };
             let circuit = ZkSyncLeafLayerRecursiveCircuit {
                 base_layer_circuit_type: BaseLayerCircuitType::from_numeric_value(
@@ -592,7 +588,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
             let proof = prove_recursion_layer_circuit::<NoPow>(
                 el.clone(),
                 &worker,
-                proof_config.clone(),
+                recursion_layer_proof_config(),
                 &setup_base,
                 &setup,
                 &setup_tree,
@@ -660,7 +656,6 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
             proof_witnesses: VecDeque::new(),
         };
 
-        let padding_proof = source.get_recursion_layer_leaf_padding_proof().unwrap();
         use crate::zkevm_circuits::recursion::node_layer::NodeLayerRecursionConfig;
         use circuit_definitions::circuit_definitions::recursion_layer::node_layer::ZkSyncNodeLayerRecursiveCircuit;
         let config = NodeLayerRecursionConfig {
@@ -668,7 +663,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
             vk_fixed_parameters: input_vk.clone().into_inner().fixed_parameters,
             leaf_layer_capacity: RECURSION_ARITY,
             node_layer_capacity: RECURSION_ARITY,
-            padding_proof: padding_proof.into_inner(),
+            padding_proof: None,
         };
         let circuit = ZkSyncNodeLayerRecursiveCircuit {
             witness: witness,
@@ -708,13 +703,12 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
             proof_witnesses: VecDeque::new(),
         };
 
-        let padding_proof = source.get_recursion_layer_leaf_padding_proof().unwrap();
         let config = NodeLayerRecursionConfig {
             proof_config: recursion_layer_proof_config(),
             vk_fixed_parameters: input_vk2.clone().into_inner().fixed_parameters,
             leaf_layer_capacity: RECURSION_ARITY,
             node_layer_capacity: RECURSION_ARITY,
-            padding_proof: padding_proof.into_inner(),
+            padding_proof: None,
         };
         let circuit = ZkSyncNodeLayerRecursiveCircuit {
             witness: witness,
@@ -909,7 +903,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
                 let proof = prove_recursion_layer_circuit::<NoPow>(
                     el.clone(),
                     &worker,
-                    proof_config.clone(),
+                    recursion_layer_proof_config(),
                     &setup_base,
                     &setup,
                     &setup_tree,
@@ -997,9 +991,9 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
         .into_inner();
 
     let config = SchedulerConfig {
-        proof_config: base_layer_proof_config(),
+        proof_config: recursion_layer_proof_config(),
         vk_fixed_parameters: node_vk.fixed_parameters,
-        padding_proof: padding_proof,
+        padding_proof: None,
         capacity: SCHEDULER_CAPACITY,
     };
 
@@ -1012,7 +1006,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
     println!("Computing scheduler proof");
 
-    let scheduler_circuit = ZkSyncRecursiveLayerCircuit::SchedulerCircuit(scheduler_circuit);
+    let mut scheduler_circuit = ZkSyncRecursiveLayerCircuit::SchedulerCircuit(scheduler_circuit);
 
     if source.get_scheduler_proof().is_err() {
         let f = std::fs::File::create("tmp.json").unwrap();
@@ -1045,10 +1039,14 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
         println!("Proving!");
         let now = std::time::Instant::now();
 
+        let ZkSyncRecursiveLayerCircuit::SchedulerCircuit(circuit) = &mut scheduler_circuit else {panic!()};
+        circuit.config.padding_proof = Some(padding_proof);
+        drop(circuit);
+
         let proof = prove_recursion_layer_circuit::<NoPow>(
             scheduler_circuit.clone(),
             &worker,
-            proof_config.clone(),
+            recursion_layer_proof_config(),
             &setup_base,
             &setup,
             &setup_tree,

@@ -17,7 +17,7 @@ use crate::zkevm_circuits::recursion::{
     node_layer::{input::RecursionNodeInputWitness, NodeLayerRecursionConfig},
     VK_COMMITMENT_LENGTH,
 };
-use circuit_definitions::base_layer_proof_config;
+use circuit_definitions::{base_layer_proof_config, recursion_layer_proof_config};
 use circuit_definitions::ZkSyncDefaultRoundFunction;
 use std::collections::VecDeque;
 
@@ -127,10 +127,10 @@ pub fn create_leaf_witnesses(
             <H as RecursiveTreeHasher<F, Num<F>>>::NonCircuitSimulator,
             EXT,
         > {
-            proof_config: base_layer_proof_config(),
+            proof_config: recursion_layer_proof_config(),
             vk_fixed_parameters: vk.clone().into_inner().fixed_parameters,
             capacity: RECURSION_ARITY,
-            padding_proof: padding_proof.clone().into_inner(),
+            padding_proof: Some(padding_proof.clone().into_inner()),
         };
 
         let base_layer_circuit_type =
@@ -297,11 +297,11 @@ pub fn create_node_witnesses(
         <H as RecursiveTreeHasher<F, Num<F>>>::NonCircuitSimulator,
         EXT,
     > {
-        proof_config: base_layer_proof_config(),
+        proof_config: recursion_layer_proof_config(),
         vk_fixed_parameters: vk.clone().into_inner().fixed_parameters,
         leaf_layer_capacity: RECURSION_ARITY,
         node_layer_capacity: RECURSION_ARITY,
-        padding_proof: padding_proof.clone().into_inner(),
+        padding_proof: Some(padding_proof.clone().into_inner()),
     };
 
     let mut results = vec![];
