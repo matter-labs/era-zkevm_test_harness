@@ -107,7 +107,7 @@ mod test {
             config: CompressionRecursionConfig {
                 proof_config: base_layer_proof_config(),
                 verification_key: vk.into_inner(),
-                padding_proof: proof.into_inner(),
+                padding_proof: None,
             },
             transcript_params: (),
             _marker: std::marker::PhantomData,
@@ -143,7 +143,7 @@ mod test {
             config: CompressionRecursionConfig {
                 proof_config: CompressionMode1::proof_config_for_compression_step(),
                 verification_key: vk,
-                padding_proof: proof,
+                padding_proof: None,
             },
             transcript_params: (),
             _marker: std::marker::PhantomData,
@@ -179,7 +179,7 @@ mod test {
             config: CompressionRecursionConfig {
                 proof_config: CompressionMode2::proof_config_for_compression_step(),
                 verification_key: vk,
-                padding_proof: proof,
+                padding_proof: None,
             },
             transcript_params: (),
             _marker: std::marker::PhantomData,
@@ -215,7 +215,7 @@ mod test {
             config: CompressionRecursionConfig {
                 proof_config: CompressionMode3::proof_config_for_compression_step(),
                 verification_key: vk,
-                padding_proof: proof,
+                padding_proof: None,
             },
             transcript_params: (),
             _marker: std::marker::PhantomData,
@@ -251,7 +251,7 @@ mod test {
             config: CompressionRecursionConfig {
                 proof_config: CompressionMode4::proof_config_for_compression_step(),
                 verification_key: vk,
-                padding_proof: proof,
+                padding_proof: None,
             },
             transcript_params: (),
             _marker: std::marker::PhantomData,
@@ -284,7 +284,7 @@ mod test {
             config: CompressionRecursionConfig {
                 proof_config: base_layer_proof_config(),
                 verification_key: vk.into_inner(),
-                padding_proof: proof.into_inner(),
+                padding_proof: None,
             },
             transcript_params: (),
             _marker: std::marker::PhantomData,
