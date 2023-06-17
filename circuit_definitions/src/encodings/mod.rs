@@ -77,7 +77,9 @@ impl<F: SmallField, const T: usize, const SW: usize, const ROUNDS: usize>
     Default(bound = "[F; T]: Default, [F; N]: Default"),
     Debug
 )]
-#[serde(bound = "")]
+#[serde(bound = "[F; T]: serde::Serialize + serde::de::DeserializeOwned,
+    [F; N]: serde::Serialize + serde::de::DeserializeOwned,
+    I: serde::Serialize + serde::de::DeserializeOwned")]
 pub struct QueueSimulator<
     F: SmallField,
     I: OutOfCircuitFixedLengthEncodable<F, N>,
@@ -85,21 +87,9 @@ pub struct QueueSimulator<
     const N: usize,
     const ROUNDS: usize,
 > {
-    #[serde(bound(serialize = "[F; T]: serde::Serialize, I: serde::Serialize"))]
-    #[serde(bound(
-        deserialize = "[F; T]: serde::de::DeserializeOwned, I: serde::de::DeserializeOwned"
-    ))]
     pub head: [F; T],
-    #[serde(bound(serialize = "[F; T]: serde::Serialize, I: serde::Serialize"))]
-    #[serde(bound(
-        deserialize = "[F; T]: serde::de::DeserializeOwned, I: serde::de::DeserializeOwned"
-    ))]
     pub tail: [F; T],
     pub num_items: u32,
-    #[serde(bound(serialize = "[F; N]: serde::Serialize, I: serde::Serialize"))]
-    #[serde(bound(
-        deserialize = "[F; N]: serde::de::DeserializeOwned, I: serde::de::DeserializeOwned"
-    ))]
     pub witness: VecDeque<([F; N], [F; T], I)>,
 }
 
@@ -315,8 +305,11 @@ pub struct FullWidthQueueIntermediateStates<F: SmallField, const SW: usize, cons
     pub round_function_execution_pairs: [([F; SW], [F; SW]); ROUNDS],
 }
 
-#[derive(Derivative)]
+#[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Debug, Clone(bound = ""))]
+#[serde(bound = "[F; SW]: serde::Serialize + serde::de::DeserializeOwned,
+    [F; N]: serde::Serialize + serde::de::DeserializeOwned,
+    I: serde::Serialize + serde::de::DeserializeOwned")]
 pub struct FullWidthQueueSimulator<
     F: SmallField,
     I: OutOfCircuitFixedLengthEncodable<F, N>,
