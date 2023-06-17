@@ -38,7 +38,7 @@ pub trait SetupDataSource {
     fn set_base_layer_vk(&mut self, vk: ZkSyncBaseLayerVerificationKey) -> SourceResult<()>;
     fn set_base_layer_padding_proof(&mut self, proof: ZkSyncBaseLayerProof) -> SourceResult<()>;
     fn set_base_layer_finalization_hint(
-        &self,
+        &mut self,
         hint: ZkSyncBaseLayerFinalizationHint,
     ) -> SourceResult<()>;
     fn set_recursion_layer_vk(
@@ -54,7 +54,7 @@ pub trait SetupDataSource {
         proof: ZkSyncRecursionLayerProof,
     ) -> SourceResult<()>;
     fn set_recursion_layer_finalization_hint(
-        &self,
+        &mut self,
         hint: ZkSyncRecursionLayerFinalizationHint,
     ) -> SourceResult<()>;
     fn set_recursion_layer_leaf_padding_proof(
@@ -66,7 +66,7 @@ pub trait SetupDataSource {
         proof: ZkSyncRecursionLayerProof,
     ) -> SourceResult<()>;
     fn set_recursion_layer_node_finalization_hint(
-        &self,
+        &mut self,
         hint: ZkSyncRecursionLayerFinalizationHint,
     ) -> SourceResult<()>;
 }
@@ -233,7 +233,7 @@ impl SetupDataSource for LocalFileDataSource {
         Ok(())
     }
     fn set_base_layer_finalization_hint(
-        &self,
+        &mut self,
         hint: ZkSyncBaseLayerFinalizationHint,
     ) -> SourceResult<()> {
         let circuit_type = hint.numeric_circuit_type();
@@ -302,7 +302,7 @@ impl SetupDataSource for LocalFileDataSource {
         Ok(())
     }
     fn set_recursion_layer_finalization_hint(
-        &self,
+        &mut self,
         hint: ZkSyncRecursionLayerFinalizationHint,
     ) -> SourceResult<()> {
         let circuit_type = hint.numeric_circuit_type();
@@ -316,7 +316,7 @@ impl SetupDataSource for LocalFileDataSource {
         Ok(())
     }
     fn set_recursion_layer_node_finalization_hint(
-        &self,
+        &mut self,
         hint: ZkSyncRecursionLayerFinalizationHint,
     ) -> SourceResult<()> {
         let file = File::create("./setup/recursion_layer/finalization_hint_node.json")
