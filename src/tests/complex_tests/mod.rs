@@ -34,7 +34,7 @@ use circuit_definitions::circuit_definitions::recursion_layer::*;
 use circuit_definitions::zkevm_circuits::scheduler::aux::NUM_CIRCUIT_TYPES_TO_SCHEDULE;
 use circuit_definitions::{
     base_layer_proof_config, recursion_layer_proof_config, BASE_LAYER_CAP_SIZE,
-    BASE_LAYER_FRI_LDE_FACTOR,
+    BASE_LAYER_FRI_LDE_FACTOR, RECURSION_LAYER_CAP_SIZE, RECURSION_LAYER_FRI_LDE_FACTOR,
 };
 use utils::read_test_artifact;
 
@@ -364,7 +364,6 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
     println!("Assembling keys");
 
     let mut proofs = vec![];
-    let mut padding_proofs = vec![];
     let mut verification_keys = vec![];
 
     for (circuit_id, _, inputs) in recursion_queues.iter() {
@@ -374,9 +373,6 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
             let proof = source.get_base_layer_proof(circuit_type, idx).unwrap();
             proofs_for_circuit_type.push(proof);
         }
-
-        let proof = source.get_base_layer_padding_proof(circuit_type).unwrap();
-        padding_proofs.push(proof);
 
         let vk = source.get_base_layer_vk(circuit_type).unwrap();
         verification_keys.push(vk);
@@ -420,7 +416,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
                 proof_config: recursion_layer_proof_config(),
                 vk_fixed_parameters: vk.into_inner().fixed_parameters,
                 capacity: RECURSION_ARITY,
-                padding_proof: None,
+                _marker: std::marker::PhantomData,
             };
             let circuit = ZkSyncLeafLayerRecursiveCircuit {
                 base_layer_circuit_type: BaseLayerCircuitType::from_numeric_value(
@@ -441,8 +437,8 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
                 create_recursive_layer_setup_data(
                     circuit,
                     &worker,
-                    BASE_LAYER_FRI_LDE_FACTOR,
-                    BASE_LAYER_CAP_SIZE,
+                    RECURSION_LAYER_FRI_LDE_FACTOR,
+                    RECURSION_LAYER_CAP_SIZE,
                 );
 
             let finalization_hint = ZkSyncRecursionLayerFinalizationHint::from_inner(
@@ -484,11 +480,10 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
     let mut all_closed_form_inputs_for_scheduler = vec![];
 
-    for (((subset, proofs), padding_proof), vk) in recursion_queues
+    for ((subset, proofs), vk) in recursion_queues
         .clone()
         .into_iter()
         .zip(proofs.into_iter())
-        .zip(padding_proofs.iter().cloned())
         .zip(verification_keys.iter().cloned())
     {
         let param = leaf_vk_commits
@@ -496,8 +491,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
             .find(|el| el.0 == subset.0 as u8)
             .cloned()
             .unwrap();
-        let (aggregations, _closed_form_inputs) =
-            create_leaf_witnesses(subset, proofs, padding_proof, vk, param);
+        let (aggregations, _closed_form_inputs) = create_leaf_witnesses(subset, proofs, vk, param);
         all_leaf_aggregations.push(aggregations);
         all_closed_form_inputs_for_scheduler.extend(_closed_form_inputs);
     }
@@ -533,8 +527,8 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
                     create_recursive_layer_setup_data(
                         el.clone(),
                         &worker,
-                        BASE_LAYER_FRI_LDE_FACTOR,
-                        BASE_LAYER_CAP_SIZE,
+                        RECURSION_LAYER_FRI_LDE_FACTOR,
+                        RECURSION_LAYER_CAP_SIZE,
                     );
 
                 let other_vk = source
@@ -663,7 +657,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
             vk_fixed_parameters: input_vk.clone().into_inner().fixed_parameters,
             leaf_layer_capacity: RECURSION_ARITY,
             node_layer_capacity: RECURSION_ARITY,
-            padding_proof: None,
+            _marker: std::marker::PhantomData,
         };
         let circuit = ZkSyncNodeLayerRecursiveCircuit {
             witness: witness,
@@ -678,8 +672,8 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
             create_recursive_layer_setup_data(
                 circuit,
                 &worker,
-                BASE_LAYER_FRI_LDE_FACTOR,
-                BASE_LAYER_CAP_SIZE,
+                RECURSION_LAYER_FRI_LDE_FACTOR,
+                RECURSION_LAYER_CAP_SIZE,
             );
 
         let finalization_hint =
@@ -708,7 +702,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
             vk_fixed_parameters: input_vk2.clone().into_inner().fixed_parameters,
             leaf_layer_capacity: RECURSION_ARITY,
             node_layer_capacity: RECURSION_ARITY,
-            padding_proof: None,
+            _marker: std::marker::PhantomData,
         };
         let circuit = ZkSyncNodeLayerRecursiveCircuit {
             witness: witness,
@@ -735,8 +729,8 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
         ) = create_recursive_layer_setup_data(
             circuit,
             &worker,
-            BASE_LAYER_FRI_LDE_FACTOR,
-            BASE_LAYER_CAP_SIZE,
+            RECURSION_LAYER_FRI_LDE_FACTOR,
+            RECURSION_LAYER_CAP_SIZE,
         );
 
         assert_eq!(_vars_hint, _vars_hint_2);
@@ -820,17 +814,9 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
                 proofs.push(proof);
             }
-            let padding_proof = if depth == 0 {
-                let padding_proof_leaf = source.get_recursion_layer_leaf_padding_proof().unwrap();
-                padding_proof_leaf
-            } else {
-                let padding_proof_node = source.get_recursion_layer_node_padding_proof().unwrap();
-                padding_proof_node
-            };
             next_aggregations = create_node_witnesses(
                 next_aggregations,
                 proofs,
-                padding_proof,
                 vk.clone(),
                 node_vk_commitment,
                 &leaf_vk_commits,
@@ -863,8 +849,8 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
                     ) = create_recursive_layer_setup_data(
                         el.clone(),
                         &worker,
-                        BASE_LAYER_FRI_LDE_FACTOR,
-                        BASE_LAYER_CAP_SIZE,
+                        RECURSION_LAYER_FRI_LDE_FACTOR,
+                        RECURSION_LAYER_CAP_SIZE,
                     );
 
                     let other_vk = source.get_recursion_layer_node_vk().unwrap().into_inner();
@@ -985,16 +971,11 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
     use crate::zkevm_circuits::scheduler::SchedulerConfig;
 
-    let padding_proof = source
-        .get_recursion_layer_node_padding_proof()
-        .unwrap()
-        .into_inner();
-
     let config = SchedulerConfig {
         proof_config: recursion_layer_proof_config(),
         vk_fixed_parameters: node_vk.fixed_parameters,
-        padding_proof: None,
         capacity: SCHEDULER_CAPACITY,
+        _marker: std::marker::PhantomData,
     };
 
     let scheduler_circuit = SchedulerCircuit {
@@ -1006,7 +987,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
     println!("Computing scheduler proof");
 
-    let mut scheduler_circuit = ZkSyncRecursiveLayerCircuit::SchedulerCircuit(scheduler_circuit);
+    let scheduler_circuit = ZkSyncRecursiveLayerCircuit::SchedulerCircuit(scheduler_circuit);
 
     if source.get_scheduler_proof().is_err() {
         let f = std::fs::File::create("tmp.json").unwrap();
@@ -1019,8 +1000,8 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
             create_recursive_layer_setup_data(
                 scheduler_circuit.clone(),
                 &worker,
-                BASE_LAYER_FRI_LDE_FACTOR,
-                BASE_LAYER_CAP_SIZE,
+                RECURSION_LAYER_FRI_LDE_FACTOR,
+                RECURSION_LAYER_CAP_SIZE,
             );
 
         // we did it above
@@ -1038,10 +1019,6 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
         // prove
         println!("Proving!");
         let now = std::time::Instant::now();
-
-        let ZkSyncRecursiveLayerCircuit::SchedulerCircuit(circuit) = &mut scheduler_circuit else {panic!()};
-        circuit.config.padding_proof = Some(padding_proof);
-        drop(circuit);
 
         let proof = prove_recursion_layer_circuit::<NoPow>(
             scheduler_circuit.clone(),

@@ -17,8 +17,8 @@ use crate::zkevm_circuits::recursion::{
     node_layer::{input::RecursionNodeInputWitness, NodeLayerRecursionConfig},
     VK_COMMITMENT_LENGTH,
 };
-use circuit_definitions::{base_layer_proof_config, recursion_layer_proof_config};
 use circuit_definitions::ZkSyncDefaultRoundFunction;
+use circuit_definitions::{base_layer_proof_config, recursion_layer_proof_config};
 use std::collections::VecDeque;
 
 type F = GoldilocksField;
@@ -71,7 +71,6 @@ pub fn create_leaf_witnesses(
         Vec<ZkSyncBaseLayerClosedFormInput<F>>,
     ),
     proofs: Vec<ZkSyncBaseLayerProof>,
-    padding_proof: ZkSyncBaseLayerProof,
     vk: ZkSyncBaseLayerVerificationKey,
     leaf_params: (u8, RecursionLeafParametersWitness<F>),
 ) -> (
@@ -87,7 +86,6 @@ pub fn create_leaf_witnesses(
 
     let (circuit_type, queue, closed_form_inputs) = subset;
     assert_eq!(queue.num_items as usize, proofs.len());
-    assert_eq!(circuit_type, padding_proof.numeric_circuit_type() as u64);
     assert_eq!(circuit_type, vk.numeric_circuit_type() as u64);
 
     let (t, params) = leaf_params;
@@ -130,7 +128,7 @@ pub fn create_leaf_witnesses(
             proof_config: recursion_layer_proof_config(),
             vk_fixed_parameters: vk.clone().into_inner().fixed_parameters,
             capacity: RECURSION_ARITY,
-            padding_proof: Some(padding_proof.clone().into_inner()),
+            _marker: std::marker::PhantomData,
         };
 
         let base_layer_circuit_type =
@@ -248,7 +246,6 @@ pub fn create_node_witnesses(
         ZkSyncRecursiveLayerCircuit, // proof for that chunk
     )>,
     proofs: Vec<ZkSyncRecursionLayerProof>,
-    padding_proof: ZkSyncRecursionLayerProof,
     vk: ZkSyncRecursionLayerVerificationKey,
     node_vk_commitment: [F; VK_COMMITMENT_LENGTH],
     leaf_layer_params: &Vec<(u8, RecursionLeafParametersWitness<F>)>,
@@ -301,7 +298,7 @@ pub fn create_node_witnesses(
         vk_fixed_parameters: vk.clone().into_inner().fixed_parameters,
         leaf_layer_capacity: RECURSION_ARITY,
         node_layer_capacity: RECURSION_ARITY,
-        padding_proof: Some(padding_proof.clone().into_inner()),
+        _marker: std::marker::PhantomData,
     };
 
     let mut results = vec![];

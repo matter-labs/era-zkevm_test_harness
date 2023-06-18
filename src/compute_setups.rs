@@ -4,9 +4,12 @@ use std::{
 };
 
 use crate::boojum::worker::Worker;
-use circuit_definitions::circuit_definitions::base_layer::{
-    ZkSyncBaseLayerCircuit, ZkSyncBaseLayerFinalizationHint, ZkSyncBaseLayerProof,
-    ZkSyncBaseLayerVerificationKey,
+use circuit_definitions::{
+    circuit_definitions::base_layer::{
+        ZkSyncBaseLayerCircuit, ZkSyncBaseLayerFinalizationHint, ZkSyncBaseLayerProof,
+        ZkSyncBaseLayerVerificationKey,
+    },
+    recursion_layer_proof_config, RECURSION_LAYER_CAP_SIZE, RECURSION_LAYER_FRI_LDE_FACTOR,
 };
 
 use super::*;
@@ -111,8 +114,6 @@ pub fn generate_recursive_layer_vks_and_proofs(
 
     println!("Computing leaf vks");
 
-    let recursion_step_proof_config = base_layer_proof_config();
-
     for base_circuit_type in
         (BaseLayerCircuitType::VM as u8)..=(BaseLayerCircuitType::L1MessagesHasher as u8)
     {
@@ -140,10 +141,10 @@ pub fn generate_recursive_layer_vks_and_proofs(
 
         use crate::zkevm_circuits::recursion::leaf_layer::LeafLayerRecursionConfig;
         let config = LeafLayerRecursionConfig {
-            proof_config: base_layer_proof_config(),
+            proof_config: recursion_layer_proof_config(),
             vk_fixed_parameters: vk.into_inner().fixed_parameters,
             capacity: RECURSION_ARITY,
-            padding_proof: None,
+            _marker: std::marker::PhantomData,
         };
 
         let circuit = ZkSyncLeafLayerRecursiveCircuit {
@@ -163,8 +164,8 @@ pub fn generate_recursive_layer_vks_and_proofs(
             create_recursive_layer_setup_data(
                 circuit.clone(),
                 &worker,
-                BASE_LAYER_FRI_LDE_FACTOR,
-                BASE_LAYER_CAP_SIZE,
+                RECURSION_LAYER_FRI_LDE_FACTOR,
+                RECURSION_LAYER_CAP_SIZE,
             );
 
         let typed_finalization_hint = ZkSyncRecursionLayerFinalizationHint::from_inner(
@@ -184,7 +185,7 @@ pub fn generate_recursive_layer_vks_and_proofs(
         let proof = prove_recursion_layer_circuit::<NoPow>(
             circuit.clone(),
             &worker,
-            recursion_step_proof_config.clone(),
+            recursion_layer_proof_config(),
             &setup_base,
             &setup,
             &setup_tree,
@@ -226,11 +227,11 @@ pub fn generate_recursive_layer_vks_and_proofs(
         use crate::zkevm_circuits::recursion::node_layer::NodeLayerRecursionConfig;
         use circuit_definitions::circuit_definitions::recursion_layer::node_layer::ZkSyncNodeLayerRecursiveCircuit;
         let config = NodeLayerRecursionConfig {
-            proof_config: recursion_step_proof_config.clone(),
+            proof_config: recursion_layer_proof_config(),
             vk_fixed_parameters: vk.into_inner().fixed_parameters,
             leaf_layer_capacity: RECURSION_ARITY,
             node_layer_capacity: RECURSION_ARITY,
-            padding_proof: None,
+            _marker: std::marker::PhantomData,
         };
         let circuit = ZkSyncNodeLayerRecursiveCircuit {
             witness: witness,
@@ -245,8 +246,8 @@ pub fn generate_recursive_layer_vks_and_proofs(
             create_recursive_layer_setup_data(
                 circuit.clone(),
                 &worker,
-                BASE_LAYER_FRI_LDE_FACTOR,
-                BASE_LAYER_CAP_SIZE,
+                RECURSION_LAYER_FRI_LDE_FACTOR,
+                RECURSION_LAYER_CAP_SIZE,
             );
 
         let typed_finalization_hint =
@@ -261,7 +262,7 @@ pub fn generate_recursive_layer_vks_and_proofs(
         let proof = prove_recursion_layer_circuit::<NoPow>(
             circuit.clone(),
             &worker,
-            recursion_step_proof_config.clone(),
+            recursion_layer_proof_config(),
             &setup_base,
             &setup,
             &setup_tree,
@@ -288,15 +289,12 @@ pub fn generate_recursive_layer_vks_and_proofs(
         use circuit_definitions::circuit_definitions::recursion_layer::scheduler::SchedulerCircuit;
 
         let node_vk = source.get_recursion_layer_node_vk()?.into_inner();
-        let padding_proof = source
-            .get_recursion_layer_node_padding_proof()?
-            .into_inner();
 
         let config = SchedulerConfig {
-            proof_config: recursion_step_proof_config.clone(),
+            proof_config: recursion_layer_proof_config(),
             vk_fixed_parameters: node_vk.fixed_parameters.clone(),
-            padding_proof: None,
             capacity: SCHEDULER_CAPACITY,
+            _marker: std::marker::PhantomData,
         };
 
         use crate::zkevm_circuits::scheduler::input::SchedulerCircuitInstanceWitness;
@@ -317,8 +315,8 @@ pub fn generate_recursive_layer_vks_and_proofs(
             create_recursive_layer_setup_data(
                 scheduler_circuit.clone(),
                 &worker,
-                BASE_LAYER_FRI_LDE_FACTOR,
-                BASE_LAYER_CAP_SIZE,
+                RECURSION_LAYER_FRI_LDE_FACTOR,
+                RECURSION_LAYER_CAP_SIZE,
             );
 
         source.set_recursion_layer_vk(ZkSyncRecursionLayerVerificationKey::SchedulerCircuit(
