@@ -36,13 +36,13 @@ use circuit_definitions::{
     base_layer_proof_config, recursion_layer_proof_config, BASE_LAYER_CAP_SIZE,
     BASE_LAYER_FRI_LDE_FACTOR, RECURSION_LAYER_CAP_SIZE, RECURSION_LAYER_FRI_LDE_FACTOR,
 };
-use utils::read_test_artifact;
+use utils::read_basic_test_artifact;
 
 use zkevm_assembly::Assembly;
 
 #[test]
 fn basic_test() {
-    let test_artifact = read_test_artifact("basic_test");
+    let test_artifact = read_basic_test_artifact();
     run_and_try_create_witness_inner(test_artifact, 20000);
     // run_and_try_create_witness_inner(test_artifact, 16);
 }
