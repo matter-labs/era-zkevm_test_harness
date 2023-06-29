@@ -15,12 +15,15 @@ mod test {
 
         type BaseLayerCircuit = ZkSyncBaseLayerCircuit<GoldilocksField, VmWitnessOracle<GoldilocksField>, ZkSyncDefaultRoundFunction>;
 
-        let circuit: BaseLayerCircuit = bincode::deserialize(&buffer).unwrap();
+        let mut circuit: BaseLayerCircuit = bincode::deserialize(&buffer).unwrap();
         // circuit.debug_witness();
 
-        match &circuit {
+        match &mut circuit {
             ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {
                 let witness = inner.clone_witness().unwrap();
+                let _current_config = (*inner.config).clone();
+                dbg!(_current_config);
+                inner.config = std::sync::Arc::new(117500);
                 dbg!(&*inner.config);
 
                 assert_eq!(witness.closed_form_input.start_flag, true);

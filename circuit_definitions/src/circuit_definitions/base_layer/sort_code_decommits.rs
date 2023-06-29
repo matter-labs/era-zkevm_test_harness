@@ -130,7 +130,10 @@ where
     }
 
     fn size_hint() -> (Option<usize>, Option<usize>) {
-        (Some(TARGET_CIRCUIT_TRACE_LENGTH), Some(1 << 26))
+        (
+            Some(TARGET_CIRCUIT_TRACE_LENGTH),
+            Some((1 << 26) + (1 << 25)),
+        )
     }
 
     fn add_tables<CS: ConstraintSystem<F>>(cs: &mut CS) {
