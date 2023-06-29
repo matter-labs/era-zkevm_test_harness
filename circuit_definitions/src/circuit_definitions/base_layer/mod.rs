@@ -304,31 +304,25 @@ where
         }
     }
 
-    // pub fn debug_witness(&self) {
-    //     match &self {
-    //         ZkSyncCircuit::Scheduler(inner) => {inner.debug_witness();},
-    //         ZkSyncCircuit::LeafAggregation(inner) => {inner.debug_witness();},
-    //         ZkSyncCircuit::NodeAggregation(inner) => {inner.debug_witness();},
-    //         ZkSyncCircuit::MainVM(inner) => {inner.debug_witness();},
-    //         ZkSyncCircuit::CodeDecommittmentsSorter(inner) => {inner.debug_witness();},
-    //         ZkSyncCircuit::CodeDecommitter(inner) => {inner.debug_witness();},
-    //         ZkSyncCircuit::LogDemuxer(inner) => {inner.debug_witness();},
-    //         ZkSyncCircuit::KeccakRoundFunction(inner) => {inner.debug_witness();},
-    //         ZkSyncCircuit::Sha256RoundFunction(inner) => {inner.debug_witness();},
-    //         ZkSyncCircuit::ECRecover(inner) => {inner.debug_witness();},
-    //         ZkSyncCircuit::RAMPermutation(inner) => {inner.debug_witness();},
-    //         ZkSyncCircuit::StorageSorter(inner) => {inner.debug_witness();},
-    //         ZkSyncCircuit::StorageApplication(inner) => {inner.debug_witness();},
-    //         ZkSyncCircuit::EventsSorter(inner) => {inner.debug_witness();},
-    //         ZkSyncCircuit::L1MessagesSorter(inner) => {inner.debug_witness();},
-    //         ZkSyncCircuit::L1MessagesMerklier(inner) => {inner.debug_witness();},
-    //         ZkSyncCircuit::InitialWritesPubdataHasher(inner) => {inner.debug_witness();},
-    //         ZkSyncCircuit::RepeatedWritesPubdataHasher(inner) => {inner.debug_witness();},
-    //         ZkSyncCircuit::L1MessagesPubdataHasher(inner) => {inner.debug_witness();},
-    //     };
+    pub fn debug_witness(&self) {
+        match &self {
+            ZkSyncBaseLayerCircuit::MainVM(inner) => {inner.debug_witness();},
+            ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {inner.debug_witness();},
+            ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {inner.debug_witness();},
+            ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {inner.debug_witness();},
+            ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {inner.debug_witness();},
+            ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {inner.debug_witness();},
+            ZkSyncBaseLayerCircuit::ECRecover(inner) => {inner.debug_witness();},
+            ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {inner.debug_witness();},
+            ZkSyncBaseLayerCircuit::StorageSorter(inner) => {inner.debug_witness();},
+            ZkSyncBaseLayerCircuit::StorageApplication(inner) => {inner.debug_witness();},
+            ZkSyncBaseLayerCircuit::EventsSorter(inner) => {inner.debug_witness();},
+            ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {inner.debug_witness();},
+            ZkSyncBaseLayerCircuit::L1MessagesHasher(inner) => {inner.debug_witness();},
+        };
 
-    //     ()
-    // }
+        ()
+    }
 
     pub fn numeric_circuit_type(&self) -> u8 {
         use zkevm_circuits::scheduler::aux::BaseLayerCircuitType;

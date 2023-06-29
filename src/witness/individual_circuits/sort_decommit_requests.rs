@@ -92,6 +92,25 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
 
     let num_items = sorted_decommittment_requests_with_data.len();
 
+    // self-check that we had a proper oracle
+    use crate::zk_evm::aux_structures::{MemoryPage, Timestamp};
+    let mut tmp: Option<(U256, MemoryPage, Timestamp)> = None;
+    for (query, _) in sorted_decommittment_requests_with_data.iter() {
+        if let Some((hash, page, timestamp)) = tmp.as_mut() {
+            if *hash == query.hash {
+                assert_eq!(*page, query.memory_page);
+                assert!(query.timestamp.0 > (*timestamp).0);
+            } else {
+                assert!(query.hash >= *hash);
+                *hash = query.hash;
+                *page = query.memory_page;
+                *timestamp = query.timestamp;
+            }
+        } else {
+            tmp = Some((query.hash, query.memory_page, query.timestamp));
+        }
+    }
+
     for (idx, (query, writes)) in sorted_decommittment_requests_with_data
         .into_iter()
         .enumerate()

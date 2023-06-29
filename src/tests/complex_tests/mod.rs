@@ -1,6 +1,6 @@
 pub mod utils;
 
-// pub mod invididual_debugs;
+pub mod invididual_debugs;
 
 use std::collections::{HashMap, VecDeque};
 
@@ -182,15 +182,16 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
     use crate::toolset::GeometryConfig;
 
     let geometry = GeometryConfig {
-        cycles_per_vm_snapshot: 1,
-        // cycles_per_vm_snapshot: 1024,
+        // cycles_per_vm_snapshot: 1,
+        cycles_per_vm_snapshot: 1024,
         cycles_per_ram_permutation: 1024,
         cycles_per_code_decommitter: 256,
         cycles_per_storage_application: 4,
         cycles_per_keccak256_circuit: 7,
         cycles_per_sha256_circuit: 7,
         cycles_per_ecrecover_circuit: 2,
-        cycles_code_decommitter_sorter: 512,
+        // cycles_code_decommitter_sorter: 512,
+        cycles_code_decommitter_sorter: 3,
         cycles_per_log_demuxer: 16,
         cycles_per_storage_sorter: 16,
         cycles_per_events_or_l1_messages_sorter: 4,
@@ -198,7 +199,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
         limit_for_l1_messages_pudata_hasher: 32,
     };
 
-    let geometry = crate::geometry_config::get_geometry_config();
+    // let geometry = crate::geometry_config::get_geometry_config();
 
     // let (basic_block_circuits, basic_block_circuits_inputs, mut scheduler_partial_input) = run(
     let (
@@ -222,13 +223,12 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
         )
         .enumerate()
     {
-        continue;
-
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
 
         match &el {
-            ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {
+            ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {
+                dbg!(&*inner.config);
                 // let witness = inner.clone_witness().unwrap();
                 // dbg!(&witness.closed_form_input);
                 // dbg!(witness.closed_form_input.start_flag);

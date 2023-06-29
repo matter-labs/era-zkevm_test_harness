@@ -170,7 +170,7 @@ where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocat
 
         let instance = CodeDecommittsSorterCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
-            config: Arc::new(geometry.cycles_per_code_decommitter as usize),
+            config: Arc::new(geometry.cycles_code_decommitter_sorter as usize),
             round_function: round_function.clone(),
             expected_public_input: Some(proof_system_input),
         };
