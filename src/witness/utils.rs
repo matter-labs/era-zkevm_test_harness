@@ -296,14 +296,7 @@ pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
     ctx.saved_context.aux_heap_upper_bound = out_of_circuit_context.aux_heap_bound;
 
     // context composite
-    ctx.saved_context.context_u128_value_composite[0] =
-        out_of_circuit_context.context_u128_value as u32;
-    ctx.saved_context.context_u128_value_composite[1] =
-        (out_of_circuit_context.context_u128_value >> 32) as u32;
-    ctx.saved_context.context_u128_value_composite[2] =
-        (out_of_circuit_context.context_u128_value >> 64) as u32;
-    ctx.saved_context.context_u128_value_composite[3] =
-        (out_of_circuit_context.context_u128_value >> 96) as u32;
+    ctx.saved_context.context_u128_value_composite = u128_as_u32_le(out_of_circuit_context.context_u128_value);
 
     // various counters
     ctx.saved_context.pc = out_of_circuit_context.pc;
@@ -372,12 +365,7 @@ pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
     hidden_fsm.ergs_per_pubdata_byte = vm_state.current_ergs_per_pubdata_byte;
     hidden_fsm.pending_exception = vm_state.pending_exception;
 
-    hidden_fsm.context_composite_u128 = [
-        vm_state.context_u128_register as u32,
-        (vm_state.context_u128_register >> 32) as u32,
-        (vm_state.context_u128_register >> 64) as u32,
-        (vm_state.context_u128_register >> 96) as u32,
-    ];
+    hidden_fsm.context_composite_u128 = u128_as_u32_le(vm_state.context_u128_register);
 
     hidden_fsm.memory_queue_state = aux_params.memory_queue_state.tail.tail;
     hidden_fsm.memory_queue_length = aux_params.memory_queue_state.tail.length;

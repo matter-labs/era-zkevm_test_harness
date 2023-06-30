@@ -412,12 +412,7 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
                 this_shard_id: entry.this_shard_id,
                 caller_shard_id: entry.caller_shard_id,
                 code_shard_id: entry.code_shard_id,
-                context_u128_value_composite: [
-                    entry.context_u128_value as u32,
-                    (entry.context_u128_value >> 32) as u32,
-                    (entry.context_u128_value >> 64) as u32,
-                    (entry.context_u128_value >> 96) as u32,
-                ],
+                context_u128_value_composite: u128_as_u32_le(entry.context_u128_value),
                 heap_upper_bound: entry.heap_bound,
                 aux_heap_upper_bound: entry.aux_heap_bound,
                 is_local_call: entry.is_local_frame,

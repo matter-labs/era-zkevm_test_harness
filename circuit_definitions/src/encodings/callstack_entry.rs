@@ -1,4 +1,4 @@
-use crate::boojum::field::SmallField;
+use crate::{boojum::field::SmallField, aux_definitions::witness_oracle::u128_as_u32_le};
 use zk_evm::vm_state::CallStackEntry;
 
 use super::*;
@@ -59,12 +59,7 @@ impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, EXECUTION_CONTEXT_RECORD
         let v21 = caller_address[3].into_field();
         let v22 = caller_address[4].into_field();
 
-        let context_u128_value_composite = [
-            self.callstack_entry.context_u128_value as u32,
-            (self.callstack_entry.context_u128_value >> 32) as u32,
-            (self.callstack_entry.context_u128_value >> 64) as u32,
-            (self.callstack_entry.context_u128_value >> 92) as u32,
-        ];
+        let context_u128_value_composite = u128_as_u32_le(self.callstack_entry.context_u128_value);
 
         let v23 = context_u128_value_composite[0].into_field();
         let v24 = context_u128_value_composite[1].into_field();
