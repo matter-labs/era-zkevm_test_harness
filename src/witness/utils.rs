@@ -374,9 +374,9 @@ pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
 
     hidden_fsm.context_composite_u128 = [
         vm_state.context_u128_register as u32,
-        (out_of_circuit_context.context_u128_value >> 32) as u32,
-        (out_of_circuit_context.context_u128_value >> 64) as u32,
-        (out_of_circuit_context.context_u128_value >> 96) as u32,
+        (vm_state.context_u128_register >> 32) as u32,
+        (vm_state.context_u128_register >> 64) as u32,
+        (vm_state.context_u128_register >> 96) as u32,
     ];
 
     hidden_fsm.memory_queue_state = aux_params.memory_queue_state.tail.tail;
