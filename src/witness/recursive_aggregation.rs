@@ -304,8 +304,11 @@ pub fn create_node_witnesses(
     let mut results = vec![];
 
     for chunk in chunks.chunks(RECURSION_ARITY) {
-        let mut it = chunk.into_iter();
+        assert!(chunk.len() > 0);
+
         let mut proofs = vec![];
+
+        let mut it = chunk.into_iter();
         let (circuit_type, queue, _) = (&mut it).next().unwrap();
 
         let circuit_type = *circuit_type;
@@ -318,14 +321,23 @@ pub fn create_node_witnesses(
         });
 
         proofs.push(proofs_iter.next().unwrap().into_inner());
+        
         for (_, c, _) in it {
-            split_points.push(QueueTailStateWitness {
-                tail: c.tail,
-                length: c.num_items,
-            });
+            if split_points.len() + 1 < RECURSION_ARITY {
+                // we do not need to add last one because it'll be automatically created
+                // between previous one and the full queue length
+                split_points.push(QueueTailStateWitness {
+                    tail: c.tail,
+                    length: c.num_items,
+                });
+            }
+
             queue = RecursionQueueSimulator::<F>::merge(queue, c.clone());
             proofs.push(proofs_iter.next().unwrap().into_inner());
         }
+
+        assert!(split_points.len() + 1 <= RECURSION_ARITY);
+
         if split_points.len() + 1 < RECURSION_ARITY {
             let padding = QueueTailStateWitness {
                 tail: queue.tail,
@@ -333,6 +345,7 @@ pub fn create_node_witnesses(
             };
             split_points.resize(RECURSION_ARITY - 1, padding);
         }
+        assert_eq!(split_points.len() + 1, RECURSION_ARITY);
 
         let mut input = partial_inputs.clone();
         input.queue_state = take_sponge_like_queue_state_from_simulator(&queue);
@@ -357,6 +370,8 @@ pub fn create_node_witnesses(
 
         results.push((circuit_type, queue, circuit));
     }
+
+    assert!(proofs_iter.next().is_none());
 
     results
 }
