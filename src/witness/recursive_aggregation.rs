@@ -336,6 +336,7 @@ pub fn create_node_witnesses(
             proofs.push(proofs_iter.next().unwrap().into_inner());
         }
 
+        assert_eq!(split_points.len() + 1, proofs.len());
         assert!(split_points.len() + 1 <= RECURSION_ARITY);
 
         if split_points.len() + 1 < RECURSION_ARITY {
