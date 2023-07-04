@@ -4,10 +4,11 @@ use super::*;
 mod test {
     use std::io::Read;
     use super::*;
+    use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 
     #[test]
     fn read_and_run() {
-        let circuit_file_name = "prover_jobs_fri_33218_769_2_BasicCircuits_0_raw.bin";
+        let circuit_file_name = "prover_jobs_fri_38193_240_1_BasicCircuits_0_raw.bin";
 
         let mut content = std::fs::File::open(circuit_file_name).unwrap();
         let mut buffer = vec![];
@@ -19,6 +20,11 @@ mod test {
         // circuit.debug_witness();
 
         match &mut circuit {
+            ZkSyncBaseLayerCircuit::MainVM(inner) => {
+                let witness = inner.clone_witness().unwrap();
+                dbg!(witness.closed_form_input.hidden_fsm_input.context_composite_u128);
+                dbg!(witness.closed_form_input.hidden_fsm_output.context_composite_u128);
+            }
             ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {
                 let witness = inner.clone_witness().unwrap();
                 let _current_config = (*inner.config).clone();
@@ -72,5 +78,50 @@ mod test {
         }
 
         base_test_circuit(circuit);
+    }
+
+    #[test]
+    fn test_and_run_recursive() {
+        // let file_name = "closed_form_inputs_35828_1_raw.bin";
+        // let mut content = std::fs::File::open(file_name).unwrap();
+        // let mut buffer = vec![];
+        // content.read_to_end(&mut buffer).unwrap();
+
+        // let t: RecursionQueueSimulator<GoldilocksField> = bincode::deserialize(&buffer).unwrap();
+        // dbg!(&t);
+
+        let circuit_file_name = "prover_jobs_fri_38142_0_3_NodeAggregation_1_raw.bin";
+
+        let mut content = std::fs::File::open(circuit_file_name).unwrap();
+        let mut buffer = vec![];
+        content.read_to_end(&mut buffer).unwrap();
+
+        let mut circuit: ZkSyncRecursiveLayerCircuit = bincode::deserialize(&buffer).unwrap();
+        // circuit.debug_witness();
+
+        match &mut circuit {
+            ZkSyncRecursiveLayerCircuit::SchedulerCircuit(inner) => {
+                dbg!(&inner.witness.leaf_layer_parameters);
+                for el in inner.witness.proof_witnesses.iter() {
+                    let vk = inner.witness.node_layer_vk_witness.clone();
+                    // let vk = ZkSyncRecursionLayerVerificationKey::from_inner(ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8, vk);
+                    // let proof = ZkSyncRecursionLayerProof::from_inner(ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8, el.clone());
+                    let valid = verify_recursion_layer_proof_for_type::<NoPow>(ZkSyncRecursionLayerStorageType::NodeLayerCircuit, el, &vk);
+                    assert!(valid);
+                }
+            },
+            ZkSyncRecursiveLayerCircuit::NodeLayerCircuit(inner) => {
+                let vk = inner.witness.vk_witness.clone();
+                for el in inner.witness.proof_witnesses.iter() {
+                    // let vk = ZkSyncRecursionLayerVerificationKey::from_inner(ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8, vk);
+                    // let proof = ZkSyncRecursionLayerProof::from_inner(ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8, el.clone());
+                    let valid = verify_recursion_layer_proof_for_type::<NoPow>(ZkSyncRecursionLayerStorageType::NodeLayerCircuit, el, &vk);
+                    assert!(valid);
+                }
+            },
+            _ => {}
+        }
+
+        test_recursive_circuit(circuit);
     }
 }
