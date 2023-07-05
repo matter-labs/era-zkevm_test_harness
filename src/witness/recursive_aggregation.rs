@@ -314,42 +314,59 @@ pub fn create_node_witnesses(
         let proofs: Vec<_> = (&mut proofs_iter).take(num_chunks).map(|el| el.into_inner()).collect();
         assert_eq!(proofs.len(), num_chunks); // so we indeed taken exactly enough
 
-        // now even though we would have a chunk of len N, we should only create N-1 split points
+        // now even though we would have a chunk of len N, we should only create N-1 split points at the end
 
+        let mut split_points = Vec::with_capacity(RECURSION_ARITY);
         let mut it = chunk.into_iter();
-        let (circuit_type, queue, _) = (&mut it).next().unwrap();
 
+        // Take the first chunk (guaranteed to exist)
+        let (circuit_type, queue, _) = (&mut it).next().unwrap();
         let circuit_type = *circuit_type;
         let mut queue = queue.clone();
+        split_points.push(QueueTailStateWitness {
+            tail: queue.tail,
+            length: queue.num_items,
+        });
 
-        let mut split_points = vec![];
-        // we do NOT take a split point here, and instead take it in the loop below.
-        // Even if loop is empty, we are good!
-
-        let mut num_items = queue.num_items;
-        
+        // merge all of them, and record split points
         for (_, c, _) in it {
-            // Split point is a tail of the CURRENT queue
+            // Split point is a tail of the subqueue
             split_points.push(QueueTailStateWitness {
-                tail: queue.tail,
-                length: num_items,
+                tail: c.tail,
+                length: c.num_items,
             });
 
             queue = RecursionQueueSimulator::<F>::merge(queue, c.clone());
-            num_items = queue.num_items - num_items;
         }
 
-        assert_eq!(split_points.len() + 1, proofs.len());
-        assert!(split_points.len() + 1 <= RECURSION_ARITY);
+        // check that for every subqueue we have a proof
+        assert_eq!(split_points.len(), proofs.len());
 
-        if split_points.len() + 1 < RECURSION_ARITY {
+        // for N chunks we need N-1 split points, so either truncate, or pad
+        assert!(split_points.len() <= RECURSION_ARITY);
+        
+        if split_points.len() == RECURSION_ARITY {
+            let _ = split_points.pop().unwrap();
+        } else {
+            // pad it
             let padding = QueueTailStateWitness {
                 tail: queue.tail,
                 length: 0,
             };
             split_points.resize(RECURSION_ARITY - 1, padding);
         }
+
         assert_eq!(split_points.len() + 1, RECURSION_ARITY);
+
+        // self-check that we have a matching length
+        
+        let total_queue_len = queue.num_items;
+        let mut acc = 0;
+        for el in split_points.iter() {
+            acc += el.length;
+        }
+
+        assert_eq!(acc, total_queue_len);
 
         let mut input = partial_inputs.clone();
         input.queue_state = take_sponge_like_queue_state_from_simulator(&queue);
