@@ -263,12 +263,6 @@ pub fn create_node_witnesses(
 
     assert!(chunks.len() > 0);
     let circuit_type = chunks[0].0 as u8;
-    assert_eq!(
-        base_circuit_type_into_recursive_leaf_circuit_type(
-            BaseLayerCircuitType::from_numeric_value(circuit_type)
-        ) as u8,
-        vk.numeric_circuit_type()
-    );
     let mut proofs_iter = proofs.into_iter();
 
     let leaf_layer_params = leaf_layer_params
