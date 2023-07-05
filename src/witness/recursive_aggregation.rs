@@ -342,9 +342,17 @@ pub fn create_node_witnesses(
         // check that for every subqueue we have a proof
         assert_eq!(split_points.len(), proofs.len());
 
+        // self-check that we have a matching length
+        let total_queue_len = queue.num_items;
+        let mut acc = 0;
+        for el in split_points.iter() {
+            acc += el.length;
+        }
+        assert_eq!(acc, total_queue_len);
+
         // for N chunks we need N-1 split points, so either truncate, or pad
         assert!(split_points.len() <= RECURSION_ARITY);
-        
+
         if split_points.len() == RECURSION_ARITY {
             let _ = split_points.pop().unwrap();
         } else {
@@ -357,16 +365,6 @@ pub fn create_node_witnesses(
         }
 
         assert_eq!(split_points.len() + 1, RECURSION_ARITY);
-
-        // self-check that we have a matching length
-        
-        let total_queue_len = queue.num_items;
-        let mut acc = 0;
-        for el in split_points.iter() {
-            acc += el.length;
-        }
-
-        assert_eq!(acc, total_queue_len);
 
         let mut input = partial_inputs.clone();
         input.queue_state = take_sponge_like_queue_state_from_simulator(&queue);
