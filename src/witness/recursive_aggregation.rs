@@ -305,6 +305,10 @@ pub fn create_node_witnesses(
 
     for chunk in chunks.chunks(RECURSION_ARITY) {
         assert!(chunk.len() > 0);
+        // if chunk exists it's elements are non-trivial
+        for (_, c, _) in chunk.iter() {
+            assert!(c.num_items > 0);
+        }
         let num_chunks = chunk.len();
         // we can immediatelly collect proofs
         let proofs: Vec<_> = (&mut proofs_iter).take(num_chunks).map(|el| el.into_inner()).collect();
@@ -321,15 +325,18 @@ pub fn create_node_witnesses(
         let mut split_points = vec![];
         // we do NOT take a split point here, and instead take it in the loop below.
         // Even if loop is empty, we are good!
+
+        let mut num_items = queue.num_items;
         
         for (_, c, _) in it {
             // Split point is a tail of the CURRENT queue
             split_points.push(QueueTailStateWitness {
                 tail: queue.tail,
-                length: queue.num_items,
+                length: num_items,
             });
 
             queue = RecursionQueueSimulator::<F>::merge(queue, c.clone());
+            num_items = queue.num_items - num_items;
         }
 
         assert_eq!(split_points.len() + 1, proofs.len());
