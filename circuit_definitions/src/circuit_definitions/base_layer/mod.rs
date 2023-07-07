@@ -393,10 +393,10 @@ use zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
 pub type ZkSyncBaseLayerClosedFormInput<F> =
     ZkSyncBaseLayerStorage<ClosedFormInputCompactFormWitness<F>>;
 
-use crate::boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
+use crate::boojum::algebraic_props::round_function::AbsorptionModeOverwrite;
 use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
 
-pub type BaseProofsTreeHasher = GoldilocksPoseidon2Sponge<AbsorbtionModeOverwrite>;
+pub type BaseProofsTreeHasher = GoldilocksPoseidon2Sponge<AbsorptionModeOverwrite>;
 pub type ZkSyncBaseProof = Proof<GoldilocksField, BaseProofsTreeHasher, GoldilocksExt2>;
 
 pub type ZkSyncBaseLayerProof = ZkSyncBaseLayerStorage<ZkSyncBaseProof>;

@@ -47,7 +47,7 @@ fn basic_test() {
     // run_and_try_create_witness_inner(test_artifact, 16);
 }
 
-use crate::boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
+use crate::boojum::algebraic_props::round_function::AbsorptionModeOverwrite;
 use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
 use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
 use crate::witness::full_block_artifact::*;
@@ -1059,7 +1059,7 @@ fn run_single() {
     type R = Poseidon2Goldilocks;
     type CTR = CircuitAlgebraicSpongeBasedTranscript<GoldilocksField, 8, 12, 4, R>;
     type EXT = GoldilocksExt2;
-    type H = GoldilocksPoseidon2Sponge<AbsorbtionModeOverwrite>;
+    type H = GoldilocksPoseidon2Sponge<AbsorptionModeOverwrite>;
 
     let f = std::fs::File::open("tmp.json").unwrap();
     let circuit: ZkSyncRecursiveLayerCircuit = serde_json::from_reader(f).unwrap();

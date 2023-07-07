@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
+use crate::boojum::algebraic_props::round_function::AbsorptionModeOverwrite;
 use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
 use crate::boojum::cs::implementations::pow::NoPow;
 use crate::boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
@@ -26,7 +26,7 @@ type TR = GoldilocksPoisedon2Transcript;
 type R = Poseidon2Goldilocks;
 type CTR = CircuitAlgebraicSpongeBasedTranscript<GoldilocksField, 8, 12, 4, R>;
 type EXT = GoldilocksExt2;
-type H = GoldilocksPoseidon2Sponge<AbsorbtionModeOverwrite>;
+type H = GoldilocksPoseidon2Sponge<AbsorptionModeOverwrite>;
 type RH = CircuitGoldilocksPoseidon2Sponge;
 
 // We should balance the final verification cost that would be a complex function of:

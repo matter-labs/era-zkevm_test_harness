@@ -19,7 +19,7 @@ type TR = GoldilocksPoisedon2Transcript;
 type R = Poseidon2Goldilocks;
 type CTR = CircuitAlgebraicSpongeBasedTranscript<GoldilocksField, 8, 12, 4, R>;
 type EXT = GoldilocksExt2;
-type H = GoldilocksPoseidon2Sponge<AbsorbtionModeOverwrite>;
+type H = GoldilocksPoseidon2Sponge<AbsorptionModeOverwrite>;
 type RH = CircuitGoldilocksPoseidon2Sponge;
 
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
