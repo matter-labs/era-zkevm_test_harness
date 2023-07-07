@@ -2,7 +2,7 @@ name: Zkevm test harness build
 
 on:
   push:
-    branches: ["v1.4.0", "akash-dev-1-4"]
+    branches: ["v1.4.0", "fix-boojum"]
 
 jobs:
   boojum-build-test:
