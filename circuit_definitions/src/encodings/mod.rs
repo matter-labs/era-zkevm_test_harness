@@ -1,5 +1,5 @@
 use crate::boojum::algebraic_props::round_function::{
-    absorb_multiple_rounds, AbsorbtionModeOverwrite, AlgebraicRoundFunction,
+    absorb_multiple_rounds, AbsorptionModeOverwrite, AlgebraicRoundFunction,
 };
 use crate::boojum::field::SmallField;
 use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
@@ -187,11 +187,11 @@ impl<
         to_hash.extend(self.tail);
 
         let mut state = R::initial_state();
-        let states = absorb_multiple_rounds::<F, R, AbsorbtionModeOverwrite, AW, SW, CW, ROUNDS>(
+        let states = absorb_multiple_rounds::<F, R, AbsorptionModeOverwrite, AW, SW, CW, ROUNDS>(
             &mut state, &to_hash,
         );
         let new_tail =
-            <R as AlgebraicRoundFunction<F, AW, SW, CW>>::state_into_committment::<T>(&state);
+            <R as AlgebraicRoundFunction<F, AW, SW, CW>>::state_into_commitment::<T>(&state);
         self.witness.push_back((encoding, old_tail, element));
 
         let states = make_round_function_pairs(R::initial_state(), states);
@@ -229,11 +229,11 @@ impl<
         to_hash.extend(self.head);
 
         let mut state = R::initial_state();
-        let states = absorb_multiple_rounds::<F, R, AbsorbtionModeOverwrite, AW, SW, CW, ROUNDS>(
+        let states = absorb_multiple_rounds::<F, R, AbsorptionModeOverwrite, AW, SW, CW, ROUNDS>(
             &mut state, &to_hash,
         );
         let new_head =
-            <R as AlgebraicRoundFunction<F, AW, SW, CW>>::state_into_committment::<T>(&state);
+            <R as AlgebraicRoundFunction<F, AW, SW, CW>>::state_into_commitment::<T>(&state);
 
         let states = make_round_function_pairs(R::initial_state(), states);
 
@@ -396,7 +396,7 @@ impl<
         let encoding = element.encoding_witness();
 
         let mut state = old_tail;
-        let states = absorb_multiple_rounds::<F, R, AbsorbtionModeOverwrite, AW, SW, CW, ROUNDS>(
+        let states = absorb_multiple_rounds::<F, R, AbsorptionModeOverwrite, AW, SW, CW, ROUNDS>(
             &mut state, &encoding,
         );
         let new_tail = state;
@@ -433,7 +433,7 @@ impl<
         let encoding = element.encoding_witness();
 
         let mut state = old_head;
-        let states = absorb_multiple_rounds::<F, R, AbsorbtionModeOverwrite, AW, SW, CW, ROUNDS>(
+        let states = absorb_multiple_rounds::<F, R, AbsorptionModeOverwrite, AW, SW, CW, ROUNDS>(
             &mut state, &encoding,
         );
         let new_head = state;
@@ -571,7 +571,7 @@ impl<
         let old_state = self.state;
 
         let mut state = old_state;
-        let states = absorb_multiple_rounds::<F, R, AbsorbtionModeOverwrite, AW, SW, CW, ROUNDS>(
+        let states = absorb_multiple_rounds::<F, R, AbsorptionModeOverwrite, AW, SW, CW, ROUNDS>(
             &mut state, &encoding,
         );
         let new_state = state;
@@ -612,7 +612,7 @@ impl<
         let encoding = element.encoding_witness();
 
         let mut state = previous_state;
-        let states = absorb_multiple_rounds::<F, R, AbsorbtionModeOverwrite, AW, SW, CW, ROUNDS>(
+        let states = absorb_multiple_rounds::<F, R, AbsorptionModeOverwrite, AW, SW, CW, ROUNDS>(
             &mut state, &encoding,
         );
         let new_state = state;

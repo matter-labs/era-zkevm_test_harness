@@ -1,4 +1,4 @@
-use crate::boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
+use crate::boojum::algebraic_props::round_function::AbsorptionModeOverwrite;
 use crate::boojum::algebraic_props::round_function::AlgebraicRoundFunction;
 use crate::boojum::config::DevCSConfig;
 use crate::boojum::config::ProvingCSConfig;
@@ -471,7 +471,7 @@ pub fn produce_fs_challenges<
     R::specialize_for_len(fs_input.len() as u32, &mut state);
     let mut it = fs_input.array_chunks::<8>();
     for chunk in &mut it {
-        R::absorb_into_state::<AbsorbtionModeOverwrite>(&mut state, chunk);
+        R::absorb_into_state::<AbsorptionModeOverwrite>(&mut state, chunk);
         R::round_function(&mut state);
     }
 
@@ -479,7 +479,7 @@ pub fn produce_fs_challenges<
     if remainder.len() != 0 {
         let mut padded_chunk = [F::ZERO; 8];
         padded_chunk[..remainder.len()].copy_from_slice(remainder);
-        R::absorb_into_state::<AbsorbtionModeOverwrite>(&mut state, &padded_chunk);
+        R::absorb_into_state::<AbsorptionModeOverwrite>(&mut state, &padded_chunk);
         R::round_function(&mut state);
     }
 

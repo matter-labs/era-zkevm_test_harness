@@ -1,6 +1,6 @@
 use std::ops::Add;
 
-use crate::boojum::algebraic_props::round_function::AbsorbtionModeOverwrite;
+use crate::boojum::algebraic_props::round_function::AbsorptionModeOverwrite;
 use crate::boojum::config::*;
 use crate::boojum::cs::implementations::setup::FinalizationHintsForProver;
 use crate::boojum::field::goldilocks::GoldilocksExt2;
@@ -140,8 +140,8 @@ pub fn finalize_queue_state<
 
     let mut state = R::initial_state();
     use crate::boojum::algebraic_props::round_function::absorb_into_state_vararg;
-    absorb_into_state_vararg::<F, R, AbsorbtionModeOverwrite, 8, 12, 4>(&mut state, &to_absorb);
-    let commitment = <R as AlgebraicRoundFunction<F, 8, 12, 4>>::state_into_committment::<
+    absorb_into_state_vararg::<F, R, AbsorptionModeOverwrite, 8, 12, 4>(&mut state, &to_absorb);
+    let commitment = <R as AlgebraicRoundFunction<F, 8, 12, 4>>::state_into_commitment::<
         QUEUE_FINAL_STATE_COMMITMENT_LENGTH,
     >(&state);
 
