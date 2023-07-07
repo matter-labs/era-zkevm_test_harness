@@ -15,3 +15,7 @@ zk_evm = {git = "https://github.com/matter-labs/zk_evm.git", branch = "v1.4.0"}
 derivative = "*"
 serde = {version = "1", features = ["derive"]}
 crossbeam = "0.8"
+
+[features]
+default = []
+log_tracing = ["zkevm_circuits/log_tracing"]
