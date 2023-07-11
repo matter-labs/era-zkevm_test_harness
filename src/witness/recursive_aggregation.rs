@@ -17,7 +17,8 @@ use crate::zkevm_circuits::recursion::{
     node_layer::{input::RecursionNodeInputWitness, NodeLayerRecursionConfig},
     VK_COMMITMENT_LENGTH,
 };
-use circuit_definitions::ZkSyncDefaultRoundFunction;
+use circuit_definitions::{ZkSyncDefaultRoundFunction, zkevm_circuits::scheduler::aux::NUM_CIRCUIT_TYPES_TO_SCHEDULE};
+use crate::zkevm_circuits::scheduler::LEAF_LAYER_PARAMETERS_COMMITMENT_LENGTH;
 use circuit_definitions::{base_layer_proof_config, recursion_layer_proof_config};
 use std::collections::VecDeque;
 
@@ -210,6 +211,33 @@ pub fn compute_leaf_params(
     };
 
     params
+}
+
+pub fn compute_leaf_vks_and_params_commitment(
+    leaf_params: [RecursionLeafParametersWitness<F>; NUM_CIRCUIT_TYPES_TO_SCHEDULE],
+) -> [F; LEAF_LAYER_PARAMETERS_COMMITMENT_LENGTH] {
+    use circuit_definitions::ZkSyncDefaultRoundFunction;
+
+    let round_function = ZkSyncDefaultRoundFunction::default();
+    use crate::witness::utils::*;
+    let mut cs_for_witness_generation =
+        create_cs_for_witness_generation::<F, ZkSyncDefaultRoundFunction>(
+            TRACE_LEN_LOG_2_FOR_CALCULATION,
+            MAX_VARS_LOG_2_FOR_CALCULATION,
+        );
+
+    let params_commitment: [_; LEAF_LAYER_PARAMETERS_COMMITMENT_LENGTH] = compute_encodable_item_from_witness::<
+        [RecursionLeafParameters<F>; NUM_CIRCUIT_TYPES_TO_SCHEDULE],
+        LEAF_LAYER_PARAMETERS_COMMITMENT_LENGTH,
+        _,
+        _,
+    >(
+        leaf_params,
+        &mut cs_for_witness_generation,
+        &round_function,
+    );
+
+    params_commitment
 }
 
 pub fn compute_node_vk_commitment(
