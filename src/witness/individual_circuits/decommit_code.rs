@@ -120,7 +120,6 @@ pub fn compute_decommitter_circuit_snapshots<
                     },
                     rw_flag: true,
                     value: el,
-                    is_pended: false,
                     value_is_pointer: false,
                 })
                 .collect();

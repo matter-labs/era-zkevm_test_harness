@@ -46,7 +46,7 @@ pub struct FullBlockArtifacts<E: Engine> {
 
     // all the RAM (without accumulation into the queue)
     pub vm_memory_queries_accumulated: Vec<(u32, MemoryQuery)>,
-    pub vm_memory_queue_states: Vec<(u32, bool, MemoryQueueState<E>)>,
+    pub vm_memory_queue_states: Vec<(u32, MemoryQueueState<E>)>,
     //
     pub all_memory_queries_accumulated: Vec<MemoryQuery>,
     pub sorted_memory_queries_accumulated: Vec<MemoryQuery>,
@@ -198,9 +198,8 @@ impl<E: Engine> FullBlockArtifacts<E> {
                 .memory_queue_simulator
                 .push_and_output_intermediate_data(*query, round_function);
 
-            let is_pended = query.is_pended;
             self.vm_memory_queue_states
-                .push((*cycle, is_pended, intermediate_info));
+                .push((*cycle, intermediate_info));
             self.all_memory_queue_states.push(intermediate_info);
         }
 

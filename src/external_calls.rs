@@ -106,7 +106,8 @@ pub fn run<
 
     let (entry_point_decommittment_query, entry_point_decommittment_query_witness) = tools
         .decommittment_processor
-        .decommit_into_memory(0, entry_point_decommittment_query, &mut tools.memory);
+        .decommit_into_memory(0, entry_point_decommittment_query, &mut tools.memory)
+        .unwrap();
     let entry_point_decommittment_query_witness = entry_point_decommittment_query_witness.unwrap();
     tools.witness_tracer.add_decommittment(
         0,
@@ -134,7 +135,6 @@ pub fn run<
                 index: MemoryIndex(idx as u32),
             },
             rw_flag: true,
-            is_pended: false,
             value: el,
             value_is_pointer: false,
         };
@@ -156,7 +156,6 @@ pub fn run<
                 index: MemoryIndex(idx as u32),
             },
             rw_flag: false,
-            is_pended: false,
             value: el,
             value_is_pointer: false,
         };
@@ -217,7 +216,6 @@ pub fn run<
                     index: MemoryIndex(word)
                 }, 
                 rw_flag: false, 
-                is_pended: false, 
                 value_is_pointer: false, 
                 value: U256::zero() 
             };

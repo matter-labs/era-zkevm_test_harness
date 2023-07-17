@@ -1015,7 +1015,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
             .iter()
             .take_while(|el| el.0 < initial_state.at_cycle)
             .last()
-            .map(|el| transform_sponge_like_queue_state(el.2))
+            .map(|el| transform_sponge_like_queue_state(el.1))
             .unwrap_or(FullSpongeLikeQueueState::<E>::placeholder_witness());
 
         let decommittment_queue_state_for_entry = artifacts
@@ -1202,7 +1202,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
         let final_memory_queue_state = artifacts
             .vm_memory_queue_states
             .last()
-            .map(|el| transform_sponge_like_queue_state(el.2))
+            .map(|el| transform_sponge_like_queue_state(el.1))
             .unwrap_or(FullSpongeLikeQueueState::<E>::placeholder_witness());
 
         let final_decommittment_queue_state = artifacts

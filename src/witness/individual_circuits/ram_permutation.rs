@@ -548,7 +548,6 @@ fn test_parallelized_grand_product() {
         },
         rw_flag: true,
         value: U256::from(123u64),
-        is_pended: false,
         value_is_pointer: false,
     };
 
@@ -564,7 +563,6 @@ fn test_parallelized_grand_product() {
             },
             rw_flag: false,
             value: U256::from(123u64),
-            is_pended: false,
             value_is_pointer: false,
         };
 
