@@ -1,38 +1,46 @@
+#![recursion_limit = "32"]
+#![allow(dropping_references)]
+#![feature(array_chunks)]
+#![feature(stmt_expr_attributes)]
+#![feature(generic_const_exprs)]
+#![feature(iter_array_chunks)]
+#![feature(iter_next_chunk)]
+#![feature(associated_type_defaults)]
+#![feature(return_position_impl_trait_in_trait)]
 #![allow(unused_imports)]
+#![allow(clippy::drop_ref)]
 
-pub use zk_evm::zkevm_opcode_defs::sha2;
-pub use zk_evm::zkevm_opcode_defs::sha3;
-pub use zk_evm::zkevm_opcode_defs::k256;
-pub use zk_evm::zkevm_opcode_defs::blake2;
+use crate::boojum::field::goldilocks::GoldilocksField;
+use crate::boojum::implementations::poseidon2::Poseidon2Goldilocks;
 
-pub use sync_vm::recursion::leaf_aggregation::LeafAggregationOutputDataWitness;
-pub use sync_vm::recursion::node_aggregation::NodeAggregationOutputDataWitness;
-pub use sync_vm::recursion::node_aggregation::ZkSyncParametricCircuit;
-pub use sync_vm::scheduler::SchedulerCircuitInstanceWitness;
+pub use circuit_definitions::boojum;
+pub use circuit_definitions::zk_evm;
+pub use circuit_definitions::zkevm_circuits;
 
-pub mod encodings;
+pub use crate::zk_evm::blake2;
+pub use crate::zk_evm::sha2;
+pub use crate::zk_evm::sha3;
+
+pub mod data_source;
 pub mod entry_point;
+pub mod geometry_config;
+pub mod proof_compression;
+pub mod prover_utils;
 pub mod utils;
 pub mod witness;
 
-pub use self::bellman::pairing;
-pub use self::franklin_crypto::bellman;
-pub use self::pairing::ff;
-pub use sync_vm;
-pub use sync_vm::franklin_crypto;
-pub mod circuit_limit_estimator;
-pub mod geometry_config;
-pub use zk_evm::ethereum_types;
-pub use zk_evm;
+pub use crate::zk_evm::ethereum_types;
 
 use self::utils::*;
 
+pub mod capacity_estimator;
+pub mod compute_setups;
 pub mod external_calls;
 pub mod toolset;
-
-pub mod abstract_zksync_circuit;
+// pub mod circuit_limit_estimator;
 
 pub const INITIAL_MONOTONIC_CYCLE_COUNTER: u32 = 1024;
 
 // #[cfg(test)]
+pub mod helper;
 pub(crate) mod tests;

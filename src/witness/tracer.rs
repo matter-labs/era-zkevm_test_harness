@@ -1,21 +1,21 @@
 use crate::witness::callstack_handler::CallstackWithAuxData;
-use zk_evm::abstractions::PrecompileCyclesWitness;
-use zk_evm::aux_structures::LogQuery;
-use zk_evm::aux_structures::*;
-use zk_evm::ethereum_types::U256;
-use zk_evm::reference_impls::event_sink::ApplicationData;
-use zk_evm::vm_state::CallStackEntry;
+use crate::zk_evm::abstractions::PrecompileCyclesWitness;
+use crate::zk_evm::aux_structures::LogQuery;
+use crate::zk_evm::aux_structures::*;
+use crate::zk_evm::ethereum_types::U256;
+use crate::zk_evm::reference_impls::event_sink::ApplicationData;
+use crate::zk_evm::vm_state::CallStackEntry;
 
-use zk_evm::precompiles::ecrecover::ECRecoverRoundWitness;
-use zk_evm::precompiles::keccak256::Keccak256RoundWitness;
-use zk_evm::precompiles::sha256::Sha256RoundWitness;
+use crate::zk_evm::zk_evm_abstractions::precompiles::ecrecover::ECRecoverRoundWitness;
+use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::Keccak256RoundWitness;
+use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Sha256RoundWitness;
 
+use crate::zk_evm::zkevm_opcode_defs::decoding::EncodingModeProduction;
+use crate::zk_evm::zkevm_opcode_defs::system_params::NUM_SPONGES;
+use crate::zk_evm::zkevm_opcode_defs::system_params::STORAGE_AUX_BYTE;
+use crate::zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS;
+use crate::zk_evm::zkevm_opcode_defs::system_params::VM_MAX_STACK_DEPTH;
 use tracing;
-use zk_evm::zkevm_opcode_defs::decoding::EncodingModeProduction;
-use zk_evm::zkevm_opcode_defs::system_params::NUM_SPONGES;
-use zk_evm::zkevm_opcode_defs::system_params::STORAGE_AUX_BYTE;
-use zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS;
-use zk_evm::zkevm_opcode_defs::system_params::VM_MAX_STACK_DEPTH;
 
 // cycle indicators below are not timestamps!
 
@@ -213,9 +213,8 @@ impl AuxCallstackProto {
     }
 }
 
-use zk_evm::abstractions::SpongeExecutionMarker;
-use zk_evm::vm_state::VmLocalState;
-use zk_evm::witness_trace::VmWitnessTracer;
+use crate::zk_evm::vm_state::VmLocalState;
+use crate::zk_evm::witness_trace::VmWitnessTracer;
 
 use super::vm_snapshot::VmSnapshot;
 
@@ -250,28 +249,17 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
         if self.current_cycle_counter
             >= self.cycle_counter_of_last_snapshot + self.cycles_to_use_per_snapshot
         {
-            let is_pending = current_state.pending_port.is_any_pending();
-            if self.current_cycle_counter
-                > self.cycle_counter_of_last_snapshot + self.cycles_to_use_per_snapshot
-            {
-                assert!(!is_pending);
-            }
+            // do it immediatelly
+            let snapshot = VmSnapshot {
+                local_state: current_state.clone(),
+                at_cycle: self.current_cycle_counter,
+            };
+            self.vm_snapshots.push(snapshot);
+            tracing::debug!("Made snapshot at cycle {:?}", self.current_cycle_counter);
+            println!("Made snapshot at cycle {:?}", self.current_cycle_counter);
 
-            if !is_pending {
-                // do it immediatelly
-                let snapshot = VmSnapshot {
-                    local_state: current_state.clone(),
-                    at_cycle: self.current_cycle_counter,
-                };
-                self.vm_snapshots.push(snapshot);
-                tracing::debug!("Made snapshot at cycle {:?}", self.current_cycle_counter);
-                println!("Made snapshot at cycle {:?}", self.current_cycle_counter);
-
-                // we made a snapshot now, but the cycle itself will be the first one for the next snapshot
-                self.cycle_counter_of_last_snapshot = current_state.monotonic_cycle_counter;
-            } else {
-                // wait for 1 more cycle
-            }
+            // we made a snapshot now, but the cycle itself will be the first one for the next snapshot
+            self.cycle_counter_of_last_snapshot = current_state.monotonic_cycle_counter;
         }
 
         // monotonic counter always increases
@@ -290,24 +278,6 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
         }
         // println!("Cycle ends");
     }
-    fn add_sponge_marker(
-        &mut self,
-        _monotonic_cycle_counter: u32,
-        _marker: SpongeExecutionMarker,
-        sponges_range: Range<usize>,
-        _is_pended: bool,
-    ) {
-        // println!("Adding sponges range {:?}", &sponges_range);
-        for el in sponges_range {
-            let is_unique = self.sponge_busy_range.insert(el);
-            if !is_unique {
-                panic!(
-                    "sponge markers are {:?} and trying to add {:?}",
-                    &self.sponge_busy_range, &el
-                );
-            }
-        }
-    }
 
     fn add_memory_query(&mut self, monotonic_cycle_counter: u32, memory_query: MemoryQuery) {
         self.memory_queries
@@ -318,7 +288,7 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
         &mut self,
         monotonic_cycle_counter: u32,
         log_query: LogQuery,
-        refund: zk_evm::abstractions::RefundType,
+        refund: crate::zk_evm::abstractions::RefundType,
     ) {
         assert!(log_query.aux_byte == STORAGE_AUX_BYTE);
         self.refunds_logs

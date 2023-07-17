@@ -1,11 +1,11 @@
-use super::*;
-use crate::bellman::Engine;
 use crate::encodings::initial_storage_write::CircuitEquivalentReflection;
-use crate::ethereum_types::U256;
+use crate::bellman::Engine;
+use super::*;
 use derivative::*;
 use sync_vm::franklin_crypto::bellman::SynthesisError;
 use sync_vm::franklin_crypto::plonk::circuit::tables::inscribe_range_table_for_bit_width_over_first_three_columns;
 use sync_vm::traits::CSAllocatable;
+use crate::ethereum_types::U256;
 
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -57,14 +57,14 @@ pub struct BlockContentHeader {
     pub auxilary_output: BlockAuxilaryOutput,
 }
 
-impl<E: Engine> CircuitEquivalentReflection<E> for PerShardState {
+impl<F: SmallField> CircuitEquivalentReflection<E> for PerShardState {
     type Destination = sync_vm::scheduler::block_header::PerShardState<E>;
 
     fn reflect(&self) -> <Self::Destination as sync_vm::traits::CSWitnessable<E>>::Witness {
         sync_vm::scheduler::block_header::PerShardStateWitness::<E> {
             enumeration_counter: self.enumeration_counter,
             state_root: Bytes32Witness::from_bytes_array(&self.state_root),
-            _marker: std::marker::PhantomData,
+            _marker: std::marker::PhantomData
         }
     }
 }
@@ -81,7 +81,7 @@ impl PerShardState {
     }
 }
 
-impl<E: Engine> CircuitEquivalentReflection<E> for BlockPassthroughData {
+impl<F: SmallField> CircuitEquivalentReflection<E> for BlockPassthroughData {
     type Destination = sync_vm::scheduler::block_header::BlockPassthroughData<E>;
 
     fn reflect(&self) -> <Self::Destination as sync_vm::traits::CSWitnessable<E>>::Witness {
@@ -93,7 +93,7 @@ impl<E: Engine> CircuitEquivalentReflection<E> for BlockPassthroughData {
 
         sync_vm::scheduler::block_header::BlockPassthroughDataWitness::<E> {
             per_shard_states: reflected_parts.try_into().unwrap(),
-            _marker: std::marker::PhantomData,
+            _marker: std::marker::PhantomData
         }
     }
 }
@@ -120,7 +120,7 @@ impl BlockPassthroughData {
     }
 }
 
-impl<E: Engine> CircuitEquivalentReflection<E> for BlockMetaParameters {
+impl<F: SmallField> CircuitEquivalentReflection<E> for BlockMetaParameters {
     type Destination = sync_vm::scheduler::block_header::BlockMetaParameters<E>;
 
     fn reflect(&self) -> <Self::Destination as sync_vm::traits::CSWitnessable<E>>::Witness {
@@ -128,7 +128,7 @@ impl<E: Engine> CircuitEquivalentReflection<E> for BlockMetaParameters {
             bootloader_code_hash: Bytes32Witness::from_bytes_array(&self.bootloader_code_hash),
             default_aa_code_hash: Bytes32Witness::from_bytes_array(&self.default_aa_code_hash),
             zkporter_is_available: self.zkporter_is_available,
-            _marker: std::marker::PhantomData,
+            _marker: std::marker::PhantomData
         }
     }
 }
@@ -155,22 +155,16 @@ impl BlockMetaParameters {
     }
 }
 
-impl<E: Engine> CircuitEquivalentReflection<E> for BlockAuxilaryOutput {
+impl<F: SmallField> CircuitEquivalentReflection<E> for BlockAuxilaryOutput {
     type Destination = sync_vm::scheduler::block_header::BlockAuxilaryOutput<E>;
 
     fn reflect(&self) -> <Self::Destination as sync_vm::traits::CSWitnessable<E>>::Witness {
         sync_vm::scheduler::block_header::BlockAuxilaryOutputWitness::<E> {
             l1_messages_root: Bytes32Witness::from_bytes_array(&self.l1_messages_root),
-            l1_messages_linear_hash: Bytes32Witness::from_bytes_array(
-                &self.l1_messages_linear_hash,
-            ),
-            rollup_initital_writes_pubdata_hash: Bytes32Witness::from_bytes_array(
-                &self.rollup_initital_writes_pubdata_hash,
-            ),
-            rollup_repeated_writes_pubdata_hash: Bytes32Witness::from_bytes_array(
-                &self.rollup_repeated_writes_pubdata_hash,
-            ),
-            _marker: std::marker::PhantomData,
+            l1_messages_linear_hash: Bytes32Witness::from_bytes_array(&self.l1_messages_linear_hash),
+            rollup_initital_writes_pubdata_hash: Bytes32Witness::from_bytes_array(&self.rollup_initital_writes_pubdata_hash),
+            rollup_repeated_writes_pubdata_hash: Bytes32Witness::from_bytes_array(&self.rollup_repeated_writes_pubdata_hash),
+            _marker: std::marker::PhantomData
         }
     }
 }
@@ -198,8 +192,17 @@ impl BlockAuxilaryOutput {
     }
 }
 
+
 impl BlockContentHeader {
-    pub fn into_formal_block_hash(self) -> ([u8; 32], ([u8; 32], [u8; 32], [u8; 32])) {
+    pub fn into_formal_block_hash(self) -> 
+    (
+        [u8; 32],
+        (
+            [u8; 32],
+            [u8; 32],
+            [u8; 32],
+        )
+    ) {
         // everything is BE
         let block_data_hash = self.block_data.hash();
         let block_meta_hash = self.block_meta.hash();
@@ -208,13 +211,10 @@ impl BlockContentHeader {
         let block_hash = Self::formal_block_hash_from_partial_hashes(
             block_data_hash,
             block_meta_hash,
-            auxilary_output_hash,
+            auxilary_output_hash
         );
 
-        (
-            block_hash,
-            (block_data_hash, block_meta_hash, auxilary_output_hash),
-        )
+        (block_hash, (block_data_hash, block_meta_hash, auxilary_output_hash))
     }
 
     pub fn formal_block_hash_from_partial_hashes(
@@ -231,7 +231,7 @@ impl BlockContentHeader {
 
         let t = hasher.finalize();
         result.copy_from_slice(&t.as_slice());
-
+        
         result
     }
 }
@@ -241,8 +241,8 @@ pub fn block_proof_input(
     this_block_formal_hash: [u8; 32],
     recursion_node_verification_key_hash: [u8; 32], // BE
     recursion_leaf_verification_key_hash: [u8; 32], // BE
-    all_different_circuits_keys_hash: [u8; 32],     // BE
-    aggregation_result: [[u8; 32]; 4],              // BE
+    all_different_circuits_keys_hash: [u8; 32], // BE
+    aggregation_result: [[u8; 32]; 4] // BE
 ) -> U256 {
     let mut result = [0u8; 32];
     use sha3::{Digest, Keccak256};
@@ -262,54 +262,50 @@ pub fn block_proof_input(
     result.copy_from_slice(&t.as_slice());
 
     result[0] = 0; // zero out to fit into the field
-
+    
     U256::from_big_endian(&result)
 }
 
 #[test]
 fn test_equality() -> Result<(), SynthesisError> {
-    use crate::franklin_crypto::plonk::circuit::tables::inscribe_default_range_table_for_bit_width_over_first_three_columns;
-    use sync_vm::circuit_structures::byte::Byte;
     use sync_vm::scheduler::block_header::keccak_output_into_bytes;
+    use sync_vm::circuit_structures::byte::Byte;
+    use cratFanklin_crypto::plonk::circuit::tables::inscribe_default_range_table_for_bit_width_over_first_three_columns;
 
     let (mut cs_outer, _, _) = create_test_artifacts_with_optimized_gate();
     use franklin_crypto::plonk::circuit::hashes_with_tables::keccak::gadgets::Keccak256Gadget;
     let cs = &mut cs_outer;
     inscribe_default_range_table_for_bit_width_over_first_three_columns(cs, 16)?;
 
-    use crate::bellman::plonk::better_better_cs::cs::ConstraintSystem;
+    use sync_vm::vm::VM_BITWISE_LOGICAL_OPS_TABLE_NAME;
+    use sync_vm::vm::tables::BitwiseLogicTable;
     use crate::bellman::plonk::better_better_cs::cs::LookupTableApplication;
     use crate::bellman::plonk::better_better_cs::data_structures::PolyIdentifier;
-    use sync_vm::vm::tables::BitwiseLogicTable;
-    use sync_vm::vm::VM_BITWISE_LOGICAL_OPS_TABLE_NAME;
+    use crate::bellman::plonk::better_better_cs::cs::ConstraintSystem;
     let columns3 = vec![
-        PolyIdentifier::VariablesPolynomial(0),
-        PolyIdentifier::VariablesPolynomial(1),
-        PolyIdentifier::VariablesPolynomial(2),
+        PolyIdentifier::VariablesPolynomial(0), 
+        PolyIdentifier::VariablesPolynomial(1), 
+        PolyIdentifier::VariablesPolynomial(2)
     ];
-
+    
     if cs.get_table(VM_BITWISE_LOGICAL_OPS_TABLE_NAME).is_err() {
         let name = VM_BITWISE_LOGICAL_OPS_TABLE_NAME;
         let bitwise_logic_table = LookupTableApplication::new(
-            name,
-            BitwiseLogicTable::new(&name, 8),
-            columns3.clone(),
-            None,
-            true,
+            name, BitwiseLogicTable::new(&name, 8), columns3.clone(), None, true
         );
         cs.add_table(bitwise_logic_table)?;
     };
 
-    use crate::franklin_crypto::plonk::circuit::tables::RANGE_CHECK_SINGLE_APPLICATION_TABLE_NAME;
+    use cratFanklin_crypto::plonk::circuit::tables::RANGE_CHECK_SINGLE_APPLICATION_TABLE_NAME;
 
     let keccak_gadget = Keccak256Gadget::new(
-        cs,
-        None,
-        None,
-        None,
-        None,
-        true,
-        RANGE_CHECK_SINGLE_APPLICATION_TABLE_NAME,
+        cs, 
+        None, 
+        None, 
+        None, 
+        None, 
+        true, 
+        RANGE_CHECK_SINGLE_APPLICATION_TABLE_NAME
     )?;
 
     // we use some hardcoded values, but since we always hide under hashes it's not important
@@ -323,41 +319,29 @@ fn test_equality() -> Result<(), SynthesisError> {
                 PerShardState {
                     enumeration_counter: 0,
                     state_root: [0; 32],
-                },
-            ],
+                }
+            ]
         };
         let out_of_circuit_passthrough_data_hash = passthrough_data.hash();
 
-        let in_circuit_passthrough =
-            sync_vm::scheduler::block_header::BlockPassthroughData::alloc_from_witness(
-                cs,
-                Some(passthrough_data.reflect()),
-            )?;
+        let in_circuit_passthrough = sync_vm::scheduler::block_header::BlockPassthroughData::alloc_from_witness(cs, Some(passthrough_data.reflect()))?;
         let t = in_circuit_passthrough.into_flattened_bytes(cs)?;
         let in_circuit_passthrough_data_hash = keccak_gadget.digest_from_bytes(cs, &t)?;
-        let in_circuit_passthrough_data_hash =
-            keccak_output_into_bytes(cs, in_circuit_passthrough_data_hash)?;
-        let in_circuit_passthrough_data_hash =
-            Byte::get_byte_value_multiple(&in_circuit_passthrough_data_hash);
+        let in_circuit_passthrough_data_hash = keccak_output_into_bytes(cs, in_circuit_passthrough_data_hash)?;
+        let in_circuit_passthrough_data_hash = Byte::get_byte_value_multiple(&in_circuit_passthrough_data_hash);
 
-        assert_eq!(
-            out_of_circuit_passthrough_data_hash,
-            in_circuit_passthrough_data_hash.unwrap()
-        );
+        assert_eq!(out_of_circuit_passthrough_data_hash, in_circuit_passthrough_data_hash.unwrap());
     }
 
     {
         let out_of_circuit = BlockMetaParameters {
             zkporter_is_available: false,
             bootloader_code_hash: [2u8; 32],
-            default_aa_code_hash: [3u8; 32],
+            default_aa_code_hash: [3u8; 32]
         };
         let out_of_circuit_hash = out_of_circuit.hash();
 
-        let in_circuit = sync_vm::scheduler::block_header::BlockMetaParameters::alloc_from_witness(
-            cs,
-            Some(out_of_circuit.reflect()),
-        )?;
+        let in_circuit = sync_vm::scheduler::block_header::BlockMetaParameters::alloc_from_witness(cs, Some(out_of_circuit.reflect()))?;
         let t = in_circuit.into_flattened_bytes(cs)?;
         let in_circuit_hash = keccak_gadget.digest_from_bytes(cs, &t)?;
         let in_circuit_hash = keccak_output_into_bytes(cs, in_circuit_hash)?;
@@ -375,10 +359,7 @@ fn test_equality() -> Result<(), SynthesisError> {
         };
         let out_of_circuit_hash = out_of_circuit.hash();
 
-        let in_circuit = sync_vm::scheduler::block_header::BlockAuxilaryOutput::alloc_from_witness(
-            cs,
-            Some(out_of_circuit.reflect()),
-        )?;
+        let in_circuit = sync_vm::scheduler::block_header::BlockAuxilaryOutput::alloc_from_witness(cs, Some(out_of_circuit.reflect()))?;
         let t = in_circuit.into_flattened_bytes(cs)?;
         let in_circuit_hash = keccak_gadget.digest_from_bytes(cs, &t)?;
         let in_circuit_hash = keccak_output_into_bytes(cs, in_circuit_hash)?;

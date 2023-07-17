@@ -3,24 +3,25 @@ use std::collections::HashMap;
 use super::*;
 use crate::entry_point::create_out_of_circuit_global_context;
 
+use crate::boojum::config::{ProvingCSConfig, SetupCSConfig};
+use crate::boojum::cs::implementations::prover::ProofConfig;
+use crate::boojum::cs::traits::cs::ConstraintSystem;
+use crate::boojum::cs::traits::gate::GatePlacementStrategy;
+use crate::boojum::field::traits::field_like::TrivialContext;
 use crate::ethereum_types::*;
-use crate::pairing::bn256::Bn256;
+use crate::external_calls::run_with_fixed_params;
 use crate::toolset::create_tools;
 use crate::witness::oracle::create_artifacts_from_tracer;
-use crate::witness::oracle::VmWitnessOracle;
-use sync_vm::glue::traits::GenericHasher;
-use sync_vm::rescue_poseidon::rescue::params::RescueParams;
-use sync_vm::traits::CSWitnessable;
-use sync_vm::vm::vm_cycle::cycle::vm_cycle;
-use sync_vm::vm::vm_cycle::witness_oracle::u256_to_biguint;
-use zk_evm::abstractions::*;
-use zk_evm::aux_structures::DecommittmentQuery;
-use zk_evm::aux_structures::*;
-use zk_evm::reference_impls::memory::SimpleMemory;
-use zk_evm::testing::storage::InMemoryStorage;
-use zk_evm::utils::{bytecode_to_code_hash, contract_bytecode_to_words};
-use zk_evm::witness_trace::VmWitnessTracer;
-use zk_evm::GenericNoopTracer;
+use crate::zk_evm::abstractions::*;
+use crate::zk_evm::aux_structures::DecommittmentQuery;
+use crate::zk_evm::aux_structures::*;
+use crate::zk_evm::testing::storage::InMemoryStorage;
+use crate::zk_evm::utils::{bytecode_to_code_hash, contract_bytecode_to_words};
+use crate::zk_evm::witness_trace::VmWitnessTracer;
+use crate::zk_evm::GenericNoopTracer;
+use crate::zkevm_circuits::base_structures::vm_state::GlobalContextWitness;
+use crate::zkevm_circuits::main_vm::main_vm_entry_point;
+use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use zkevm_assembly::Assembly;
 
 #[test]
@@ -143,72 +144,29 @@ fn run_and_try_create_witness() {
     run_and_try_create_witness_inner(asm, 50);
 }
 
-pub fn assert_equal_state(
-    out_of_circuit: &zk_evm::vm_state::VmLocalState,
-    in_circuit: &sync_vm::vm::vm_state::VmLocalState<Bn256, 3>,
-) {
-    let wit = in_circuit.clone().split().0.create_witness().unwrap();
+#[test]
+fn run_pseudo_benchmark() {
+    let asm = r#"
+        .text
+        .file	"Test_26"
+        .rodata.cst32
+        .p2align	5
+        .text
+        .globl	__entry
+    __entry:
+    .main:
+        add 100, r0, r1,
+    .loop:
+        sub.s! 1, r1, r1
+        jump.ne @.loop
+    .end
+        ret.ok r0
+    "#;
 
-    for (reg_idx, (circuit, not_circuit)) in wit
-        .registers
-        .iter()
-        .zip(out_of_circuit.registers.iter())
-        .enumerate()
-    {
-        compare_reg_values(reg_idx + 1, circuit.inner, not_circuit.value);
-    }
-
-    // compare flags
-    let flags = wit.flags;
-    assert_eq!(
-        flags.overflow_or_less_than, out_of_circuit.flags.overflow_or_less_than_flag,
-        "OF flag divergence"
-    );
-    assert_eq!(
-        flags.equal, out_of_circuit.flags.equality_flag,
-        "EQ flag divergence"
-    );
-    assert_eq!(
-        flags.greater_than, out_of_circuit.flags.greater_than_flag,
-        "GT flag divergence"
-    );
-}
-
-fn compare_reg_values(reg_idx: usize, in_circuit: [u128; 2], out_of_circuit: U256) {
-    let l0_a = in_circuit[0] as u64;
-    let l1_a = (in_circuit[0] >> 64) as u64;
-    let l2_a = in_circuit[1] as u64;
-    let l3_a = (in_circuit[1] >> 64) as u64;
-
-    let equal = out_of_circuit.0[0] == l0_a
-        && out_of_circuit.0[1] == l1_a
-        && out_of_circuit.0[2] == l2_a
-        && out_of_circuit.0[3] == l3_a;
-    if !equal {
-        println!(
-            "Limb 0 in circuit = 0x{:016x}, out = 0x{:016x}",
-            l0_a, out_of_circuit.0[0]
-        );
-        println!(
-            "Limb 1 in circuit = 0x{:016x}, out = 0x{:016x}",
-            l1_a, out_of_circuit.0[1]
-        );
-        println!(
-            "Limb 2 in circuit = 0x{:016x}, out = 0x{:016x}",
-            l2_a, out_of_circuit.0[2]
-        );
-        println!(
-            "Limb 3 in circuit = 0x{:016x}, out = 0x{:016x}",
-            l3_a, out_of_circuit.0[3]
-        );
-
-        panic!("Failed as reg {}:", reg_idx);
-    }
+    run_and_try_create_witness_inner(asm, 30000);
 }
 
 pub(crate) fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
-    use sha3::Digest;
-
     let mut assembly = Assembly::try_from(asm.to_owned()).unwrap();
     let bytecode = assembly.compile_to_bytecode().unwrap();
 
@@ -221,27 +179,24 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
     cycle_limit: usize,
 ) {
     use crate::external_calls::run;
-    use sync_vm::testing::create_test_artifacts_with_optimized_gate;
-    use zk_evm::zkevm_opcode_defs::system_params::BOOTLOADER_FORMAL_ADDRESS;
-    let (_, round_function, _) = create_test_artifacts_with_optimized_gate();
+    use crate::zk_evm::zkevm_opcode_defs::system_params::BOOTLOADER_FORMAL_ADDRESS;
 
     use crate::toolset::GeometryConfig;
 
     let geometry = GeometryConfig {
-        cycles_per_vm_snapshot: 10,
-        cycles_per_code_decommitter_sorter: 16,
+        cycles_per_vm_snapshot: 5,
+        // cycles_per_vm_snapshot: 5000,
+        cycles_code_decommitter_sorter: 16,
         cycles_per_log_demuxer: 8,
         cycles_per_storage_sorter: 4,
         cycles_per_events_or_l1_messages_sorter: 2,
         cycles_per_ram_permutation: 4,
         cycles_per_code_decommitter: 4,
         cycles_per_storage_application: 2,
-        limit_for_initial_writes_pubdata_hasher: 16,
-        limit_for_repeated_writes_pubdata_hasher: 16,
         cycles_per_keccak256_circuit: 1,
         cycles_per_sha256_circuit: 1,
         cycles_per_ecrecover_circuit: 1,
-        limit_for_l1_messages_merklizer: 8,
+
         limit_for_l1_messages_pudata_hasher: 8,
     };
 
@@ -256,79 +211,60 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
     }));
 
     let mut storage_impl = InMemoryStorage::new();
-    let memory_impl = SimpleMemory::new_without_preallocations();
     let mut tree = ZKSyncTestingTree::empty();
 
     let mut known_contracts = HashMap::new();
     known_contracts.extend(other_contracts.iter().cloned());
 
-    crate::tests::complex_tests::save_predeployed_contracts(
-        &mut storage_impl,
-        &mut tree,
-        &known_contracts,
-    );
+    save_predeployed_contracts(&mut storage_impl, &mut tree, &known_contracts);
 
-    let (basic_block_circuits, basic_block_circuits_inputs, scheduler_input) = run(
-        Address::zero(),
-        *BOOTLOADER_FORMAL_ADDRESS,
-        entry_point_bytecode,
-        vec![],
-        false,
-        U256::zero(),
-        used_bytecodes_and_hashes,
-        vec![],
-        cycle_limit,
-        round_function,
-        geometry,
-        storage_impl,
-        memory_impl,
-        &mut tree,
-    );
+    // let (basic_block_circuits, basic_block_circuits_inputs, scheduler_input) = run(
+    let (basic_block_circuits, basic_block_circuits_inputs, closed_form_inputs, _, _) =
+        run_with_fixed_params(
+            Address::zero(),
+            *BOOTLOADER_FORMAL_ADDRESS,
+            entry_point_bytecode,
+            vec![],
+            false,
+            U256::zero(),
+            used_bytecodes_and_hashes,
+            vec![],
+            cycle_limit,
+            geometry,
+            storage_impl,
+            &mut tree,
+        );
 
     println!("Simulation and witness creation are completed");
 
-    // let flattened = basic_block_circuits.into_flattened_set();
-    // for el in flattened.into_iter() {
-    //     use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
-    //     let is_satisfied = circuit_testing::check_if_satisfied::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(el).unwrap();
-    //     assert!(is_satisfied);
-    // }
-
-    // for el in flattened.into_iter() {
-    //     use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
-    //     circuit_testing::prove_and_verify_circuit::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(el).unwrap();
-    // }
-
     let flattened = basic_block_circuits.into_flattened_set();
-    let flattened_inputs = basic_block_circuits_inputs.into_flattened_set();
-
-    for (idx, (el, input_value)) in flattened
-        .into_iter()
-        .zip(flattened_inputs.into_iter())
-        .enumerate()
-    {
-        let descr = el.short_description();
-        println!("Doing {}: {}", idx, descr);
-        use crate::abstract_zksync_circuit::concrete_circuits::ZkSyncCircuit;
-        if !matches!(&el, ZkSyncCircuit::MainVM(..)) {
-            continue;
-        }
-        // el.debug_witness();
-        use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
-        let (is_satisfied, public_input) = circuit_testing::check_if_satisfied::<
-            Bn256,
-            _,
-            PlonkCsWidth4WithNextStepAndCustomGatesParams,
-        >(el)
-        .unwrap();
-        assert!(is_satisfied);
-        assert_eq!(
-            public_input, input_value,
-            "Public input diverged for circuit {} of type {}",
-            idx, descr
-        );
-        // if public_input != input_value {
-        //     println!("Public input diverged for circuit {} of type {}", idx, descr);
-        // }
+    for el in flattened.into_iter() {
+        println!("Doing {} circuit", el.short_description());
+        base_test_circuit(el);
     }
+
+    // // for el in flattened.into_iter() {
+    // //     use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
+    // //     circuit_testing::prove_and_verify_circuit::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(el).unwrap();
+    // // }
+
+    // let flattened = basic_block_circuits.into_flattened_set();
+    // let flattened_inputs = basic_block_circuits_inputs.into_flattened_set();
+
+    // for (idx, (el, input_value)) in flattened.into_iter().zip(flattened_inputs.into_iter()).enumerate() {
+    //     let descr = el.short_description();
+    //     println!("Doing {}: {}", idx, descr);
+    //     use crate::abstract_zksync_circuit::concrete_circuits::ZkSyncCircuit;
+    //     if !matches!(&el, ZkSyncCircuit::MainVM(..)) {
+    //         continue;
+    //     }
+    //     // el.debug_witness();
+    //     use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
+    //     let (is_satisfied, public_input) = circuit_testing::check_if_satisfied::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(el).unwrap();
+    //     assert!(is_satisfied);
+    //     assert_eq!(public_input, input_value, "Public input diverged for circuit {} of type {}", idx, descr);
+    //     // if public_input != input_value {
+    //     //     println!("Public input diverged for circuit {} of type {}", idx, descr);
+    //     // }
+    // }
 }

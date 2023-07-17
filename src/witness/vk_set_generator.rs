@@ -1,13 +1,13 @@
-use super::oracle::VmWitnessOracle;
-use super::recursive_aggregation::*;
 use super::*;
-use crate::abstract_zksync_circuit::concrete_circuits::*;
-use crate::bellman::plonk::better_better_cs::proof::Proof;
-use crate::bellman::plonk::better_better_cs::setup::VerificationKey;
+use super::oracle::VmWitnessOracle;
 use crate::toolset::GeometryConfig;
-use sync_vm::recursion::recursion_tree::NUM_LIMBS;
+use super::recursive_aggregation::*;
 use sync_vm::testing::Bn256;
 use sync_vm::testing::Fr;
+use crate::bellman::plonk::better_better_cs::setup::VerificationKey;
+use crate::bellman::plonk::better_better_cs::proof::Proof;
+use sync_vm::recursion::recursion_tree::NUM_LIMBS;
+use crate::abstract_zksync_circuit::concrete_circuits::*;
 
 // create circuits WITHOUT witness, but with all the parameters
 // to generate verification keys. It needs geometry and some valid proofs for padding
@@ -16,34 +16,28 @@ pub fn circuits_for_vk_generation(
     splitting_factor_for_leafs: usize,
     splitting_factor_for_nodes: usize,
     scheduler_upper_bound: u32,
-    padding_aggregations: Vec<(
-        [Fr; NUM_LIMBS],
-        [Fr; NUM_LIMBS],
-        [Fr; NUM_LIMBS],
-        [Fr; NUM_LIMBS],
-    )>,
+    padding_aggregations: Vec<([Fr; NUM_LIMBS], [Fr; NUM_LIMBS], [Fr; NUM_LIMBS], [Fr; NUM_LIMBS])>,
 ) -> Vec<ZkSyncCircuit<Bn256, VmWitnessOracle<Bn256>>> {
     // scheduler
     let mut result = vec![];
 
-    use sync_vm::circuit_structures::utils::bn254_rescue_params;
-    use sync_vm::recursion::aggregation::VkInRns;
-    use sync_vm::recursion::get_base_placeholder_point_for_accumulators;
     use sync_vm::recursion::get_prefered_committer;
-    use sync_vm::recursion::get_prefered_rns_params;
-    use sync_vm::recursion::recursion_tree::AggregationParameters;
+    use sync_vm::circuit_structures::utils::bn254_rescue_params;
     use sync_vm::recursion::transcript::GenericTranscriptGadget;
+    use sync_vm::recursion::recursion_tree::AggregationParameters;
+    use sync_vm::recursion::get_base_placeholder_point_for_accumulators;
+    use sync_vm::recursion::aggregation::VkInRns;
+    use sync_vm::recursion::get_prefered_rns_params;
 
     let rns_params = get_prefered_rns_params();
     let round_function = get_prefered_committer();
     let sponge_params = bn254_rescue_params();
 
-    let aggregation_params =
-        AggregationParameters::<_, GenericTranscriptGadget<_, _, 2, 3>, _, 2, 3> {
-            base_placeholder_point: get_base_placeholder_point_for_accumulators(),
-            hash_params: sponge_params.clone(),
-            transcript_params: sponge_params.clone(),
-        };
+    let aggregation_params = AggregationParameters::<_, GenericTranscriptGadget<_, _, 2, 3>, _, 2, 3> {
+        base_placeholder_point: get_base_placeholder_point_for_accumulators(),
+        hash_params: sponge_params.clone(),
+        transcript_params: sponge_params.clone(),
+    };
 
     let (padding_vk, padding_proofs) = get_paddings();
 
@@ -53,11 +47,14 @@ pub fn circuits_for_vk_generation(
 
     for proof in padding_proofs.iter() {
         let is_valid = crate::bellman::plonk::better_better_cs::verifier::verify::<
-            Bn256,
-            _,
-            RescueTranscriptForRecursion<'_>,
-        >(&padding_vk, proof, Some(transcript_params))
-        .expect("must try to verify a proof");
+            Bn256, 
+            _, 
+            RescueTranscriptForRecursion<'_>
+        >(
+            &padding_vk, 
+            proof, 
+            Some(transcript_params)
+        ).expect("must try to verify a proof");
         assert!(is_valid, "padding proof and VK must be valid");
     }
 
@@ -65,7 +62,7 @@ pub fn circuits_for_vk_generation(
         // add
         let vk_in_rns = VkInRns {
             vk: Some(padding_vk.clone()),
-            rns_params: &rns_params,
+            rns_params: &rns_params
         };
         use sync_vm::traits::ArithmeticEncodable;
         let encoding = vk_in_rns.encode().unwrap();
@@ -90,12 +87,10 @@ pub fn circuits_for_vk_generation(
     let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::Scheduler(circuit);
     result.push(circuit);
 
-    let (padding_proofs, padding_public_inputs) =
-        get_filled_paddings(splitting_factor_for_nodes, &padding_proofs);
+    let (padding_proofs, padding_public_inputs) = get_filled_paddings(splitting_factor_for_nodes, &padding_proofs);
 
     use sync_vm::glue::optimizable_queue::simulate_variable_length_hash;
-    let padding_vk_committment =
-        simulate_variable_length_hash(&padding_vk_encoding, &round_function);
+    let padding_vk_committment = simulate_variable_length_hash(&padding_vk_encoding, &round_function);
 
     // node aggregation
     let circuit = NodeAggregationCircuit::new(
@@ -119,8 +114,7 @@ pub fn circuits_for_vk_generation(
     let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::NodeAggregation(circuit);
     result.push(circuit);
 
-    let (padding_proofs, padding_public_inputs) =
-        get_filled_paddings(splitting_factor_for_leafs, &padding_proofs);
+    let (padding_proofs, padding_public_inputs) = get_filled_paddings(splitting_factor_for_leafs, &padding_proofs);
 
     // leaf aggregation
     let circuit = LeafAggregationCircuit::new(
@@ -144,18 +138,18 @@ pub fn circuits_for_vk_generation(
 
     // VM
     let circuit = VMMainCircuit::new(
-        None,
-        geometry.cycles_per_vm_snapshot as usize,
-        round_function.clone(),
-        None,
+        None, 
+        geometry.cycles_per_vm_snapshot as usize, 
+        round_function.clone(), 
+        None
     );
     let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::MainVM(circuit);
     result.push(circuit);
-
+    
     // decommits sorter
     let circuit = CodeDecommittsSorterCircuit::new(
         None,
-        geometry.cycles_per_code_decommitter_sorter as usize,
+        geometry.limit_for_code_decommitter_sorter as usize,
         round_function.clone(),
         None,
     );
@@ -221,7 +215,7 @@ pub fn circuits_for_vk_generation(
     );
     let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::RAMPermutation(circuit);
     result.push(circuit);
-
+    
     // storage sorter
     let circuit = StorageSorterCircuit::new(
         None,
@@ -236,10 +230,7 @@ pub fn circuits_for_vk_generation(
     // storage application
     let circuit = StorageApplicationCircuit::new(
         None,
-        (
-            geometry.cycles_per_storage_application as usize,
-            USE_BLAKE2S_EXTRA_TABLES,
-        ),
+        (geometry.cycles_per_storage_application as usize, USE_BLAKE2S_EXTRA_TABLES),
         round_function.clone(),
         None,
     );
@@ -253,8 +244,7 @@ pub fn circuits_for_vk_generation(
         round_function.clone(),
         None,
     );
-    let circuit =
-        ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::InitialWritesPubdataHasher(circuit);
+    let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::InitialWritesPubdataHasher(circuit);
     result.push(circuit);
 
     // repeated writes rehasher
@@ -264,8 +254,7 @@ pub fn circuits_for_vk_generation(
         round_function.clone(),
         None,
     );
-    let circuit =
-        ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::RepeatedWritesPubdataHasher(circuit);
+    let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::RepeatedWritesPubdataHasher(circuit);
     result.push(circuit);
 
     // events sorter
@@ -302,16 +291,13 @@ pub fn circuits_for_vk_generation(
     // l1 merklizer
     let circuit = L1MessagesMerklizerCircuit::new(
         None,
-        (
-            geometry.limit_for_l1_messages_merklizer as usize,
-            L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH,
-        ),
+        (geometry.limit_for_l1_messages_merklizer as usize, L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH),
         round_function.clone(),
         None,
     );
     let circuit = ZkSyncCircuit::<Bn256, VmWitnessOracle<Bn256>>::L1MessagesMerklier(circuit);
     result.push(circuit);
-
+    
     // check ordering
     let mut idx = -1;
     for el in result.iter() {

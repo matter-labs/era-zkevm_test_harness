@@ -2,159 +2,126 @@ use super::*;
 
 #[cfg(test)]
 mod test {
-    use crate::abstract_zksync_circuit::concrete_circuits::{ZkSyncProof, ZkSyncVerificationKey};
     use std::io::Read;
-    use sync_vm::{
-        franklin_crypto::bellman::plonk::better_better_cs::cs::Circuit,
-        testing::create_test_artifacts_with_optimized_gate,
-    };
-
     use super::*;
+    use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 
     #[test]
     fn read_and_run() {
-        // let proof_file_name = "132.bin";
-        // let mut content = std::fs::File::open(proof_file_name).unwrap();
-        // let mut buffer = vec![];
-        // content.read_to_end(&mut buffer).unwrap();
-        // let proof: ZkSyncProof<Bn256> = bincode::deserialize(&buffer).unwrap();
-        // match &proof {
-        //     ZkSyncProof::Scheduler(inner) => {
-        //         dbg!(&inner.inputs);
-        //     },
-        //     ZkSyncProof::MainVM(inner) => {
-        //         dbg!(&inner.inputs);
-        //         dbg!(&inner.n);
-        //     }
-        //     _ => {}
-        // }
-
-        // let verification_key_file_name = "verification_3_key.json";
-        // let mut content = std::fs::File::open(verification_key_file_name).unwrap();
-        // let mut buffer = vec![];
-        // content.read_to_end(&mut buffer).unwrap();
-        // use crate::bellman::plonk::better_better_cs::setup::VerificationKey;
-        // let vk: VerificationKey<Bn256, ZkSyncCircuit<Bn256, VmWitnessOracle<Bn256>>> = serde_json::from_slice(&buffer).unwrap();
-        // let vk = ZkSyncVerificationKey::MainVM(vk);
-        // // let vk: ZkSyncVerificationKey<Bn256> = serde_json::from_slice(&buffer).unwrap();
-        // match &vk {
-        //     ZkSyncVerificationKey::Scheduler(inner) => {
-        //         dbg!(&inner);
-        //     },
-        //     _ => {}
-        // }
-
-        // let is_valid = vk.verify_proof(&proof);
-        // assert!(is_valid);
-
-        let circuit_file_name = "1204_132_Main VM_BasicCircuits.bin";
-        // let circuit_file_name = "prover_jobs_1204_132_Main VM_BasicCircuits.bin";
+        let circuit_file_name = "prover_jobs_fri_38193_240_1_BasicCircuits_0_raw.bin";
 
         let mut content = std::fs::File::open(circuit_file_name).unwrap();
         let mut buffer = vec![];
         content.read_to_end(&mut buffer).unwrap();
-        let circuit: ZkSyncCircuit<Bn256, VmWitnessOracle<Bn256>> =
-            bincode::deserialize(&buffer).unwrap();
 
-        use sync_vm::franklin_crypto::bellman::Field;
-        let mut expected_input = sync_vm::testing::Fr::zero();
+        type BaseLayerCircuit = ZkSyncBaseLayerCircuit<GoldilocksField, VmWitnessOracle<GoldilocksField>, ZkSyncDefaultRoundFunction>;
 
-        match &circuit {
-            ZkSyncCircuit::KeccakRoundFunction(inner) => {
-                let inner = inner.clone();
-                let inner = inner.witness.take().unwrap();
-                dbg!(&inner.closed_form_input.start_flag);
-                dbg!(&inner.closed_form_input.completion_flag);
-                dbg!(&inner.closed_form_input.observable_input);
-                dbg!(&inner.closed_form_input.hidden_fsm_input);
-            }
-            ZkSyncCircuit::Sha256RoundFunction(inner) => {
-                let inner = inner.clone();
-                let inner = inner.witness.take().unwrap();
-                dbg!(&inner);
-            }
-            ZkSyncCircuit::StorageApplication(inner) => {
-                let inner = inner.clone();
-                let inner = inner.witness.take().unwrap();
-                assert_eq!(inner.storage_queue_witness.wit.len(), inner.merkle_paths.len());
-                assert_eq!(inner.storage_queue_witness.wit.len(), inner.leaf_indexes_for_reads.len());
-                dbg!(&inner.closed_form_input.start_flag);
-                println!("0x{:032x}", inner.closed_form_input.observable_input.initial_root[0]);
-                println!("0x{:032x}", inner.closed_form_input.observable_input.initial_root[1]);
-                println!("0x{:032x}", inner.closed_form_input.hidden_fsm_input.root_hash[0]);
-                println!("0x{:032x}", inner.closed_form_input.hidden_fsm_input.root_hash[1]);
-                // dbg!(&inner);
-            }
-            ZkSyncCircuit::MainVM(inner) => {
-                let inner = inner.clone();
-                dbg!(&inner.config);
-                panic!();
-                let inner = inner.witness.take().unwrap();
-                dbg!(&inner);
-                let (public_input_committment, _) =
-                    simulate_public_input_value_from_witness(inner.closed_form_input);
+        let mut circuit: BaseLayerCircuit = bincode::deserialize(&buffer).unwrap();
+        // circuit.debug_witness();
 
-                expected_input = public_input_committment;
+        match &mut circuit {
+            ZkSyncBaseLayerCircuit::MainVM(inner) => {
+                let witness = inner.clone_witness().unwrap();
+                dbg!(witness.closed_form_input.hidden_fsm_input.context_composite_u128);
+                dbg!(witness.closed_form_input.hidden_fsm_output.context_composite_u128);
             }
-            ZkSyncCircuit::RAMPermutation(inner) => {
-                // let inner = inner.clone();
-                // let inner = inner.witness.take().unwrap();
+            ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {
+                let witness = inner.clone_witness().unwrap();
+                let _current_config = (*inner.config).clone();
+                dbg!(_current_config);
+                inner.config = std::sync::Arc::new(117500);
+                dbg!(&*inner.config);
 
-                // let (public_input_committment, _) = simulate_public_input_value_from_witness(inner.closed_form_input);
+                assert_eq!(witness.closed_form_input.start_flag, true);
+                assert_eq!(witness.closed_form_input.completion_flag, true);
 
-                // expected_input = public_input_committment;
-            }
-            _ => {
-                // unreachable!()
-            }
+                let initial_items = witness.initial_queue_witness.elements;
+                let sorted_items = witness.sorted_queue_witness.elements;
+                dbg!(initial_items.len());
+                dbg!(sorted_items.len());
+                
+                let mut tmp: Vec<_> = initial_items.clone().into();
+                tmp.sort_by(|a, b| {
+                    match a.0.code_hash.cmp(&b.0.code_hash) {
+                        std::cmp::Ordering::Equal => a.0.timestamp.cmp(&b.0.timestamp),
+                        a @ _ => a,
+                    }
+                });
+
+                let other: Vec<_> = sorted_items.clone().into();
+
+                for (idx, (a, b)) in tmp.into_iter().zip(other.into_iter()).enumerate() {
+                    assert_eq!(a.0, b.0, "failed at index {}", idx);
+                }
+
+                // assert_eq!(tmp, other);
+
+                // self-check that we had a proper oracle
+                let mut tmp: Option<(U256, u32, u32)> = None;
+                for (query, _) in sorted_items.iter() {
+                    if let Some((hash, page, timestamp)) = tmp.as_mut() {
+                        if *hash == query.code_hash {
+                            assert_eq!(*page, query.page);
+                            assert!(query.timestamp > *timestamp);
+                        } else {
+                            assert!(query.code_hash >= *hash);
+                            *hash = query.code_hash;
+                            *page = query.page;
+                            *timestamp = query.timestamp;
+                        }
+                    } else {
+                        tmp = Some((query.code_hash, query.page, query.timestamp));
+                    }
+                }
+            },
+            _ => {}
         }
 
-        dbg!(circuit.short_description());
-        dbg!(expected_input);
-
-        let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
-        circuit.synthesize(&mut cs).unwrap();
-        dbg!(&cs.input_assingments);
-        println!("Checking if satisfied");
-        let is_satisified = cs.is_satisfied();
-        assert!(is_satisified);
-
-        // // let worker = crate::sync_vm::franklin_crypto::bellman::worker::Worker::new();
-        // // let setup = cs.create_setup(&worker).expect("must create setup");
-
-        // let sponge_params = bn254_rescue_params();
-        // let rns_params = get_prefered_rns_params();
-        // let transcript_params = (&sponge_params, &rns_params);
-
-        // // this only works for basic circuits
-
-        // use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
-        // // let vk =
-        // // circuit_testing::create_vk::<Bn256, _, PlonkCsWidth4WithNextStepAndCustomGatesParams>(
-        // //     circuit.clone(),
-        // // )
-        // // .unwrap();
-
-        // use crate::sync_vm::recursion::RescueTranscriptForRecursion;
-        // let (_proof, _vk) = circuit_testing::prove_only_circuit_for_params::<
-        //     Bn256,
-        //     _,
-        //     PlonkCsWidth4WithNextStepAndCustomGatesParams,
-        //     RescueTranscriptForRecursion<'_>,
-        // >(circuit.clone(), Some(transcript_params), vk.clone(), None)
-        // .unwrap();
+        base_test_circuit(circuit);
     }
 
     #[test]
-    fn artificial_padding() {
-        use crate::franklin_crypto::plonk::circuit::allocated_num::Num;
-        use sync_vm::franklin_crypto::bellman::Field;
-        use sync_vm::testing::Fr;
+    fn test_and_run_recursive() {
+        // let file_name = "closed_form_inputs_35828_1_raw.bin";
+        // let mut content = std::fs::File::open(file_name).unwrap();
+        // let mut buffer = vec![];
+        // content.read_to_end(&mut buffer).unwrap();
 
-        let (mut cs, _, _) = create_test_artifacts_with_optimized_gate();
-        let a = Num::alloc(&mut cs, Some(Fr::one())).unwrap();
-        let b = Num::alloc(&mut cs, Some(Fr::one())).unwrap();
-        let _c = a.mul(&mut cs, &b).unwrap();
-        cs.finalize_to_size_log_2(26);
+        // let t: RecursionQueueSimulator<GoldilocksField> = bincode::deserialize(&buffer).unwrap();
+        // dbg!(&t);
+
+        let circuit_file_name = "prover_jobs_fri_38142_0_3_NodeAggregation_1_raw.bin";
+
+        let mut content = std::fs::File::open(circuit_file_name).unwrap();
+        let mut buffer = vec![];
+        content.read_to_end(&mut buffer).unwrap();
+
+        let mut circuit: ZkSyncRecursiveLayerCircuit = bincode::deserialize(&buffer).unwrap();
+        // circuit.debug_witness();
+
+        match &mut circuit {
+            ZkSyncRecursiveLayerCircuit::SchedulerCircuit(inner) => {
+                dbg!(&inner.witness.leaf_layer_parameters);
+                for el in inner.witness.proof_witnesses.iter() {
+                    let vk = inner.witness.node_layer_vk_witness.clone();
+                    // let vk = ZkSyncRecursionLayerVerificationKey::from_inner(ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8, vk);
+                    // let proof = ZkSyncRecursionLayerProof::from_inner(ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8, el.clone());
+                    let valid = verify_recursion_layer_proof_for_type::<NoPow>(ZkSyncRecursionLayerStorageType::NodeLayerCircuit, el, &vk);
+                    assert!(valid);
+                }
+            },
+            ZkSyncRecursiveLayerCircuit::NodeLayerCircuit(inner) => {
+                let vk = inner.witness.vk_witness.clone();
+                for el in inner.witness.proof_witnesses.iter() {
+                    // let vk = ZkSyncRecursionLayerVerificationKey::from_inner(ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8, vk);
+                    // let proof = ZkSyncRecursionLayerProof::from_inner(ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8, el.clone());
+                    let valid = verify_recursion_layer_proof_for_type::<NoPow>(ZkSyncRecursionLayerStorageType::NodeLayerCircuit, el, &vk);
+                    assert!(valid);
+                }
+            },
+            _ => {}
+        }
+
+        test_recursive_circuit(circuit);
     }
 }

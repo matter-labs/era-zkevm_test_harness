@@ -1,69 +1,89 @@
-use crate::bellman::bn256::Bn256;
+use std::collections::VecDeque;
+
+use crate::blake2::Blake2s256;
+use crate::boojum::algebraic_props::round_function::AlgebraicRoundFunction;
+use crate::boojum::gadgets::traits::round_function::BuildableCircuitRoundFunction;
+use crate::boojum::{
+    cs::implementations::{prover::ProofConfig, verifier::VerificationKey},
+    field::{goldilocks::GoldilocksField, SmallField},
+};
 use crate::entry_point::*;
-use crate::franklin_crypto::plonk::circuit::allocated_num::Num;
 use crate::toolset::create_tools;
 use crate::toolset::GeometryConfig;
 use crate::witness::full_block_artifact::BlockBasicCircuits;
+use crate::witness::full_block_artifact::BlockBasicCircuitsPublicCompactFormsWitnesses;
 use crate::witness::full_block_artifact::BlockBasicCircuitsPublicInputs;
 use crate::witness::oracle::create_artifacts_from_tracer;
 use crate::witness::tree::BinarySparseStorageTree;
 use crate::witness::tree::ZKSyncTestingTree;
 use crate::witness::tree::ZkSyncStorageLeaf;
+use crate::zk_evm::abstractions::Storage;
+use crate::zk_evm::abstractions::*;
+use crate::zk_evm::aux_structures::*;
+use crate::zk_evm::bytecode_to_code_hash;
+use crate::zk_evm::contract_bytecode_to_words;
+use crate::zk_evm::witness_trace::VmWitnessTracer;
+use crate::zk_evm::GenericNoopTracer;
+use crate::zkevm_circuits::{
+    base_structures::vm_state::FULL_SPONGE_QUEUE_STATE_WIDTH,
+    scheduler::input::SchedulerCircuitInstanceWitness,
+};
 use crate::{
     ethereum_types::{Address, U256},
-    utils::calldata_to_aligned_data,
-    witness::full_block_artifact::FullBlockArtifacts,
+    utils::{calldata_to_aligned_data, u64_as_u32_le},
 };
 use ::tracing;
-use crate::blake2::Blake2s256;
-use sync_vm::scheduler::block_header::*;
-use sync_vm::testing::create_test_artifacts_with_optimized_gate;
-use sync_vm::{
-    circuit_structures::traits::CircuitArithmeticRoundFunction,
-    franklin_crypto::plonk::circuit::tables::inscribe_default_range_table_for_bit_width_over_first_three_columns,
-    glue::code_unpacker_sha256::memory_query_updated::MemoryQueriesQueue,
-    scheduler::SchedulerCircuitInstanceWitness,
-};
-use zk_evm::abstractions::Storage;
-use zk_evm::abstractions::*;
-use zk_evm::aux_structures::*;
-use zk_evm::bytecode_to_code_hash;
-use zk_evm::contract_bytecode_to_words;
-use zk_evm::witness_trace::VmWitnessTracer;
-use zk_evm::GenericNoopTracer;
+use circuit_definitions::ZkSyncDefaultRoundFunction;
 
-use sync_vm::circuit_structures::bytes32::Bytes32;
-use sync_vm::scheduler::{NUM_MEMORY_QUERIES_TO_VERIFY, SCHEDULER_TIMESTAMP};
-use zk_evm::zkevm_opcode_defs::FatPointer;
+pub const SCHEDULER_TIMESTAMP: u32 = 1;
+
+use crate::boojum::field::FieldExtension;
+use crate::boojum::gadgets::num::Num;
+use crate::boojum::gadgets::recursion::recursive_tree_hasher::RecursiveTreeHasher;
+use crate::boojum::gadgets::traits::allocatable::*;
+use crate::witness::full_block_artifact::FullBlockArtifacts;
+use crate::witness::oracle::VmInstanceWitness;
+use crate::zkevm_circuits::scheduler::block_header::BlockAuxilaryOutputWitness;
+use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 
 /// This is a testing interface that basically will
 /// setup the environment and will run out-of-circuit and then in-circuit
 /// and perform intermediate tests
 pub fn run<
-    R: CircuitArithmeticRoundFunction<Bn256, 2, 3, StateElement = Num<Bn256>>,
-    S: Storage,
-    M: Memory,
+    F: SmallField,
+    R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
+    H: RecursiveTreeHasher<F, Num<F>>,
+    EXT: FieldExtension<2, BaseField = F>,
+    S: Storage
 >(
-    caller: Address,                 // for real block must be zero
-    entry_point_address: Address,    // for real block must be the bootloader
-    entry_point_code: Vec<[u8; 32]>, // for read lobkc must be a bootloader code
-    initial_heap_content: Vec<u8>,   // bootloader starts with non-deterministic heap
+caller: Address, // for real block must be zero
+entry_point_address: Address, // for real block must be the bootloader
+entry_point_code: Vec<[u8; 32]>, // for read lobkc must be a bootloader code
+initial_heap_content: Vec<u8>, // bootloader starts with non-deterministic heap
     zk_porter_is_available: bool,
     default_aa_code_hash: U256,
-    used_bytecodes: std::collections::HashMap<U256, Vec<[u8; 32]>>, // auxilary information to avoid passing a full set of all used codes
-    ram_verification_queries: Vec<(u32, U256)>, // we may need to check that after the bootloader's memory is filled
+used_bytecodes: std::collections::HashMap<U256, Vec<[u8; 32]>>, // auxilary information to avoid passing a full set of all used codes
+ram_verification_queries: Vec<(u32, U256)>, // we may need to check that after the bootloader's memory is filled
     cycle_limit: usize,
-    round_function: R, // used for all queues implementation
+round_function: R, // used for all queues implementation
     geometry: GeometryConfig,
     storage: S,
-    memory: M,
     tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
-    // ) -> FullBlockArtifacts<Bn256> {
 ) -> (
-    BlockBasicCircuits<Bn256>,
-    BlockBasicCircuitsPublicInputs<Bn256>,
-    SchedulerCircuitInstanceWitness<Bn256>,
-) {
+    BlockBasicCircuits<F, R>,
+    BlockBasicCircuitsPublicInputs<F>,
+    BlockBasicCircuitsPublicCompactFormsWitnesses<F>,
+    SchedulerCircuitInstanceWitness<F, H, EXT>,
+    BlockAuxilaryOutputWitness<F>,
+)
+    where [(); <crate::zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <crate::zkevm_circuits::base_structures::memory_query::MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <crate::zkevm_circuits::base_structures::decommit_query::DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <crate::boojum::gadgets::u256::UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <crate::boojum::gadgets::u256::UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN + 1]:,
+    [(); <crate::zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <crate::zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+{
     assert!(zk_porter_is_available == false);
     assert_eq!(
         ram_verification_queries.len(),
@@ -76,7 +96,7 @@ pub fn run<
 
     let bytecode_hash = bytecode_to_code_hash(&entry_point_code).unwrap();
 
-    let mut tools = create_tools(storage, memory, &geometry);
+    let mut tools = create_tools(storage, &geometry);
 
     // fill the tools
     let mut to_fill = vec![];
@@ -99,14 +119,15 @@ pub fn run<
     let entry_point_decommittment_query = DecommittmentQuery {
         hash: entry_point_code_hash_as_u256,
         timestamp: Timestamp(SCHEDULER_TIMESTAMP),
-        memory_page: MemoryPage(zk_evm::zkevm_opcode_defs::BOOTLOADER_CODE_PAGE),
+        memory_page: MemoryPage(crate::zk_evm::zkevm_opcode_defs::BOOTLOADER_CODE_PAGE),
         decommitted_length: entry_point_code.len() as u16,
         is_fresh: true,
     };
 
     let (entry_point_decommittment_query, entry_point_decommittment_query_witness) = tools
         .decommittment_processor
-        .decommit_into_memory(0, entry_point_decommittment_query, &mut tools.memory);
+        .decommit_into_memory(0, entry_point_decommittment_query, &mut tools.memory)
+        .expect("must decommit the extry point");
     let entry_point_decommittment_query_witness = entry_point_decommittment_query_witness.unwrap();
     tools.witness_tracer.add_decommittment(
         0,
@@ -130,11 +151,10 @@ pub fn run<
             timestamp: Timestamp(0),
             location: MemoryLocation {
                 memory_type: MemoryType::Heap,
-                page: MemoryPage(zk_evm::zkevm_opcode_defs::BOOTLOADER_HEAP_PAGE),
+                page: MemoryPage(crate::zk_evm::zkevm_opcode_defs::BOOTLOADER_HEAP_PAGE),
                 index: MemoryIndex(idx as u32),
             },
             rw_flag: true,
-            is_pended: false,
             value: el,
             value_is_pointer: false,
         };
@@ -142,31 +162,24 @@ pub fn run<
         out_of_circuit_vm.memory.execute_partial_query(0, query);
     }
 
-    let mut memory_verification_queries: Vec<
-        sync_vm::glue::code_unpacker_sha256::memory_query_updated::MemoryQueryWitness<Bn256>,
-    > = vec![];
+    // let mut memory_verification_queries: Vec<sync_vm::glue::code_unpacker_sha256::memory_query_updated::MemoryQueryWitness<Bn256>> = vec![];
 
-    // heap content verification queries
-    for (idx, el) in ram_verification_queries.into_iter() {
-        let query = MemoryQuery {
-            timestamp: Timestamp(SCHEDULER_TIMESTAMP),
-            location: MemoryLocation {
-                memory_type: MemoryType::Heap,
-                page: MemoryPage(zk_evm::zkevm_opcode_defs::BOOTLOADER_HEAP_PAGE),
-                index: MemoryIndex(idx as u32),
-            },
-            rw_flag: false,
-            is_pended: false,
-            value: el,
-            value_is_pointer: false,
-        };
-        out_of_circuit_vm.witness_tracer.add_memory_query(0, query);
-        out_of_circuit_vm.memory.execute_partial_query(0, query);
+    // // heap content verification queries
+    // for (idx, el) in ram_verification_queries.into_iter() {
+    //     let query = MemoryQuery {
+    //         timestamp: Timestamp(SCHEDULER_TIMESTAMP),
+    //         location: MemoryLocation { memory_type: MemoryType::Heap, page: MemoryPage(zk_evm::zkevm_opcode_defs::BOOTLOADER_HEAP_PAGE), index: MemoryIndex(idx as u32) },
+    //         rw_flag: false,
+    //         value: el,
+    //         value_is_pointer: false,
+    //     };
+    //     out_of_circuit_vm.witness_tracer.add_memory_query(0, query);
+    //     out_of_circuit_vm.memory.execute_partial_query(0, query);
 
-        use crate::encodings::initial_storage_write::CircuitEquivalentReflection;
-        let as_vm_query = query.reflect();
-        memory_verification_queries.push(as_vm_query);
-    }
+    //     use crate::encodings::initial_storage_write::CircuitEquivalentReflection;
+    //     let as_vm_query = query.reflect();
+    //     memory_verification_queries.push(as_vm_query);
+    // }
 
     let mut tracer = GenericNoopTracer::<_>::new();
     // tracing::debug!("Running out of circuit for {} cycles", cycle_limit);
@@ -174,7 +187,7 @@ pub fn run<
     let mut next_snapshot_will_capture_end_of_execution = false;
     let mut snapshots_len = None;
     for _cycle in 0..cycle_limit {
-        if out_of_circuit_vm.execution_has_ended() && out_of_circuit_vm.is_any_pending() == false {
+        if out_of_circuit_vm.execution_has_ended() {
             // we formally have to let VM run as it resets some of the state in a process
             if next_snapshot_will_capture_end_of_execution == false {
                 next_snapshot_will_capture_end_of_execution = true;
@@ -186,51 +199,15 @@ pub fn run<
                 }
             }
         }
-        out_of_circuit_vm.cycle(&mut tracer);
+        out_of_circuit_vm
+            .cycle(&mut tracer)
+            .expect("cycle should finish succesfully");
     }
 
     assert!(
         out_of_circuit_vm.execution_has_ended(),
         "VM execution didn't finish"
     );
-    assert!(
-        out_of_circuit_vm.is_any_pending() == false,
-        "VM execution didn't process pending operations"
-    );
-    if out_of_circuit_vm.local_state.callstack.current.pc != 0 {
-        let r1_value = out_of_circuit_vm.local_state.registers[0].value;
-        let r1_fat_ptr = FatPointer::from_u256(r1_value);
-        dbg!(&r1_fat_ptr);
-        let mut aligned_returndata = vec![];
-        let start_word = r1_fat_ptr.start / 32;
-        let mut end_word = (r1_fat_ptr.start + r1_fat_ptr.length) / 32;
-        if (r1_fat_ptr.start + r1_fat_ptr.length) % 32 != 0 {
-            end_word += 1;
-        }
-
-        for word in start_word..end_word {
-            let query = MemoryQuery { 
-                timestamp: Timestamp(0), 
-                location: MemoryLocation { 
-                    memory_type: MemoryType::Heap, 
-                    page: MemoryPage(r1_fat_ptr.memory_page), 
-                    index: MemoryIndex(word)
-                }, 
-                rw_flag: false, 
-                is_pended: false, 
-                value_is_pointer: false, 
-                value: U256::zero() 
-            };
-            let memory_content = out_of_circuit_vm.memory.execute_partial_query(0, query);
-            let mut buffer = [0u8; 32];
-            memory_content.value.to_big_endian(&mut buffer);
-            aligned_returndata.extend(buffer);
-        }
-
-        let unaligned_returndata = aligned_returndata[((r1_fat_ptr.start as usize) % 32)..][..(r1_fat_ptr.length as usize)].to_vec();
-        panic!("root frame ended up with panic with returndata 0x{}", hex::encode(&unaligned_returndata));
-    }
-    
     assert_eq!(
         out_of_circuit_vm.local_state.callstack.current.pc, 0,
         "root frame ended up with panic"
@@ -264,20 +241,21 @@ pub fn run<
     );
 
     assert!(artifacts.special_initial_decommittment_queries.len() == 1);
-    use sync_vm::scheduler::queues::SpongeLikeQueueStateWitness;
-    let memory_state_after_bootloader_heap_writes = if num_non_deterministic_heap_queries == 0 {
-        // empty
-        SpongeLikeQueueStateWitness::<Bn256, 3>::empty()
-    } else {
-        let full_info = &artifacts.all_memory_queue_states[num_non_deterministic_heap_queries - 1];
-        let sponge_state = full_info.tail;
-        let length = full_info.num_items;
 
-        SpongeLikeQueueStateWitness::<Bn256, 3> {
-            length,
-            sponge_state,
-        }
-    };
+    // use sync_vm::scheduler::queues::SpongeLikeQueueStateWitness;
+    // let memory_state_after_bootloader_heap_writes = if num_non_deterministic_heap_queries == 0 {
+    //     // empty
+    //     SpongeLikeQueueStateWitness::<Bn256, 3>::empty()
+    // } else {
+    //     let full_info = &artifacts.all_memory_queue_states[num_non_deterministic_heap_queries-1];
+    //     let sponge_state = full_info.tail;
+    //     let length = full_info.num_items;
+
+    //     SpongeLikeQueueStateWitness::<Bn256, 3> {
+    //         length,
+    //         sponge_state
+    //     }
+    // };
 
     use crate::witness::postprocessing::create_leaf_level_circuits_and_scheduler_witness;
 
@@ -288,116 +266,115 @@ pub fn run<
             instance_oracles,
             artifacts,
             geometry,
+            &round_function,
         );
 
-    let scheduler_circuit_witness = {
-        use sync_vm::circuit_structures::bytes32::Bytes32Witness;
-
-        fn u256_to_bytes32witness_be<E: crate::bellman::Engine>(value: U256) -> Bytes32Witness<E> {
-            let mut buffer = [0u8; 32];
-            value.to_big_endian(&mut buffer);
-            Bytes32Witness::from_bytes_array(&buffer)
-        }
+    let (scheduler_circuit_witness, aux_data) = {
+        use crate::zkevm_circuits::scheduler::block_header::*;
+        use crate::zkevm_circuits::scheduler::input::*;
 
         let prev_rollup_state = PerShardStateWitness {
-            enumeration_counter: initial_rollup_enumeration_counter,
-            state_root: Bytes32Witness::from_bytes_array(&initial_rollup_root),
-            _marker: std::marker::PhantomData,
+            enumeration_counter: u64_as_u32_le(initial_rollup_enumeration_counter),
+            state_root: initial_rollup_root,
         };
 
         let prev_porter_state = PerShardStateWitness {
-            enumeration_counter: 0,
-            state_root: Bytes32Witness::from_bytes_array(&[0u8; 32]),
-            _marker: std::marker::PhantomData,
+            enumeration_counter: [0; 2],
+            state_root: [0u8; 32],
         };
 
         let previous_block_passthrough = BlockPassthroughDataWitness {
             per_shard_states: [prev_rollup_state, prev_porter_state],
-            _marker: std::marker::PhantomData,
         };
 
         // now we need parameters and aux
         // parameters
+
         let block_meta_parameters = BlockMetaParametersWitness {
-            bootloader_code_hash: u256_to_bytes32witness_be(entry_point_code_hash_as_u256),
-            default_aa_code_hash: u256_to_bytes32witness_be(default_aa_code_hash),
+            bootloader_code_hash: entry_point_code_hash_as_u256,
+            default_aa_code_hash: default_aa_code_hash,
             zkporter_is_available: zk_porter_is_available,
-            _marker: std::marker::PhantomData,
         };
+
+        use crate::zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
+
+        let t = basic_circuits
+            .events_sorter_circuits
+            .last()
+            .map(|el| {
+                let wit = el.clone_witness().unwrap();
+                wit.closed_form_input
+                    .observable_output
+                    .final_queue_state
+                    .tail
+                    .tail
+            })
+            .unwrap_or([F::ZERO; QUEUE_STATE_WIDTH]);
+
+        use crate::finalize_queue_state;
+        use crate::finalized_queue_state_as_bytes;
+
+        let events_queue_state = finalize_queue_state(t, &round_function);
+        let events_queue_state = finalized_queue_state_as_bytes(events_queue_state);
+
+        let t = basic_circuits
+            .main_vm_circuits
+            .first()
+            .map(|el| {
+                let wit = el.clone_witness().unwrap();
+                wit.closed_form_input
+                    .observable_input
+                    .memory_queue_initial_state
+                    .tail
+            })
+            .unwrap_or([F::ZERO; FULL_SPONGE_QUEUE_STATE_WIDTH]);
+
+        let bootloader_heap_initial_content = finalize_queue_state(t, &round_function);
+        let bootloader_heap_initial_content =
+            finalized_queue_state_as_bytes(bootloader_heap_initial_content);
+
+        let rollup_state_diff_for_compression = basic_circuits
+            .storage_application_circuits
+            .last()
+            .map(|el| {
+                let wit = el.clone_witness().unwrap();
+                wit.closed_form_input
+                    .observable_output
+                    .state_diffs_keccak256_hash
+            })
+            .expect("at least 1 storage application");
+
+        let l1_messages_linear_hash = basic_circuits
+            .l1_messages_hasher_circuits
+            .last()
+            .map(|el| {
+                let wit = el.clone_witness().unwrap();
+                wit.closed_form_input.observable_output.keccak256_hash
+            })
+            .expect("at least 1 L2 to L1 message");
 
         // aux
-        let _aux_data = BlockAuxilaryOutputWitness {
-            l1_messages_linear_hash: basic_circuits
-                .l1_messages_merklizer_circuit
-                .clone_witness()
-                .unwrap()
-                .closed_form_input
-                .observable_output
-                .linear_hash,
-            l1_messages_root: basic_circuits
-                .l1_messages_merklizer_circuit
-                .clone_witness()
-                .unwrap()
-                .closed_form_input
-                .observable_output
-                .root_hash,
-            rollup_initital_writes_pubdata_hash: basic_circuits
-                .initial_writes_hasher_circuit
-                .clone_witness()
-                .unwrap()
-                .closed_form_input
-                .observable_output
-                .pubdata_hash,
-            rollup_repeated_writes_pubdata_hash: basic_circuits
-                .repeated_writes_hasher_circuit
-                .clone_witness()
-                .unwrap()
-                .closed_form_input
-                .observable_output
-                .pubdata_hash,
-            _marker: std::marker::PhantomData,
+        let aux_data = BlockAuxilaryOutputWitness::<F> {
+            events_queue_state,
+            bootloader_heap_initial_content,
+            rollup_state_diff_for_compression,
+            l1_messages_linear_hash: l1_messages_linear_hash,
         };
 
-        let per_circuit_inputs = compact_form_witnesses.clone().into_flattened_set();
-
-        let ram_permutation_full_sorted_state = basic_circuits
-            .ram_permutation_circuits
-            .last()
-            .unwrap()
-            .clone_witness()
-            .unwrap()
-            .closed_form_input
-            .observable_input
-            .sorted_queue_initial_state;
-        let tail = ram_permutation_full_sorted_state.tail;
-        let length = ram_permutation_full_sorted_state.length;
-
-        let ram_permutation_sorted_state = SpongeLikeQueueStateWitness::<Bn256, 3> {
-            length,
-            sponge_state: tail,
-        };
-
-        let decommits_sorter_sorter_state = basic_circuits
-            .code_decommittments_sorter_circuits
-            .last()
-            .unwrap()
-            .clone_witness()
-            .unwrap()
-            .closed_form_input
-            .observable_input
-            .sorted_queue_initial_state;
-        let tail = decommits_sorter_sorter_state.tail;
-        let length = decommits_sorter_sorter_state.length;
-
-        let decommits_sorter_intermediate_queue_state = SpongeLikeQueueStateWitness::<Bn256, 3> {
-            length,
-            sponge_state: tail,
-        };
-
-        use sync_vm::recursion::node_aggregation::NodeAggregationOutputData;
-        use sync_vm::traits::CSWitnessable;
+        use crate::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
+        let per_circuit_inputs: VecDeque<ClosedFormInputCompactFormWitness<F>> =
+            compact_form_witnesses
+                .clone()
+                .into_flattened_set()
+                .into_iter()
+                .map(|el| el.into_inner())
+                .collect();
 
         // let memory_verification_queries: [sync_vm::glue::code_unpacker_sha256::memory_query_updated::MemoryQueryWitness<Bn256>; NUM_MEMORY_QUERIES_TO_VERIFY] = memory_verification_queries.try_into().unwrap();
+
+        use crate::zkevm_circuits::recursion::leaf_layer::input::RecursionLeafParameters;
+        use crate::zkevm_circuits::recursion::VK_COMMITMENT_LENGTH;
+        use crate::zkevm_circuits::scheduler::LEAF_LAYER_PARAMETERS_COMMITMENT_LENGTH;
 
         let scheduler_circuit_witness = SchedulerCircuitInstanceWitness {
             prev_block_data: previous_block_passthrough,
@@ -474,18 +451,6 @@ pub fn run<
                 .unwrap()
                 .closed_form_input
                 .observable_output,
-            initial_writes_rehasher_observable_output: basic_circuits
-                .initial_writes_hasher_circuit
-                .clone_witness()
-                .unwrap()
-                .closed_form_input
-                .observable_output,
-            repeated_writes_rehasher_observable_output: basic_circuits
-                .repeated_writes_hasher_circuit
-                .clone_witness()
-                .unwrap()
-                .closed_form_input
-                .observable_output,
             events_sorter_observable_output: basic_circuits
                 .events_sorter_circuits
                 .last()
@@ -503,13 +468,9 @@ pub fn run<
                 .closed_form_input
                 .observable_output,
             l1messages_linear_hasher_observable_output: basic_circuits
-                .l1_messages_pubdata_hasher_circuit
-                .clone_witness()
+                .l1_messages_hasher_circuits
+                .last()
                 .unwrap()
-                .closed_form_input
-                .observable_output,
-            l1messages_merklizer_observable_output: basic_circuits
-                .l1_messages_merklizer_circuit
                 .clone_witness()
                 .unwrap()
                 .closed_form_input
@@ -524,24 +485,36 @@ pub fn run<
                 .observable_input
                 .rollback_queue_tail_for_block,
             per_circuit_closed_form_inputs: per_circuit_inputs,
-            bootloader_heap_memory_state: memory_state_after_bootloader_heap_writes,
-            ram_sorted_queue_state: ram_permutation_sorted_state,
-            decommits_sorter_intermediate_queue_state: decommits_sorter_intermediate_queue_state,
-            rollup_initital_writes_pubdata_hash: basic_circuits
-                .initial_writes_hasher_circuit
-                .clone_witness()
-                .unwrap()
-                .closed_form_input
-                .observable_output
-                .pubdata_hash,
-            rollup_repeated_writes_pubdata_hash: basic_circuits
-                .repeated_writes_hasher_circuit
-                .clone_witness()
-                .unwrap()
-                .closed_form_input
-                .observable_output
-                .pubdata_hash,
 
+            bootloader_heap_memory_state: basic_circuits
+                .main_vm_circuits
+                .first()
+                .unwrap()
+                .clone_witness()
+                .unwrap()
+                .closed_form_input
+                .observable_input
+                .memory_queue_initial_state,
+            ram_sorted_queue_state: basic_circuits
+                .ram_permutation_circuits
+                .first()
+                .unwrap()
+                .clone_witness()
+                .unwrap()
+                .closed_form_input
+                .observable_input
+                .sorted_queue_initial_state
+                .tail,
+            decommits_sorter_intermediate_queue_state: basic_circuits
+                .code_decommittments_sorter_circuits
+                .first()
+                .unwrap()
+                .clone_witness()
+                .unwrap()
+                .closed_form_input
+                .observable_input
+                .sorted_queue_initial_state
+                .tail,
             events_sorter_intermediate_queue_state: basic_circuits
                 .events_sorter_circuits
                 .first()
@@ -550,7 +523,8 @@ pub fn run<
                 .unwrap()
                 .closed_form_input
                 .observable_input
-                .intermediate_sorted_queue_state,
+                .intermediate_sorted_queue_state
+                .tail,
             l1messages_sorter_intermediate_queue_state: basic_circuits
                 .l1_messages_sorter_circuits
                 .first()
@@ -559,7 +533,8 @@ pub fn run<
                 .unwrap()
                 .closed_form_input
                 .observable_input
-                .intermediate_sorted_queue_state,
+                .intermediate_sorted_queue_state
+                .tail,
             rollup_storage_sorter_intermediate_queue_state: basic_circuits
                 .storage_sorter_circuits
                 .first()
@@ -568,31 +543,36 @@ pub fn run<
                 .unwrap()
                 .closed_form_input
                 .observable_input
-                .intermediate_sorted_queue_state,
+                .intermediate_sorted_queue_state
+                .tail,
 
-            previous_block_meta_hash: Bytes32::placeholder_witness(),
-            previous_block_aux_hash: Bytes32::placeholder_witness(),
-            recursion_node_verification_key_hash: Bytes32::placeholder_witness(),
-            recursion_leaf_verification_key_hash: Bytes32::placeholder_witness(),
-            all_different_circuits_keys_hash: Bytes32::placeholder_witness(),
+            previous_block_meta_hash: [0u8; 32],
+            previous_block_aux_hash: [0u8; 32],
 
-            aggregation_result: NodeAggregationOutputData::placeholder_witness(),
+            node_layer_vk_witness: VerificationKey::default(),
+            leaf_layer_parameters: std::array::from_fn(|_| {
+                RecursionLeafParameters::placeholder_witness()
+            }),
 
-            proof_witnesses: vec![],
-            vk_encoding_witnesses: vec![],
+            proof_witnesses: VecDeque::new(),
         };
 
-        scheduler_circuit_witness
+        (scheduler_circuit_witness, aux_data)
     };
 
     (
         basic_circuits,
         basic_circuits_inputs,
+        compact_form_witnesses,
         scheduler_circuit_witness,
+        aux_data,
     )
 }
 
-pub fn run_with_fixed_params<S: Storage, M: Memory>(
+use crate::boojum::field::goldilocks::GoldilocksExt2;
+use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
+
+pub fn run_with_fixed_params<S: Storage>(
     caller: Address,                 // for real block must be zero
     entry_point_address: Address,    // for real block must be the bootloader
     entry_point_code: Vec<[u8; 32]>, // for read lobkc must be a bootloader code
@@ -604,14 +584,20 @@ pub fn run_with_fixed_params<S: Storage, M: Memory>(
     cycle_limit: usize,
     geometry: GeometryConfig,
     storage: S,
-    memory: M,
     tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
 ) -> (
-    BlockBasicCircuits<Bn256>,
-    BlockBasicCircuitsPublicInputs<Bn256>,
-    SchedulerCircuitInstanceWitness<Bn256>,
+    BlockBasicCircuits<GoldilocksField, ZkSyncDefaultRoundFunction>,
+    BlockBasicCircuitsPublicInputs<GoldilocksField>,
+    BlockBasicCircuitsPublicCompactFormsWitnesses<GoldilocksField>,
+    SchedulerCircuitInstanceWitness<
+        GoldilocksField,
+        CircuitGoldilocksPoseidon2Sponge,
+        GoldilocksExt2,
+    >,
+    BlockAuxilaryOutputWitness<GoldilocksField>,
 ) {
-    let (_, round_function, _) = create_test_artifacts_with_optimized_gate();
+    let round_function = ZkSyncDefaultRoundFunction::default();
+
     run(
         caller,
         entry_point_address,
@@ -625,7 +611,6 @@ pub fn run_with_fixed_params<S: Storage, M: Memory>(
         round_function,
         geometry,
         storage,
-        memory,
         tree,
     )
 }

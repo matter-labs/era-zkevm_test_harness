@@ -10,4 +10,3 @@ mod limited_ergs;
 mod log;
 mod memory_growth;
 mod ptr_add;
-mod out_of_ergs;
