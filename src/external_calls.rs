@@ -141,7 +141,7 @@ round_function: R, // used for all queues implementation
     use crate::toolset::create_out_of_circuit_vm;
 
     let mut out_of_circuit_vm =
-        create_out_of_circuit_vm(&mut tools, &block_properties, caller, entry_point_address);
+        create_out_of_circuit_vm(tools, block_properties, caller, entry_point_address);
 
     // first there exists non-deterministic writes into the heap of the bootloader's heap and calldata
     // heap
@@ -217,19 +217,19 @@ round_function: R, // used for all queues implementation
 
     if !next_snapshot_will_capture_end_of_execution {
         // perform the final snapshot
-        let current_cycle_counter = tools.witness_tracer.current_cycle_counter;
+        let current_cycle_counter = out_of_circuit_vm.witness_tracer.current_cycle_counter;
         use crate::witness::vm_snapshot::VmSnapshot;
         let snapshot = VmSnapshot {
             local_state: vm_local_state.clone(),
             at_cycle: current_cycle_counter,
         };
-        tools.witness_tracer.vm_snapshots.push(snapshot);
+        out_of_circuit_vm.witness_tracer.vm_snapshots.push(snapshot);
     }
 
     // dbg!(tools.witness_tracer.vm_snapshots.len());
 
     let (instance_oracles, artifacts) = create_artifacts_from_tracer(
-        tools.witness_tracer,
+        out_of_circuit_vm.witness_tracer,
         &round_function,
         &geometry,
         (
