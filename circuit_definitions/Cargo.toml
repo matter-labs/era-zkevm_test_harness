@@ -10,7 +10,7 @@ edition = "2021"
 # zkevm_circuits = {path = "../../zkevm_circuits", features = ["verbose_circuits"]}
 
 zkevm_circuits = {git = "https://github.com/matter-labs/zkevm_circuits.git", branch = "main"}
-zk_evm = {git = "https://github.com/matter-labs/zk_evm.git", branch = "deniallugo-make-vm-owned-1.4.0"}
+zk_evm = {git = "https://github.com/matter-labs/zk_evm.git", branch = "v1.4.0"}
 
 derivative = "*"
 serde = {version = "1", features = ["derive"]}
