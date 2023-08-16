@@ -155,6 +155,7 @@ pub type CompressionMode2Circuit = CompressionLayerCircuit<CompressionMode2>;
 pub type CompressionMode3Circuit = CompressionLayerCircuit<CompressionMode3>;
 pub type CompressionMode4Circuit = CompressionLayerCircuit<CompressionMode4>;
 pub type CompressionModeToL1Circuit = CompressionLayerCircuit<CompressionModeToL1>;
+pub type CompressionMode2ForWrapperCircuit = CompressionLayerCircuit<CompressionMode2ForWrapper>;
 
 use crate::circuit_definitions::traits::circuit::CircuitBuilderProxy;
 
@@ -163,3 +164,4 @@ pub type CompressionMode2CircuitBuilder = CircuitBuilderProxy<F, CompressionMode
 pub type CompressionMode3CircuitBuilder = CircuitBuilderProxy<F, CompressionMode3Circuit>;
 pub type CompressionMode4CircuitBuilder = CircuitBuilderProxy<F, CompressionMode4Circuit>;
 pub type CompressionModeToL1CircuitBuilder = CircuitBuilderProxy<F, CompressionModeToL1Circuit>;
+pub type CompressionMode2ForWrapperCircuitBuilder = CircuitBuilderProxy<F, CompressionMode2ForWrapperCircuit>;

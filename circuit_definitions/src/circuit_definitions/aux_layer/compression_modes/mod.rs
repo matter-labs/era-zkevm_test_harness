@@ -49,9 +49,11 @@ pub mod mode_2;
 pub mod mode_3;
 pub mod mode_4;
 pub mod mode_to_l1;
+pub mod mode_2_for_wrapper;
 
 pub use self::mode_1::*;
 pub use self::mode_2::*;
 pub use self::mode_3::*;
 pub use self::mode_4::*;
 pub use self::mode_to_l1::*;
+pub use self::mode_2_for_wrapper::*;

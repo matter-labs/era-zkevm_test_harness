@@ -21,6 +21,9 @@ resolver = "2"
 [dependencies]
 circuit_definitions = {path = "./circuit_definitions"}
 
+snark_wrapper = {path = "../snark_wrapper"}
+rescue_poseidon = {path = "../rescue-poseidon"}
+
 zkevm-assembly = {git = "https://github.com/matter-labs/zkEVM-assembly.git", branch = "v1.3.2"}
 
 rayon = "*"
