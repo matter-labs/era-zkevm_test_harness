@@ -1,6 +1,7 @@
 pub mod utils;
 
 pub mod invididual_debugs;
+mod test_synthesis;
 
 use std::collections::{HashMap, VecDeque};
 
