@@ -9,9 +9,13 @@ edition = "2021"
 # zk_evm = {path = "../../zk_evm"}
 # zkevm_circuits = {path = "../../zkevm_circuits", features = ["verbose_circuits"]}
 
-snark_wrapper = {git = "https://github.com/matter-labs/snark-wrapper.git", branch = "main"}
-franklin_crypto = {package = "franklin-crypto", features = ["plonk"], git = "https://github.com/matter-labs/franklin-crypto", branch = "snark_wrapper"}
-rescue_poseidon = {git = "https://github.com/matter-labs/rescue-poseidon.git", branch = "poseidon2"}
+# snark_wrapper = {git = "https://github.com/matter-labs/snark-wrapper.git", branch = "main"}
+# franklin_crypto = {package = "franklin-crypto", features = ["plonk"], git = "https://github.com/matter-labs/franklin-crypto", branch = "snark_wrapper"}
+# rescue_poseidon = {git = "https://github.com/matter-labs/rescue-poseidon.git", branch = "poseidon2"}
+
+snark_wrapper = {path = "../../snark_wrapper"}
+franklin_crypto = {package = "franklin-crypto", features = ["plonk"], path = "../../franklin-crypto"}
+rescue_poseidon = {path = "../../rescue-poseidon"}
 
 zkevm_circuits = {git = "https://github.com/matter-labs/zkevm_circuits.git", branch = "snark-wrapper"}
 zk_evm = {git = "https://github.com/matter-labs/zk_evm.git", branch = "v1.4.0"}

@@ -47,10 +47,39 @@ fn basic_test() {
     // run_and_try_create_witness_inner(test_artifact, 16);
 }
 
+#[test]
+fn basic_test_compression_only() {
+    let _test_artifact = read_basic_test_artifact();
+
+    todo!();
+}
+
 use crate::boojum::algebraic_props::round_function::AbsorptionModeOverwrite;
 use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
 use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
 use crate::witness::full_block_artifact::*;
+
+fn get_geometry_config() -> GeometryConfig {
+    // let geometry = crate::geometry_config::get_geometry_config();
+
+    GeometryConfig {
+        // cycles_per_vm_snapshot: 1,
+        cycles_per_vm_snapshot: 1024,
+        cycles_per_ram_permutation: 1024,
+        cycles_per_code_decommitter: 256,
+        cycles_per_storage_application: 4,
+        cycles_per_keccak256_circuit: 7,
+        cycles_per_sha256_circuit: 7,
+        cycles_per_ecrecover_circuit: 2,
+        // cycles_code_decommitter_sorter: 512,
+        cycles_code_decommitter_sorter: 3,
+        cycles_per_log_demuxer: 16,
+        cycles_per_storage_sorter: 16,
+        cycles_per_events_or_l1_messages_sorter: 4,
+
+        limit_for_l1_messages_pudata_hasher: 32,
+    }
+}
 
 pub(crate) fn generate_base_layer(
     mut test_artifact: TestArtifact,
@@ -181,25 +210,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
     use crate::external_calls::run;
     use crate::toolset::GeometryConfig;
 
-    let geometry = GeometryConfig {
-        // cycles_per_vm_snapshot: 1,
-        cycles_per_vm_snapshot: 1024,
-        cycles_per_ram_permutation: 1024,
-        cycles_per_code_decommitter: 256,
-        cycles_per_storage_application: 4,
-        cycles_per_keccak256_circuit: 7,
-        cycles_per_sha256_circuit: 7,
-        cycles_per_ecrecover_circuit: 2,
-        // cycles_code_decommitter_sorter: 512,
-        cycles_code_decommitter_sorter: 3,
-        cycles_per_log_demuxer: 16,
-        cycles_per_storage_sorter: 16,
-        cycles_per_events_or_l1_messages_sorter: 4,
-
-        limit_for_l1_messages_pudata_hasher: 32,
-    };
-
-    // let geometry = crate::geometry_config::get_geometry_config();
+    let geometry = get_geometry_config();
 
     // let (basic_block_circuits, basic_block_circuits_inputs, mut scheduler_partial_input) = run(
     let (
@@ -979,7 +990,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
     };
 
     let scheduler_circuit = SchedulerCircuit {
-        witness: scheduler_witness,
+        witness: scheduler_witness.clone(),
         config,
         transcript_params: (),
         _marker: std::marker::PhantomData,
@@ -1042,6 +1053,49 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
         source
             .set_scheduler_proof(ZkSyncRecursionLayerProof::SchedulerCircuit(proof))
             .unwrap();
+    }
+
+    println!("Computing compression proofs");
+
+    try_to_compress_and_wrap_to_snark(scheduler_witness);
+
+    println!("DONE");
+}
+
+fn try_to_compress_and_wrap_to_snark(
+    scheduler_witness: SchedulerCircuitInstanceWitness<GoldilocksField, boojum::gadgets::round_function::CircuitSimpleAlgebraicSponge<GoldilocksField, 8, 12, 4, Poseidon2Goldilocks, true>, GoldilocksExt2>
+) {
+    use crate::data_source::*;
+    use crate::zkevm_circuits::scheduler::SchedulerConfig;
+
+    let worker = Worker::new_with_num_threads(8);
+
+    println!("Computing scheduler proof");
+    let mut source = LocalFileDataSource;
+
+    let node_vk = source.get_recursion_layer_node_vk().unwrap().into_inner();
+
+    let config = SchedulerConfig {
+        proof_config: recursion_layer_proof_config(),
+        vk_fixed_parameters: node_vk.fixed_parameters,
+        capacity: SCHEDULER_CAPACITY,
+        _marker: std::marker::PhantomData,
+    };
+
+    let scheduler_circuit = SchedulerCircuit {
+        witness: scheduler_witness,
+        config,
+        transcript_params: (),
+        _marker: std::marker::PhantomData,
+    };
+
+    let scheduler_circuit = ZkSyncRecursiveLayerCircuit::SchedulerCircuit(scheduler_circuit);
+
+    match source.get_scheduler_proof() {
+        Err(_) => panic!(),
+        Ok(proof) => {
+
+        }
     }
 
     println!("DONE");

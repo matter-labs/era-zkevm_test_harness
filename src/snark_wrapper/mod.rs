@@ -100,7 +100,9 @@ mod test {
 
         dbg!(after - before);
 
+
         assert!(assembly.is_satisfied());
         
+        dbg!(assembly.gates);
     }
 }

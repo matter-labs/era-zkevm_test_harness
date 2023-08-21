@@ -1,7 +1,13 @@
 use super::*;
-pub struct CompressionMode2ForWrapper;
+use crate::boojum::gadgets::traits::configuration::ConfigurationFunction;
+use crate::boojum::sha3::Keccak256;
+use crate::circuit_definitions::implementations::transcript::Keccak256Transcript;
 
-impl ProofCompressionFunction for CompressionMode2ForWrapper {
+// no lookup, just enough copiable width, moderate LDE factor,
+// and matrix multiplication gate,
+pub struct CompressionModeToL1ForWrapper;
+
+impl ProofCompressionFunction for CompressionModeToL1ForWrapper {
     // no PoW from the previous step
     type PreviousLayerPoW = NoPow;
 
@@ -16,21 +22,20 @@ impl ProofCompressionFunction for CompressionMode2ForWrapper {
     }
 
     fn description_for_compression_step() -> String {
-        "Compression mode 2: no lookup, just enough copiable width, moderate-high LDE factor, Poseidon gate"
-        .to_string()
+        "Compression mode to L1: no lookup, just enough copiable width, large LDE factor, PoW"
+            .to_string()
     }
 
     fn size_hint_for_compression_step() -> (usize, usize) {
-        (1 << 13, 1 << 22)
+        (1 << 18, 1 << 22)
     }
 
     fn geometry_for_compression_step() -> CSGeometry {
         CSGeometry {
-            num_columns_under_copy_permutation: 56,
-            // num_witness_columns: 0,
-            num_witness_columns: 74,
+            num_columns_under_copy_permutation: 28,
+            num_witness_columns: 0,
             num_constant_columns: 4,
-            max_allowed_constraint_degree: 8,
+            max_allowed_constraint_degree: 4,
         }
     }
 
@@ -49,22 +54,17 @@ impl ProofCompressionFunction for CompressionMode2ForWrapper {
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,
         );
-        // let builder = BooleanConstraintGate::configure_builder(
-        //     builder,
-        //     GatePlacementStrategy::UseGeneralPurposeColumns,
-        // );
-        // This reduces quotient complexity
-        let builder = BoundedBooleanConstraintGate::configure_builder(
+        let builder = BooleanConstraintGate::configure_builder(
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,
-            10,
         );
-        let builder =
-            R::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
+        let configuration_function = R::make_specialization_function_0();
+        let builder = configuration_function
+            .configure_proxy(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
         let builder = ZeroCheckGate::configure_builder(
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,
-            true,
+            false,
         );
         let builder = FmaGateInBaseFieldWithoutConstant::configure_builder(
             builder,
@@ -79,10 +79,6 @@ impl ProofCompressionFunction for CompressionMode2ForWrapper {
             GatePlacementStrategy::UseGeneralPurposeColumns,
         );
         let builder = ParallelSelectionGate::<4>::configure_builder(
-            builder,
-            GatePlacementStrategy::UseGeneralPurposeColumns,
-        );
-        let builder = ConditionalSwapGate::<4>::configure_builder(
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,
         );
@@ -102,17 +98,17 @@ impl ProofCompressionFunction for CompressionMode2ForWrapper {
 
     fn proof_config_for_compression_step() -> ProofConfig {
         ProofConfig {
-            fri_lde_factor: 512,
-            merkle_tree_cap_size: 16,
+            fri_lde_factor: 4096,
+            merkle_tree_cap_size: 8,
             fri_folding_schedule: None,
             security_level: crate::L1_SECURITY_BITS,
-            pow_bits: 0,
+            pow_bits: 28,
         }
     }
 
     fn previous_step_builder_for_compression<CS: ConstraintSystem<F> + 'static>(
     ) -> Box<dyn ErasedBuilderForRecursiveVerifier<GoldilocksField, EXT, CS>> {
-        use crate::circuit_definitions::aux_layer::compression::CompressionMode1CircuitBuilder;
-        CompressionMode1CircuitBuilder::dyn_recursive_verifier_builder::<EXT, CS>()
+        use crate::circuit_definitions::aux_layer::compression::CompressionMode4CircuitBuilder;
+        CompressionMode4CircuitBuilder::dyn_recursive_verifier_builder::<EXT, CS>()
     }
 }
