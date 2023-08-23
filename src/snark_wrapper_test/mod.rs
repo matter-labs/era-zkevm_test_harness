@@ -73,7 +73,7 @@ mod test {
 
         let proof: AllocatedProof<Bn256, CircuitPoseidon2Sponge<Bn256, 2, 3, 3, true>> = AllocatedProof::allocate_from_witness(
             &mut assembly,
-            Some(proof),
+            &Some(proof),
             &verifier,
             &fixed_parameters,
             &proof_config,

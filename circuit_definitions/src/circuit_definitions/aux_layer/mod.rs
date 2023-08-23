@@ -5,7 +5,16 @@ pub mod compression_modes;
 pub mod wrapper;
 
 use crate::circuit_definitions::aux_layer::compression::*;
+use crate::boojum::field::traits::field_like::PrimeFieldLikeVectorized;
+use crate::boojum::config::ProvingCSConfig;
+use crate::circuit_definitions::implementations::reference_cs::CSReferenceAssembly;
+use crate::circuit_definitions::cs_builder_reference::CsReferenceImplementationBuilder;
+use crate::circuit_definitions::traits::circuit::CircuitBuilderProxy;
+use crate::circuit_definitions::aux_layer::compression_modes::*;
+use crate::ProofConfig;
 
+type F = GoldilocksField;
+type EXT = GoldilocksExt2;
 
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone(bound = ""))]
@@ -29,6 +38,127 @@ pub enum ZkSyncCompressionLayerStorageType {
     CompressionMode4Circuit = 4,
     CompressionModeToL1Circuit = 5,
 }
+
+impl ZkSyncCompressionLayerCircuit {
+    pub fn short_description(&self) -> &'static str {
+        match &self {
+            Self::CompressionMode1Circuit(..) => "Compression mode 1",
+            Self::CompressionMode2Circuit(..) => "Compression mode 2",
+            Self::CompressionMode3Circuit(..) => "Compression mode 3",
+            Self::CompressionMode4Circuit(..) => "Compression mode 4",
+            Self::CompressionModeToL1Circuit(..) => "Compression mode to L1",
+        }
+    }
+
+    pub fn numeric_circuit_type(&self) -> u8 {
+        match &self {
+            Self::CompressionMode1Circuit(..) => {
+                ZkSyncCompressionLayerStorageType::CompressionMode1Circuit as u8
+            }
+            Self::CompressionMode2Circuit(..) => {
+                ZkSyncCompressionLayerStorageType::CompressionMode2Circuit as u8
+            }
+            Self::CompressionMode3Circuit(..) => {
+                ZkSyncCompressionLayerStorageType::CompressionMode3Circuit as u8
+            }
+            Self::CompressionMode4Circuit(..) => {
+                ZkSyncCompressionLayerStorageType::CompressionMode4Circuit as u8
+            }
+            Self::CompressionModeToL1Circuit(..) => {
+                ZkSyncCompressionLayerStorageType::CompressionModeToL1Circuit as u8
+            }
+        }
+    }
+
+    pub fn size_hint(&self) -> (Option<usize>, Option<usize>) {
+        match &self {
+            Self::CompressionMode1Circuit(inner) => inner.size_hint(),
+            Self::CompressionMode2Circuit(inner) => inner.size_hint(),
+            Self::CompressionMode3Circuit(inner) => inner.size_hint(),
+            Self::CompressionMode4Circuit(inner) => inner.size_hint(),
+            Self::CompressionModeToL1Circuit(inner) => inner.size_hint(),
+        }
+    }
+
+    pub fn geometry(&self) -> CSGeometry {
+        use crate::boojum::cs::traits::circuit::CircuitBuilder;
+        match &self {
+            Self::CompressionMode1Circuit(..) => <CompressionMode1Circuit as CircuitBuilder<GoldilocksField>>::geometry(),
+            Self::CompressionMode2Circuit(..) => <CompressionMode2Circuit as CircuitBuilder<GoldilocksField>>::geometry(),
+            Self::CompressionMode3Circuit(..) => <CompressionMode3Circuit as CircuitBuilder<GoldilocksField>>::geometry(),
+            Self::CompressionMode4Circuit(..) => <CompressionMode4Circuit as CircuitBuilder<GoldilocksField>>::geometry(),
+            Self::CompressionModeToL1Circuit(..) => <CompressionModeToL1Circuit as CircuitBuilder<GoldilocksField>>::geometry(),
+        }
+    }
+
+    pub fn proof_config_for_compression_step(&self) -> ProofConfig {
+        match &self {
+            Self::CompressionMode1Circuit(..) => CompressionMode1::proof_config_for_compression_step(),
+            Self::CompressionMode2Circuit(..) => CompressionMode2::proof_config_for_compression_step(),
+            Self::CompressionMode3Circuit(..) => CompressionMode3::proof_config_for_compression_step(),
+            Self::CompressionMode4Circuit(..) => CompressionMode4::proof_config_for_compression_step(),
+            Self::CompressionModeToL1Circuit(..) => CompressionModeToL1::proof_config_for_compression_step(),
+        }
+    }
+
+    fn synthesis_inner<P: PrimeFieldLikeVectorized<Base = GoldilocksField>, CF: ProofCompressionFunction> (
+        inner: &CompressionLayerCircuit<CF>,
+        hint: &FinalizationHintsForProver
+    ) ->  CSReferenceAssembly<GoldilocksField, P, ProvingCSConfig> {
+        let geometry = inner.geometry();
+        let (max_trace_len, num_vars) = inner.size_hint();
+        let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, ProvingCSConfig>::new(
+            geometry,
+            num_vars.unwrap(),
+            max_trace_len.unwrap(),
+        );
+        let cs_builder = new_builder::<_, GoldilocksField>(builder_impl);
+        let builder = inner.configure_builder_proxy(cs_builder);
+        let mut cs = builder.build(());
+        inner.add_tables(&mut cs);
+        inner.clone().synthesize_into_cs(&mut cs);
+        cs.pad_and_shrink_using_hint(hint);
+        cs.into_assembly()
+    }
+
+    pub fn synthesis<P: PrimeFieldLikeVectorized<Base = F>>(
+        &self, 
+        hint: &FinalizationHintsForProver
+    ) ->  CSReferenceAssembly<F, P, ProvingCSConfig> {
+        match &self {
+            Self::CompressionMode1Circuit(inner) => Self::synthesis_inner(inner, hint),
+            Self::CompressionMode2Circuit(inner) => Self::synthesis_inner(inner, hint),
+            Self::CompressionMode3Circuit(inner) => Self::synthesis_inner(inner, hint),
+            Self::CompressionMode4Circuit(inner) => Self::synthesis_inner(inner, hint),
+            Self::CompressionModeToL1Circuit(inner) => Self::synthesis_inner(inner, hint),
+        }
+    }
+
+    pub fn into_dyn_verifier_builder(
+        &self,
+    ) -> Box<dyn crate::boojum::cs::traits::circuit::ErasedBuilderForVerifier<F, EXT>> {
+        match &self {
+            Self::CompressionMode1Circuit(..) => {
+                CompressionMode1ForWrapperCircuitBuilder::dyn_verifier_builder()
+            }
+            Self::CompressionMode2Circuit(..) => {
+                CompressionMode2ForWrapperCircuitBuilder::dyn_verifier_builder()
+            }
+            Self::CompressionMode3Circuit(..) => {
+                CompressionMode3ForWrapperCircuitBuilder::dyn_verifier_builder()
+            }
+            Self::CompressionMode4Circuit(..) => {
+                CompressionMode4ForWrapperCircuitBuilder::dyn_verifier_builder()
+            }
+            Self::CompressionModeToL1Circuit(..) => {
+                CompressionModeToL1ForWrapperCircuitBuilder::dyn_verifier_builder()
+            }
+        }
+    }
+}
+
+use crate::circuit_definitions::recursion_layer::scheduler::ConcreteSchedulerCircuitBuilder;
+use zkevm_circuits::scheduler::auxiliary::BaseLayerCircuitType;
 
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone(bound = ""), Debug)]
@@ -120,6 +250,125 @@ pub enum ZkSyncCompressionForWrapperCircuit {
     CompressionModeToL1Circuit(CompressionModeToL1ForWrapperCircuit),
 }
 
+
+impl ZkSyncCompressionForWrapperCircuit {
+    pub fn short_description(&self) -> &'static str {
+        match &self {
+            Self::CompressionMode1Circuit(..) => "Compression mode 1 for wrapper",
+            Self::CompressionMode2Circuit(..) => "Compression mode 2 for wrapper",
+            Self::CompressionMode3Circuit(..) => "Compression mode 3 for wrapper",
+            Self::CompressionMode4Circuit(..) => "Compression mode 4 for wrapper",
+            Self::CompressionModeToL1Circuit(..) => "Compression mode to L1 for wrapper",
+        }
+    }
+
+    pub fn numeric_circuit_type(&self) -> u8 {
+        match &self {
+            Self::CompressionMode1Circuit(..) => {
+                ZkSyncCompressionLayerStorageType::CompressionMode1Circuit as u8
+            }
+            Self::CompressionMode2Circuit(..) => {
+                ZkSyncCompressionLayerStorageType::CompressionMode2Circuit as u8
+            }
+            Self::CompressionMode3Circuit(..) => {
+                ZkSyncCompressionLayerStorageType::CompressionMode3Circuit as u8
+            }
+            Self::CompressionMode4Circuit(..) => {
+                ZkSyncCompressionLayerStorageType::CompressionMode4Circuit as u8
+            }
+            Self::CompressionModeToL1Circuit(..) => {
+                ZkSyncCompressionLayerStorageType::CompressionModeToL1Circuit as u8
+            }
+        }
+    }
+
+    pub fn size_hint(&self) -> (Option<usize>, Option<usize>) {
+        match &self {
+            Self::CompressionMode1Circuit(inner) => inner.size_hint(),
+            Self::CompressionMode2Circuit(inner) => inner.size_hint(),
+            Self::CompressionMode3Circuit(inner) => inner.size_hint(),
+            Self::CompressionMode4Circuit(inner) => inner.size_hint(),
+            Self::CompressionModeToL1Circuit(inner) => inner.size_hint(),
+        }
+    }
+
+    pub fn geometry(&self) -> CSGeometry {
+        use crate::boojum::cs::traits::circuit::CircuitBuilder;
+        match &self {
+            Self::CompressionMode1Circuit(..) => <CompressionMode1Circuit as CircuitBuilder<GoldilocksField>>::geometry(),
+            Self::CompressionMode2Circuit(..) => <CompressionMode2Circuit as CircuitBuilder<GoldilocksField>>::geometry(),
+            Self::CompressionMode3Circuit(..) => <CompressionMode3Circuit as CircuitBuilder<GoldilocksField>>::geometry(),
+            Self::CompressionMode4Circuit(..) => <CompressionMode4Circuit as CircuitBuilder<GoldilocksField>>::geometry(),
+            Self::CompressionModeToL1Circuit(..) => <CompressionModeToL1Circuit as CircuitBuilder<GoldilocksField>>::geometry(),
+        }
+    }
+
+    pub fn proof_config_for_compression_step(&self) -> ProofConfig {
+        match &self {
+            Self::CompressionMode1Circuit(..) => CompressionMode1ForWrapper::proof_config_for_compression_step(),
+            Self::CompressionMode2Circuit(..) => CompressionMode2ForWrapper::proof_config_for_compression_step(),
+            Self::CompressionMode3Circuit(..) => CompressionMode3ForWrapper::proof_config_for_compression_step(),
+            Self::CompressionMode4Circuit(..) => CompressionMode4ForWrapper::proof_config_for_compression_step(),
+            Self::CompressionModeToL1Circuit(..) => CompressionModeToL1ForWrapper::proof_config_for_compression_step(),
+        }
+    }
+
+    fn synthesis_inner<P: PrimeFieldLikeVectorized<Base = GoldilocksField>, CF: ProofCompressionFunction> (
+        inner: &CompressionLayerCircuit<CF>,
+        hint: &FinalizationHintsForProver
+    ) ->  CSReferenceAssembly<GoldilocksField, P, ProvingCSConfig> {
+        let geometry = inner.geometry();
+        let (max_trace_len, num_vars) = inner.size_hint();
+        let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, ProvingCSConfig>::new(
+            geometry,
+            num_vars.unwrap(),
+            max_trace_len.unwrap(),
+        );
+        let cs_builder = new_builder::<_, GoldilocksField>(builder_impl);
+        let builder = inner.configure_builder_proxy(cs_builder);
+        let mut cs = builder.build(());
+        inner.add_tables(&mut cs);
+        inner.clone().synthesize_into_cs(&mut cs);
+        cs.pad_and_shrink_using_hint(hint);
+        cs.into_assembly()
+    }
+
+    pub fn synthesis<P: PrimeFieldLikeVectorized<Base = F>>(
+        &self, 
+        hint: &FinalizationHintsForProver
+    ) ->  CSReferenceAssembly<F, P, ProvingCSConfig> {
+        match &self {
+            Self::CompressionMode1Circuit(inner) => Self::synthesis_inner(inner, hint),
+            Self::CompressionMode2Circuit(inner) => Self::synthesis_inner(inner, hint),
+            Self::CompressionMode3Circuit(inner) => Self::synthesis_inner(inner, hint),
+            Self::CompressionMode4Circuit(inner) => Self::synthesis_inner(inner, hint),
+            Self::CompressionModeToL1Circuit(inner) => Self::synthesis_inner(inner, hint),
+        }
+    }
+
+    pub fn into_dyn_verifier_builder(
+        &self,
+    ) -> Box<dyn crate::boojum::cs::traits::circuit::ErasedBuilderForVerifier<F, EXT>> {
+        match &self {
+            Self::CompressionMode1Circuit(..) => {
+                CompressionMode1ForWrapperCircuitBuilder::dyn_verifier_builder()
+            }
+            Self::CompressionMode2Circuit(..) => {
+                CompressionMode2ForWrapperCircuitBuilder::dyn_verifier_builder()
+            }
+            Self::CompressionMode3Circuit(..) => {
+                CompressionMode3ForWrapperCircuitBuilder::dyn_verifier_builder()
+            }
+            Self::CompressionMode4Circuit(..) => {
+                CompressionMode4ForWrapperCircuitBuilder::dyn_verifier_builder()
+            }
+            Self::CompressionModeToL1Circuit(..) => {
+                CompressionModeToL1ForWrapperCircuitBuilder::dyn_verifier_builder()
+            }
+        }
+    }
+}
+
 pub type ZkSyncCompressionLayerCircuitInput<F> =
     ZkSyncCompressionLayerStorage<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>;
 
@@ -166,14 +415,15 @@ use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::setup::Ver
 use snark_wrapper::verifier::WrapperCircuit;
 use snark_wrapper::implementations::poseidon2::CircuitPoseidon2Sponge;
 use snark_wrapper::implementations::poseidon2::transcript::CircuitPoseidon2Transcript;
+use crate::circuit_definitions::aux_layer::wrapper::ZkSyncCompressionWrapper;
 
-pub type SnarkCircuit<PWF> = WrapperCircuit<
+pub type ZkSyncSnarkWrapperCircuit = WrapperCircuit<
     Bn256, 
     Poseidon2Sponge<Bn256, GoldilocksField, AbsorptionModeReplacement<Fr>, 2, 3>, 
     CircuitPoseidon2Sponge<Bn256, 2, 3, 3, true>,
     CircuitPoseidon2Transcript<Bn256, 2, 3, 3, true>,
-    PWF
+    ZkSyncCompressionWrapper
 >;
 
-pub type ZkSyncSnarkWrapperProof<PWF> = ZkSyncCompressionLayerStorage<SnarkProof<Bn256, SnarkCircuit<PWF>>>;
-pub type ZkSyncSnarkWrapperVK<PWF> = ZkSyncCompressionLayerStorage<SnarkVK<Bn256, SnarkCircuit<PWF>>>;
+pub type ZkSyncSnarkWrapperProof = ZkSyncCompressionLayerStorage<SnarkProof<Bn256, ZkSyncSnarkWrapperCircuit>>;
+pub type ZkSyncSnarkWrapperVK = ZkSyncCompressionLayerStorage<SnarkVK<Bn256, ZkSyncSnarkWrapperCircuit>>;
