@@ -98,7 +98,7 @@ pub trait SetupDataSource {
         hint: ZkSyncCompressionForWrapperFinalizationHint,
     ) -> SourceResult<()>;
     fn set_wrapper_vk(
-        &self,
+        &mut self,
         vk: ZkSyncSnarkWrapperVK,
     ) -> SourceResult<()>;
 }
@@ -471,7 +471,7 @@ impl SetupDataSource for LocalFileDataSource {
         Ok(())
     }
     fn set_wrapper_vk(
-        &self,
+        &mut self,
         vk: ZkSyncSnarkWrapperVK,
     ) -> SourceResult<()> {
         let circuit_type = vk.numeric_circuit_type();

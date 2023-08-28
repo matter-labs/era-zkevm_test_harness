@@ -101,6 +101,7 @@ use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::gates
 use crate::boojum::algebraic_props::round_function::AbsorptionModeOverwrite;
 use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
 use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
+use crate::in_memory_data_source::InMemoryDataSource;
 use crate::witness::full_block_artifact::*;
 
 fn get_geometry_config() -> GeometryConfig {
@@ -305,7 +306,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
     let mut setup_data = None;
 
-    let mut source = LocalFileDataSource;
+    let mut source = InMemoryDataSource::new();
     use crate::data_source::*;
 
     for (idx, el) in basic_block_circuits

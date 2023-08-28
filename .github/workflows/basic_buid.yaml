@@ -27,7 +27,7 @@ jobs:
           rustup toolchain install nightly-2023-05-31
           rustup default nightly-2023-05-31
 
-      - name: build
+      - name: Basic test
         run: |
           git config --global --add url."https://${{ secrets.ZKSYNC_ADMIN_BOT_ORG_REPO_WRITE }}:x-oauth-basic@github.com/".insteadOf ssh://git@github.com/
           git config --global --add url."https://${{ secrets.ZKSYNC_ADMIN_BOT_ORG_REPO_WRITE }}:x-oauth-basic@github.com/".insteadOf https://github.com/
