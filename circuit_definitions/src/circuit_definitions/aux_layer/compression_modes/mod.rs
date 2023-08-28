@@ -16,6 +16,11 @@ use crate::circuit_definitions::recursion_layer::scheduler::SchedulerCircuitBuil
 use crate::circuit_definitions::traits::circuit::ErasedBuilderForRecursiveVerifier;
 use crate::circuit_definitions::traits::gate::GatePlacementStrategy;
 
+use rescue_poseidon::poseidon2::*;
+use rescue_poseidon::poseidon2::transcript::Poseidon2Transcript;
+use snark_wrapper::implementations::poseidon2::tree_hasher::AbsorptionModeReplacement;
+use franklin_crypto::bellman::pairing::bn256::{Bn256, Fr};
+
 use zkevm_circuits::boojum::cs::implementations::prover::ProofConfig;
 
 use crate::circuit_definitions::aux_layer::compression::ProofCompressionFunction;
@@ -28,6 +33,12 @@ type CTR = CircuitAlgebraicSpongeBasedTranscript<GoldilocksField, 8, 12, 4, R>;
 type EXT = GoldilocksExt2;
 type H = GoldilocksPoseidon2Sponge<AbsorptionModeOverwrite>;
 type RH = CircuitGoldilocksPoseidon2Sponge;
+
+pub type CompressionTreeHasherForWrapper = 
+    Poseidon2Sponge<Bn256, F, AbsorptionModeReplacement<Fr>, 2, 3>;
+pub type CompressionTranscriptForWrapper = 
+    Poseidon2Transcript<Bn256, F, AbsorptionModeReplacement<Fr>, 2, 3>;
+
 
 // We should balance the final verification cost that would be a complex function of:
 // - rate. It decreases number of queries, but increases query depth. Although in practice we
@@ -49,9 +60,20 @@ pub mod mode_2;
 pub mod mode_3;
 pub mod mode_4;
 pub mod mode_to_l1;
+pub mod mode_1_for_wrapper;
+pub mod mode_2_for_wrapper;
+pub mod mode_3_for_wrapper;
+pub mod mode_4_for_wrapper;
+pub mod mode_to_l1_for_wrapper;
 
 pub use self::mode_1::*;
 pub use self::mode_2::*;
 pub use self::mode_3::*;
 pub use self::mode_4::*;
 pub use self::mode_to_l1::*;
+
+pub use self::mode_1_for_wrapper::*;
+pub use self::mode_2_for_wrapper::*;
+pub use self::mode_3_for_wrapper::*;
+pub use self::mode_4_for_wrapper::*;
+pub use self::mode_to_l1_for_wrapper::*;
