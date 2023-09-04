@@ -143,7 +143,7 @@ pub fn main_vm_capacity() -> usize {
         ZkSyncDefaultRoundFunction,
     >;
 
-    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(550), |x: usize| x)
+    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(5500), |x: usize| x)
 }
 
 pub fn code_decommittments_sorter_capacity() -> usize {
@@ -200,7 +200,7 @@ pub fn event_sorter_capacity() -> usize {
         ZkSyncDefaultRoundFunction,
     >;
 
-    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(2000), |x: usize| x)
+    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(20000), |x: usize| x)
 }
 
 pub fn storage_sorter_capacity() -> usize {
@@ -214,7 +214,7 @@ pub fn storage_application_capacity() -> usize {
     type SF =
         StorageApplicationInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
 
-    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(5), |x: usize| x)
+    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(32), |x: usize| x)
 }
 
 pub fn l1_messages_hasher_capacity() -> usize {
