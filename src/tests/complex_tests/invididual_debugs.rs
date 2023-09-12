@@ -47,7 +47,7 @@ mod test {
         // let is_valid = vk.verify_proof(&proof);
         // assert!(is_valid);
 
-        let circuit_file_name = "1204_132_Main VM_BasicCircuits.bin";
+        let circuit_file_name = "prover_jobs_58348_452_L1 messages sorter_BasicCircuits.bin";
         // let circuit_file_name = "prover_jobs_1204_132_Main VM_BasicCircuits.bin";
 
         let mut content = std::fs::File::open(circuit_file_name).unwrap();
@@ -143,6 +143,36 @@ mod test {
         //     RescueTranscriptForRecursion<'_>,
         // >(circuit.clone(), Some(transcript_params), vk.clone(), None)
         // .unwrap();
+    }
+
+    #[test]
+    fn one_off_proof() {
+        let circuit_file_name = "prover_jobs_58348_452_L1 messages sorter_BasicCircuits.bin";
+        let mut content = std::fs::File::open(circuit_file_name).unwrap();
+        let mut buffer = vec![];
+        content.read_to_end(&mut buffer).unwrap();
+        let circuit: ZkSyncCircuit<Bn256, VmWitnessOracle<Bn256>> =
+            bincode::deserialize(&buffer).unwrap();
+
+        let sponge_params = bn254_rescue_params();
+        let rns_params = get_prefered_rns_params();
+        let transcript_params = (&sponge_params, &rns_params);        
+
+        use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
+        use sync_vm::recursion::RescueTranscriptForRecursion;
+
+        let (proof, _vk) = circuit_testing::prove_and_verify_circuit_for_params::<
+            Bn256,
+            _,
+            PlonkCsWidth4WithNextStepAndCustomGatesParams,
+            RescueTranscriptForRecursion<'_>,
+        >(
+            circuit,
+            Some(transcript_params)
+        )
+        .unwrap();
+
+        // SERIALIZE PROOF!
     }
 
     #[test]
