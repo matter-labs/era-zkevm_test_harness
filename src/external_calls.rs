@@ -120,8 +120,6 @@ pub fn run<
 
     use crate::toolset::create_out_of_circuit_vm;
 
-    let mut out_of_circuit_vm =
-        create_out_of_circuit_vm(&mut tools, &block_properties, caller, entry_point_address);
 
     // first there exists non-deterministic writes into the heap of the bootloader's heap and calldata
     // heap
@@ -138,9 +136,10 @@ pub fn run<
             value: el,
             value_is_pointer: false,
         };
-        out_of_circuit_vm.witness_tracer.add_memory_query(0, query);
-        out_of_circuit_vm.memory.execute_partial_query(0, query);
+        tools.witness_tracer.add_memory_query(0, query);
+        tools.memory.execute_partial_query(0, query);
     }
+
 
     let mut memory_verification_queries: Vec<
         sync_vm::glue::code_unpacker_sha256::memory_query_updated::MemoryQueryWitness<Bn256>,
@@ -159,13 +158,16 @@ pub fn run<
             value: el,
             value_is_pointer: false,
         };
-        out_of_circuit_vm.witness_tracer.add_memory_query(0, query);
-        out_of_circuit_vm.memory.execute_partial_query(0, query);
+        tools.witness_tracer.add_memory_query(0, query);
+        tools.memory.execute_partial_query(0, query);
 
         use crate::encodings::initial_storage_write::CircuitEquivalentReflection;
         let as_vm_query = query.reflect();
         memory_verification_queries.push(as_vm_query);
     }
+
+    let mut out_of_circuit_vm =
+        create_out_of_circuit_vm(tools, block_properties, caller, entry_point_address);
 
     let mut tracer = GenericNoopTracer::<_>::new();
     // tracing::debug!("Running out of circuit for {} cycles", cycle_limit);
@@ -238,19 +240,19 @@ pub fn run<
 
     if !next_snapshot_will_capture_end_of_execution {
         // perform the final snapshot
-        let current_cycle_counter = tools.witness_tracer.current_cycle_counter;
+        let current_cycle_counter = out_of_circuit_vm.witness_tracer.current_cycle_counter;
         use crate::witness::vm_snapshot::VmSnapshot;
         let snapshot = VmSnapshot {
             local_state: vm_local_state.clone(),
             at_cycle: current_cycle_counter,
         };
-        tools.witness_tracer.vm_snapshots.push(snapshot);
+        out_of_circuit_vm.witness_tracer.vm_snapshots.push(snapshot);
     }
 
     // dbg!(tools.witness_tracer.vm_snapshots.len());
 
     let (instance_oracles, artifacts) = create_artifacts_from_tracer(
-        tools.witness_tracer,
+        out_of_circuit_vm.witness_tracer,
         &round_function,
         &geometry,
         (
