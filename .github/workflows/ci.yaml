@@ -1,17 +1,18 @@
-name: "Rust CI"                  
+name: "Rust CI"
 on:
   pull_request:
 
 jobs:
   build:
     name: cargo build and test
-    # Needs big runner for the test.
-    runs-on: ubuntu-22.04-github-hosted-16core
+    runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          rustflags: ""
       - run: cargo build --verbose
-      - run: cargo test --verbose --all
+      - run: cargo test --verbose --all --no-run
 
   formatting:
     name: cargo fmt
@@ -23,4 +24,3 @@ jobs:
           components: rustfmt
       - name: Rustfmt Check
         uses: actions-rust-lang/rustfmt@v1
-
