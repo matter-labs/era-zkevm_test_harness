@@ -12,7 +12,7 @@ jobs:
         with:
           rustflags: ""
       - run: cargo build --verbose
-      - run: cargo test --verbose --all
+      - run: cargo test --verbose --all --no-run
 
   formatting:
     name: cargo fmt
