@@ -64,7 +64,7 @@ use crate::zk_evm::vm_state::{PrimitiveValue, VmState};
 use crate::zk_evm::zkevm_opcode_defs::*;
 
 /// We expect that storage/memory/decommitter were prefilled
-pub fn create_out_of_circuit_vm< S: Storage>(
+pub fn create_out_of_circuit_vm<S: Storage>(
     tools: ProvingToolset<S>,
     block_properties: BlockProperties,
     caller_address: Address,

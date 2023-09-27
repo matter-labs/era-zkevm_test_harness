@@ -1,3 +1,10 @@
+use crate::data_source::{BlockDataSource, SetupDataSource, SourceResult};
+use circuit_definitions::circuit_definitions::aux_layer::{
+    ZkSyncCompressionForWrapperFinalizationHint, ZkSyncCompressionForWrapperProof,
+    ZkSyncCompressionForWrapperVerificationKey, ZkSyncCompressionLayerFinalizationHint,
+    ZkSyncCompressionLayerProof, ZkSyncCompressionLayerVerificationKey, ZkSyncSnarkWrapperProof,
+    ZkSyncSnarkWrapperVK,
+};
 use circuit_definitions::circuit_definitions::base_layer::{
     ZkSyncBaseLayerFinalizationHint, ZkSyncBaseLayerProof, ZkSyncBaseLayerVerificationKey,
 };
@@ -7,8 +14,6 @@ use circuit_definitions::circuit_definitions::recursion_layer::{
 };
 use std::collections::HashMap;
 use std::io::{Error, ErrorKind};
-use circuit_definitions::circuit_definitions::aux_layer::{ZkSyncCompressionForWrapperFinalizationHint, ZkSyncCompressionForWrapperProof, ZkSyncCompressionForWrapperVerificationKey, ZkSyncCompressionLayerFinalizationHint, ZkSyncCompressionLayerProof, ZkSyncCompressionLayerVerificationKey, ZkSyncSnarkWrapperProof, ZkSyncSnarkWrapperVK};
-use crate::data_source::{BlockDataSource, SetupDataSource, SourceResult};
 
 pub struct InMemoryDataSource {
     ///data structures required for holding [`SetupDataSource`] result
@@ -158,7 +163,10 @@ impl SetupDataSource for InMemoryDataSource {
         Ok(self.recursion_layer_node_finalization_hint.clone().unwrap())
     }
 
-    fn get_compression_vk(&self, circuit_type: u8) -> SourceResult<ZkSyncCompressionLayerVerificationKey> {
+    fn get_compression_vk(
+        &self,
+        circuit_type: u8,
+    ) -> SourceResult<ZkSyncCompressionLayerVerificationKey> {
         self.compression_vk
             .get(&circuit_type)
             .cloned()
@@ -168,7 +176,10 @@ impl SetupDataSource for InMemoryDataSource {
             )))
     }
 
-    fn get_compression_hint(&self, circuit_type: u8) -> SourceResult<ZkSyncCompressionLayerFinalizationHint> {
+    fn get_compression_hint(
+        &self,
+        circuit_type: u8,
+    ) -> SourceResult<ZkSyncCompressionLayerFinalizationHint> {
         self.compression_hint
             .get(&circuit_type)
             .cloned()
@@ -178,7 +189,10 @@ impl SetupDataSource for InMemoryDataSource {
             )))
     }
 
-    fn get_compression_for_wrapper_vk(&self, circuit_type: u8) -> SourceResult<ZkSyncCompressionForWrapperVerificationKey> {
+    fn get_compression_for_wrapper_vk(
+        &self,
+        circuit_type: u8,
+    ) -> SourceResult<ZkSyncCompressionForWrapperVerificationKey> {
         self.compression_for_wrapper_vk
             .get(&circuit_type)
             .cloned()
@@ -188,7 +202,10 @@ impl SetupDataSource for InMemoryDataSource {
             )))
     }
 
-    fn get_compression_for_wrapper_hint(&self, circuit_type: u8) -> SourceResult<ZkSyncCompressionForWrapperFinalizationHint> {
+    fn get_compression_for_wrapper_hint(
+        &self,
+        circuit_type: u8,
+    ) -> SourceResult<ZkSyncCompressionForWrapperFinalizationHint> {
         self.compression_for_wrapper_hint
             .get(&circuit_type)
             .cloned()
@@ -287,30 +304,42 @@ impl SetupDataSource for InMemoryDataSource {
         Ok(())
     }
 
-    fn set_compression_vk(&mut self, vk: ZkSyncCompressionLayerVerificationKey) -> SourceResult<()> {
+    fn set_compression_vk(
+        &mut self,
+        vk: ZkSyncCompressionLayerVerificationKey,
+    ) -> SourceResult<()> {
         self.compression_vk.insert(vk.numeric_circuit_type(), vk);
         Ok(())
     }
 
-    fn set_compression_hint(&mut self, hint: ZkSyncCompressionLayerFinalizationHint) -> SourceResult<()> {
-        self.compression_hint.insert(hint.numeric_circuit_type(), hint);
-        Ok(())
-    }
-
-    fn set_compression_for_wrapper_vk(&mut self, vk: ZkSyncCompressionForWrapperVerificationKey) -> SourceResult<()> {
-        self.compression_for_wrapper_vk.insert(vk.numeric_circuit_type(), vk);
-        Ok(())
-    }
-
-    fn set_compression_for_wrapper_hint(&mut self, hint: ZkSyncCompressionForWrapperFinalizationHint) -> SourceResult<()> {
-        self.compression_for_wrapper_hint.insert(hint.numeric_circuit_type(), hint);
-        Ok(())
-    }
-
-    fn set_wrapper_vk(
+    fn set_compression_hint(
         &mut self,
-        vk: ZkSyncSnarkWrapperVK,
+        hint: ZkSyncCompressionLayerFinalizationHint,
     ) -> SourceResult<()> {
+        self.compression_hint
+            .insert(hint.numeric_circuit_type(), hint);
+        Ok(())
+    }
+
+    fn set_compression_for_wrapper_vk(
+        &mut self,
+        vk: ZkSyncCompressionForWrapperVerificationKey,
+    ) -> SourceResult<()> {
+        self.compression_for_wrapper_vk
+            .insert(vk.numeric_circuit_type(), vk);
+        Ok(())
+    }
+
+    fn set_compression_for_wrapper_hint(
+        &mut self,
+        hint: ZkSyncCompressionForWrapperFinalizationHint,
+    ) -> SourceResult<()> {
+        self.compression_for_wrapper_hint
+            .insert(hint.numeric_circuit_type(), hint);
+        Ok(())
+    }
+
+    fn set_wrapper_vk(&mut self, vk: ZkSyncSnarkWrapperVK) -> SourceResult<()> {
         self.wrapper_vk.insert(vk.numeric_circuit_type(), vk);
         Ok(())
     }
@@ -386,7 +415,10 @@ impl BlockDataSource for InMemoryDataSource {
             )))
     }
 
-    fn get_compression_for_wrapper_proof(&self, circuit_type: u8) -> SourceResult<ZkSyncCompressionForWrapperProof> {
+    fn get_compression_for_wrapper_proof(
+        &self,
+        circuit_type: u8,
+    ) -> SourceResult<ZkSyncCompressionForWrapperProof> {
         self.compression_for_wrapper_proof
             .get(&circuit_type)
             .cloned()
@@ -444,17 +476,23 @@ impl BlockDataSource for InMemoryDataSource {
     }
 
     fn set_compression_proof(&mut self, proof: ZkSyncCompressionLayerProof) -> SourceResult<()> {
-        self.compression_proof.insert(proof.numeric_circuit_type(), proof);
+        self.compression_proof
+            .insert(proof.numeric_circuit_type(), proof);
         Ok(())
     }
 
-    fn set_compression_for_wrapper_proof(&mut self, proof: ZkSyncCompressionForWrapperProof) -> SourceResult<()> {
-        self.compression_for_wrapper_proof.insert(proof.numeric_circuit_type(), proof);
+    fn set_compression_for_wrapper_proof(
+        &mut self,
+        proof: ZkSyncCompressionForWrapperProof,
+    ) -> SourceResult<()> {
+        self.compression_for_wrapper_proof
+            .insert(proof.numeric_circuit_type(), proof);
         Ok(())
     }
 
     fn set_wrapper_proof(&mut self, proof: ZkSyncSnarkWrapperProof) -> SourceResult<()> {
-        self.wrapper_proof.insert(proof.numeric_circuit_type(), proof);
+        self.wrapper_proof
+            .insert(proof.numeric_circuit_type(), proof);
         Ok(())
     }
 }

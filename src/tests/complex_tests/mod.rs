@@ -31,9 +31,11 @@ use crate::zk_evm::witness_trace::VmWitnessTracer;
 use crate::zk_evm::GenericNoopTracer;
 use crate::zkevm_circuits::scheduler::input::SchedulerCircuitInstanceWitness;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
-use circuit_definitions::circuit_definitions::aux_layer::compression::{self, CompressionMode1Circuit};
-use circuit_definitions::circuit_definitions::base_layer::*;
+use circuit_definitions::circuit_definitions::aux_layer::compression::{
+    self, CompressionMode1Circuit,
+};
 use circuit_definitions::circuit_definitions::aux_layer::wrapper::*;
+use circuit_definitions::circuit_definitions::base_layer::*;
 use circuit_definitions::circuit_definitions::recursion_layer::leaf_layer::ZkSyncLeafLayerRecursiveCircuit;
 use circuit_definitions::circuit_definitions::recursion_layer::scheduler::SchedulerCircuit;
 use circuit_definitions::circuit_definitions::recursion_layer::*;
@@ -56,13 +58,11 @@ fn basic_test() {
 #[test]
 fn basic_test_compression_only() {
     let compression = std::env::var("COMPRESSION_NUM")
-        .map(|s| 
-            s.parse::<usize>().expect("should be a number")
-        ).unwrap_or(1);
+        .map(|s| s.parse::<usize>().expect("should be a number"))
+        .unwrap_or(1);
 
     testing_wrapper::test_compression_for_compression_num(compression as u8);
 }
-
 
 #[test]
 fn basic_test_compression_all_modes() {
@@ -1108,7 +1108,18 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 }
 
 fn try_to_compress_and_wrap_to_snark(
-    scheduler_witness: SchedulerCircuitInstanceWitness<GoldilocksField, boojum::gadgets::round_function::CircuitSimpleAlgebraicSponge<GoldilocksField, 8, 12, 4, Poseidon2Goldilocks, true>, GoldilocksExt2>
+    scheduler_witness: SchedulerCircuitInstanceWitness<
+        GoldilocksField,
+        boojum::gadgets::round_function::CircuitSimpleAlgebraicSponge<
+            GoldilocksField,
+            8,
+            12,
+            4,
+            Poseidon2Goldilocks,
+            true,
+        >,
+        GoldilocksExt2,
+    >,
 ) {
     use crate::data_source::*;
     use crate::zkevm_circuits::scheduler::SchedulerConfig;
@@ -1138,9 +1149,7 @@ fn try_to_compress_and_wrap_to_snark(
 
     match source.get_scheduler_proof() {
         Err(_) => panic!(),
-        Ok(proof) => {
-
-        }
+        Ok(proof) => {}
     }
 
     println!("DONE");

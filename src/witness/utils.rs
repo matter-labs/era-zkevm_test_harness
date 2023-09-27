@@ -27,8 +27,8 @@ use crate::zkevm_circuits::base_structures::vm_state::{
     FULL_SPONGE_QUEUE_STATE_WIDTH, QUEUE_STATE_WIDTH,
 };
 use crate::zkevm_circuits::fsm_input_output::circuit_inputs::INPUT_OUTPUT_COMMITMENT_LENGTH;
-use circuit_definitions::ZkSyncDefaultRoundFunction;
 use circuit_definitions::encodings::*;
+use circuit_definitions::ZkSyncDefaultRoundFunction;
 
 use super::*;
 
@@ -297,7 +297,8 @@ pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
     ctx.saved_context.aux_heap_upper_bound = out_of_circuit_context.aux_heap_bound;
 
     // context composite
-    ctx.saved_context.context_u128_value_composite = u128_as_u32_le(out_of_circuit_context.context_u128_value);
+    ctx.saved_context.context_u128_value_composite =
+        u128_as_u32_le(out_of_circuit_context.context_u128_value);
 
     // various counters
     ctx.saved_context.pc = out_of_circuit_context.pc;
@@ -675,8 +676,8 @@ pub fn initial_heap_content_commitment<
 ) -> [u8; 32] {
     let heap_writes = calldata_to_aligned_data(bootloader_heap_data);
 
-    use crate::zk_evm::aux_structures::*;
     use crate::zk_evm::abstractions::*;
+    use crate::zk_evm::aux_structures::*;
     use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 
     let mut memory_queue = MemoryQueueSimulator::empty();
@@ -714,8 +715,8 @@ pub fn events_queue_commitment<
     sorted_and_deduplicated_events: &Vec<LogQuery>,
     round_function: &R,
 ) -> [u8; 32] {
-    use crate::zk_evm::aux_structures::*;
     use crate::zk_evm::abstractions::*;
+    use crate::zk_evm::aux_structures::*;
     use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 
     let mut queue = LogQueueSimulator::empty();

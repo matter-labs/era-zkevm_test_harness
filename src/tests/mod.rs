@@ -299,21 +299,21 @@ pub(crate) fn test_compression_circuit(circuit: ZkSyncCompressionLayerCircuit) {
     use crate::boojum::config::DevCSConfig;
     use crate::boojum::cs::cs_builder::new_builder;
     use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
-    use circuit_definitions::circuit_definitions::aux_layer::compression::ProofCompressionFunction;
     use crate::boojum::cs::implementations::reference_cs::CSReferenceAssembly;
     use circuit_definitions::circuit_definitions::aux_layer::compression::CompressionLayerCircuit;
+    use circuit_definitions::circuit_definitions::aux_layer::compression::ProofCompressionFunction;
 
     type P = GoldilocksField;
     // type P = MixedGL;
 
     let worker = Worker::new();
 
-    fn test_inner<CF: ProofCompressionFunction> (
+    fn test_inner<CF: ProofCompressionFunction>(
         circuit: CompressionLayerCircuit<CF>,
-    ) -> CSReferenceAssembly<GoldilocksField, P, DevCSConfig>{
+    ) -> CSReferenceAssembly<GoldilocksField, P, DevCSConfig> {
         let geometry = circuit.geometry();
         let (max_trace_len, num_vars) = circuit.size_hint();
-    
+
         let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
             geometry,
             num_vars.unwrap(),
@@ -350,21 +350,21 @@ pub(crate) fn test_compression_for_wrapper_circuit(circuit: ZkSyncCompressionFor
     use crate::boojum::config::DevCSConfig;
     use crate::boojum::cs::cs_builder::new_builder;
     use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
-    use circuit_definitions::circuit_definitions::aux_layer::compression::ProofCompressionFunction;
     use crate::boojum::cs::implementations::reference_cs::CSReferenceAssembly;
     use circuit_definitions::circuit_definitions::aux_layer::compression::CompressionLayerCircuit;
+    use circuit_definitions::circuit_definitions::aux_layer::compression::ProofCompressionFunction;
 
     type P = GoldilocksField;
     // type P = MixedGL;
 
     let worker = Worker::new();
 
-    fn test_inner<CF: ProofCompressionFunction> (
+    fn test_inner<CF: ProofCompressionFunction>(
         circuit: CompressionLayerCircuit<CF>,
-    ) -> CSReferenceAssembly<GoldilocksField, P, DevCSConfig>{
+    ) -> CSReferenceAssembly<GoldilocksField, P, DevCSConfig> {
         let geometry = circuit.geometry();
         let (max_trace_len, num_vars) = circuit.size_hint();
-    
+
         let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
             geometry,
             num_vars.unwrap(),

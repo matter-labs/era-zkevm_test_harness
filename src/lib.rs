@@ -25,8 +25,8 @@ pub mod data_source;
 pub mod entry_point;
 pub mod geometry_config;
 pub mod proof_compression;
-pub mod snark_wrapper_test;
 pub mod prover_utils;
+pub mod snark_wrapper_test;
 pub mod utils;
 pub mod witness;
 
@@ -44,6 +44,6 @@ pub const INITIAL_MONOTONIC_CYCLE_COUNTER: u32 = 1024;
 
 // #[cfg(test)]
 pub mod helper;
-pub(crate) mod tests;
 pub mod in_memory_data_source;
 pub mod proof_wrapper_utils;
+pub(crate) mod tests;
