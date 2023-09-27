@@ -153,6 +153,42 @@ mod test {
     }
 
     #[test]
+    fn preform_step_2_compression_for_wrapper() {
+        let proof_file = std::fs::File::open("compression_1_proof.json").unwrap();
+        let proof: Proof<F, <CompressionMode1 as ProofCompressionFunction>::ThisLayerHasher, EXT> =
+            serde_json::from_reader(proof_file).unwrap();
+
+        let vk_file_file = std::fs::File::open("compression_1_vk.json").unwrap();
+        let vk: VerificationKey<
+            F,
+            <CompressionMode1 as ProofCompressionFunction>::ThisLayerHasher,
+        > = serde_json::from_reader(vk_file_file).unwrap();
+
+        let verifier_builder = CompressionMode1CircuitBuilder::dyn_verifier_builder();
+        let verifier = verifier_builder.create_verifier();
+        let is_valid = verifier.verify::<
+            <CompressionMode1 as ProofCompressionFunction>::ThisLayerHasher,
+            <CompressionMode1 as ProofCompressionFunction>::ThisLayerTranscript,
+            <CompressionMode1 as ProofCompressionFunction>::ThisLayerPoW,
+        >((), &vk, &proof.clone());
+        assert!(is_valid);
+
+        // make a compression circuit
+        let circuit = CompressionMode2ForWrapperCircuit {
+            witness: Some(proof.clone()),
+            config: CompressionRecursionConfig {
+                proof_config: CompressionMode1::proof_config_for_compression_step(),
+                verification_key: vk,
+                _marker: std::marker::PhantomData,
+            },
+            transcript_params: (),
+            _marker: std::marker::PhantomData,
+        };
+
+        prove_and_save(circuit, "compression_2_for_wrapper".to_string());
+    }
+
+    #[test]
     fn preform_step_3_compression() {
         let proof_file = std::fs::File::open("compression_2_proof.json").unwrap();
         let proof: Proof<F, <CompressionMode2 as ProofCompressionFunction>::ThisLayerHasher, EXT> =

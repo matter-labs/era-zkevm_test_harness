@@ -286,6 +286,53 @@ where
         }
     }
 
+    fn synthesis_inner<P: PrimeFieldLikeVectorized<Base = F>>(
+        inner: &ZkSyncUniformCircuitInstance<F, impl ZkSyncUniformSynthesisFunction<F>>,
+        hint: &FinalizationHintsForProver,
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
+        let geometry = inner.geometry_proxy();
+        let (max_trace_len, num_vars) = inner.size_hint();
+        let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig>::new(
+            geometry,
+            num_vars.unwrap(),
+            max_trace_len.unwrap(),
+        );
+        let cs_builder = new_builder::<_, F>(builder_impl);
+        let builder = inner.configure_builder_proxy(cs_builder);
+        let mut cs = builder.build(());
+        inner.add_tables_proxy(&mut cs);
+        inner.clone().synthesize_proxy(&mut cs);
+        cs.pad_and_shrink_using_hint(hint);
+        cs.into_assembly()
+    }
+
+    pub fn synthesis<P: PrimeFieldLikeVectorized<Base = F>>(
+        &self,
+        hint: &FinalizationHintsForProver,
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
+        match &self {
+            ZkSyncBaseLayerCircuit::MainVM(inner) => Self::synthesis_inner(inner, hint),
+            ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {
+                Self::synthesis_inner(inner, hint)
+            }
+            ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => Self::synthesis_inner(inner, hint),
+            ZkSyncBaseLayerCircuit::LogDemuxer(inner) => Self::synthesis_inner(inner, hint),
+            ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {
+                Self::synthesis_inner(inner, hint)
+            }
+            ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {
+                Self::synthesis_inner(inner, hint)
+            }
+            ZkSyncBaseLayerCircuit::ECRecover(inner) => Self::synthesis_inner(inner, hint),
+            ZkSyncBaseLayerCircuit::RAMPermutation(inner) => Self::synthesis_inner(inner, hint),
+            ZkSyncBaseLayerCircuit::StorageSorter(inner) => Self::synthesis_inner(inner, hint),
+            ZkSyncBaseLayerCircuit::StorageApplication(inner) => Self::synthesis_inner(inner, hint),
+            ZkSyncBaseLayerCircuit::EventsSorter(inner) => Self::synthesis_inner(inner, hint),
+            ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => Self::synthesis_inner(inner, hint),
+            ZkSyncBaseLayerCircuit::L1MessagesHasher(inner) => Self::synthesis_inner(inner, hint),
+        }
+    }
+
     pub fn geometry(&self) -> CSGeometry {
         match &self {
             ZkSyncBaseLayerCircuit::MainVM(inner) => inner.geometry_proxy(),
@@ -306,19 +353,45 @@ where
 
     pub fn debug_witness(&self) {
         match &self {
-            ZkSyncBaseLayerCircuit::MainVM(inner) => {inner.debug_witness();},
-            ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {inner.debug_witness();},
-            ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {inner.debug_witness();},
-            ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {inner.debug_witness();},
-            ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {inner.debug_witness();},
-            ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {inner.debug_witness();},
-            ZkSyncBaseLayerCircuit::ECRecover(inner) => {inner.debug_witness();},
-            ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {inner.debug_witness();},
-            ZkSyncBaseLayerCircuit::StorageSorter(inner) => {inner.debug_witness();},
-            ZkSyncBaseLayerCircuit::StorageApplication(inner) => {inner.debug_witness();},
-            ZkSyncBaseLayerCircuit::EventsSorter(inner) => {inner.debug_witness();},
-            ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {inner.debug_witness();},
-            ZkSyncBaseLayerCircuit::L1MessagesHasher(inner) => {inner.debug_witness();},
+            ZkSyncBaseLayerCircuit::MainVM(inner) => {
+                inner.debug_witness();
+            }
+            ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {
+                inner.debug_witness();
+            }
+            ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {
+                inner.debug_witness();
+            }
+            ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {
+                inner.debug_witness();
+            }
+            ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {
+                inner.debug_witness();
+            }
+            ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {
+                inner.debug_witness();
+            }
+            ZkSyncBaseLayerCircuit::ECRecover(inner) => {
+                inner.debug_witness();
+            }
+            ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {
+                inner.debug_witness();
+            }
+            ZkSyncBaseLayerCircuit::StorageSorter(inner) => {
+                inner.debug_witness();
+            }
+            ZkSyncBaseLayerCircuit::StorageApplication(inner) => {
+                inner.debug_witness();
+            }
+            ZkSyncBaseLayerCircuit::EventsSorter(inner) => {
+                inner.debug_witness();
+            }
+            ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {
+                inner.debug_witness();
+            }
+            ZkSyncBaseLayerCircuit::L1MessagesHasher(inner) => {
+                inner.debug_witness();
+            }
         };
 
         ()
@@ -395,6 +468,9 @@ pub type ZkSyncBaseLayerClosedFormInput<F> =
 
 use crate::boojum::algebraic_props::round_function::AbsorptionModeOverwrite;
 use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
+use crate::boojum::config::ProvingCSConfig;
+use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
+use crate::boojum::cs::implementations::reference_cs::CSReferenceAssembly;
 
 pub type BaseProofsTreeHasher = GoldilocksPoseidon2Sponge<AbsorptionModeOverwrite>;
 pub type ZkSyncBaseProof = Proof<GoldilocksField, BaseProofsTreeHasher, GoldilocksExt2>;
@@ -404,6 +480,8 @@ pub type ZkSyncBaseLayerProof = ZkSyncBaseLayerStorage<ZkSyncBaseProof>;
 pub type ZkSyncBaseLayerFinalizationHint = ZkSyncBaseLayerStorage<FinalizationHintsForProver>;
 
 use crate::boojum::cs::implementations::verifier::VerificationKey;
+use crate::boojum::field::traits::field_like::PrimeFieldLikeVectorized;
+
 pub type ZkSyncBaseVerificationKey = VerificationKey<GoldilocksField, BaseProofsTreeHasher>;
 
 pub type ZkSyncBaseLayerVerificationKey = ZkSyncBaseLayerStorage<ZkSyncBaseVerificationKey>;

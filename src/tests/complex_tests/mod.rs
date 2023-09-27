@@ -1,12 +1,16 @@
 pub mod utils;
 
 pub mod invididual_debugs;
+mod test_synthesis;
+
+pub mod testing_wrapper;
 
 use std::collections::{HashMap, VecDeque};
 
 use super::*;
 use crate::boojum::cs::implementations::pow::NoPow;
 use crate::boojum::cs::implementations::prover::ProofConfig;
+use crate::boojum::cs::implementations::setup::FinalizationHintsForProver;
 use crate::boojum::field::goldilocks::GoldilocksExt2;
 use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 use crate::compute_setups::*;
@@ -27,6 +31,10 @@ use crate::zk_evm::witness_trace::VmWitnessTracer;
 use crate::zk_evm::GenericNoopTracer;
 use crate::zkevm_circuits::scheduler::input::SchedulerCircuitInstanceWitness;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
+use circuit_definitions::circuit_definitions::aux_layer::compression::{
+    self, CompressionMode1Circuit,
+};
+use circuit_definitions::circuit_definitions::aux_layer::wrapper::*;
 use circuit_definitions::circuit_definitions::base_layer::*;
 use circuit_definitions::circuit_definitions::recursion_layer::leaf_layer::ZkSyncLeafLayerRecursiveCircuit;
 use circuit_definitions::circuit_definitions::recursion_layer::scheduler::SchedulerCircuit;
@@ -47,10 +55,76 @@ fn basic_test() {
     // run_and_try_create_witness_inner(test_artifact, 16);
 }
 
+#[test]
+fn basic_test_compression_only() {
+    let compression = std::env::var("COMPRESSION_NUM")
+        .map(|s| s.parse::<usize>().expect("should be a number"))
+        .unwrap_or(1);
+
+    testing_wrapper::test_compression_for_compression_num(compression as u8);
+}
+
+#[test]
+fn basic_test_compression_all_modes() {
+    for compression in 1..=5 {
+        println!("Testing wrapper for mode {}", compression);
+        testing_wrapper::test_compression_for_compression_num(compression as u8);
+    }
+}
+
+use crate::zkevm_circuits::recursion::compression::CompressionRecursionConfig;
+use circuit_definitions::circuit_definitions::aux_layer::compression_modes::*;
+use circuit_definitions::circuit_definitions::aux_layer::*;
+use circuit_definitions::circuit_definitions::aux_layer::compression::ProofCompressionFunction;
+use circuit_definitions::circuit_definitions::aux_layer::ZkSyncCompressionLayerVerificationKey;
+use crate::data_source::{LocalFileDataSource, SetupDataSource, BlockDataSource};
+use circuit_definitions::circuit_definitions::aux_layer::compression::*;
+use snark_wrapper::verifier_structs::allocated_vk::AllocatedVerificationKey;
+use snark_wrapper::franklin_crypto::plonk::circuit::bigint_new::BITWISE_LOGICAL_OPS_TABLE_NAME;
+use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::cs::*;
+use snark_wrapper::franklin_crypto::bellman::plonk::commitments::transcript::{
+    keccak_transcript::RollingKeccakTranscript,
+    Prng
+};
+use snark_wrapper::franklin_crypto::bellman::pairing::bn256::{Bn256, Fr};
+use snark_wrapper::franklin_crypto::bellman::kate_commitment::{Crs, CrsForMonomialForm};
+use snark_wrapper::verifier::WrapperCircuit;
+use rescue_poseidon::poseidon2::Poseidon2Sponge;
+use rescue_poseidon::poseidon2::transcript::Poseidon2Transcript;
+use snark_wrapper::implementations::poseidon2::tree_hasher::AbsorptionModeReplacement;
+use snark_wrapper::implementations::poseidon2::CircuitPoseidon2Sponge;
+use snark_wrapper::implementations::poseidon2::transcript::CircuitPoseidon2Transcript;
+use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::setup::VerificationKey as SnarkVK;
+use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::gates
+    ::selector_optimized_with_d_next::SelectorOptimizedWidth4MainGateWithDNext;
+
 use crate::boojum::algebraic_props::round_function::AbsorptionModeOverwrite;
 use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
 use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
+use crate::in_memory_data_source::InMemoryDataSource;
 use crate::witness::full_block_artifact::*;
+
+fn get_geometry_config() -> GeometryConfig {
+    // let geometry = crate::geometry_config::get_geometry_config();
+
+    GeometryConfig {
+        // cycles_per_vm_snapshot: 1,
+        cycles_per_vm_snapshot: 1024,
+        cycles_per_ram_permutation: 1024,
+        cycles_per_code_decommitter: 256,
+        cycles_per_storage_application: 4,
+        cycles_per_keccak256_circuit: 7,
+        cycles_per_sha256_circuit: 7,
+        cycles_per_ecrecover_circuit: 2,
+        // cycles_code_decommitter_sorter: 512,
+        cycles_code_decommitter_sorter: 3,
+        cycles_per_log_demuxer: 16,
+        cycles_per_storage_sorter: 16,
+        cycles_per_events_or_l1_messages_sorter: 4,
+
+        limit_for_l1_messages_pudata_hasher: 32,
+    }
+}
 
 pub(crate) fn generate_base_layer(
     mut test_artifact: TestArtifact,
@@ -181,25 +255,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
     use crate::external_calls::run;
     use crate::toolset::GeometryConfig;
 
-    let geometry = GeometryConfig {
-        // cycles_per_vm_snapshot: 1,
-        cycles_per_vm_snapshot: 1024,
-        cycles_per_ram_permutation: 1024,
-        cycles_per_code_decommitter: 256,
-        cycles_per_storage_application: 4,
-        cycles_per_keccak256_circuit: 7,
-        cycles_per_sha256_circuit: 7,
-        cycles_per_ecrecover_circuit: 2,
-        // cycles_code_decommitter_sorter: 512,
-        cycles_code_decommitter_sorter: 3,
-        cycles_per_log_demuxer: 16,
-        cycles_per_storage_sorter: 16,
-        cycles_per_events_or_l1_messages_sorter: 4,
-
-        limit_for_l1_messages_pudata_hasher: 32,
-    };
-
-    // let geometry = crate::geometry_config::get_geometry_config();
+    let geometry = get_geometry_config();
 
     // let (basic_block_circuits, basic_block_circuits_inputs, mut scheduler_partial_input) = run(
     let (
@@ -250,7 +306,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
     let mut setup_data = None;
 
-    let mut source = LocalFileDataSource;
+    let mut source = InMemoryDataSource::new();
     use crate::data_source::*;
 
     for (idx, el) in basic_block_circuits
@@ -979,7 +1035,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
     };
 
     let scheduler_circuit = SchedulerCircuit {
-        witness: scheduler_witness,
+        witness: scheduler_witness.clone(),
         config,
         transcript_params: (),
         _marker: std::marker::PhantomData,
@@ -1042,6 +1098,58 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
         source
             .set_scheduler_proof(ZkSyncRecursionLayerProof::SchedulerCircuit(proof))
             .unwrap();
+    }
+
+    println!("Computing compression proofs");
+
+    try_to_compress_and_wrap_to_snark(scheduler_witness);
+
+    println!("DONE");
+}
+
+fn try_to_compress_and_wrap_to_snark(
+    scheduler_witness: SchedulerCircuitInstanceWitness<
+        GoldilocksField,
+        boojum::gadgets::round_function::CircuitSimpleAlgebraicSponge<
+            GoldilocksField,
+            8,
+            12,
+            4,
+            Poseidon2Goldilocks,
+            true,
+        >,
+        GoldilocksExt2,
+    >,
+) {
+    use crate::data_source::*;
+    use crate::zkevm_circuits::scheduler::SchedulerConfig;
+
+    let worker = Worker::new_with_num_threads(8);
+
+    println!("Computing scheduler proof");
+    let mut source = LocalFileDataSource;
+
+    let node_vk = source.get_recursion_layer_node_vk().unwrap().into_inner();
+
+    let config = SchedulerConfig {
+        proof_config: recursion_layer_proof_config(),
+        vk_fixed_parameters: node_vk.fixed_parameters,
+        capacity: SCHEDULER_CAPACITY,
+        _marker: std::marker::PhantomData,
+    };
+
+    let scheduler_circuit = SchedulerCircuit {
+        witness: scheduler_witness,
+        config,
+        transcript_params: (),
+        _marker: std::marker::PhantomData,
+    };
+
+    let scheduler_circuit = ZkSyncRecursiveLayerCircuit::SchedulerCircuit(scheduler_circuit);
+
+    match source.get_scheduler_proof() {
+        Err(_) => panic!(),
+        Ok(proof) => {}
     }
 
     println!("DONE");

@@ -17,9 +17,11 @@ use crate::zkevm_circuits::recursion::{
     node_layer::{input::RecursionNodeInputWitness, NodeLayerRecursionConfig},
     VK_COMMITMENT_LENGTH,
 };
-use circuit_definitions::{ZkSyncDefaultRoundFunction, zkevm_circuits::scheduler::aux::NUM_CIRCUIT_TYPES_TO_SCHEDULE};
 use crate::zkevm_circuits::scheduler::LEAF_LAYER_PARAMETERS_COMMITMENT_LENGTH;
 use circuit_definitions::{base_layer_proof_config, recursion_layer_proof_config};
+use circuit_definitions::{
+    zkevm_circuits::scheduler::aux::NUM_CIRCUIT_TYPES_TO_SCHEDULE, ZkSyncDefaultRoundFunction,
+};
 use std::collections::VecDeque;
 
 type F = GoldilocksField;
@@ -226,16 +228,13 @@ pub fn compute_leaf_vks_and_params_commitment(
             MAX_VARS_LOG_2_FOR_CALCULATION,
         );
 
-    let params_commitment: [_; LEAF_LAYER_PARAMETERS_COMMITMENT_LENGTH] = compute_encodable_item_from_witness::<
-        [RecursionLeafParameters<F>; NUM_CIRCUIT_TYPES_TO_SCHEDULE],
-        LEAF_LAYER_PARAMETERS_COMMITMENT_LENGTH,
-        _,
-        _,
-    >(
-        leaf_params,
-        &mut cs_for_witness_generation,
-        &round_function,
-    );
+    let params_commitment: [_; LEAF_LAYER_PARAMETERS_COMMITMENT_LENGTH] =
+        compute_encodable_item_from_witness::<
+            [RecursionLeafParameters<F>; NUM_CIRCUIT_TYPES_TO_SCHEDULE],
+            LEAF_LAYER_PARAMETERS_COMMITMENT_LENGTH,
+            _,
+            _,
+        >(leaf_params, &mut cs_for_witness_generation, &round_function);
 
     params_commitment
 }
@@ -333,7 +332,10 @@ pub fn create_node_witnesses(
         }
         let num_chunks = chunk.len();
         // we can immediatelly collect proofs
-        let proofs: Vec<_> = (&mut proofs_iter).take(num_chunks).map(|el| el.into_inner()).collect();
+        let proofs: Vec<_> = (&mut proofs_iter)
+            .take(num_chunks)
+            .map(|el| el.into_inner())
+            .collect();
         assert_eq!(proofs.len(), num_chunks); // so we indeed taken exactly enough
 
         // now even though we would have a chunk of len N, we should only create N-1 split points at the end

@@ -1,4 +1,4 @@
-use crate::{boojum::field::SmallField, aux_definitions::witness_oracle::u128_as_u32_le};
+use crate::{aux_definitions::witness_oracle::u128_as_u32_le, boojum::field::SmallField};
 use zk_evm::vm_state::CallStackEntry;
 
 use super::*;

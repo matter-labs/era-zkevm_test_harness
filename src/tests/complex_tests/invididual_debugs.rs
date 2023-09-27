@@ -2,9 +2,9 @@ use super::*;
 
 #[cfg(test)]
 mod test {
-    use std::io::Read;
     use super::*;
     use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
+    use std::io::Read;
 
     #[test]
     fn read_and_run() {
@@ -14,7 +14,11 @@ mod test {
         let mut buffer = vec![];
         content.read_to_end(&mut buffer).unwrap();
 
-        type BaseLayerCircuit = ZkSyncBaseLayerCircuit<GoldilocksField, VmWitnessOracle<GoldilocksField>, ZkSyncDefaultRoundFunction>;
+        type BaseLayerCircuit = ZkSyncBaseLayerCircuit<
+            GoldilocksField,
+            VmWitnessOracle<GoldilocksField>,
+            ZkSyncDefaultRoundFunction,
+        >;
 
         let mut circuit: BaseLayerCircuit = bincode::deserialize(&buffer).unwrap();
         // circuit.debug_witness();
@@ -22,8 +26,18 @@ mod test {
         match &mut circuit {
             ZkSyncBaseLayerCircuit::MainVM(inner) => {
                 let witness = inner.clone_witness().unwrap();
-                dbg!(witness.closed_form_input.hidden_fsm_input.context_composite_u128);
-                dbg!(witness.closed_form_input.hidden_fsm_output.context_composite_u128);
+                dbg!(
+                    witness
+                        .closed_form_input
+                        .hidden_fsm_input
+                        .context_composite_u128
+                );
+                dbg!(
+                    witness
+                        .closed_form_input
+                        .hidden_fsm_output
+                        .context_composite_u128
+                );
             }
             ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {
                 let witness = inner.clone_witness().unwrap();
@@ -39,13 +53,11 @@ mod test {
                 let sorted_items = witness.sorted_queue_witness.elements;
                 dbg!(initial_items.len());
                 dbg!(sorted_items.len());
-                
+
                 let mut tmp: Vec<_> = initial_items.clone().into();
-                tmp.sort_by(|a, b| {
-                    match a.0.code_hash.cmp(&b.0.code_hash) {
-                        std::cmp::Ordering::Equal => a.0.timestamp.cmp(&b.0.timestamp),
-                        a @ _ => a,
-                    }
+                tmp.sort_by(|a, b| match a.0.code_hash.cmp(&b.0.code_hash) {
+                    std::cmp::Ordering::Equal => a.0.timestamp.cmp(&b.0.timestamp),
+                    a @ _ => a,
                 });
 
                 let other: Vec<_> = sorted_items.clone().into();
@@ -73,7 +85,7 @@ mod test {
                         tmp = Some((query.code_hash, query.page, query.timestamp));
                     }
                 }
-            },
+            }
             _ => {}
         }
 
@@ -106,19 +118,27 @@ mod test {
                     let vk = inner.witness.node_layer_vk_witness.clone();
                     // let vk = ZkSyncRecursionLayerVerificationKey::from_inner(ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8, vk);
                     // let proof = ZkSyncRecursionLayerProof::from_inner(ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8, el.clone());
-                    let valid = verify_recursion_layer_proof_for_type::<NoPow>(ZkSyncRecursionLayerStorageType::NodeLayerCircuit, el, &vk);
+                    let valid = verify_recursion_layer_proof_for_type::<NoPow>(
+                        ZkSyncRecursionLayerStorageType::NodeLayerCircuit,
+                        el,
+                        &vk,
+                    );
                     assert!(valid);
                 }
-            },
+            }
             ZkSyncRecursiveLayerCircuit::NodeLayerCircuit(inner) => {
                 let vk = inner.witness.vk_witness.clone();
                 for el in inner.witness.proof_witnesses.iter() {
                     // let vk = ZkSyncRecursionLayerVerificationKey::from_inner(ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8, vk);
                     // let proof = ZkSyncRecursionLayerProof::from_inner(ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8, el.clone());
-                    let valid = verify_recursion_layer_proof_for_type::<NoPow>(ZkSyncRecursionLayerStorageType::NodeLayerCircuit, el, &vk);
+                    let valid = verify_recursion_layer_proof_for_type::<NoPow>(
+                        ZkSyncRecursionLayerStorageType::NodeLayerCircuit,
+                        el,
+                        &vk,
+                    );
                     assert!(valid);
                 }
-            },
+            }
             _ => {}
         }
 

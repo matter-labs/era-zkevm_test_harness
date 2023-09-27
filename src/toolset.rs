@@ -64,13 +64,12 @@ use crate::zk_evm::vm_state::{PrimitiveValue, VmState};
 use crate::zk_evm::zkevm_opcode_defs::*;
 
 /// We expect that storage/memory/decommitter were prefilled
-pub fn create_out_of_circuit_vm<'a, S: Storage>(
-    tools: &'a mut ProvingToolset<S>,
-    block_properties: &'a BlockProperties,
+pub fn create_out_of_circuit_vm<S: Storage>(
+    tools: ProvingToolset<S>,
+    block_properties: BlockProperties,
     caller_address: Address,
     entry_point_address: Address,
 ) -> VmState<
-    'a,
     S,
     SimpleMemory,
     InMemoryEventSink,
@@ -79,12 +78,12 @@ pub fn create_out_of_circuit_vm<'a, S: Storage>(
     WitnessTracer,
 > {
     let mut vm = VmState::empty_state(
-        &mut tools.storage,
-        &mut tools.memory,
-        &mut tools.event_sink,
-        &mut tools.precompiles_processor,
-        &mut tools.decommittment_processor,
-        &mut tools.witness_tracer,
+        tools.storage,
+        tools.memory,
+        tools.event_sink,
+        tools.precompiles_processor,
+        tools.decommittment_processor,
+        tools.witness_tracer,
         block_properties,
     );
 
