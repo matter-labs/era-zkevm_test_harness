@@ -83,7 +83,7 @@ use snark_wrapper::verifier_structs::allocated_vk::AllocatedVerificationKey;
 use snark_wrapper::franklin_crypto::plonk::circuit::bigint_new::BITWISE_LOGICAL_OPS_TABLE_NAME;
 use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::cs::*;
 use snark_wrapper::franklin_crypto::bellman::plonk::commitments::transcript::{
-    keccak_transcript::RollingKeccakTranscript, 
+    keccak_transcript::RollingKeccakTranscript,
     Prng
 };
 use snark_wrapper::franklin_crypto::bellman::pairing::bn256::{Bn256, Fr};

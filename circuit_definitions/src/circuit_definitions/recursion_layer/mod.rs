@@ -5,10 +5,10 @@ use crate::boojum::field::goldilocks::{GoldilocksExt2, GoldilocksField};
 use crate::boojum::gadgets::recursion::recursive_transcript::CircuitAlgebraicSpongeBasedTranscript;
 use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
 use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
+use zkevm_circuits::boojum::cs::traits::circuit::CircuitBuilder;
 use zkevm_circuits::recursion::leaf_layer::input::RecursionLeafParametersWitness;
 use zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord;
-use zkevm_circuits::boojum::cs::traits::circuit::CircuitBuilder;
 
 pub mod circuit_def;
 pub mod leaf_layer;
@@ -434,7 +434,6 @@ impl ZkSyncRecursiveLayerCircuit {
     }
 
     pub fn geometry(&self) -> CSGeometry {
-
         match &self {
             Self::SchedulerCircuit(..) => ZkSyncSchedulerCircuit::geometry(),
             Self::NodeLayerCircuit(..) => ZkSyncNodeLayerRecursiveCircuit::geometry(),
@@ -456,7 +455,10 @@ impl ZkSyncRecursiveLayerCircuit {
         }
     }
 
-    fn synthesis_inner<P: PrimeFieldLikeVectorized<Base = F>>(inner: &ZkSyncLeafLayerRecursiveCircuit, hint: &FinalizationHintsForProver) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
+    fn synthesis_inner<P: PrimeFieldLikeVectorized<Base = F>>(
+        inner: &ZkSyncLeafLayerRecursiveCircuit,
+        hint: &FinalizationHintsForProver,
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
         let geometry = ZkSyncLeafLayerRecursiveCircuit::geometry();
         let (max_trace_len, num_vars) = inner.size_hint();
         let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig>::new(
@@ -474,7 +476,10 @@ impl ZkSyncRecursiveLayerCircuit {
         cs.into_assembly()
     }
 
-    pub fn synthesis<P: PrimeFieldLikeVectorized<Base = F>>(&self, hint: &FinalizationHintsForProver) ->  CSReferenceAssembly<F, P, ProvingCSConfig> {
+    pub fn synthesis<P: PrimeFieldLikeVectorized<Base = F>>(
+        &self,
+        hint: &FinalizationHintsForProver,
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
         match &self {
             Self::SchedulerCircuit(inner) => {
                 let geometry = ZkSyncSchedulerCircuit::geometry();

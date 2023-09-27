@@ -160,7 +160,8 @@ pub type CompressionMode1ForWrapperCircuit = CompressionLayerCircuit<Compression
 pub type CompressionMode2ForWrapperCircuit = CompressionLayerCircuit<CompressionMode2ForWrapper>;
 pub type CompressionMode3ForWrapperCircuit = CompressionLayerCircuit<CompressionMode3ForWrapper>;
 pub type CompressionMode4ForWrapperCircuit = CompressionLayerCircuit<CompressionMode4ForWrapper>;
-pub type CompressionModeToL1ForWrapperCircuit = CompressionLayerCircuit<CompressionModeToL1ForWrapper>;
+pub type CompressionModeToL1ForWrapperCircuit =
+    CompressionLayerCircuit<CompressionModeToL1ForWrapper>;
 
 use crate::circuit_definitions::traits::circuit::CircuitBuilderProxy;
 
@@ -170,8 +171,13 @@ pub type CompressionMode3CircuitBuilder = CircuitBuilderProxy<F, CompressionMode
 pub type CompressionMode4CircuitBuilder = CircuitBuilderProxy<F, CompressionMode4Circuit>;
 pub type CompressionModeToL1CircuitBuilder = CircuitBuilderProxy<F, CompressionModeToL1Circuit>;
 
-pub type CompressionMode1ForWrapperCircuitBuilder = CircuitBuilderProxy<F, CompressionMode1ForWrapperCircuit>;
-pub type CompressionMode2ForWrapperCircuitBuilder = CircuitBuilderProxy<F, CompressionMode2ForWrapperCircuit>;
-pub type CompressionMode3ForWrapperCircuitBuilder = CircuitBuilderProxy<F, CompressionMode3ForWrapperCircuit>;
-pub type CompressionMode4ForWrapperCircuitBuilder = CircuitBuilderProxy<F, CompressionMode4ForWrapperCircuit>;
-pub type CompressionModeToL1ForWrapperCircuitBuilder = CircuitBuilderProxy<F, CompressionModeToL1ForWrapperCircuit>;
+pub type CompressionMode1ForWrapperCircuitBuilder =
+    CircuitBuilderProxy<F, CompressionMode1ForWrapperCircuit>;
+pub type CompressionMode2ForWrapperCircuitBuilder =
+    CircuitBuilderProxy<F, CompressionMode2ForWrapperCircuit>;
+pub type CompressionMode3ForWrapperCircuitBuilder =
+    CircuitBuilderProxy<F, CompressionMode3ForWrapperCircuit>;
+pub type CompressionMode4ForWrapperCircuitBuilder =
+    CircuitBuilderProxy<F, CompressionMode4ForWrapperCircuit>;
+pub type CompressionModeToL1ForWrapperCircuitBuilder =
+    CircuitBuilderProxy<F, CompressionModeToL1ForWrapperCircuit>;

@@ -286,7 +286,10 @@ where
         }
     }
 
-    fn synthesis_inner<P: PrimeFieldLikeVectorized<Base = F>>(inner: &ZkSyncUniformCircuitInstance<F, impl ZkSyncUniformSynthesisFunction<F>>, hint: &FinalizationHintsForProver) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
+    fn synthesis_inner<P: PrimeFieldLikeVectorized<Base = F>>(
+        inner: &ZkSyncUniformCircuitInstance<F, impl ZkSyncUniformSynthesisFunction<F>>,
+        hint: &FinalizationHintsForProver,
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
         let geometry = inner.geometry_proxy();
         let (max_trace_len, num_vars) = inner.size_hint();
         let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig>::new(
@@ -303,47 +306,30 @@ where
         cs.into_assembly()
     }
 
-    pub fn synthesis<P: PrimeFieldLikeVectorized<Base = F>>(&self, hint: &FinalizationHintsForProver) ->  CSReferenceAssembly<F, P, ProvingCSConfig>{
+    pub fn synthesis<P: PrimeFieldLikeVectorized<Base = F>>(
+        &self,
+        hint: &FinalizationHintsForProver,
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
         match &self {
-            ZkSyncBaseLayerCircuit::MainVM(inner) => {
-                Self::synthesis_inner(inner, hint)
-            }
+            ZkSyncBaseLayerCircuit::MainVM(inner) => Self::synthesis_inner(inner, hint),
             ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {
                 Self::synthesis_inner(inner, hint)
             }
-            ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {
-                Self::synthesis_inner(inner, hint)
-            }
-            ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {
-                Self::synthesis_inner(inner, hint)
-            }
+            ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => Self::synthesis_inner(inner, hint),
+            ZkSyncBaseLayerCircuit::LogDemuxer(inner) => Self::synthesis_inner(inner, hint),
             ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {
                 Self::synthesis_inner(inner, hint)
             }
             ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {
                 Self::synthesis_inner(inner, hint)
             }
-            ZkSyncBaseLayerCircuit::ECRecover(inner) => {
-                Self::synthesis_inner(inner, hint)
-            }
-            ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {
-                Self::synthesis_inner(inner, hint)
-            }
-            ZkSyncBaseLayerCircuit::StorageSorter(inner) => {
-                Self::synthesis_inner(inner, hint)
-            }
-            ZkSyncBaseLayerCircuit::StorageApplication(inner) => {
-                Self::synthesis_inner(inner, hint)
-            }
-            ZkSyncBaseLayerCircuit::EventsSorter(inner) => {
-                Self::synthesis_inner(inner, hint)
-            }
-            ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {
-                Self::synthesis_inner(inner, hint)
-            }
-            ZkSyncBaseLayerCircuit::L1MessagesHasher(inner) => {
-                Self::synthesis_inner(inner, hint)
-            }
+            ZkSyncBaseLayerCircuit::ECRecover(inner) => Self::synthesis_inner(inner, hint),
+            ZkSyncBaseLayerCircuit::RAMPermutation(inner) => Self::synthesis_inner(inner, hint),
+            ZkSyncBaseLayerCircuit::StorageSorter(inner) => Self::synthesis_inner(inner, hint),
+            ZkSyncBaseLayerCircuit::StorageApplication(inner) => Self::synthesis_inner(inner, hint),
+            ZkSyncBaseLayerCircuit::EventsSorter(inner) => Self::synthesis_inner(inner, hint),
+            ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => Self::synthesis_inner(inner, hint),
+            ZkSyncBaseLayerCircuit::L1MessagesHasher(inner) => Self::synthesis_inner(inner, hint),
         }
     }
 
@@ -367,19 +353,45 @@ where
 
     pub fn debug_witness(&self) {
         match &self {
-            ZkSyncBaseLayerCircuit::MainVM(inner) => {inner.debug_witness();},
-            ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {inner.debug_witness();},
-            ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {inner.debug_witness();},
-            ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {inner.debug_witness();},
-            ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {inner.debug_witness();},
-            ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {inner.debug_witness();},
-            ZkSyncBaseLayerCircuit::ECRecover(inner) => {inner.debug_witness();},
-            ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {inner.debug_witness();},
-            ZkSyncBaseLayerCircuit::StorageSorter(inner) => {inner.debug_witness();},
-            ZkSyncBaseLayerCircuit::StorageApplication(inner) => {inner.debug_witness();},
-            ZkSyncBaseLayerCircuit::EventsSorter(inner) => {inner.debug_witness();},
-            ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {inner.debug_witness();},
-            ZkSyncBaseLayerCircuit::L1MessagesHasher(inner) => {inner.debug_witness();},
+            ZkSyncBaseLayerCircuit::MainVM(inner) => {
+                inner.debug_witness();
+            }
+            ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {
+                inner.debug_witness();
+            }
+            ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {
+                inner.debug_witness();
+            }
+            ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {
+                inner.debug_witness();
+            }
+            ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {
+                inner.debug_witness();
+            }
+            ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {
+                inner.debug_witness();
+            }
+            ZkSyncBaseLayerCircuit::ECRecover(inner) => {
+                inner.debug_witness();
+            }
+            ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {
+                inner.debug_witness();
+            }
+            ZkSyncBaseLayerCircuit::StorageSorter(inner) => {
+                inner.debug_witness();
+            }
+            ZkSyncBaseLayerCircuit::StorageApplication(inner) => {
+                inner.debug_witness();
+            }
+            ZkSyncBaseLayerCircuit::EventsSorter(inner) => {
+                inner.debug_witness();
+            }
+            ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {
+                inner.debug_witness();
+            }
+            ZkSyncBaseLayerCircuit::L1MessagesHasher(inner) => {
+                inner.debug_witness();
+            }
         };
 
         ()

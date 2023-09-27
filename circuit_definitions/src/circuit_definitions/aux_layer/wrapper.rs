@@ -1,10 +1,10 @@
 use super::*;
 
+use crate::circuit_definitions::aux_layer::compression_modes::*;
 use snark_wrapper::franklin_crypto::bellman::pairing::Engine;
 use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::cs::ConstraintSystem as SnarkConstraintSystem;
 use snark_wrapper::traits::circuit::ErasedBuilderForWrapperVerifier;
 use snark_wrapper::traits::circuit::ProofWrapperFunction;
-use crate::circuit_definitions::aux_layer::compression_modes::*;
 
 use crate::ProofConfig;
 
@@ -22,19 +22,19 @@ impl ZkSyncCompressionWrapper {
         match num_type {
             a if a == ZkSyncCompressionLayerStorageType::CompressionMode1Circuit as u8 => {
                 Self::CompressionMode1Circuit
-            },
+            }
             a if a == ZkSyncCompressionLayerStorageType::CompressionMode2Circuit as u8 => {
                 Self::CompressionMode2Circuit
-            },
+            }
             a if a == ZkSyncCompressionLayerStorageType::CompressionMode3Circuit as u8 => {
                 Self::CompressionMode3Circuit
-            },
+            }
             a if a == ZkSyncCompressionLayerStorageType::CompressionMode4Circuit as u8 => {
                 Self::CompressionMode4Circuit
-            },
+            }
             a if a == ZkSyncCompressionLayerStorageType::CompressionModeToL1Circuit as u8 => {
                 Self::CompressionModeToL1Circuit
-            },
+            }
             a => panic!("Unknown numeric circuit type: {}", a),
         }
     }
@@ -62,7 +62,7 @@ impl ZkSyncCompressionWrapper {
 
 impl<E: Engine> ProofWrapperFunction<E> for ZkSyncCompressionWrapper {
     fn builder_for_wrapper<CS: SnarkConstraintSystem<E> + 'static>(
-        &self
+        &self,
     ) -> Box<dyn ErasedBuilderForWrapperVerifier<E, CS>> {
         match &self {
             Self::CompressionMode1Circuit => {
