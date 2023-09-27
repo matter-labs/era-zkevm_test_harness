@@ -26,7 +26,7 @@ pub type TreeHasherForWrapper = CircuitPoseidon2Sponge<Bn256, 2, 3, 3, true>;
 pub type TranscriptForWrapper = CircuitPoseidon2Transcript<Bn256, 2, 3, 3, true>;
 
 pub(crate) const CRS_FILE_ENV_VAR: &str = "CRS_FILE";
-pub(crate) const L1_VERIFIER_DOMAIN_SIZE_LOG: usize = 26;
+pub(crate) const L1_VERIFIER_DOMAIN_SIZE_LOG: usize = 24;
 
 use crate::data_source::{BlockDataSource, SetupDataSource};
 use crate::in_memory_data_source::InMemoryDataSource;
