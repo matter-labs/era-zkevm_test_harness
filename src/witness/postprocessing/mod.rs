@@ -111,12 +111,14 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
     let mut code_decommittments_sorter_circuit_compact_forms_witnesses = vec![];
     let num_instances = decommittments_deduplicator_circuits_data.len();
     let mut observable_input = None;
-    for (circuit_idx, mut circuit_input) in decommittments_deduplicator_circuits_data.into_iter().enumerate() {
-
+    for (circuit_idx, mut circuit_input) in decommittments_deduplicator_circuits_data
+        .into_iter()
+        .enumerate()
+    {
         use crate::witness::utils::vm_instance_witness_to_circuit_formal_input;
         let is_first = circuit_idx == 0;
         let is_last = circuit_idx == num_instances - 1;
-        
+
         if observable_input.is_none() {
             assert!(is_first);
             observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
@@ -617,7 +619,8 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
 
     let basic_circuits_public_inputs = BlockBasicCircuitsPublicCompactFormsWitnesses {
         main_vm_circuits: main_vm_circuits_compact_forms_witnesses,
-        code_decommittments_sorter_circuits: code_decommittments_sorter_circuit_compact_forms_witnesses,
+        code_decommittments_sorter_circuits:
+            code_decommittments_sorter_circuit_compact_forms_witnesses,
         code_decommitter_circuits: code_decommitter_circuits_compact_forms_witnesses,
         log_demux_circuits: log_demux_circuits_compact_forms_witnesses,
         keccak_precompile_circuits: keccak_precompile_circuits_compact_forms_witnesses,

@@ -76,13 +76,31 @@ mod test {
             ZkSyncCircuit::StorageApplication(inner) => {
                 let inner = inner.clone();
                 let inner = inner.witness.take().unwrap();
-                assert_eq!(inner.storage_queue_witness.wit.len(), inner.merkle_paths.len());
-                assert_eq!(inner.storage_queue_witness.wit.len(), inner.leaf_indexes_for_reads.len());
+                assert_eq!(
+                    inner.storage_queue_witness.wit.len(),
+                    inner.merkle_paths.len()
+                );
+                assert_eq!(
+                    inner.storage_queue_witness.wit.len(),
+                    inner.leaf_indexes_for_reads.len()
+                );
                 dbg!(&inner.closed_form_input.start_flag);
-                println!("0x{:032x}", inner.closed_form_input.observable_input.initial_root[0]);
-                println!("0x{:032x}", inner.closed_form_input.observable_input.initial_root[1]);
-                println!("0x{:032x}", inner.closed_form_input.hidden_fsm_input.root_hash[0]);
-                println!("0x{:032x}", inner.closed_form_input.hidden_fsm_input.root_hash[1]);
+                println!(
+                    "0x{:032x}",
+                    inner.closed_form_input.observable_input.initial_root[0]
+                );
+                println!(
+                    "0x{:032x}",
+                    inner.closed_form_input.observable_input.initial_root[1]
+                );
+                println!(
+                    "0x{:032x}",
+                    inner.closed_form_input.hidden_fsm_input.root_hash[0]
+                );
+                println!(
+                    "0x{:032x}",
+                    inner.closed_form_input.hidden_fsm_input.root_hash[1]
+                );
                 // dbg!(&inner);
             }
             ZkSyncCircuit::MainVM(inner) => {

@@ -1,4 +1,5 @@
 use crate::bellman::bn256::Bn256;
+use crate::blake2::Blake2s256;
 use crate::entry_point::*;
 use crate::franklin_crypto::plonk::circuit::allocated_num::Num;
 use crate::toolset::create_tools;
@@ -15,7 +16,6 @@ use crate::{
     witness::full_block_artifact::FullBlockArtifacts,
 };
 use ::tracing;
-use crate::blake2::Blake2s256;
 use sync_vm::scheduler::block_header::*;
 use sync_vm::testing::create_test_artifacts_with_optimized_gate;
 use sync_vm::{
@@ -120,7 +120,6 @@ pub fn run<
 
     use crate::toolset::create_out_of_circuit_vm;
 
-
     // first there exists non-deterministic writes into the heap of the bootloader's heap and calldata
     // heap
 
@@ -139,7 +138,6 @@ pub fn run<
         tools.witness_tracer.add_memory_query(0, query);
         tools.memory.execute_partial_query(0, query);
     }
-
 
     let mut memory_verification_queries: Vec<
         sync_vm::glue::code_unpacker_sha256::memory_query_updated::MemoryQueryWitness<Bn256>,
@@ -210,16 +208,16 @@ pub fn run<
         }
 
         for word in start_word..end_word {
-            let query = MemoryQuery { 
-                timestamp: Timestamp(0), 
-                location: MemoryLocation { 
-                    memory_type: MemoryType::Heap, 
-                    page: MemoryPage(r1_fat_ptr.memory_page), 
-                    index: MemoryIndex(word)
-                }, 
-                rw_flag: false, 
-                value_is_pointer: false, 
-                value: U256::zero() 
+            let query = MemoryQuery {
+                timestamp: Timestamp(0),
+                location: MemoryLocation {
+                    memory_type: MemoryType::Heap,
+                    page: MemoryPage(r1_fat_ptr.memory_page),
+                    index: MemoryIndex(word),
+                },
+                rw_flag: false,
+                value_is_pointer: false,
+                value: U256::zero(),
             };
             let memory_content = out_of_circuit_vm.memory.execute_partial_query(0, query);
             let mut buffer = [0u8; 32];
@@ -227,10 +225,15 @@ pub fn run<
             aligned_returndata.extend(buffer);
         }
 
-        let unaligned_returndata = aligned_returndata[((r1_fat_ptr.start as usize) % 32)..][..(r1_fat_ptr.length as usize)].to_vec();
-        panic!("root frame ended up with panic with returndata 0x{}", hex::encode(&unaligned_returndata));
+        let unaligned_returndata = aligned_returndata[((r1_fat_ptr.start as usize) % 32)..]
+            [..(r1_fat_ptr.length as usize)]
+            .to_vec();
+        panic!(
+            "root frame ended up with panic with returndata 0x{}",
+            hex::encode(&unaligned_returndata)
+        );
     }
-    
+
     assert_eq!(
         out_of_circuit_vm.local_state.callstack.current.pc, 0,
         "root frame ended up with panic"

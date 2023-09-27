@@ -220,7 +220,7 @@ impl<E: Engine> FullBlockArtifacts<E> {
                 self,
                 round_function,
                 geometry.cycles_per_code_decommitter as usize,
-                geometry.cycles_per_code_decommitter_sorter as usize
+                geometry.cycles_per_code_decommitter_sorter as usize,
             );
 
         self.code_decommitter_circuits_data = code_decommitter_circuits_data;
@@ -483,7 +483,8 @@ impl<E: Engine> BlockBasicCircuits<E> {
         result.extend(
             code_decommittments_sorter_circuits
                 .into_iter()
-                .map(|el| ZkSyncCircuit::CodeDecommittmentsSorter(el)));
+                .map(|el| ZkSyncCircuit::CodeDecommittmentsSorter(el)),
+        );
 
         result.extend(
             code_decommitter_circuits
