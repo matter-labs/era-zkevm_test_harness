@@ -177,7 +177,8 @@ impl CallstackWithAuxData {
         previous_simple_entry: CallStackEntry,
         new_simple_entry: CallStackEntry,
     ) {
-        self.flat_new_frames_history.push((monotonic_cycle_counter, new_simple_entry));
+        self.flat_new_frames_history
+            .push((monotonic_cycle_counter, new_simple_entry));
 
         let new_counter = self.monotonic_frame_counter;
         self.monotonic_frame_counter += 1;

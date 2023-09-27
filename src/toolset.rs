@@ -72,7 +72,7 @@ use zk_evm::zkevm_opcode_defs::*;
 
 /// We expect that storage/memory/decommitter were prefilled
 pub fn create_out_of_circuit_vm<S: Storage, M: Memory>(
-    tools:  ProvingToolset<S, M>,
+    tools: ProvingToolset<S, M>,
     block_properties: BlockProperties,
     caller_address: Address,
     entry_point_address: Address,

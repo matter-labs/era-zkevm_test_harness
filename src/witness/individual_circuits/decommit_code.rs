@@ -6,7 +6,6 @@ use crate::ff::Field;
 use crate::utils::biguint_from_u256;
 use crate::witness::full_block_artifact::FullBlockArtifacts;
 use rayon::prelude::*;
-use sync_vm::utils::IdentifyFirstLast;
 use std::cmp::Ordering;
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -18,6 +17,7 @@ use sync_vm::glue::sort_decommittment_requests::input::CodeDecommittmentsDedupli
 use sync_vm::inputs::ClosedFormInputWitness;
 use sync_vm::scheduler::queues::DecommitQueryWitness;
 use sync_vm::utils::u64_to_fe;
+use sync_vm::utils::IdentifyFirstLast;
 use zk_evm::aux_structures::MemoryIndex;
 use zk_evm::aux_structures::MemoryQuery;
 
@@ -66,7 +66,9 @@ pub fn compute_decommitter_circuit_snapshots<
         unsorted_decommittment_requests_with_data.push((*decommittment_request, data));
     }
 
-    let num_circuits = (artifacts.all_decommittment_queries.len() + dedublicator_circuit_capacity - 1) / dedublicator_circuit_capacity;
+    let num_circuits = (artifacts.all_decommittment_queries.len() + dedublicator_circuit_capacity
+        - 1)
+        / dedublicator_circuit_capacity;
 
     // internally parallelizable by the factor of 3
     for (cycle, decommittment_request, _) in artifacts.all_decommittment_queries.iter() {
@@ -97,11 +99,15 @@ pub fn compute_decommitter_circuit_snapshots<
     let mut first_encountered_timestamps = vec![];
     let mut previous_record_encodings = vec![];
     let mut first_encountered_timestamp = 0;
-    let mut previous_deduplicated_decommittment_queue_simulator = deduplicated_decommittment_queue_simulator.clone();
+    let mut previous_deduplicated_decommittment_queue_simulator =
+        deduplicated_decommittment_queue_simulator.clone();
 
     let num_items = sorted_decommittment_requests_with_data.len();
 
-    for (idx, (query, writes)) in sorted_decommittment_requests_with_data.into_iter().enumerate() {
+    for (idx, (query, writes)) in sorted_decommittment_requests_with_data
+        .into_iter()
+        .enumerate()
+    {
         let last = idx == num_items - 1;
         if query.is_fresh {
             first_encountered_timestamp = query.timestamp.0;
@@ -141,7 +147,8 @@ pub fn compute_decommitter_circuit_snapshots<
             // and sorted request
             artifacts.deduplicated_decommittment_queries.push(query);
 
-            previous_deduplicated_decommittment_queue_simulator = deduplicated_decommittment_queue_simulator.clone();
+            previous_deduplicated_decommittment_queue_simulator =
+                deduplicated_decommittment_queue_simulator.clone();
             let (_old_tail, intermediate_info) = deduplicated_decommittment_queue_simulator
                 .push_and_output_intermediate_data(query, round_function);
 
@@ -163,24 +170,33 @@ pub fn compute_decommitter_circuit_snapshots<
             counter = 0;
 
             if last {
-                dedublicated_intermediate_states.push(take_sponge_like_queue_state_from_simulator(&deduplicated_decommittment_queue_simulator));
+                dedublicated_intermediate_states.push(take_sponge_like_queue_state_from_simulator(
+                    &deduplicated_decommittment_queue_simulator,
+                ));
             } else {
-                dedublicated_intermediate_states.push(take_sponge_like_queue_state_from_simulator(&previous_deduplicated_decommittment_queue_simulator));
+                dedublicated_intermediate_states.push(take_sponge_like_queue_state_from_simulator(
+                    &previous_deduplicated_decommittment_queue_simulator,
+                ));
             }
 
-            let record = sorted_decommittment_queue_simulator.witness.pop_back().unwrap();
-            previous_packed_keys.push(
-                pack_key(record.2.hash.0, record.2.timestamp.0)
-            );
+            let record = sorted_decommittment_queue_simulator
+                .witness
+                .pop_back()
+                .unwrap();
+            previous_packed_keys.push(pack_key(record.2.hash.0, record.2.timestamp.0));
             previous_items_are_trivial.push(false);
             previous_record_encodings.push(record.0);
             first_encountered_timestamps.push(first_encountered_timestamp);
 
-            sorted_decommittment_queue_simulator.witness.push_back(record);
+            sorted_decommittment_queue_simulator
+                .witness
+                .push_back(record);
         }
     }
     if counter > 0 {
-        dedublicated_intermediate_states.push(take_sponge_like_queue_state_from_simulator(&deduplicated_decommittment_queue_simulator));
+        dedublicated_intermediate_states.push(take_sponge_like_queue_state_from_simulator(
+            &deduplicated_decommittment_queue_simulator,
+        ));
 
         previous_packed_keys.push([E::Fr::zero(); 2]);
         previous_items_are_trivial.push(true);
@@ -193,7 +209,9 @@ pub fn compute_decommitter_circuit_snapshots<
         artifacts.all_memory_queries_accumulated.len()
     );
 
-    let mut decommittments_deduplicator_witness: Vec<CodeDecommittmentsDeduplicatorInstanceWitness<E>> = vec![];
+    let mut decommittments_deduplicator_witness: Vec<
+        CodeDecommittmentsDeduplicatorInstanceWitness<E>,
+    > = vec![];
 
     use sync_vm::glue::sort_decommittment_requests::input::CodeDecommittmentsDeduplicatorInputOutputWitness;
     use sync_vm::glue::sort_decommittment_requests::input::*;
@@ -203,7 +221,7 @@ pub fn compute_decommitter_circuit_snapshots<
         CodeDecommittmentsDeduplicatorInputData::<E>::placeholder_witness();
     input_passthrough_data.initial_log_queue_state =
         take_sponge_like_queue_state_from_simulator(&unsorted_decommittment_queue_simulator);
-    input_passthrough_data.sorted_queue_initial_state = 
+    input_passthrough_data.sorted_queue_initial_state =
         take_sponge_like_queue_state_from_simulator(&sorted_decommittment_queue_simulator);
 
     let mut output_passthrough_data =
@@ -211,16 +229,19 @@ pub fn compute_decommitter_circuit_snapshots<
     output_passthrough_data.final_queue_state =
         take_sponge_like_queue_state_from_simulator(&deduplicated_decommittment_queue_simulator);
 
-
     // now we should chunk it by circuits but briefly simulating their logic
 
     let mut challenges = vec![];
 
     let mut fs_input = vec![];
     fs_input.extend_from_slice(&unsorted_decommittment_queue_simulator.tail);
-    fs_input.push(u64_to_fe(unsorted_decommittment_queue_simulator.num_items as u64));
+    fs_input.push(u64_to_fe(
+        unsorted_decommittment_queue_simulator.num_items as u64,
+    ));
     fs_input.extend_from_slice(&sorted_decommittment_queue_simulator.tail);
-    fs_input.push(u64_to_fe(sorted_decommittment_queue_simulator.num_items as u64));
+    fs_input.push(u64_to_fe(
+        sorted_decommittment_queue_simulator.num_items as u64,
+    ));
 
     let sequence_of_states =
         round_function.simulate_absorb_multiple_rounds_into_empty_with_specialization(&fs_input);
@@ -245,8 +266,11 @@ pub fn compute_decommitter_circuit_snapshots<
 
     use crate::witness::individual_circuits::ram_permutation::compute_grand_product_chains;
 
-    let (lhs_grand_product_chain, rhs_grand_product_chain) =
-        compute_grand_product_chains::<E, 2, 3>(&lhs_contributions, &rhs_contributions, challenges.clone());
+    let (lhs_grand_product_chain, rhs_grand_product_chain) = compute_grand_product_chains::<E, 2, 3>(
+        &lhs_contributions,
+        &rhs_contributions,
+        challenges.clone(),
+    );
 
     // now we need to split them into individual circuits
     // splitting is not extra hard here, we walk over iterator over everything and save states on checkpoints
@@ -268,7 +292,10 @@ pub fn compute_decommitter_circuit_snapshots<
     let mut unsorted_intermediate_states = vec![];
     let mut i = 0;
     for _ in 0..num_items {
-        let (encoding, old_tail, element) = unsorted_decommittment_queue_simulator.witness.front().unwrap();
+        let (encoding, old_tail, element) = unsorted_decommittment_queue_simulator
+            .witness
+            .front()
+            .unwrap();
 
         let wit = DecommitQueryWitness {
             root_hash: biguint_from_u256(element.hash),
@@ -282,7 +309,7 @@ pub fn compute_decommitter_circuit_snapshots<
         for (el, coeff) in encoding.iter().zip(challenges.iter()) {
             let mut contr_part = *el;
             contr_part.mul_assign(coeff);
-          
+
             contribution.add_assign(&contr_part);
         }
         input_product.mul_assign(&contribution);
@@ -297,14 +324,17 @@ pub fn compute_decommitter_circuit_snapshots<
             let completed_chunk = std::mem::replace(&mut input_witness_chunk, VecDeque::new());
             input_witness.push(completed_chunk);
             input_products.push(input_product);
-            unsorted_intermediate_states.push(take_sponge_like_queue_state_from_simulator(&unsorted_decommittment_queue_simulator));
+            unsorted_intermediate_states.push(take_sponge_like_queue_state_from_simulator(
+                &unsorted_decommittment_queue_simulator,
+            ));
         }
-
     }
     if input_witness_chunk.len() > 0 {
         input_witness.push(input_witness_chunk);
         input_products.push(input_product);
-        unsorted_intermediate_states.push(take_sponge_like_queue_state_from_simulator(&unsorted_decommittment_queue_simulator));
+        unsorted_intermediate_states.push(take_sponge_like_queue_state_from_simulator(
+            &unsorted_decommittment_queue_simulator,
+        ));
     }
 
     assert_eq!(num_items, sorted_decommittment_queue_simulator.num_items);
@@ -315,7 +345,10 @@ pub fn compute_decommitter_circuit_snapshots<
     let mut sorted_intermediate_states = vec![];
     let mut i = 0;
     for _ in 0..num_items {
-        let (encoding, old_tail, element) = sorted_decommittment_queue_simulator.witness.front().unwrap();
+        let (encoding, old_tail, element) = sorted_decommittment_queue_simulator
+            .witness
+            .front()
+            .unwrap();
         let wit = DecommitQueryWitness {
             root_hash: biguint_from_u256(element.hash),
             page: element.memory_page.0,
@@ -328,7 +361,7 @@ pub fn compute_decommitter_circuit_snapshots<
         for (el, coeff) in encoding.iter().zip(challenges.iter()) {
             let mut contr_part = *el;
             contr_part.mul_assign(coeff);
-          
+
             contribution.add_assign(&contr_part);
         }
         sorted_product.mul_assign(&contribution);
@@ -343,13 +376,17 @@ pub fn compute_decommitter_circuit_snapshots<
             let completed_chunk = std::mem::replace(&mut sorted_witness_chunk, VecDeque::new());
             sorted_witness.push(completed_chunk);
             sorted_products.push(sorted_product);
-            sorted_intermediate_states.push(take_sponge_like_queue_state_from_simulator(&sorted_decommittment_queue_simulator));
+            sorted_intermediate_states.push(take_sponge_like_queue_state_from_simulator(
+                &sorted_decommittment_queue_simulator,
+            ));
         }
     }
     if sorted_witness_chunk.len() > 0 {
         sorted_witness.push(sorted_witness_chunk);
         sorted_products.push(sorted_product);
-        sorted_intermediate_states.push(take_sponge_like_queue_state_from_simulator(&sorted_decommittment_queue_simulator));
+        sorted_intermediate_states.push(take_sponge_like_queue_state_from_simulator(
+            &sorted_decommittment_queue_simulator,
+        ));
     }
 
     for i in 0..num_circuits {
@@ -359,13 +396,19 @@ pub fn compute_decommitter_circuit_snapshots<
                 completion_flag: i == num_circuits - 1,
                 observable_input: input_passthrough_data.clone(),
                 observable_output: CodeDecommittmentsDeduplicatorOutputData::placeholder_witness(),
-                hidden_fsm_input: CodeDecommittmentsDeduplicatorFSMInputOutput::placeholder_witness(),
-                hidden_fsm_output: CodeDecommittmentsDeduplicatorFSMInputOutput::placeholder_witness(),
+                hidden_fsm_input: CodeDecommittmentsDeduplicatorFSMInputOutput::placeholder_witness(
+                ),
+                hidden_fsm_output:
+                    CodeDecommittmentsDeduplicatorFSMInputOutput::placeholder_witness(),
                 _marker_e: (),
                 _marker: std::marker::PhantomData,
             },
-            initial_queue_witness: FixedWidthEncodingSpongeLikeQueueWitness{wit: VecDeque::new()},
-            sorted_queue_witness: FixedWidthEncodingSpongeLikeQueueWitness{wit: VecDeque::new()},
+            initial_queue_witness: FixedWidthEncodingSpongeLikeQueueWitness {
+                wit: VecDeque::new(),
+            },
+            sorted_queue_witness: FixedWidthEncodingSpongeLikeQueueWitness {
+                wit: VecDeque::new(),
+            },
             previous_record_witness: DecommitQuery::placeholder_witness(),
         };
 
@@ -373,28 +416,41 @@ pub fn compute_decommitter_circuit_snapshots<
             // set passthrough output
             current_witness.closed_form_input.observable_output = output_passthrough_data.clone();
         }
-        current_witness.initial_queue_witness = FixedWidthEncodingSpongeLikeQueueWitness { wit: input_witness[i].clone() };
-        current_witness.sorted_queue_witness = FixedWidthEncodingSpongeLikeQueueWitness { wit: sorted_witness[i].clone() };
+        current_witness.initial_queue_witness = FixedWidthEncodingSpongeLikeQueueWitness {
+            wit: input_witness[i].clone(),
+        };
+        current_witness.sorted_queue_witness = FixedWidthEncodingSpongeLikeQueueWitness {
+            wit: sorted_witness[i].clone(),
+        };
 
         if let Some(previous_witness) = decommittments_deduplicator_witness.last() {
-            current_witness.closed_form_input.hidden_fsm_input = previous_witness.closed_form_input.hidden_fsm_output.clone();
-            current_witness.previous_record_witness = previous_witness.sorted_queue_witness.wit.iter().last().unwrap().1.clone();
+            current_witness.closed_form_input.hidden_fsm_input =
+                previous_witness.closed_form_input.hidden_fsm_output.clone();
+            current_witness.previous_record_witness = previous_witness
+                .sorted_queue_witness
+                .wit
+                .iter()
+                .last()
+                .unwrap()
+                .1
+                .clone();
         }
 
-        current_witness.closed_form_input.hidden_fsm_output = CodeDecommittmentsDeduplicatorFSMInputOutputWitness {
-            initial_log_queue_state: unsorted_intermediate_states[i].clone(),
-            sorted_queue_state: sorted_intermediate_states[i].clone(),
-            final_queue_state: dedublicated_intermediate_states[i].clone(),
+        current_witness.closed_form_input.hidden_fsm_output =
+            CodeDecommittmentsDeduplicatorFSMInputOutputWitness {
+                initial_log_queue_state: unsorted_intermediate_states[i].clone(),
+                sorted_queue_state: sorted_intermediate_states[i].clone(),
+                final_queue_state: dedublicated_intermediate_states[i].clone(),
 
-            grand_products: [input_products[i], sorted_products[i]],
+                grand_products: [input_products[i], sorted_products[i]],
 
-            previous_packed_key: previous_packed_keys[i],
-            previous_item_is_trivial: previous_items_are_trivial[i],
-            first_encountered_timestamp: first_encountered_timestamps[i],
-            previous_record_encoding: previous_record_encodings[i],
+                previous_packed_key: previous_packed_keys[i],
+                previous_item_is_trivial: previous_items_are_trivial[i],
+                first_encountered_timestamp: first_encountered_timestamps[i],
+                previous_record_encoding: previous_record_encodings[i],
 
-            _marker: std::marker::PhantomData,
-        };
+                _marker: std::marker::PhantomData,
+            };
 
         decommittments_deduplicator_witness.push(current_witness);
     }
@@ -753,10 +809,7 @@ pub fn compute_decommitter_circuit_snapshots<
     (results, decommittments_deduplicator_witness)
 }
 
-fn pack_key<F: crate::ff::PrimeField>(
-    hash: [u64; 4],
-    timestamp: u32,
-) -> [F; 2] {
+fn pack_key<F: crate::ff::PrimeField>(hash: [u64; 4], timestamp: u32) -> [F; 2] {
     // LE packing
     let fe_32 = F::from_repr(F::Repr::from(1u64 << 32)).unwrap();
 
@@ -765,7 +818,6 @@ fn pack_key<F: crate::ff::PrimeField>(
     let mut part = F::from_repr(F::Repr::from(hash[0])).unwrap();
     part.mul_assign(&fe_32);
     value_0.add_assign(&part);
-
 
     let mut value_1 = F::from_repr(F::Repr::from(hash[1])).unwrap();
     let mut shift = fe_32;

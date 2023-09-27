@@ -1,9 +1,9 @@
 #![allow(unused_imports)]
 
+pub use zk_evm::zkevm_opcode_defs::blake2;
+pub use zk_evm::zkevm_opcode_defs::k256;
 pub use zk_evm::zkevm_opcode_defs::sha2;
 pub use zk_evm::zkevm_opcode_defs::sha3;
-pub use zk_evm::zkevm_opcode_defs::k256;
-pub use zk_evm::zkevm_opcode_defs::blake2;
 
 pub use sync_vm::recursion::leaf_aggregation::LeafAggregationOutputDataWitness;
 pub use sync_vm::recursion::node_aggregation::NodeAggregationOutputDataWitness;
@@ -22,8 +22,8 @@ pub use sync_vm;
 pub use sync_vm::franklin_crypto;
 pub mod circuit_limit_estimator;
 pub mod geometry_config;
-pub use zk_evm::ethereum_types;
 pub use zk_evm;
+pub use zk_evm::ethereum_types;
 
 use self::utils::*;
 

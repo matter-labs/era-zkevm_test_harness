@@ -315,7 +315,11 @@ fn run_and_try_create_witness_inner(mut test_artifact: TestArtifact, cycle_limit
         use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
         use crate::bellman::plonk::better_better_cs::cs::TrivialAssembly;
 
-        let mut assembly = TrivialAssembly::<Bn256, PlonkCsWidth4WithNextStepAndCustomGatesParams, SelectorOptimizedWidth4MainGateWithDNext>::new();
+        let mut assembly = TrivialAssembly::<
+            Bn256,
+            PlonkCsWidth4WithNextStepAndCustomGatesParams,
+            SelectorOptimizedWidth4MainGateWithDNext,
+        >::new();
         el.synthesize(&mut assembly).unwrap();
         assert_eq!(assembly.input_assingments.len(), 1);
         assert_eq!(assembly.num_input_gates, 1);
