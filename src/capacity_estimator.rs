@@ -229,8 +229,17 @@ mod test {
 
     #[test]
     fn test_size_estimation() {
-        let size = l1_messages_hasher_capacity();
-
-        println!("Size = {}", size)
+        println!("Size of main_vm_capacity: {}", main_vm_capacity());
+        println!("Size of code_decommittments_sorter_capacity: {}", code_decommittments_sorter_capacity());
+        println!("Size of code_decommitter_capacity: {}", code_decommitter_capacity());
+        println!("Size of log_demuxer_capacity: {}", log_demuxer_capacity());
+        println!("Size of keccak256_rf_capacity: {}", keccak256_rf_capacity());
+        println!("Size of sha256_rf_capacity: {}", sha256_rf_capacity());
+        println!("Size of ecrecover_capacity: {}", ecrecover_capacity());
+        println!("Size of ram_permutation_capacity: {}", ram_permutation_capacity());
+        println!("Size of event_sorter_capacity: {}", event_sorter_capacity());
+        println!("Size of storage_sorter_capacity: {}", storage_sorter_capacity());
+        println!("Size of storage_application_capacity: {}", storage_application_capacity());
+        println!("Size of l1_messages_hasher_capacity: {}", l1_messages_hasher_capacity());
     }
 }

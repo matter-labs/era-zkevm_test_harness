@@ -293,3 +293,106 @@ pub(crate) fn test_recursive_circuit(circuit: ZkSyncRecursiveLayerCircuit) {
     let is_satisfied = cs.check_if_satisfied(&worker);
     assert!(is_satisfied);
 }
+
+use circuit_definitions::circuit_definitions::aux_layer::*;
+pub(crate) fn test_compression_circuit(circuit: ZkSyncCompressionLayerCircuit) {
+    use crate::boojum::config::DevCSConfig;
+    use crate::boojum::cs::cs_builder::new_builder;
+    use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
+    use circuit_definitions::circuit_definitions::aux_layer::compression::ProofCompressionFunction;
+    use crate::boojum::cs::implementations::reference_cs::CSReferenceAssembly;
+    use circuit_definitions::circuit_definitions::aux_layer::compression::CompressionLayerCircuit;
+
+    type P = GoldilocksField;
+    // type P = MixedGL;
+
+    let worker = Worker::new();
+
+    fn test_inner<CF: ProofCompressionFunction> (
+        circuit: CompressionLayerCircuit<CF>,
+    ) -> CSReferenceAssembly<GoldilocksField, P, DevCSConfig>{
+        let geometry = circuit.geometry();
+        let (max_trace_len, num_vars) = circuit.size_hint();
+    
+        let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
+            geometry,
+            num_vars.unwrap(),
+            max_trace_len.unwrap(),
+        );
+        let builder = new_builder::<_, GoldilocksField>(builder_impl);
+        let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
+            geometry,
+            num_vars.unwrap(),
+            max_trace_len.unwrap(),
+        );
+        let builder = new_builder::<_, GoldilocksField>(builder_impl);
+        let builder = circuit.configure_builder_proxy(builder);
+        let mut cs = builder.build(());
+        circuit.synthesize_into_cs(&mut cs);
+
+        cs.pad_and_shrink();
+        cs.into_assembly()
+    }
+
+    let mut cs = match circuit {
+        ZkSyncCompressionLayerCircuit::CompressionMode1Circuit(inner) => test_inner(inner),
+        ZkSyncCompressionLayerCircuit::CompressionMode2Circuit(inner) => test_inner(inner),
+        ZkSyncCompressionLayerCircuit::CompressionMode3Circuit(inner) => test_inner(inner),
+        ZkSyncCompressionLayerCircuit::CompressionMode4Circuit(inner) => test_inner(inner),
+        ZkSyncCompressionLayerCircuit::CompressionModeToL1Circuit(inner) => test_inner(inner),
+    };
+
+    let is_satisfied = cs.check_if_satisfied(&worker);
+    assert!(is_satisfied);
+}
+
+pub(crate) fn test_compression_for_wrapper_circuit(circuit: ZkSyncCompressionForWrapperCircuit) {
+    use crate::boojum::config::DevCSConfig;
+    use crate::boojum::cs::cs_builder::new_builder;
+    use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
+    use circuit_definitions::circuit_definitions::aux_layer::compression::ProofCompressionFunction;
+    use crate::boojum::cs::implementations::reference_cs::CSReferenceAssembly;
+    use circuit_definitions::circuit_definitions::aux_layer::compression::CompressionLayerCircuit;
+
+    type P = GoldilocksField;
+    // type P = MixedGL;
+
+    let worker = Worker::new();
+
+    fn test_inner<CF: ProofCompressionFunction> (
+        circuit: CompressionLayerCircuit<CF>,
+    ) -> CSReferenceAssembly<GoldilocksField, P, DevCSConfig>{
+        let geometry = circuit.geometry();
+        let (max_trace_len, num_vars) = circuit.size_hint();
+    
+        let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
+            geometry,
+            num_vars.unwrap(),
+            max_trace_len.unwrap(),
+        );
+        let builder = new_builder::<_, GoldilocksField>(builder_impl);
+        let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
+            geometry,
+            num_vars.unwrap(),
+            max_trace_len.unwrap(),
+        );
+        let builder = new_builder::<_, GoldilocksField>(builder_impl);
+        let builder = circuit.configure_builder_proxy(builder);
+        let mut cs = builder.build(());
+        circuit.synthesize_into_cs(&mut cs);
+
+        cs.pad_and_shrink();
+        cs.into_assembly()
+    }
+
+    let mut cs = match circuit {
+        ZkSyncCompressionForWrapperCircuit::CompressionMode1Circuit(inner) => test_inner(inner),
+        ZkSyncCompressionForWrapperCircuit::CompressionMode2Circuit(inner) => test_inner(inner),
+        ZkSyncCompressionForWrapperCircuit::CompressionMode3Circuit(inner) => test_inner(inner),
+        ZkSyncCompressionForWrapperCircuit::CompressionMode4Circuit(inner) => test_inner(inner),
+        ZkSyncCompressionForWrapperCircuit::CompressionModeToL1Circuit(inner) => test_inner(inner),
+    };
+
+    let is_satisfied = cs.check_if_satisfied(&worker);
+    assert!(is_satisfied);
+}

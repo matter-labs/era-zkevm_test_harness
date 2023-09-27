@@ -8,6 +8,7 @@ use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRe
 use zkevm_circuits::recursion::leaf_layer::input::RecursionLeafParametersWitness;
 use zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord;
+use zkevm_circuits::boojum::cs::traits::circuit::CircuitBuilder;
 
 pub mod circuit_def;
 pub mod leaf_layer;
@@ -313,6 +314,9 @@ pub type ZkSyncRecursionLayerFinalizationHint =
 
 use crate::boojum::algebraic_props::round_function::AbsorptionModeOverwrite;
 use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
+use crate::boojum::config::ProvingCSConfig;
+use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
+use crate::boojum::cs::implementations::reference_cs::CSReferenceAssembly;
 
 pub type RecursiveProofsTreeHasher = GoldilocksPoseidon2Sponge<AbsorptionModeOverwrite>;
 
@@ -321,6 +325,9 @@ pub type ZkSyncRecursionProof = Proof<GoldilocksField, RecursiveProofsTreeHasher
 pub type ZkSyncRecursionLayerProof = ZkSyncRecursionLayerStorage<ZkSyncRecursionProof>;
 
 use crate::boojum::cs::implementations::verifier::VerificationKey;
+use crate::boojum::field::traits::field_like::PrimeFieldLikeVectorized;
+use crate::ZkSyncDefaultRoundFunction;
+
 pub type ZkSyncRecursionVerificationKey =
     VerificationKey<GoldilocksField, RecursiveProofsTreeHasher>;
 
@@ -427,7 +434,6 @@ impl ZkSyncRecursiveLayerCircuit {
     }
 
     pub fn geometry(&self) -> CSGeometry {
-        use crate::boojum::cs::traits::circuit::CircuitBuilder;
 
         match &self {
             Self::SchedulerCircuit(..) => ZkSyncSchedulerCircuit::geometry(),
@@ -446,6 +452,78 @@ impl ZkSyncRecursiveLayerCircuit {
             | Self::LeafLayerCircuitForL1MessagesSorter(..)
             | Self::LeafLayerCircuitForL1MessagesHasher(..) => {
                 ZkSyncLeafLayerRecursiveCircuit::geometry()
+            }
+        }
+    }
+
+    fn synthesis_inner<P: PrimeFieldLikeVectorized<Base = F>>(inner: &ZkSyncLeafLayerRecursiveCircuit, hint: &FinalizationHintsForProver) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
+        let geometry = ZkSyncLeafLayerRecursiveCircuit::geometry();
+        let (max_trace_len, num_vars) = inner.size_hint();
+        let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig>::new(
+            geometry,
+            num_vars.unwrap(),
+            max_trace_len.unwrap(),
+        );
+        let cs_builder = new_builder::<_, F>(builder_impl);
+        let builder = inner.configure_builder_proxy(cs_builder);
+        let mut cs = builder.build(());
+        let round_function = ZkSyncDefaultRoundFunction::default();
+        inner.add_tables(&mut cs);
+        inner.clone().synthesize_into_cs(&mut cs, &round_function);
+        cs.pad_and_shrink_using_hint(hint);
+        cs.into_assembly()
+    }
+
+    pub fn synthesis<P: PrimeFieldLikeVectorized<Base = F>>(&self, hint: &FinalizationHintsForProver) ->  CSReferenceAssembly<F, P, ProvingCSConfig> {
+        match &self {
+            Self::SchedulerCircuit(inner) => {
+                let geometry = ZkSyncSchedulerCircuit::geometry();
+                let (max_trace_len, num_vars) = inner.size_hint();
+                let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig>::new(
+                    geometry,
+                    num_vars.unwrap(),
+                    max_trace_len.unwrap(),
+                );
+                let cs_builder = new_builder::<_, F>(builder_impl);
+                let builder = inner.configure_builder_proxy(cs_builder);
+                let mut cs = builder.build(());
+                let round_function = ZkSyncDefaultRoundFunction::default();
+                inner.add_tables(&mut cs);
+                inner.clone().synthesize_into_cs(&mut cs, &round_function);
+                cs.pad_and_shrink_using_hint(hint);
+                cs.into_assembly()
+            }
+            Self::NodeLayerCircuit(inner) => {
+                let geometry = ZkSyncNodeLayerRecursiveCircuit::geometry();
+                let (max_trace_len, num_vars) = inner.size_hint();
+                let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig>::new(
+                    geometry,
+                    num_vars.unwrap(),
+                    max_trace_len.unwrap(),
+                );
+                let cs_builder = new_builder::<_, F>(builder_impl);
+                let builder = inner.configure_builder_proxy(cs_builder);
+                let mut cs = builder.build(());
+                let round_function = ZkSyncDefaultRoundFunction::default();
+                inner.add_tables(&mut cs);
+                inner.clone().synthesize_into_cs(&mut cs, &round_function);
+                cs.pad_and_shrink_using_hint(hint);
+                cs.into_assembly()
+            }
+            Self::LeafLayerCircuitForMainVM(inner)
+            | Self::LeafLayerCircuitForCodeDecommittmentsSorter(inner)
+            | Self::LeafLayerCircuitForCodeDecommitter(inner)
+            | Self::LeafLayerCircuitForLogDemuxer(inner)
+            | Self::LeafLayerCircuitForKeccakRoundFunction(inner)
+            | Self::LeafLayerCircuitForSha256RoundFunction(inner)
+            | Self::LeafLayerCircuitForECRecover(inner)
+            | Self::LeafLayerCircuitForRAMPermutation(inner)
+            | Self::LeafLayerCircuitForStorageSorter(inner)
+            | Self::LeafLayerCircuitForStorageApplication(inner)
+            | Self::LeafLayerCircuitForEventsSorter(inner)
+            | Self::LeafLayerCircuitForL1MessagesSorter(inner)
+            | Self::LeafLayerCircuitForL1MessagesHasher(inner) => {
+                Self::synthesis_inner(inner, hint)
             }
         }
     }
