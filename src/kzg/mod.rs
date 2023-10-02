@@ -1,14 +1,14 @@
 //! Implementation based on https://github.com/ethereum/consensus-specs/blob/86fb82b221474cc89387fa6436806507b3849d88/specs/deneb/polynomial-commitments.md
+use crate::boojum::blake2::Digest;
+use crate::boojum::pairing::bls12_381::fq::Fq;
+use crate::boojum::pairing::bls12_381::fq12::Fq12;
+use crate::boojum::pairing::bls12_381::fr::{Fr, FrRepr};
+use crate::boojum::pairing::bls12_381::Bls12;
+use crate::boojum::pairing::bls12_381::{G1Affine, G1Compressed, G2Affine, G2Compressed, G1, G2};
+use crate::boojum::pairing::ff::{Field, PrimeField};
+use crate::boojum::pairing::Engine;
+use crate::boojum::pairing::{CurveAffine, CurveProjective, EncodedPoint};
 use crate::sha3::Keccak256;
-use boojum::blake2::Digest;
-use boojum::pairing::bls12_381::fq::Fq;
-use boojum::pairing::bls12_381::fq12::Fq12;
-use boojum::pairing::bls12_381::fr::{Fr, FrRepr};
-use boojum::pairing::bls12_381::Bls12;
-use boojum::pairing::bls12_381::{G1Affine, G1Compressed, G2Affine, G2Compressed, G1, G2};
-use boojum::pairing::ff::{Field, PrimeField};
-use boojum::pairing::Engine;
-use boojum::pairing::{CurveAffine, CurveProjective, EncodedPoint};
 use rayon::prelude::*;
 use serde::Serialize;
 
