@@ -1,8 +1,12 @@
 use super::*;
 
 use crate::proof_wrapper_utils::{
-    compute_compression_circuit, compute_compression_for_wrapper_circuit, compute_wrapper_proof,
+    compute_compression_circuit,
+    compute_compression_for_wrapper_circuit,
+    compute_wrapper_proof,
+    compress_stark_pi_to_snark_pi,
 };
+
 use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::proof::Proof as SnarkProof;
 use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::setup::VerificationKey as SnarkVK;
 use snark_wrapper::franklin_crypto::bellman::worker::Worker as BellmanWorker;
@@ -31,6 +35,43 @@ pub(crate) fn test_compression_for_compression_num(compression: u8) {
             return;
         }
     }
+}
+
+pub(crate) fn test_wrapper_pi_inner<DS: SetupDataSource + BlockDataSource>(
+    source: &mut DS,
+    circuit_type: u8,
+) {
+    let scheduler_proof = source
+        .get_scheduler_proof()
+        .expect("scheduler proof should be present")
+        .into_inner();
+
+    let wrapper_proof = source
+        .get_wrapper_proof(circuit_type)
+        .expect("wrapper proof should be present")
+        .into_inner();
+
+    let scheduler_pi = scheduler_proof.public_inputs.try_into().unwrap();
+    let wrapper_pi = wrapper_proof.inputs[0];
+    assert!(wrapper_proof.inputs.len() == 1);
+
+    let expected_wrapper_pi = compress_stark_pi_to_snark_pi(scheduler_pi);
+    assert_eq!(expected_wrapper_pi, wrapper_pi);
+}
+
+#[test]
+fn test_wrapper_pi() {
+    let circuit_type = std::env::var("COMPRESSION_NUM")
+        .map(|s| s.parse::<usize>().expect("should be a number"))
+        .unwrap_or(1);
+    assert!(
+        circuit_type > 0 && circuit_type <= 5,
+        "compression should be between 1 and 5"
+    );
+
+    let mut source = LocalFileDataSource;
+
+    test_wrapper_pi_inner(&mut source, circuit_type as u8);
 }
 
 #[test]

@@ -1,6 +1,8 @@
 use circuit_definitions::base_layer_proof_config;
 use circuit_definitions::boojum::cs::implementations::pow::NoPow;
 use circuit_definitions::boojum::cs::implementations::setup::FinalizationHintsForProver;
+use circuit_definitions::boojum::field::goldilocks::GoldilocksField;
+use circuit_definitions::boojum::field::{PrimeField as BoojumPrimeField, U64Representable};
 use circuit_definitions::circuit_definitions::aux_layer::compression::{CompressionMode1Circuit, CompressionMode1ForWrapperCircuit, CompressionMode2Circuit, CompressionMode2ForWrapperCircuit, CompressionMode3Circuit, CompressionMode3ForWrapperCircuit, CompressionMode4Circuit, CompressionMode4ForWrapperCircuit, CompressionModeToL1Circuit, CompressionModeToL1ForWrapperCircuit, ProofCompressionFunction};
 use circuit_definitions::circuit_definitions::aux_layer::compression_modes::{CompressionMode1, CompressionMode1ForWrapper, CompressionMode2, CompressionMode2ForWrapper, CompressionMode3, CompressionMode3ForWrapper, CompressionMode4, CompressionMode4ForWrapper};
 use circuit_definitions::circuit_definitions::aux_layer::{ZkSyncCompressionForWrapperCircuit, ZkSyncCompressionLayerCircuit, ZkSyncCompressionLayerStorage, ZkSyncCompressionProof, ZkSyncCompressionProofForWrapper, ZkSyncCompressionVerificationKey, ZkSyncCompressionVerificationKeyForWrapper, ZkSyncSnarkWrapperCircuit, ZkSyncSnarkWrapperProof, ZkSyncSnarkWrapperVK};
@@ -19,6 +21,7 @@ use snark_wrapper::implementations::poseidon2::transcript::CircuitPoseidon2Trans
 use snark_wrapper::verifier::WrapperCircuit;
 use snark_wrapper::verifier_structs::allocated_vk::AllocatedVerificationKey;
 use circuit_definitions::franklin_crypto::bellman::pairing::bn256::{Bn256, Fr};
+use circuit_definitions::franklin_crypto::bellman::{Field, PrimeField, PrimeFieldRepr};
 use circuit_definitions::circuit_definitions::aux_layer::ZkSyncCompressionForWrapperVerificationKey;
 use crate::boojum::worker::Worker;
 
@@ -600,4 +603,25 @@ fn get_trusted_setup() -> Crs<Bn256, CrsForMonomialForm> {
     let crs_file_path = std::path::Path::new(&crs_file_str);
     let crs_file = std::fs::File::open(&crs_file_path).expect("crs file to open");
     Crs::read(&crs_file).expect("crs file for bases")
+}
+
+pub fn compress_stark_pi_to_snark_pi(stark_pi: [GoldilocksField; 4]) -> Fr {
+    let chunk_bit_size = (GoldilocksField::CAPACITY_BITS / 8) * 8;
+    assert!(stark_pi.len() * chunk_bit_size <= Fr::CAPACITY as usize, 
+        "scalar field capacity is not enough to fit all public inputs");
+
+    let mut coeff = Fr::one();
+    let mut shift = <Fr as PrimeField>::Repr::from(1);
+    shift.shl(chunk_bit_size as u32);
+    let shift = Fr::from_repr(shift).unwrap();
+
+    let mut result = Fr::zero();
+    for chunk in stark_pi.iter().rev() {
+        let mut chunk_fr = Fr::from_repr(<Fr as PrimeField>::Repr::from(chunk.as_u64_reduced())).unwrap();
+        chunk_fr.mul_assign(&coeff);
+        result.add_assign(&chunk_fr);
+        coeff.mul_assign(&shift);
+    }
+
+    result
 }
