@@ -9,4 +9,5 @@ mod kernel_ops;
 mod limited_ergs;
 mod log;
 mod memory_growth;
+mod near_call;
 mod ptr_add;
