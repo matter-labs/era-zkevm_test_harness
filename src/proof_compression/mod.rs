@@ -36,7 +36,7 @@ mod test {
     use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
     use crate::boojum::cs::oracle::TreeHasher;
     use crate::boojum::worker::Worker;
-    use crate::data_source::{BlockDataSource, LocalFileDataSource, SetupDataSource};
+    use crate::data_source::{BlockDataSource, SetupDataSource, local_file_data_source::LocalFileDataSource};
 
     fn prove_and_save<CF: ProofCompressionFunction>(
         circuit: CompressionLayerCircuit<CF>,

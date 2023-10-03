@@ -10,9 +10,10 @@ use circuit_definitions::circuit_definitions::aux_layer::wrapper::ZkSyncCompress
 use circuit_definitions::circuit_definitions::recursion_layer::{ZkSyncRecursionLayerProof, ZkSyncRecursionLayerStorageType, ZkSyncRecursionLayerVerificationKey};
 use circuit_definitions::zkevm_circuits::recursion::compression::CompressionRecursionConfig;
 use snark_wrapper::franklin_crypto::bellman::kate_commitment::{Crs, CrsForMonomialForm};
-use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::cs::{Circuit, PlonkCsWidth4WithNextStepAndCustomGatesParams, TrivialAssembly, SetupAssembly};
+use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::cs::{Circuit, PlonkCsWidth4WithNextStepAndCustomGatesParams, TrivialAssembly, SetupAssembly, ProvingAssembly};
 use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::gates::selector_optimized_with_d_next::SelectorOptimizedWidth4MainGateWithDNext;
 use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::proof::Proof as SnarkProof;
+use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::setup::Setup as SnarkSetup;
 use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::setup::VerificationKey as SnarkVK;
 use snark_wrapper::franklin_crypto::bellman::plonk::commitments::transcript::keccak_transcript::RollingKeccakTranscript;
 use snark_wrapper::franklin_crypto::bellman::worker::Worker as BellmanWorker;
@@ -66,7 +67,7 @@ pub fn wrap_proof(
             compute_compression_circuit(&mut source, circuit_type, &worker);
         } else {
             compute_compression_for_wrapper_circuit(&mut source, circuit_type, &worker);
-            compute_wrapper_proof(&mut source, circuit_type, &bellman_worker);
+            compute_wrapper_proof_and_vk(&mut source, circuit_type, &bellman_worker);
             break;
         }
     }
@@ -77,56 +78,18 @@ pub fn wrap_proof(
 }
 
 pub fn get_wrapper_vk(vk: ZkSyncCompressionForWrapperVerificationKey) -> ZkSyncSnarkWrapperVK {
-    let worker = BellmanWorker::new();
+    check_trusted_setup_file_existace();
 
+    let worker = BellmanWorker::new();
     let circuit_type = vk.numeric_circuit_type();
     let vk = vk.into_inner();
 
-    let mut assembly = SetupAssembly::<
-        Bn256,
-        PlonkCsWidth4WithNextStepAndCustomGatesParams,
-        SelectorOptimizedWidth4MainGateWithDNext,
-    >::new();
-
-    let fixed_parameters = vk.fixed_parameters.clone();
-
-    let wrapper_function = ZkSyncCompressionWrapper::from_numeric_circuit_type(circuit_type);
-    let wrapper_circuit = WrapperCircuit::<_, _, TreeHasherForWrapper, TranscriptForWrapper, _> {
-        witness: None,
-        vk: vk,
-        fixed_parameters,
-        transcript_params: (),
-        wrapper_function,
-    };
-
-    wrapper_circuit.synthesize(&mut assembly).unwrap();
-
-    assert!(assembly.is_satisfied());
-
-    println!(
-        "Wrapper benchmark: {} gates for mode {}",
-        assembly.n(),
-        circuit_type
-    );
-
-    assembly.finalize();
-
-    println!("Creating setup");
-    let setup =
-        assembly
-            .create_setup::<WrapperCircuit<
-                _,
-                _,
-                TreeHasherForWrapper,
-                TranscriptForWrapper,
-                ZkSyncCompressionWrapper,
-            >>(&worker)
-            .unwrap();
+    let snark_setup = compute_wrapper_setup_inner(circuit_type, vk, &worker);
 
     let crs_mons = get_trusted_setup();
-    let vk = SnarkVK::from_setup(&setup, &worker, &crs_mons).unwrap();
+    let snark_vk = SnarkVK::from_setup(&snark_setup, &worker, &crs_mons).unwrap();
 
-    ZkSyncSnarkWrapperVK::from_inner(circuit_type, vk)
+    ZkSyncSnarkWrapperVK::from_inner(circuit_type, snark_vk)
 }
 
 pub(crate) fn compute_compression_circuit<DS: SetupDataSource + BlockDataSource>(
@@ -485,44 +448,135 @@ fn compute_compression_for_wrapper_circuit_inner(
     (vk, finalization_hint, proof)
 }
 
-pub(crate) fn compute_wrapper_proof<DS: SetupDataSource + BlockDataSource>(
+pub(crate) fn compute_wrapper_proof_and_vk<DS: SetupDataSource + BlockDataSource>(
     source: &mut DS,
     circuit_type: u8,
     worker: &BellmanWorker,
 ) {
-    if source.get_wrapper_vk(circuit_type).is_err()
-        || source.get_wrapper_proof(circuit_type).is_err()
-    {
+    println!("Computing wrapper setup");
+    if source.get_wrapper_setup(circuit_type).is_err() {
+        let vk = source.get_compression_for_wrapper_vk(circuit_type).unwrap();
+
+        let snark_setup = compute_wrapper_setup_inner(circuit_type, vk.into_inner(), worker);
+
+        let snark_setup = ZkSyncCompressionLayerStorage::from_inner(circuit_type, snark_setup);
+        source.set_wrapper_setup(snark_setup).unwrap();
+    }
+
+    println!("Computing wrapper vk");
+    if source.get_wrapper_vk(circuit_type).is_err() {
+        let start = std::time::Instant::now();
+        let snark_setup = source.get_wrapper_setup(circuit_type).unwrap();
+
+        let crs_mons = get_trusted_setup();
+        let snark_vk = SnarkVK::from_setup(&snark_setup.into_inner(), worker, &crs_mons).unwrap();
+
+        println!(
+            "Wrapper vk {} is done, taken {:?}",
+            circuit_type,
+            start.elapsed()
+        );
+
+        let snark_vk = ZkSyncCompressionLayerStorage::from_inner(circuit_type, snark_vk);
+        source.set_wrapper_vk(snark_vk).unwrap();
+    }
+
+    println!("Computing wrapper proof");
+    if source.get_wrapper_proof(circuit_type).is_err() {
         let proof = source
             .get_compression_for_wrapper_proof(circuit_type)
             .unwrap();
         let vk = source.get_compression_for_wrapper_vk(circuit_type).unwrap();
 
-        let (snark_vk, snark_proof) =
-            compute_wrapper_proof_inner(circuit_type, proof.into_inner(), vk.into_inner(), worker);
+        let snark_setup = source.get_wrapper_setup(circuit_type).unwrap();
 
-        let snark_vk = ZkSyncCompressionLayerStorage::from_inner(circuit_type, snark_vk);
-        source.set_wrapper_vk(snark_vk).unwrap();
+        let snark_proof = compute_wrapper_proof_inner(
+            circuit_type, 
+            proof.into_inner(), 
+            vk.into_inner(), 
+            snark_setup.into_inner(), 
+            worker
+        );
+
+        println!("Verifying");
+        let snark_vk = source.get_wrapper_vk(circuit_type).unwrap();
+        use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::verifier::verify;
+        let is_valid = verify::<_, _, RollingKeccakTranscript<Fr>>(
+            &snark_vk.into_inner(), 
+            &snark_proof, 
+            None
+        ).unwrap();
+        assert!(is_valid);
 
         let snark_proof = ZkSyncCompressionLayerStorage::from_inner(circuit_type, snark_proof);
         source.set_wrapper_proof(snark_proof).unwrap();
     }
 }
 
+fn compute_wrapper_setup_inner(
+    circuit_type: u8,
+    vk: ZkSyncCompressionVerificationKeyForWrapper,
+    worker: &BellmanWorker,
+) -> SnarkSetup<Bn256, ZkSyncSnarkWrapperCircuit> {
+    let start = std::time::Instant::now();
+
+    let mut assembly = SetupAssembly::<
+        Bn256,
+        PlonkCsWidth4WithNextStepAndCustomGatesParams,
+        SelectorOptimizedWidth4MainGateWithDNext,
+    >::new();
+
+    let fixed_parameters = vk.fixed_parameters.clone();
+
+    let wrapper_function = ZkSyncCompressionWrapper::from_numeric_circuit_type(circuit_type);
+    let wrapper_circuit = WrapperCircuit::<_, _, TreeHasherForWrapper, TranscriptForWrapper, _> {
+        witness: None,
+        vk: vk,
+        fixed_parameters,
+        transcript_params: (),
+        wrapper_function,
+    };
+
+    println!("Synthesizing");
+    wrapper_circuit.synthesize(&mut assembly).unwrap();
+
+    assembly.finalize_to_size_log_2(L1_VERIFIER_DOMAIN_SIZE_LOG);
+    assert!(assembly.is_satisfied());
+
+    println!("Creating setup");
+    let setup =
+        assembly
+            .create_setup::<WrapperCircuit<
+                _,
+                _,
+                TreeHasherForWrapper,
+                TranscriptForWrapper,
+                ZkSyncCompressionWrapper,
+            >>(worker)
+            .unwrap();
+
+
+    println!(
+        "Wrapper setup {} is done, taken {:?}",
+        circuit_type,
+        start.elapsed()
+    );
+
+    setup
+}
+
 fn compute_wrapper_proof_inner(
     circuit_type: u8,
     proof: ZkSyncCompressionProofForWrapper,
     vk: ZkSyncCompressionVerificationKeyForWrapper,
+    snark_setup: SnarkSetup<Bn256, ZkSyncSnarkWrapperCircuit>,
     worker: &BellmanWorker,
-) -> (
-    SnarkVK<Bn256, ZkSyncSnarkWrapperCircuit>,
-    SnarkProof<Bn256, ZkSyncSnarkWrapperCircuit>,
-) {
+) -> SnarkProof<Bn256, ZkSyncSnarkWrapperCircuit> {
     check_trusted_setup_file_existace();
 
     let start = std::time::Instant::now();
 
-    let mut assembly = TrivialAssembly::<
+    let mut assembly = ProvingAssembly::<
         Bn256,
         PlonkCsWidth4WithNextStepAndCustomGatesParams,
         SelectorOptimizedWidth4MainGateWithDNext,
@@ -539,6 +593,7 @@ fn compute_wrapper_proof_inner(
         wrapper_function,
     };
 
+    println!("Synthesizing");
     wrapper_circuit.synthesize(&mut assembly).unwrap();
 
     assembly.finalize_to_size_log_2(L1_VERIFIER_DOMAIN_SIZE_LOG);
@@ -550,20 +605,7 @@ fn compute_wrapper_proof_inner(
         circuit_type
     );
 
-    println!("Creating setup");
-    let setup =
-        assembly
-            .create_setup::<WrapperCircuit<
-                _,
-                _,
-                TreeHasherForWrapper,
-                TranscriptForWrapper,
-                ZkSyncCompressionWrapper,
-            >>(worker)
-            .unwrap();
-
     let crs_mons = get_trusted_setup();
-    let vk = SnarkVK::from_setup(&setup, worker, &crs_mons).unwrap();
 
     println!("Proving");
     let proof =
@@ -574,7 +616,7 @@ fn compute_wrapper_proof_inner(
                 TreeHasherForWrapper,
                 TranscriptForWrapper,
                 ZkSyncCompressionWrapper,
-            >, RollingKeccakTranscript<Fr>>(worker, &setup, &crs_mons, None)
+            >, RollingKeccakTranscript<Fr>>(worker, &snark_setup, &crs_mons, None)
             .unwrap();
 
     println!(
@@ -583,12 +625,7 @@ fn compute_wrapper_proof_inner(
         start.elapsed()
     );
 
-    println!("Verifying");
-    use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::verifier::verify;
-    let is_valid = verify::<_, _, RollingKeccakTranscript<Fr>>(&vk, &proof, None).unwrap();
-    assert!(is_valid);
-
-    (vk, proof)
+    proof
 }
 
 /// Just to check if the file and environment variable are not forgotten

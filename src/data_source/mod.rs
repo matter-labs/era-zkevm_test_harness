@@ -108,7 +108,7 @@ pub trait SetupDataSource {
         &mut self,
         hint: ZkSyncCompressionForWrapperFinalizationHint,
     ) -> SourceResult<()>;
-    fn set_wrapper_setup(&mut self, vk: ZkSyncSnarkWrapperSetup) -> SourceResult<()>;
+    fn set_wrapper_setup(&mut self, setup: ZkSyncSnarkWrapperSetup) -> SourceResult<()>;
     fn set_wrapper_vk(&mut self, vk: ZkSyncSnarkWrapperVK) -> SourceResult<()>;
 }
 
