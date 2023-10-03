@@ -21,7 +21,7 @@ use crate::tests::complex_tests::generate_base_layer;
 use crate::zkevm_circuits::base_structures::vm_state::{
     FULL_SPONGE_QUEUE_STATE_WIDTH, QUEUE_STATE_WIDTH,
 };
-use crate::{data_source::LocalFileDataSource, tests::complex_tests::utils::*};
+use crate::{data_source::local_file_data_source::LocalFileDataSource, tests::complex_tests::utils::*};
 use circuit_definitions::circuit_definitions::recursion_layer::leaf_layer::*;
 use circuit_definitions::circuit_definitions::recursion_layer::node_layer::*;
 use circuit_definitions::circuit_definitions::recursion_layer::*;

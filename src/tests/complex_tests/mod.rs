@@ -77,7 +77,7 @@ use circuit_definitions::circuit_definitions::aux_layer::compression_modes::*;
 use circuit_definitions::circuit_definitions::aux_layer::*;
 use circuit_definitions::circuit_definitions::aux_layer::compression::ProofCompressionFunction;
 use circuit_definitions::circuit_definitions::aux_layer::ZkSyncCompressionLayerVerificationKey;
-use crate::data_source::{LocalFileDataSource, SetupDataSource, BlockDataSource};
+use crate::data_source::{local_file_data_source::LocalFileDataSource, SetupDataSource, BlockDataSource};
 use circuit_definitions::circuit_definitions::aux_layer::compression::*;
 use snark_wrapper::verifier_structs::allocated_vk::AllocatedVerificationKey;
 use snark_wrapper::franklin_crypto::plonk::circuit::bigint_new::BITWISE_LOGICAL_OPS_TABLE_NAME;
@@ -101,7 +101,7 @@ use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::gates
 use crate::boojum::algebraic_props::round_function::AbsorptionModeOverwrite;
 use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
 use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
-use crate::in_memory_data_source::InMemoryDataSource;
+use crate::data_source::in_memory_data_source::InMemoryDataSource;
 use crate::witness::full_block_artifact::*;
 
 fn get_geometry_config() -> GeometryConfig {

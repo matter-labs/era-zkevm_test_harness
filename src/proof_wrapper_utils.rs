@@ -32,7 +32,7 @@ pub(crate) const CRS_FILE_ENV_VAR: &str = "CRS_FILE";
 pub(crate) const L1_VERIFIER_DOMAIN_SIZE_LOG: usize = 24;
 
 use crate::data_source::{BlockDataSource, SetupDataSource};
-use crate::in_memory_data_source::InMemoryDataSource;
+use crate::data_source::in_memory_data_source::InMemoryDataSource;
 use crate::prover_utils::{
     create_compression_for_wrapper_setup_data, create_compression_layer_setup_data,
     prove_compression_for_wrapper_circuit, prove_compression_layer_circuit,

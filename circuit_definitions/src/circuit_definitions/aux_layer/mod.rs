@@ -468,6 +468,7 @@ pub type ZkSyncCompressionForWrapperVerificationKey =
 use crate::circuit_definitions::aux_layer::wrapper::ZkSyncCompressionWrapper;
 use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::proof::Proof as SnarkProof;
 use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::setup::VerificationKey as SnarkVK;
+use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::setup::Setup as SnarkSetup;
 use snark_wrapper::implementations::poseidon2::transcript::CircuitPoseidon2Transcript;
 use snark_wrapper::implementations::poseidon2::CircuitPoseidon2Sponge;
 use snark_wrapper::verifier::WrapperCircuit;
@@ -482,5 +483,7 @@ pub type ZkSyncSnarkWrapperCircuit = WrapperCircuit<
 
 pub type ZkSyncSnarkWrapperProof =
     ZkSyncCompressionLayerStorage<SnarkProof<Bn256, ZkSyncSnarkWrapperCircuit>>;
+pub type ZkSyncSnarkWrapperSetup =
+    ZkSyncCompressionLayerStorage<SnarkSetup<Bn256, ZkSyncSnarkWrapperCircuit>>;
 pub type ZkSyncSnarkWrapperVK =
     ZkSyncCompressionLayerStorage<SnarkVK<Bn256, ZkSyncSnarkWrapperCircuit>>;
