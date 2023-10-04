@@ -352,7 +352,8 @@ impl SetupDataSource for InMemoryDataSource {
     }
 
     fn set_wrapper_setup(&mut self, setup: ZkSyncSnarkWrapperSetup) -> SourceResult<()> {
-        self.wrapper_setup.insert(setup.numeric_circuit_type(), setup);
+        self.wrapper_setup
+            .insert(setup.numeric_circuit_type(), setup);
         Ok(())
     }
 

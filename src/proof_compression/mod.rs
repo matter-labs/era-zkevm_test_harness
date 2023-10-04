@@ -26,8 +26,8 @@ mod test {
     use circuit_definitions::circuit_definitions::aux_layer::compression_modes::*;
     use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit;
     use circuit_definitions::{
-        recursion_layer_proof_config,
         circuit_definitions::recursion_layer::ZkSyncRecursionLayerStorageType,
+        recursion_layer_proof_config,
     };
 
     use super::*;
@@ -36,7 +36,9 @@ mod test {
     use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
     use crate::boojum::cs::oracle::TreeHasher;
     use crate::boojum::worker::Worker;
-    use crate::data_source::{BlockDataSource, SetupDataSource, local_file_data_source::LocalFileDataSource};
+    use crate::data_source::{
+        local_file_data_source::LocalFileDataSource, BlockDataSource, SetupDataSource,
+    };
 
     fn prove_and_save<CF: ProofCompressionFunction>(
         circuit: CompressionLayerCircuit<CF>,

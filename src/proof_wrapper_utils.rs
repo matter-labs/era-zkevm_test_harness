@@ -32,8 +32,8 @@ pub type TranscriptForWrapper = CircuitPoseidon2Transcript<Bn256, 2, 3, 3, true>
 pub(crate) const CRS_FILE_ENV_VAR: &str = "CRS_FILE";
 pub(crate) const L1_VERIFIER_DOMAIN_SIZE_LOG: usize = 24;
 
-use crate::data_source::{BlockDataSource, SetupDataSource};
 use crate::data_source::in_memory_data_source::InMemoryDataSource;
+use crate::data_source::{BlockDataSource, SetupDataSource};
 use crate::prover_utils::{
     create_compression_for_wrapper_setup_data, create_compression_layer_setup_data,
     prove_compression_for_wrapper_circuit, prove_compression_layer_circuit,
@@ -78,24 +78,27 @@ pub fn wrap_proof(
 }
 
 pub fn get_wrapper_vk_from_scheduler_vk(
-    vk: ZkSyncRecursionLayerVerificationKey, 
-    circuit_type: u8
+    vk: ZkSyncRecursionLayerVerificationKey,
+    circuit_type: u8,
 ) -> ZkSyncSnarkWrapperVK {
     check_trusted_setup_file_existace();
     let worker = Worker::new();
 
-    assert_eq!(vk.numeric_circuit_type(), ZkSyncRecursionLayerStorageType::SchedulerCircuit as u8);
+    assert_eq!(
+        vk.numeric_circuit_type(),
+        ZkSyncRecursionLayerStorageType::SchedulerCircuit as u8
+    );
     let mut source = InMemoryDataSource::new();
     source.set_recursion_layer_vk(vk).unwrap();
 
     // Firstly compute VKs to compression layer
     if circuit_type > 1 {
-        let vk = source.get_recursion_layer_vk(
-            ZkSyncRecursionLayerStorageType::SchedulerCircuit as u8
-        ).unwrap();
+        let vk = source
+            .get_recursion_layer_vk(ZkSyncRecursionLayerStorageType::SchedulerCircuit as u8)
+            .unwrap();
 
-        let circuit = ZkSyncCompressionLayerCircuit::CompressionMode1Circuit(
-            CompressionMode1Circuit {
+        let circuit =
+            ZkSyncCompressionLayerCircuit::CompressionMode1Circuit(CompressionMode1Circuit {
                 witness: None,
                 config: CompressionRecursionConfig {
                     proof_config: recursion_layer_proof_config(),
@@ -104,8 +107,7 @@ pub fn get_wrapper_vk_from_scheduler_vk(
                 },
                 transcript_params: (),
                 _marker: std::marker::PhantomData,
-            }
-        );
+            });
 
         compute_compression_vk_and_write(circuit, &mut source, &worker);
     }
@@ -113,8 +115,8 @@ pub fn get_wrapper_vk_from_scheduler_vk(
     if circuit_type > 2 {
         let vk = source.get_compression_vk(1).unwrap();
 
-        let circuit = ZkSyncCompressionLayerCircuit::CompressionMode2Circuit(
-            CompressionMode2Circuit {
+        let circuit =
+            ZkSyncCompressionLayerCircuit::CompressionMode2Circuit(CompressionMode2Circuit {
                 witness: None,
                 config: CompressionRecursionConfig {
                     proof_config: CompressionMode1::proof_config_for_compression_step(),
@@ -123,8 +125,7 @@ pub fn get_wrapper_vk_from_scheduler_vk(
                 },
                 transcript_params: (),
                 _marker: std::marker::PhantomData,
-            }
-        );
+            });
 
         compute_compression_vk_and_write(circuit, &mut source, &worker);
     }
@@ -132,8 +133,8 @@ pub fn get_wrapper_vk_from_scheduler_vk(
     if circuit_type > 3 {
         let vk = source.get_compression_vk(2).unwrap();
 
-        let circuit = ZkSyncCompressionLayerCircuit::CompressionMode3Circuit(
-            CompressionMode3Circuit {
+        let circuit =
+            ZkSyncCompressionLayerCircuit::CompressionMode3Circuit(CompressionMode3Circuit {
                 witness: None,
                 config: CompressionRecursionConfig {
                     proof_config: CompressionMode2::proof_config_for_compression_step(),
@@ -142,8 +143,7 @@ pub fn get_wrapper_vk_from_scheduler_vk(
                 },
                 transcript_params: (),
                 _marker: std::marker::PhantomData,
-            }
-        );
+            });
 
         compute_compression_vk_and_write(circuit, &mut source, &worker);
     }
@@ -151,8 +151,8 @@ pub fn get_wrapper_vk_from_scheduler_vk(
     if circuit_type > 4 {
         let vk = source.get_compression_vk(3).unwrap();
 
-        let circuit = ZkSyncCompressionLayerCircuit::CompressionMode4Circuit(
-            CompressionMode4Circuit {
+        let circuit =
+            ZkSyncCompressionLayerCircuit::CompressionMode4Circuit(CompressionMode4Circuit {
                 witness: None,
                 config: CompressionRecursionConfig {
                     proof_config: CompressionMode3::proof_config_for_compression_step(),
@@ -161,17 +161,16 @@ pub fn get_wrapper_vk_from_scheduler_vk(
                 },
                 transcript_params: (),
                 _marker: std::marker::PhantomData,
-            }
-        );
+            });
 
         compute_compression_vk_and_write(circuit, &mut source, &worker);
     }
-    
+
     // Then compute VKs to compression for wrapper
     if circuit_type == 1 {
-        let vk = source.get_recursion_layer_vk(
-            ZkSyncRecursionLayerStorageType::SchedulerCircuit as u8
-        ).unwrap();
+        let vk = source
+            .get_recursion_layer_vk(ZkSyncRecursionLayerStorageType::SchedulerCircuit as u8)
+            .unwrap();
 
         let circuit = ZkSyncCompressionForWrapperCircuit::CompressionMode1Circuit(
             CompressionMode1ForWrapperCircuit {
@@ -183,7 +182,7 @@ pub fn get_wrapper_vk_from_scheduler_vk(
                 },
                 transcript_params: (),
                 _marker: std::marker::PhantomData,
-            }
+            },
         );
 
         compute_compression_for_wrapper_vk_and_write(circuit, &mut source, &worker);
@@ -201,7 +200,7 @@ pub fn get_wrapper_vk_from_scheduler_vk(
                 },
                 transcript_params: (),
                 _marker: std::marker::PhantomData,
-            }
+            },
         );
 
         compute_compression_for_wrapper_vk_and_write(circuit, &mut source, &worker);
@@ -219,7 +218,7 @@ pub fn get_wrapper_vk_from_scheduler_vk(
                 },
                 transcript_params: (),
                 _marker: std::marker::PhantomData,
-            }
+            },
         );
 
         compute_compression_for_wrapper_vk_and_write(circuit, &mut source, &worker);
@@ -237,7 +236,7 @@ pub fn get_wrapper_vk_from_scheduler_vk(
                 },
                 transcript_params: (),
                 _marker: std::marker::PhantomData,
-            }
+            },
         );
 
         compute_compression_for_wrapper_vk_and_write(circuit, &mut source, &worker);
@@ -255,16 +254,14 @@ pub fn get_wrapper_vk_from_scheduler_vk(
                 },
                 transcript_params: (),
                 _marker: std::marker::PhantomData,
-            }
+            },
         );
 
         compute_compression_for_wrapper_vk_and_write(circuit, &mut source, &worker);
     }
 
     // Finally, wrapper vk
-    get_wrapper_vk_from_compression_vk(
-        source.get_compression_for_wrapper_vk(circuit_type).unwrap()
-    )
+    get_wrapper_vk_from_compression_vk(source.get_compression_for_wrapper_vk(circuit_type).unwrap())
 }
 
 fn compute_compression_vk_and_write(
@@ -275,20 +272,19 @@ fn compute_compression_vk_and_write(
     let circuit_type = circuit.numeric_circuit_type();
     let proof_config = circuit.proof_config_for_compression_step();
 
-    let (_, _, vk, _, _, _, _) =
-    create_compression_layer_setup_data(
+    let (_, _, vk, _, _, _, _) = create_compression_layer_setup_data(
         circuit,
         &worker,
         proof_config.fri_lde_factor,
         proof_config.merkle_tree_cap_size,
     );
 
-
     source
         .set_compression_vk(ZkSyncCompressionLayerStorage::from_inner(
             circuit_type,
             vk.clone(),
-        )).unwrap();
+        ))
+        .unwrap();
 }
 
 fn compute_compression_for_wrapper_vk_and_write(
@@ -299,8 +295,7 @@ fn compute_compression_for_wrapper_vk_and_write(
     let circuit_type = circuit.numeric_circuit_type();
     let proof_config = circuit.proof_config_for_compression_step();
 
-    let (_, _, vk, _, _, _, _) =
-    create_compression_for_wrapper_setup_data(
+    let (_, _, vk, _, _, _, _) = create_compression_for_wrapper_setup_data(
         circuit,
         &worker,
         proof_config.fri_lde_factor,
@@ -310,11 +305,13 @@ fn compute_compression_for_wrapper_vk_and_write(
         .set_compression_for_wrapper_vk(ZkSyncCompressionLayerStorage::from_inner(
             circuit_type,
             vk.clone(),
-        )).unwrap();
+        ))
+        .unwrap();
 }
 
-
-pub fn get_wrapper_vk_from_compression_vk(vk: ZkSyncCompressionForWrapperVerificationKey) -> ZkSyncSnarkWrapperVK {
+pub fn get_wrapper_vk_from_compression_vk(
+    vk: ZkSyncCompressionForWrapperVerificationKey,
+) -> ZkSyncSnarkWrapperVK {
     check_trusted_setup_file_existace();
 
     let worker = BellmanWorker::new();
@@ -724,21 +721,19 @@ pub(crate) fn compute_wrapper_proof_and_vk<DS: SetupDataSource + BlockDataSource
         let snark_setup = source.get_wrapper_setup(circuit_type).unwrap();
 
         let snark_proof = compute_wrapper_proof_inner(
-            circuit_type, 
-            proof.into_inner(), 
-            vk.into_inner(), 
-            snark_setup.into_inner(), 
-            worker
+            circuit_type,
+            proof.into_inner(),
+            vk.into_inner(),
+            snark_setup.into_inner(),
+            worker,
         );
 
         println!("Verifying");
         let snark_vk = source.get_wrapper_vk(circuit_type).unwrap();
         use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::verifier::verify;
-        let is_valid = verify::<_, _, RollingKeccakTranscript<Fr>>(
-            &snark_vk.into_inner(), 
-            &snark_proof, 
-            None
-        ).unwrap();
+        let is_valid =
+            verify::<_, _, RollingKeccakTranscript<Fr>>(&snark_vk.into_inner(), &snark_proof, None)
+                .unwrap();
         assert!(is_valid);
 
         let snark_proof = ZkSyncCompressionLayerStorage::from_inner(circuit_type, snark_proof);
@@ -787,7 +782,6 @@ fn compute_wrapper_setup_inner(
                 ZkSyncCompressionWrapper,
             >>(worker)
             .unwrap();
-
 
     println!(
         "Wrapper setup {} is done, taken {:?}",

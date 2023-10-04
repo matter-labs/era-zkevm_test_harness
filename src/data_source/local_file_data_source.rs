@@ -178,8 +178,11 @@ impl SetupDataSource for LocalFileDataSource {
         println!("Read wrapper setup from file. Can take a while.");
         let start = std::time::Instant::now();
 
-        let mut file = File::open(format!("./setup/aux_layer/wrapper_setup_{}.setup", circuit_type))
-            .map_err(|el| Box::new(el) as Box<dyn Error>)?;
+        let mut file = File::open(format!(
+            "./setup/aux_layer/wrapper_setup_{}.setup",
+            circuit_type
+        ))
+        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
 
         let result = ZkSyncSnarkWrapperSetup::from_inner(
             circuit_type,
@@ -187,7 +190,7 @@ impl SetupDataSource for LocalFileDataSource {
         );
 
         println!("Wrapper setup read from file. Took {:?}", start.elapsed());
-        
+
         Ok(result)
     }
     fn get_wrapper_vk(&self, circuit_type: u8) -> SourceResult<ZkSyncSnarkWrapperVK> {
@@ -375,10 +378,14 @@ impl SetupDataSource for LocalFileDataSource {
         let start = std::time::Instant::now();
 
         let circuit_type = setup.numeric_circuit_type();
-        let mut file = File::create(format!("./setup/aux_layer/wrapper_setup_{}.setup", circuit_type))
-            .map_err(|el| Box::new(el) as Box<dyn Error>)?;
+        let mut file = File::create(format!(
+            "./setup/aux_layer/wrapper_setup_{}.setup",
+            circuit_type
+        ))
+        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
 
-        setup.into_inner()
+        setup
+            .into_inner()
             .write(&mut file)
             .map_err(|el| Box::new(el) as Box<dyn Error>)?;
 
