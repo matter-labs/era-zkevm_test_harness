@@ -26,7 +26,7 @@ mod test {
     use circuit_definitions::circuit_definitions::aux_layer::compression_modes::*;
     use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit;
     use circuit_definitions::{
-        base_layer_proof_config,
+        recursion_layer_proof_config,
         circuit_definitions::recursion_layer::ZkSyncRecursionLayerStorageType,
     };
 
@@ -105,7 +105,7 @@ mod test {
         let circuit = CompressionMode1Circuit {
             witness: Some(proof.clone().into_inner()),
             config: CompressionRecursionConfig {
-                proof_config: base_layer_proof_config(),
+                proof_config: recursion_layer_proof_config(),
                 verification_key: vk.into_inner(),
                 _marker: std::marker::PhantomData,
             },
@@ -318,7 +318,7 @@ mod test {
         let circuit = CompressionMode1Circuit {
             witness: Some(proof.clone().into_inner()),
             config: CompressionRecursionConfig {
-                proof_config: base_layer_proof_config(),
+                proof_config: recursion_layer_proof_config(),
                 verification_key: vk.into_inner(),
                 _marker: std::marker::PhantomData,
             },

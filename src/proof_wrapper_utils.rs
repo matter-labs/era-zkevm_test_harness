@@ -1,4 +1,4 @@
-use circuit_definitions::base_layer_proof_config;
+use circuit_definitions::recursion_layer_proof_config;
 use circuit_definitions::boojum::cs::implementations::pow::NoPow;
 use circuit_definitions::boojum::cs::implementations::setup::FinalizationHintsForProver;
 use circuit_definitions::boojum::field::goldilocks::GoldilocksField;
@@ -98,7 +98,7 @@ pub fn get_wrapper_vk_from_scheduler_vk(
             CompressionMode1Circuit {
                 witness: None,
                 config: CompressionRecursionConfig {
-                    proof_config: base_layer_proof_config(),
+                    proof_config: recursion_layer_proof_config(),
                     verification_key: vk.into_inner(),
                     _marker: std::marker::PhantomData,
                 },
@@ -177,7 +177,7 @@ pub fn get_wrapper_vk_from_scheduler_vk(
             CompressionMode1ForWrapperCircuit {
                 witness: None,
                 config: CompressionRecursionConfig {
-                    proof_config: base_layer_proof_config(),
+                    proof_config: recursion_layer_proof_config(),
                     verification_key: vk.into_inner(),
                     _marker: std::marker::PhantomData,
                 },
@@ -365,7 +365,7 @@ pub(crate) fn compute_compression_circuit<DS: SetupDataSource + BlockDataSource>
             1 => ZkSyncCompressionLayerCircuit::CompressionMode1Circuit(CompressionMode1Circuit {
                 witness: Some(proof),
                 config: CompressionRecursionConfig {
-                    proof_config: base_layer_proof_config(),
+                    proof_config: recursion_layer_proof_config(),
                     verification_key: vk,
                     _marker: std::marker::PhantomData,
                 },
@@ -536,7 +536,7 @@ pub(crate) fn compute_compression_for_wrapper_circuit<DS: SetupDataSource + Bloc
                 CompressionMode1ForWrapperCircuit {
                     witness: Some(proof),
                     config: CompressionRecursionConfig {
-                        proof_config: base_layer_proof_config(),
+                        proof_config: recursion_layer_proof_config(),
                         verification_key: vk,
                         _marker: std::marker::PhantomData,
                     },
