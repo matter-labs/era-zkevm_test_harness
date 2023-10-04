@@ -877,8 +877,10 @@ fn get_trusted_setup() -> Crs<Bn256, CrsForMonomialForm> {
 
 pub fn compress_stark_pi_to_snark_pi(stark_pi: [GoldilocksField; 4]) -> Fr {
     let chunk_bit_size = (GoldilocksField::CAPACITY_BITS / 8) * 8;
-    assert!(stark_pi.len() * chunk_bit_size <= Fr::CAPACITY as usize, 
-        "scalar field capacity is not enough to fit all public inputs");
+    assert!(
+        stark_pi.len() * chunk_bit_size <= Fr::CAPACITY as usize,
+        "scalar field capacity is not enough to fit all public inputs"
+    );
 
     let mut coeff = Fr::one();
     let mut shift = <Fr as PrimeField>::Repr::from(1);
@@ -887,7 +889,8 @@ pub fn compress_stark_pi_to_snark_pi(stark_pi: [GoldilocksField; 4]) -> Fr {
 
     let mut result = Fr::zero();
     for chunk in stark_pi.iter().rev() {
-        let mut chunk_fr = Fr::from_repr(<Fr as PrimeField>::Repr::from(chunk.as_u64_reduced())).unwrap();
+        let mut chunk_fr =
+            Fr::from_repr(<Fr as PrimeField>::Repr::from(chunk.as_u64_reduced())).unwrap();
         chunk_fr.mul_assign(&coeff);
         result.add_assign(&chunk_fr);
         coeff.mul_assign(&shift);
