@@ -23,7 +23,14 @@ pub(crate) fn test_compression_for_compression_num(compression: u8) {
     let worker = Worker::new();
     let bellman_worker = BellmanWorker::new();
 
-    let mut source = LocalFileDataSource;
+    let mut file_source = LocalFileDataSource;
+    let mut source = InMemoryDataSource::new();
+
+    // Load scheduler proof and vk
+    source.set_scheduler_proof(file_source.get_scheduler_proof().unwrap()).unwrap();
+    source.set_recursion_layer_vk(file_source.get_recursion_layer_vk(
+        ZkSyncRecursionLayerStorageType::SchedulerCircuit as u8
+    ).unwrap()).unwrap();
 
     for circuit_type in 1..=5 {
         if compression > circuit_type {
@@ -35,6 +42,10 @@ pub(crate) fn test_compression_for_compression_num(compression: u8) {
             return;
         }
     }
+
+    // Write wrapper proof and vk
+    file_source.set_wrapper_proof(source.get_wrapper_proof(compression).unwrap()).unwrap();
+    file_source.set_wrapper_vk(source.get_wrapper_vk(compression).unwrap()).unwrap();
 }
 
 pub(crate) fn test_wrapper_pi_inner<DS: SetupDataSource + BlockDataSource>(
