@@ -77,7 +77,244 @@ pub fn wrap_proof(
     )
 }
 
-pub fn get_wrapper_vk(vk: ZkSyncCompressionForWrapperVerificationKey) -> ZkSyncSnarkWrapperVK {
+pub fn get_wrapper_vk_from_scheduler_vk(
+    vk: ZkSyncRecursionLayerVerificationKey, 
+    circuit_type: u8
+) -> ZkSyncSnarkWrapperVK {
+    check_trusted_setup_file_existace();
+    let worker = Worker::new();
+
+    assert_eq!(vk.numeric_circuit_type(), ZkSyncRecursionLayerStorageType::SchedulerCircuit as u8);
+    let mut source = InMemoryDataSource::new();
+    source.set_recursion_layer_vk(vk).unwrap();
+
+    // Firstly compute VKs to compression layer
+    if circuit_type > 1 {
+        let vk = source.get_recursion_layer_vk(
+            ZkSyncRecursionLayerStorageType::SchedulerCircuit as u8
+        ).unwrap();
+
+        let circuit = ZkSyncCompressionLayerCircuit::CompressionMode1Circuit(
+            CompressionMode1Circuit {
+                witness: None,
+                config: CompressionRecursionConfig {
+                    proof_config: base_layer_proof_config(),
+                    verification_key: vk.into_inner(),
+                    _marker: std::marker::PhantomData,
+                },
+                transcript_params: (),
+                _marker: std::marker::PhantomData,
+            }
+        );
+
+        compute_compression_vk_and_write(circuit, &mut source, &worker);
+    }
+
+    if circuit_type > 2 {
+        let vk = source.get_compression_vk(1).unwrap();
+
+        let circuit = ZkSyncCompressionLayerCircuit::CompressionMode2Circuit(
+            CompressionMode2Circuit {
+                witness: None,
+                config: CompressionRecursionConfig {
+                    proof_config: CompressionMode1::proof_config_for_compression_step(),
+                    verification_key: vk.into_inner(),
+                    _marker: std::marker::PhantomData,
+                },
+                transcript_params: (),
+                _marker: std::marker::PhantomData,
+            }
+        );
+
+        compute_compression_vk_and_write(circuit, &mut source, &worker);
+    }
+
+    if circuit_type > 3 {
+        let vk = source.get_compression_vk(2).unwrap();
+
+        let circuit = ZkSyncCompressionLayerCircuit::CompressionMode3Circuit(
+            CompressionMode3Circuit {
+                witness: None,
+                config: CompressionRecursionConfig {
+                    proof_config: CompressionMode2::proof_config_for_compression_step(),
+                    verification_key: vk.into_inner(),
+                    _marker: std::marker::PhantomData,
+                },
+                transcript_params: (),
+                _marker: std::marker::PhantomData,
+            }
+        );
+
+        compute_compression_vk_and_write(circuit, &mut source, &worker);
+    }
+
+    if circuit_type > 4 {
+        let vk = source.get_compression_vk(3).unwrap();
+
+        let circuit = ZkSyncCompressionLayerCircuit::CompressionMode4Circuit(
+            CompressionMode4Circuit {
+                witness: None,
+                config: CompressionRecursionConfig {
+                    proof_config: CompressionMode3::proof_config_for_compression_step(),
+                    verification_key: vk.into_inner(),
+                    _marker: std::marker::PhantomData,
+                },
+                transcript_params: (),
+                _marker: std::marker::PhantomData,
+            }
+        );
+
+        compute_compression_vk_and_write(circuit, &mut source, &worker);
+    }
+    
+    // Then compute VKs to compression for wrapper
+    if circuit_type == 1 {
+        let vk = source.get_recursion_layer_vk(
+            ZkSyncRecursionLayerStorageType::SchedulerCircuit as u8
+        ).unwrap();
+
+        let circuit = ZkSyncCompressionForWrapperCircuit::CompressionMode1Circuit(
+            CompressionMode1ForWrapperCircuit {
+                witness: None,
+                config: CompressionRecursionConfig {
+                    proof_config: base_layer_proof_config(),
+                    verification_key: vk.into_inner(),
+                    _marker: std::marker::PhantomData,
+                },
+                transcript_params: (),
+                _marker: std::marker::PhantomData,
+            }
+        );
+
+        compute_compression_for_wrapper_vk_and_write(circuit, &mut source, &worker);
+    }
+    if circuit_type == 2 {
+        let vk = source.get_compression_vk(1).unwrap();
+
+        let circuit = ZkSyncCompressionForWrapperCircuit::CompressionMode2Circuit(
+            CompressionMode2ForWrapperCircuit {
+                witness: None,
+                config: CompressionRecursionConfig {
+                    proof_config: CompressionMode1::proof_config_for_compression_step(),
+                    verification_key: vk.into_inner(),
+                    _marker: std::marker::PhantomData,
+                },
+                transcript_params: (),
+                _marker: std::marker::PhantomData,
+            }
+        );
+
+        compute_compression_for_wrapper_vk_and_write(circuit, &mut source, &worker);
+    }
+    if circuit_type == 3 {
+        let vk = source.get_compression_vk(2).unwrap();
+
+        let circuit = ZkSyncCompressionForWrapperCircuit::CompressionMode3Circuit(
+            CompressionMode3ForWrapperCircuit {
+                witness: None,
+                config: CompressionRecursionConfig {
+                    proof_config: CompressionMode2::proof_config_for_compression_step(),
+                    verification_key: vk.into_inner(),
+                    _marker: std::marker::PhantomData,
+                },
+                transcript_params: (),
+                _marker: std::marker::PhantomData,
+            }
+        );
+
+        compute_compression_for_wrapper_vk_and_write(circuit, &mut source, &worker);
+    }
+    if circuit_type == 4 {
+        let vk = source.get_compression_vk(3).unwrap();
+
+        let circuit = ZkSyncCompressionForWrapperCircuit::CompressionMode4Circuit(
+            CompressionMode4ForWrapperCircuit {
+                witness: None,
+                config: CompressionRecursionConfig {
+                    proof_config: CompressionMode3::proof_config_for_compression_step(),
+                    verification_key: vk.into_inner(),
+                    _marker: std::marker::PhantomData,
+                },
+                transcript_params: (),
+                _marker: std::marker::PhantomData,
+            }
+        );
+
+        compute_compression_for_wrapper_vk_and_write(circuit, &mut source, &worker);
+    }
+    if circuit_type == 5 {
+        let vk = source.get_compression_vk(4).unwrap();
+
+        let circuit = ZkSyncCompressionForWrapperCircuit::CompressionModeToL1Circuit(
+            CompressionModeToL1ForWrapperCircuit {
+                witness: None,
+                config: CompressionRecursionConfig {
+                    proof_config: CompressionMode4::proof_config_for_compression_step(),
+                    verification_key: vk.into_inner(),
+                    _marker: std::marker::PhantomData,
+                },
+                transcript_params: (),
+                _marker: std::marker::PhantomData,
+            }
+        );
+
+        compute_compression_for_wrapper_vk_and_write(circuit, &mut source, &worker);
+    }
+
+    // Finally, wrapper vk
+    get_wrapper_vk_from_compression_vk(
+        source.get_compression_for_wrapper_vk(circuit_type).unwrap()
+    )
+}
+
+fn compute_compression_vk_and_write(
+    circuit: ZkSyncCompressionLayerCircuit,
+    source: &mut InMemoryDataSource,
+    worker: &Worker,
+) {
+    let circuit_type = circuit.numeric_circuit_type();
+    let proof_config = circuit.proof_config_for_compression_step();
+
+    let (_, _, vk, _, _, _, _) =
+    create_compression_layer_setup_data(
+        circuit,
+        &worker,
+        proof_config.fri_lde_factor,
+        proof_config.merkle_tree_cap_size,
+    );
+
+
+    source
+        .set_compression_vk(ZkSyncCompressionLayerStorage::from_inner(
+            circuit_type,
+            vk.clone(),
+        )).unwrap();
+}
+
+fn compute_compression_for_wrapper_vk_and_write(
+    circuit: ZkSyncCompressionForWrapperCircuit,
+    source: &mut InMemoryDataSource,
+    worker: &Worker,
+) {
+    let circuit_type = circuit.numeric_circuit_type();
+    let proof_config = circuit.proof_config_for_compression_step();
+
+    let (_, _, vk, _, _, _, _) =
+    create_compression_for_wrapper_setup_data(
+        circuit,
+        &worker,
+        proof_config.fri_lde_factor,
+        proof_config.merkle_tree_cap_size,
+    );
+    source
+        .set_compression_for_wrapper_vk(ZkSyncCompressionLayerStorage::from_inner(
+            circuit_type,
+            vk.clone(),
+        )).unwrap();
+}
+
+
+pub fn get_wrapper_vk_from_compression_vk(vk: ZkSyncCompressionForWrapperVerificationKey) -> ZkSyncSnarkWrapperVK {
     check_trusted_setup_file_existace();
 
     let worker = BellmanWorker::new();
@@ -215,8 +452,6 @@ fn compute_compression_circuit_inner(
     let start = std::time::Instant::now();
 
     let circuit_type = circuit.numeric_circuit_type();
-    let f = std::fs::File::create("tmp.json").unwrap();
-    serde_json::to_writer(f, &circuit).unwrap();
 
     test_compression_circuit(circuit.clone());
     println!("Circuit is satisfied");
@@ -400,8 +635,6 @@ fn compute_compression_for_wrapper_circuit_inner(
     let start = std::time::Instant::now();
 
     let circuit_type = circuit.numeric_circuit_type();
-    let f = std::fs::File::create("tmp.json").unwrap();
-    serde_json::to_writer(f, &circuit).unwrap();
 
     test_compression_for_wrapper_circuit(circuit.clone());
     println!("Circuit is satisfied");

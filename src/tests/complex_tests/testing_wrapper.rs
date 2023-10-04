@@ -86,12 +86,12 @@ fn test_wrapper_vk_generation() {
 
     let mut source = LocalFileDataSource;
 
-    let compression_vk = source
-        .get_compression_for_wrapper_vk(circuit_type as u8)
+    let scheduler_vk = source
+        .get_recursion_layer_vk(ZkSyncRecursionLayerStorageType::SchedulerCircuit as u8)
         .unwrap();
 
-    use crate::proof_wrapper_utils::get_wrapper_vk;
-    let wrapper_vk = get_wrapper_vk(compression_vk);
+    use crate::proof_wrapper_utils::get_wrapper_vk_from_scheduler_vk;
+    let wrapper_vk = get_wrapper_vk_from_scheduler_vk(scheduler_vk, circuit_type as u8);
 
     source.set_wrapper_vk(wrapper_vk).unwrap();
 }
