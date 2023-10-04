@@ -5,7 +5,7 @@ use circuit_definitions::boojum::field::goldilocks::GoldilocksField;
 use circuit_definitions::boojum::field::{PrimeField as BoojumPrimeField, U64Representable};
 use circuit_definitions::circuit_definitions::aux_layer::compression::{CompressionMode1Circuit, CompressionMode1ForWrapperCircuit, CompressionMode2Circuit, CompressionMode2ForWrapperCircuit, CompressionMode3Circuit, CompressionMode3ForWrapperCircuit, CompressionMode4Circuit, CompressionMode4ForWrapperCircuit, CompressionModeToL1Circuit, CompressionModeToL1ForWrapperCircuit, ProofCompressionFunction};
 use circuit_definitions::circuit_definitions::aux_layer::compression_modes::{CompressionMode1, CompressionMode1ForWrapper, CompressionMode2, CompressionMode2ForWrapper, CompressionMode3, CompressionMode3ForWrapper, CompressionMode4, CompressionMode4ForWrapper};
-use circuit_definitions::circuit_definitions::aux_layer::{ZkSyncCompressionForWrapperCircuit, ZkSyncCompressionLayerCircuit, ZkSyncCompressionLayerStorage, ZkSyncCompressionProof, ZkSyncCompressionProofForWrapper, ZkSyncCompressionVerificationKey, ZkSyncCompressionVerificationKeyForWrapper, ZkSyncSnarkWrapperCircuit, ZkSyncSnarkWrapperProof, ZkSyncSnarkWrapperVK};
+use circuit_definitions::circuit_definitions::aux_layer::{ZkSyncCompressionForWrapperCircuit, ZkSyncCompressionLayerCircuit, ZkSyncCompressionLayerStorage, ZkSyncCompressionProof, ZkSyncCompressionProofForWrapper, ZkSyncCompressionVerificationKey, ZkSyncCompressionVerificationKeyForWrapper, ZkSyncSnarkWrapperCircuit, ZkSyncSnarkWrapperProof, ZkSyncSnarkWrapperVK, ZkSyncSnarkWrapperSetup};
 use circuit_definitions::circuit_definitions::aux_layer::wrapper::ZkSyncCompressionWrapper;
 use circuit_definitions::circuit_definitions::recursion_layer::{ZkSyncRecursionLayerProof, ZkSyncRecursionLayerStorageType, ZkSyncRecursionLayerVerificationKey};
 use circuit_definitions::zkevm_circuits::recursion::compression::CompressionRecursionConfig;
@@ -79,10 +79,10 @@ pub fn wrap_proof(
     )
 }
 
-pub fn get_wrapper_vk_from_scheduler_vk(
+pub fn get_wrapper_setup_and_vk_from_scheduler_vk(
     vk: ZkSyncRecursionLayerVerificationKey,
     circuit_type: u8,
-) -> ZkSyncSnarkWrapperVK {
+) -> (ZkSyncSnarkWrapperSetup, ZkSyncSnarkWrapperVK) {
     check_trusted_setup_file_existace();
     let worker = Worker::new();
 
@@ -263,7 +263,7 @@ pub fn get_wrapper_vk_from_scheduler_vk(
     }
 
     // Finally, wrapper vk
-    get_wrapper_vk_from_compression_vk(source.get_compression_for_wrapper_vk(circuit_type).unwrap())
+    get_wrapper_setup_and_vk_from_compression_vk(source.get_compression_for_wrapper_vk(circuit_type).unwrap())
 }
 
 fn compute_compression_vk_and_write(
@@ -311,9 +311,9 @@ fn compute_compression_for_wrapper_vk_and_write(
         .unwrap();
 }
 
-pub fn get_wrapper_vk_from_compression_vk(
+pub fn get_wrapper_setup_and_vk_from_compression_vk(
     vk: ZkSyncCompressionForWrapperVerificationKey,
-) -> ZkSyncSnarkWrapperVK {
+) -> (ZkSyncSnarkWrapperSetup, ZkSyncSnarkWrapperVK) {
     check_trusted_setup_file_existace();
 
     let worker = BellmanWorker::new();
@@ -325,7 +325,10 @@ pub fn get_wrapper_vk_from_compression_vk(
     let crs_mons = get_trusted_setup();
     let snark_vk = SnarkVK::from_setup(&snark_setup, &worker, &crs_mons).unwrap();
 
-    ZkSyncSnarkWrapperVK::from_inner(circuit_type, snark_vk)
+    (
+        ZkSyncSnarkWrapperSetup::from_inner(circuit_type, Arc::new(snark_setup)),
+        ZkSyncSnarkWrapperVK::from_inner(circuit_type, snark_vk)
+    )
 }
 
 pub(crate) fn compute_compression_circuit<DS: SetupDataSource + BlockDataSource>(

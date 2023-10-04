@@ -142,8 +142,8 @@ fn test_wrapper_vk_generation() {
         .get_recursion_layer_vk(ZkSyncRecursionLayerStorageType::SchedulerCircuit as u8)
         .unwrap();
 
-    use crate::proof_wrapper_utils::get_wrapper_vk_from_scheduler_vk;
-    let wrapper_vk = get_wrapper_vk_from_scheduler_vk(scheduler_vk, circuit_type as u8);
+    use crate::proof_wrapper_utils::get_wrapper_setup_and_vk_from_scheduler_vk;
+    let (_, wrapper_vk) = get_wrapper_setup_and_vk_from_scheduler_vk(scheduler_vk, circuit_type as u8);
 
     source.set_wrapper_vk(wrapper_vk).unwrap();
 }
