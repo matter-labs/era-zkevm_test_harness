@@ -2,7 +2,7 @@ use super::*;
 
 use crate::proof_wrapper_utils::{
     compress_stark_pi_to_snark_pi, compute_compression_circuit,
-    compute_compression_for_wrapper_circuit, compute_wrapper_proof,
+    compute_compression_for_wrapper_circuit, compute_wrapper_proof_and_vk,
 };
 
 use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::proof::Proof as SnarkProof;
