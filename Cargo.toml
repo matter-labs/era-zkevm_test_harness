@@ -29,6 +29,7 @@ rescue_poseidon = {git = "https://github.com/matter-labs/rescue-poseidon.git", b
 
 zkevm-assembly = {git = "https://github.com/matter-labs/era-zkEVM-assembly.git", branch = "v1.3.2"}
 
+rand = "0.4"
 rayon = "*"
 derivative = "*"
 hex = "*"

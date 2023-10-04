@@ -86,6 +86,39 @@ fn test_wrapper_pi() {
 }
 
 #[test]
+fn test_pi_aggregation_function() {
+    use crate::zkevm_circuits::scheduler::NUM_SCHEDULER_PUBLIC_INPUTS;
+    use circuit_definitions::boojum::field::goldilocks::GoldilocksField;
+    use circuit_definitions::boojum::field::{Field, PrimeField, U64Representable};
+    use rand::Rng;
+
+    let input_keccak_hash = rand::thread_rng().gen::<[u8; 32]>();
+
+    // almost code from scheduler:
+    let take_by = GoldilocksField::CAPACITY_BITS / 8;
+
+    let mut pi = vec![];
+    for chunk in input_keccak_hash
+        .chunks_exact(take_by)
+        .take(NUM_SCHEDULER_PUBLIC_INPUTS)
+    {
+        let mut lc = GoldilocksField::ZERO;
+        // treat as BE
+        for (idx, el) in chunk.iter().rev().enumerate() {
+            let mut el = GoldilocksField::from_u64(*el as u64).unwrap();
+            el.mul_assign(&GoldilocksField::from_u64(1 << (idx * 8)).unwrap());
+            lc.add_assign(&el);
+        }
+        pi.push(lc);
+    }
+
+    let wrapper_pi = compress_stark_pi_to_snark_pi(pi.try_into().unwrap());
+
+    println!("{:x?}", input_keccak_hash);
+    println!("{:?}", wrapper_pi);
+}
+
+#[test]
 fn test_wrapper_vk_generation() {
     let circuit_type = std::env::var("COMPRESSION_NUM")
         .map(|s| s.parse::<usize>().expect("should be a number"))
