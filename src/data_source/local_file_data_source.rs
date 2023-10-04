@@ -18,7 +18,7 @@ use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::setup::Set
 use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::setup::VerificationKey as SnarkVK;
 
 use std::{error::Error, fs::File};
-
+use std::sync::Arc;
 use derivative::*;
 
 #[derive(Derivative)]
@@ -184,10 +184,11 @@ impl SetupDataSource for LocalFileDataSource {
         ))
         .map_err(|el| Box::new(el) as Box<dyn Error>)?;
 
-        let result = ZkSyncSnarkWrapperSetup::from_inner(
-            circuit_type,
-            SnarkSetup::read(&mut file).map_err(|el| Box::new(el) as Box<dyn Error>)?,
+        let result = Arc::new(
+            SnarkSetup::read(&mut file).map_err(|el| Box::new(el) as Box<dyn Error>)?
         );
+
+        let result = ZkSyncSnarkWrapperSetup::from_inner(circuit_type,result);
 
         println!("Wrapper setup read from file. Took {:?}", start.elapsed());
 

@@ -41,6 +41,8 @@ use crate::prover_utils::{
 };
 use crate::tests::{test_compression_circuit, test_compression_for_wrapper_circuit};
 
+use std::sync::Arc;
+
 pub fn wrap_proof(
     proof: ZkSyncRecursionLayerProof,
     vk: ZkSyncRecursionLayerVerificationKey,
@@ -689,7 +691,7 @@ pub(crate) fn compute_wrapper_proof_and_vk<DS: SetupDataSource + BlockDataSource
 
         let snark_setup = compute_wrapper_setup_inner(circuit_type, vk.into_inner(), worker);
 
-        let snark_setup = ZkSyncCompressionLayerStorage::from_inner(circuit_type, snark_setup);
+        let snark_setup = ZkSyncCompressionLayerStorage::from_inner(circuit_type, Arc::new(snark_setup));
         source.set_wrapper_setup(snark_setup).unwrap();
     }
 
@@ -724,7 +726,7 @@ pub(crate) fn compute_wrapper_proof_and_vk<DS: SetupDataSource + BlockDataSource
             circuit_type,
             proof.into_inner(),
             vk.into_inner(),
-            snark_setup.into_inner(),
+            &snark_setup.into_inner(),
             worker,
         );
 
@@ -796,7 +798,7 @@ fn compute_wrapper_proof_inner(
     circuit_type: u8,
     proof: ZkSyncCompressionProofForWrapper,
     vk: ZkSyncCompressionVerificationKeyForWrapper,
-    snark_setup: SnarkSetup<Bn256, ZkSyncSnarkWrapperCircuit>,
+    snark_setup: &SnarkSetup<Bn256, ZkSyncSnarkWrapperCircuit>,
     worker: &BellmanWorker,
 ) -> SnarkProof<Bn256, ZkSyncSnarkWrapperCircuit> {
     check_trusted_setup_file_existace();
@@ -843,7 +845,7 @@ fn compute_wrapper_proof_inner(
                 TreeHasherForWrapper,
                 TranscriptForWrapper,
                 ZkSyncCompressionWrapper,
-            >, RollingKeccakTranscript<Fr>>(worker, &snark_setup, &crs_mons, None)
+            >, RollingKeccakTranscript<Fr>>(worker, snark_setup, &crs_mons, None)
             .unwrap();
 
     println!(
