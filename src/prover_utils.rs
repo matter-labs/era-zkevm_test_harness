@@ -623,7 +623,7 @@ pub fn create_compression_layer_setup_data(
         ZkSyncCompressionLayerCircuit::CompressionMode2Circuit(inner) => synthesize_inner(inner),
         ZkSyncCompressionLayerCircuit::CompressionMode3Circuit(inner) => synthesize_inner(inner),
         ZkSyncCompressionLayerCircuit::CompressionMode4Circuit(inner) => synthesize_inner(inner),
-        ZkSyncCompressionLayerCircuit::CompressionModeToL1Circuit(inner) => synthesize_inner(inner),
+        ZkSyncCompressionLayerCircuit::CompressionMode5Circuit(inner) => synthesize_inner(inner),
     };
 
     let (setup_base, setup, vk, setup_tree, vars_hint, witness_hints) =
@@ -692,7 +692,7 @@ pub fn prove_compression_layer_circuit<POW: PoWRunner>(
         ZkSyncCompressionLayerCircuit::CompressionMode4Circuit(inner) => {
             synthesize_inner(inner, finalization_hint)
         }
-        ZkSyncCompressionLayerCircuit::CompressionModeToL1Circuit(inner) => {
+        ZkSyncCompressionLayerCircuit::CompressionMode5Circuit(inner) => {
             synthesize_inner(inner, finalization_hint)
         }
     };
@@ -782,7 +782,7 @@ pub fn create_compression_for_wrapper_setup_data(
         ZkSyncCompressionForWrapperCircuit::CompressionMode4Circuit(inner) => {
             synthesize_inner(inner)
         }
-        ZkSyncCompressionForWrapperCircuit::CompressionModeToL1Circuit(inner) => {
+        ZkSyncCompressionForWrapperCircuit::CompressionMode5Circuit(inner) => {
             synthesize_inner(inner)
         }
     };
@@ -853,7 +853,7 @@ pub fn prove_compression_for_wrapper_circuit<POW: PoWRunner>(
         ZkSyncCompressionForWrapperCircuit::CompressionMode4Circuit(inner) => {
             synthesize_inner(inner, finalization_hint)
         }
-        ZkSyncCompressionForWrapperCircuit::CompressionModeToL1Circuit(inner) => {
+        ZkSyncCompressionForWrapperCircuit::CompressionMode5Circuit(inner) => {
             synthesize_inner(inner, finalization_hint)
         }
     };

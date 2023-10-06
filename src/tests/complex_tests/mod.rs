@@ -17,6 +17,7 @@ use crate::compute_setups::*;
 use crate::entry_point::create_out_of_circuit_global_context;
 use crate::ethereum_types::*;
 use crate::helper::artifact_utils::TestArtifact;
+use crate::proof_wrapper_utils::{WrapperConfig, DEFAULT_WRAPPER_CONFIG};
 use crate::prover_utils::*;
 use crate::toolset::{create_tools, GeometryConfig};
 use crate::witness::oracle::create_artifacts_from_tracer;
@@ -57,18 +58,17 @@ fn basic_test() {
 
 #[test]
 fn basic_test_compression_only() {
-    let compression = std::env::var("COMPRESSION_NUM")
-        .map(|s| s.parse::<usize>().expect("should be a number"))
-        .unwrap_or(1);
+    let config = testing_wrapper::get_testing_wrapper_config();
 
-    testing_wrapper::test_compression_for_compression_num(compression as u8);
+    testing_wrapper::test_compression_for_compression_num(config);
 }
 
 #[test]
 fn basic_test_compression_all_modes() {
-    for compression in 1..=5 {
+    for compression in 1..=WrapperConfig::MAX_COMPRESSION_LAYERS {
         println!("Testing wrapper for mode {}", compression);
-        testing_wrapper::test_compression_for_compression_num(compression as u8);
+        let config = WrapperConfig::new(compression as u8);
+        testing_wrapper::test_compression_for_compression_num(config);
     }
 }
 

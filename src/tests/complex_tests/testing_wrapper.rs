@@ -1,7 +1,8 @@
 use super::*;
 
+use crate::proof_wrapper_utils::WrapperConfig;
 use crate::proof_wrapper_utils::{
-    compress_stark_pi_to_snark_pi, compute_compression_circuit,
+    compress_stark_pi_to_snark_pi, compute_compression_circuits,
     compute_compression_for_wrapper_circuit, compute_wrapper_proof_and_vk,
 };
 
@@ -12,12 +13,7 @@ use snark_wrapper::franklin_crypto::bellman::worker::Worker as BellmanWorker;
 pub type TreeHasherForWrapper = CircuitPoseidon2Sponge<Bn256, 2, 3, 3, true>;
 pub type TranscriptForWrapper = CircuitPoseidon2Transcript<Bn256, 2, 3, 3, true>;
 
-pub(crate) fn test_compression_for_compression_num(compression: u8) {
-    assert!(
-        compression > 0 && compression <= 5,
-        "compression should be between 1 and 5"
-    );
-
+pub(crate) fn test_compression_for_compression_num(config: WrapperConfig) {
     let worker = Worker::new();
     let bellman_worker = BellmanWorker::new();
 
@@ -36,37 +32,32 @@ pub(crate) fn test_compression_for_compression_num(compression: u8) {
         )
         .unwrap();
 
-    for circuit_type in 1..=5 {
-        if compression > circuit_type {
-            compute_compression_circuit(&mut source, circuit_type, &worker);
-        } else {
-            compute_compression_for_wrapper_circuit(&mut source, circuit_type, &worker);
-            compute_wrapper_proof_and_vk(&mut source, circuit_type, &bellman_worker);
-
-            return;
-        }
-    }
+    compute_compression_circuits(&mut source, config, &worker);
+    compute_compression_for_wrapper_circuit(&mut source, config, &worker);
+    compute_wrapper_proof_and_vk(&mut source, config, &bellman_worker);
 
     // Write wrapper proof and vk
+    let wrapper_type = config.get_wrapper_type();
     file_source
-        .set_wrapper_proof(source.get_wrapper_proof(compression).unwrap())
+        .set_wrapper_proof(source.get_wrapper_proof(wrapper_type).unwrap())
         .unwrap();
     file_source
-        .set_wrapper_vk(source.get_wrapper_vk(compression).unwrap())
+        .set_wrapper_vk(source.get_wrapper_vk(wrapper_type).unwrap())
         .unwrap();
 }
 
 pub(crate) fn test_wrapper_pi_inner<DS: SetupDataSource + BlockDataSource>(
     source: &mut DS,
-    circuit_type: u8,
+    config: WrapperConfig,
 ) {
     let scheduler_proof = source
         .get_scheduler_proof()
         .expect("scheduler proof should be present")
         .into_inner();
 
+    let wrapper_type = config.get_wrapper_type();
     let wrapper_proof = source
-        .get_wrapper_proof(circuit_type)
+        .get_wrapper_proof(wrapper_type)
         .expect("wrapper proof should be present")
         .into_inner();
 
@@ -80,17 +71,11 @@ pub(crate) fn test_wrapper_pi_inner<DS: SetupDataSource + BlockDataSource>(
 
 #[test]
 fn test_wrapper_pi() {
-    let circuit_type = std::env::var("COMPRESSION_NUM")
-        .map(|s| s.parse::<usize>().expect("should be a number"))
-        .unwrap_or(1);
-    assert!(
-        circuit_type > 0 && circuit_type <= 5,
-        "compression should be between 1 and 5"
-    );
+    let config = get_testing_wrapper_config();
 
     let mut source = LocalFileDataSource;
 
-    test_wrapper_pi_inner(&mut source, circuit_type as u8);
+    test_wrapper_pi_inner(&mut source, config);
 }
 
 #[test]
@@ -128,13 +113,7 @@ fn test_pi_aggregation_function() {
 
 #[test]
 fn test_wrapper_vk_generation() {
-    let circuit_type = std::env::var("COMPRESSION_NUM")
-        .map(|s| s.parse::<usize>().expect("should be a number"))
-        .unwrap_or(1);
-    assert!(
-        circuit_type > 0 && circuit_type <= 5,
-        "compression should be between 1 and 5"
-    );
+    let config = get_testing_wrapper_config();
 
     let mut source = LocalFileDataSource;
 
@@ -143,7 +122,18 @@ fn test_wrapper_vk_generation() {
         .unwrap();
 
     use crate::proof_wrapper_utils::get_wrapper_setup_and_vk_from_scheduler_vk;
-    let (_, wrapper_vk) = get_wrapper_setup_and_vk_from_scheduler_vk(scheduler_vk, circuit_type as u8);
+    let (_, wrapper_vk) = get_wrapper_setup_and_vk_from_scheduler_vk(scheduler_vk, config);
 
     source.set_wrapper_vk(wrapper_vk).unwrap();
+}
+
+pub(crate) fn get_testing_wrapper_config() -> WrapperConfig {
+    let compression =
+        std::env::var("COMPRESSION_NUM").map(|s| s.parse::<usize>().expect("should be a number"));
+
+    if let Ok(compression) = compression {
+        WrapperConfig::new(compression as u8)
+    } else {
+        DEFAULT_WRAPPER_CONFIG
+    }
 }

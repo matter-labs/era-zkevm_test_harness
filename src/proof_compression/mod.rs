@@ -284,7 +284,7 @@ mod test {
         assert!(is_valid);
 
         // make a compression circuit
-        let circuit = CompressionModeToL1Circuit {
+        let circuit = CompressionMode5Circuit {
             witness: Some(proof.clone()),
             config: CompressionRecursionConfig {
                 proof_config: CompressionMode4::proof_config_for_compression_step(),
