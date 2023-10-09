@@ -101,9 +101,10 @@ fn compute_compression_circuit_inner(
 
     let proof_config = circuit.proof_config_for_compression_step();
 
+    let setup_circuit = circuit.clone_without_witness();
     let (setup_base, setup, vk, setup_tree, vars_hint, wits_hint, finalization_hint) =
         create_compression_layer_setup_data(
-            circuit.clone(),
+            setup_circuit.clone(),
             &worker,
             proof_config.fri_lde_factor,
             proof_config.merkle_tree_cap_size,
@@ -113,7 +114,7 @@ fn compute_compression_circuit_inner(
     println!("Proving!");
 
     let proof = prove_compression_layer_circuit::<NoPow>(
-        circuit.clone(),
+        circuit,
         &worker,
         proof_config,
         &setup_base,
@@ -125,7 +126,7 @@ fn compute_compression_circuit_inner(
         &finalization_hint,
     );
 
-    let is_valid = verify_compression_layer_proof::<NoPow>(&circuit, &proof, &vk);
+    let is_valid = verify_compression_layer_proof::<NoPow>(&setup_circuit, &proof, &vk);
 
     assert!(is_valid);
 

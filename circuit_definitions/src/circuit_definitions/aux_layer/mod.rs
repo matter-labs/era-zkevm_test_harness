@@ -11,6 +11,7 @@ use crate::circuit_definitions::aux_layer::compression_modes::*;
 use crate::circuit_definitions::cs_builder_reference::CsReferenceImplementationBuilder;
 use crate::circuit_definitions::implementations::reference_cs::CSReferenceAssembly;
 
+use franklin_crypto::plonk::circuit;
 use zkevm_circuits::recursion::compression::CompressionRecursionConfig;
 use crate::recursion_layer_proof_config;
 
@@ -50,7 +51,7 @@ impl ZkSyncCompressionLayerCircuit {
             Self::CompressionMode2Circuit(..) => "Compression mode 2",
             Self::CompressionMode3Circuit(..) => "Compression mode 3",
             Self::CompressionMode4Circuit(..) => "Compression mode 4",
-            Self::CompressionMode5Circuit(..) => "Compression mode to L1",
+            Self::CompressionMode5Circuit(..) => "Compression mode 5",
         }
     }
 
@@ -122,6 +123,16 @@ impl ZkSyncCompressionLayerCircuit {
             Self::CompressionMode5Circuit(..) => {
                 CompressionMode5::proof_config_for_compression_step()
             }
+        }
+    }
+
+    pub fn verification_key(&self) -> VerificationKey<F, H> {
+        match &self {
+            Self::CompressionMode1Circuit(inner) => inner.config.verification_key.clone(),
+            Self::CompressionMode2Circuit(inner) => inner.config.verification_key.clone(),
+            Self::CompressionMode3Circuit(inner) => inner.config.verification_key.clone(),
+            Self::CompressionMode4Circuit(inner) => inner.config.verification_key.clone(),
+            Self::CompressionMode5Circuit(inner) => inner.config.verification_key.clone(),
         }
     }
 
@@ -253,6 +264,12 @@ impl ZkSyncCompressionLayerCircuit {
             _ => panic!("wrong circuit_type for compression layer: {}", circuit_type),
         }
     }
+
+    pub fn clone_without_witness(&self) -> Self {
+        let circuit_type = self.numeric_circuit_type();
+        let vk = self.verification_key();
+        Self::from_witness_and_vk(None, vk, circuit_type)
+    }
 }
 
 use crate::circuit_definitions::recursion_layer::scheduler::ConcreteSchedulerCircuitBuilder;
@@ -281,9 +298,7 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             ZkSyncCompressionLayerStorage::CompressionMode2Circuit(..) => "Compression mode 2",
             ZkSyncCompressionLayerStorage::CompressionMode3Circuit(..) => "Compression mode 3",
             ZkSyncCompressionLayerStorage::CompressionMode4Circuit(..) => "Compression mode 4",
-            ZkSyncCompressionLayerStorage::CompressionMode5Circuit(..) => {
-                "Compression mode to L1"
-            }
+            ZkSyncCompressionLayerStorage::CompressionMode5Circuit(..) => "Compression mode 5",
         }
     }
 
@@ -357,7 +372,7 @@ impl ZkSyncCompressionForWrapperCircuit {
             Self::CompressionMode2Circuit(..) => "Compression mode 2 for wrapper",
             Self::CompressionMode3Circuit(..) => "Compression mode 3 for wrapper",
             Self::CompressionMode4Circuit(..) => "Compression mode 4 for wrapper",
-            Self::CompressionMode5Circuit(..) => "Compression mode to L1 for wrapper",
+            Self::CompressionMode5Circuit(..) => "Compression mode 5 for wrapper",
         }
     }
 
@@ -429,6 +444,16 @@ impl ZkSyncCompressionForWrapperCircuit {
             Self::CompressionMode5Circuit(..) => {
                 CompressionMode5ForWrapper::proof_config_for_compression_step()
             }
+        }
+    }
+
+    pub fn verification_key(&self) -> VerificationKey<F, H> {
+        match &self {
+            Self::CompressionMode1Circuit(inner) => inner.config.verification_key.clone(),
+            Self::CompressionMode2Circuit(inner) => inner.config.verification_key.clone(),
+            Self::CompressionMode3Circuit(inner) => inner.config.verification_key.clone(),
+            Self::CompressionMode4Circuit(inner) => inner.config.verification_key.clone(),
+            Self::CompressionMode5Circuit(inner) => inner.config.verification_key.clone(),
         }
     }
 
@@ -559,6 +584,12 @@ impl ZkSyncCompressionForWrapperCircuit {
             },
             _ => panic!("wrong circuit_type for compression layer: {}", circuit_type),
         }
+    }
+
+    pub fn clone_without_witness(&self) -> Self {
+        let circuit_type = self.numeric_circuit_type();
+        let vk = self.verification_key();
+        Self::from_witness_and_vk(None, vk, circuit_type)
     }
 }
 
