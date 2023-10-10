@@ -173,7 +173,7 @@ pub fn create_artifacts_from_tracer<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
-    tracer: WitnessTracer,
+    tracer: &mut WitnessTracer,
     round_function: &R,
     geometry: &GeometryConfig,
     entry_point_decommittment_query: (DecommittmentQuery, Vec<U256>),
@@ -933,11 +933,11 @@ pub fn create_artifacts_from_tracer<
     // when it potentially came into and out of scope
 
     let mut artifacts = FullBlockArtifacts::<F>::default();
-    artifacts.vm_memory_queries_accumulated = vm_memory_queries_accumulated;
-    artifacts.all_decommittment_queries = decommittment_queries;
-    artifacts.keccak_round_function_witnesses = keccak_round_function_witnesses;
-    artifacts.sha256_round_function_witnesses = sha256_round_function_witnesses;
-    artifacts.ecrecover_witnesses = ecrecover_witnesses;
+    artifacts.vm_memory_queries_accumulated = vm_memory_queries_accumulated.to_vec();
+    artifacts.all_decommittment_queries = decommittment_queries.to_vec();
+    artifacts.keccak_round_function_witnesses = keccak_round_function_witnesses.to_vec();
+    artifacts.sha256_round_function_witnesses = sha256_round_function_witnesses.to_vec();
+    artifacts.ecrecover_witnesses = ecrecover_witnesses.to_vec();
     artifacts.original_log_queue = original_log_queue;
     artifacts.original_log_queue_simulator =
         original_log_queue_simulator.unwrap_or(LogQueueSimulator::empty());
