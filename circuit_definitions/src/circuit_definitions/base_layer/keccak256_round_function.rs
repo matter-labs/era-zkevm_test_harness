@@ -87,6 +87,10 @@ where
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,
         );
+        let builder = UIntXAddGate::<8>::configure_builder(
+            builder,
+            GatePlacementStrategy::UseGeneralPurposeColumns,
+        );
         let builder = SelectionGate::configure_builder(
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,
