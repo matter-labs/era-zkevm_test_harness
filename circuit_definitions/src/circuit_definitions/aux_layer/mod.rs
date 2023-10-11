@@ -11,9 +11,9 @@ use crate::circuit_definitions::aux_layer::compression_modes::*;
 use crate::circuit_definitions::cs_builder_reference::CsReferenceImplementationBuilder;
 use crate::circuit_definitions::implementations::reference_cs::CSReferenceAssembly;
 
+use crate::recursion_layer_proof_config;
 use franklin_crypto::plonk::circuit;
 use zkevm_circuits::recursion::compression::CompressionRecursionConfig;
-use crate::recursion_layer_proof_config;
 
 use crate::ProofConfig;
 
@@ -201,66 +201,56 @@ impl ZkSyncCompressionLayerCircuit {
         circuit_type: u8,
     ) -> Self {
         match circuit_type {
-            1 => {
-                Self::CompressionMode1Circuit(CompressionMode1Circuit {
-                    witness,
-                    config: CompressionRecursionConfig {
-                        proof_config: recursion_layer_proof_config(),
-                        verification_key: vk,
-                        _marker: std::marker::PhantomData,
-                    },
-                    transcript_params: (),
+            1 => Self::CompressionMode1Circuit(CompressionMode1Circuit {
+                witness,
+                config: CompressionRecursionConfig {
+                    proof_config: recursion_layer_proof_config(),
+                    verification_key: vk,
                     _marker: std::marker::PhantomData,
-                })
-            },
-            2 => {
-                Self::CompressionMode2Circuit(CompressionMode2Circuit {
-                    witness,
-                    config: CompressionRecursionConfig {
-                        proof_config: CompressionMode1::proof_config_for_compression_step(),
-                        verification_key: vk,
-                        _marker: std::marker::PhantomData,
-                    },
-                    transcript_params: (),
+                },
+                transcript_params: (),
+                _marker: std::marker::PhantomData,
+            }),
+            2 => Self::CompressionMode2Circuit(CompressionMode2Circuit {
+                witness,
+                config: CompressionRecursionConfig {
+                    proof_config: CompressionMode1::proof_config_for_compression_step(),
+                    verification_key: vk,
                     _marker: std::marker::PhantomData,
-                })
-            },
-            3 => {
-                Self::CompressionMode3Circuit(CompressionMode3Circuit {
-                    witness,
-                    config: CompressionRecursionConfig {
-                        proof_config: CompressionMode2::proof_config_for_compression_step(),
-                        verification_key: vk,
-                        _marker: std::marker::PhantomData,
-                    },
-                    transcript_params: (),
+                },
+                transcript_params: (),
+                _marker: std::marker::PhantomData,
+            }),
+            3 => Self::CompressionMode3Circuit(CompressionMode3Circuit {
+                witness,
+                config: CompressionRecursionConfig {
+                    proof_config: CompressionMode2::proof_config_for_compression_step(),
+                    verification_key: vk,
                     _marker: std::marker::PhantomData,
-                })
-            },
-            4 => {
-                Self::CompressionMode4Circuit(CompressionMode4Circuit {
-                    witness,
-                    config: CompressionRecursionConfig {
-                        proof_config: CompressionMode3::proof_config_for_compression_step(),
-                        verification_key: vk,
-                        _marker: std::marker::PhantomData,
-                    },
-                    transcript_params: (),
+                },
+                transcript_params: (),
+                _marker: std::marker::PhantomData,
+            }),
+            4 => Self::CompressionMode4Circuit(CompressionMode4Circuit {
+                witness,
+                config: CompressionRecursionConfig {
+                    proof_config: CompressionMode3::proof_config_for_compression_step(),
+                    verification_key: vk,
                     _marker: std::marker::PhantomData,
-                })
-            },
-            5 => {
-                Self::CompressionMode5Circuit(CompressionMode5Circuit {
-                    witness,
-                    config: CompressionRecursionConfig {
-                        proof_config: CompressionMode4::proof_config_for_compression_step(),
-                        verification_key: vk,
-                        _marker: std::marker::PhantomData,
-                    },
-                    transcript_params: (),
+                },
+                transcript_params: (),
+                _marker: std::marker::PhantomData,
+            }),
+            5 => Self::CompressionMode5Circuit(CompressionMode5Circuit {
+                witness,
+                config: CompressionRecursionConfig {
+                    proof_config: CompressionMode4::proof_config_for_compression_step(),
+                    verification_key: vk,
                     _marker: std::marker::PhantomData,
-                })
-            },
+                },
+                transcript_params: (),
+                _marker: std::marker::PhantomData,
+            }),
             _ => panic!("wrong circuit_type for compression layer: {}", circuit_type),
         }
     }
@@ -522,66 +512,56 @@ impl ZkSyncCompressionForWrapperCircuit {
         circuit_type: u8,
     ) -> Self {
         match circuit_type {
-            1 => {
-                Self::CompressionMode1Circuit(CompressionMode1ForWrapperCircuit {
-                    witness,
-                    config: CompressionRecursionConfig {
-                        proof_config: recursion_layer_proof_config(),
-                        verification_key: vk,
-                        _marker: std::marker::PhantomData,
-                    },
-                    transcript_params: (),
+            1 => Self::CompressionMode1Circuit(CompressionMode1ForWrapperCircuit {
+                witness,
+                config: CompressionRecursionConfig {
+                    proof_config: recursion_layer_proof_config(),
+                    verification_key: vk,
                     _marker: std::marker::PhantomData,
-                })
-            },
-            2 => {
-                Self::CompressionMode2Circuit(CompressionMode2ForWrapperCircuit {
-                    witness,
-                    config: CompressionRecursionConfig {
-                        proof_config: CompressionMode1::proof_config_for_compression_step(),
-                        verification_key: vk,
-                        _marker: std::marker::PhantomData,
-                    },
-                    transcript_params: (),
+                },
+                transcript_params: (),
+                _marker: std::marker::PhantomData,
+            }),
+            2 => Self::CompressionMode2Circuit(CompressionMode2ForWrapperCircuit {
+                witness,
+                config: CompressionRecursionConfig {
+                    proof_config: CompressionMode1::proof_config_for_compression_step(),
+                    verification_key: vk,
                     _marker: std::marker::PhantomData,
-                })
-            },
-            3 => {
-                Self::CompressionMode3Circuit(CompressionMode3ForWrapperCircuit {
-                    witness,
-                    config: CompressionRecursionConfig {
-                        proof_config: CompressionMode2::proof_config_for_compression_step(),
-                        verification_key: vk,
-                        _marker: std::marker::PhantomData,
-                    },
-                    transcript_params: (),
+                },
+                transcript_params: (),
+                _marker: std::marker::PhantomData,
+            }),
+            3 => Self::CompressionMode3Circuit(CompressionMode3ForWrapperCircuit {
+                witness,
+                config: CompressionRecursionConfig {
+                    proof_config: CompressionMode2::proof_config_for_compression_step(),
+                    verification_key: vk,
                     _marker: std::marker::PhantomData,
-                })
-            },
-            4 => {
-                Self::CompressionMode4Circuit(CompressionMode4ForWrapperCircuit {
-                    witness,
-                    config: CompressionRecursionConfig {
-                        proof_config: CompressionMode3::proof_config_for_compression_step(),
-                        verification_key: vk,
-                        _marker: std::marker::PhantomData,
-                    },
-                    transcript_params: (),
+                },
+                transcript_params: (),
+                _marker: std::marker::PhantomData,
+            }),
+            4 => Self::CompressionMode4Circuit(CompressionMode4ForWrapperCircuit {
+                witness,
+                config: CompressionRecursionConfig {
+                    proof_config: CompressionMode3::proof_config_for_compression_step(),
+                    verification_key: vk,
                     _marker: std::marker::PhantomData,
-                })
-            },
-            5 => {
-                Self::CompressionMode5Circuit(CompressionMode5ForWrapperCircuit {
-                    witness,
-                    config: CompressionRecursionConfig {
-                        proof_config: CompressionMode4::proof_config_for_compression_step(),
-                        verification_key: vk,
-                        _marker: std::marker::PhantomData,
-                    },
-                    transcript_params: (),
+                },
+                transcript_params: (),
+                _marker: std::marker::PhantomData,
+            }),
+            5 => Self::CompressionMode5Circuit(CompressionMode5ForWrapperCircuit {
+                witness,
+                config: CompressionRecursionConfig {
+                    proof_config: CompressionMode4::proof_config_for_compression_step(),
+                    verification_key: vk,
                     _marker: std::marker::PhantomData,
-                })
-            },
+                },
+                transcript_params: (),
+                _marker: std::marker::PhantomData,
+            }),
             _ => panic!("wrong circuit_type for compression layer: {}", circuit_type),
         }
     }
@@ -642,8 +622,8 @@ pub type ZkSyncCompressionForWrapperVerificationKey =
 
 use crate::circuit_definitions::aux_layer::wrapper::ZkSyncCompressionWrapper;
 use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::proof::Proof as SnarkProof;
-use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::setup::VerificationKey as SnarkVK;
 use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::setup::Setup as SnarkSetup;
+use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::setup::VerificationKey as SnarkVK;
 use snark_wrapper::implementations::poseidon2::transcript::CircuitPoseidon2Transcript;
 use snark_wrapper::implementations::poseidon2::CircuitPoseidon2Sponge;
 use snark_wrapper::verifier::WrapperCircuit;
