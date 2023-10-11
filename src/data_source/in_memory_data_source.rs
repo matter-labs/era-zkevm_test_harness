@@ -1,9 +1,9 @@
-use crate::data_source::{BlockDataSource, SetupDataSource, SourceResult};
+use super::{BlockDataSource, SetupDataSource, SourceResult};
 use circuit_definitions::circuit_definitions::aux_layer::{
     ZkSyncCompressionForWrapperFinalizationHint, ZkSyncCompressionForWrapperProof,
     ZkSyncCompressionForWrapperVerificationKey, ZkSyncCompressionLayerFinalizationHint,
     ZkSyncCompressionLayerProof, ZkSyncCompressionLayerVerificationKey, ZkSyncSnarkWrapperProof,
-    ZkSyncSnarkWrapperVK,
+    ZkSyncSnarkWrapperSetup, ZkSyncSnarkWrapperVK,
 };
 use circuit_definitions::circuit_definitions::base_layer::{
     ZkSyncBaseLayerFinalizationHint, ZkSyncBaseLayerProof, ZkSyncBaseLayerVerificationKey,
@@ -31,6 +31,7 @@ pub struct InMemoryDataSource {
     compression_hint: HashMap<u8, ZkSyncCompressionLayerFinalizationHint>,
     compression_for_wrapper_vk: HashMap<u8, ZkSyncCompressionForWrapperVerificationKey>,
     compression_for_wrapper_hint: HashMap<u8, ZkSyncCompressionForWrapperFinalizationHint>,
+    wrapper_setup: HashMap<u8, ZkSyncSnarkWrapperSetup>,
     wrapper_vk: HashMap<u8, ZkSyncSnarkWrapperVK>,
 
     ///data structures required for holding [`BlockDataSource`] result
@@ -60,6 +61,7 @@ impl InMemoryDataSource {
             compression_hint: HashMap::new(),
             compression_for_wrapper_vk: HashMap::new(),
             compression_for_wrapper_hint: HashMap::new(),
+            wrapper_setup: HashMap::new(),
             wrapper_vk: HashMap::new(),
             base_layer_proofs: HashMap::new(),
             leaf_layer_proofs: HashMap::new(),
@@ -215,6 +217,16 @@ impl SetupDataSource for InMemoryDataSource {
             )))
     }
 
+    fn get_wrapper_setup(&self, circuit_type: u8) -> SourceResult<ZkSyncSnarkWrapperSetup> {
+        self.wrapper_setup
+            .get(&circuit_type)
+            .cloned()
+            .ok_or(Box::new(Error::new(
+                ErrorKind::Other,
+                format!("no data for circuit type {}", circuit_type),
+            )))
+    }
+
     fn get_wrapper_vk(&self, circuit_type: u8) -> SourceResult<ZkSyncSnarkWrapperVK> {
         self.wrapper_vk
             .get(&circuit_type)
@@ -336,6 +348,12 @@ impl SetupDataSource for InMemoryDataSource {
     ) -> SourceResult<()> {
         self.compression_for_wrapper_hint
             .insert(hint.numeric_circuit_type(), hint);
+        Ok(())
+    }
+
+    fn set_wrapper_setup(&mut self, setup: ZkSyncSnarkWrapperSetup) -> SourceResult<()> {
+        self.wrapper_setup
+            .insert(setup.numeric_circuit_type(), setup);
         Ok(())
     }
 

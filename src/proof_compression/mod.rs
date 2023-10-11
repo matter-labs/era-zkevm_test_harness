@@ -26,8 +26,8 @@ mod test {
     use circuit_definitions::circuit_definitions::aux_layer::compression_modes::*;
     use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit;
     use circuit_definitions::{
-        base_layer_proof_config,
         circuit_definitions::recursion_layer::ZkSyncRecursionLayerStorageType,
+        recursion_layer_proof_config,
     };
 
     use super::*;
@@ -36,7 +36,9 @@ mod test {
     use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
     use crate::boojum::cs::oracle::TreeHasher;
     use crate::boojum::worker::Worker;
-    use crate::data_source::{BlockDataSource, LocalFileDataSource, SetupDataSource};
+    use crate::data_source::{
+        local_file_data_source::LocalFileDataSource, BlockDataSource, SetupDataSource,
+    };
 
     fn prove_and_save<CF: ProofCompressionFunction>(
         circuit: CompressionLayerCircuit<CF>,
@@ -105,7 +107,7 @@ mod test {
         let circuit = CompressionMode1Circuit {
             witness: Some(proof.clone().into_inner()),
             config: CompressionRecursionConfig {
-                proof_config: base_layer_proof_config(),
+                proof_config: recursion_layer_proof_config(),
                 verification_key: vk.into_inner(),
                 _marker: std::marker::PhantomData,
             },
@@ -282,7 +284,7 @@ mod test {
         assert!(is_valid);
 
         // make a compression circuit
-        let circuit = CompressionModeToL1Circuit {
+        let circuit = CompressionMode5Circuit {
             witness: Some(proof.clone()),
             config: CompressionRecursionConfig {
                 proof_config: CompressionMode4::proof_config_for_compression_step(),
@@ -318,7 +320,7 @@ mod test {
         let circuit = CompressionMode1Circuit {
             witness: Some(proof.clone().into_inner()),
             config: CompressionRecursionConfig {
-                proof_config: base_layer_proof_config(),
+                proof_config: recursion_layer_proof_config(),
                 verification_key: vk.into_inner(),
                 _marker: std::marker::PhantomData,
             },

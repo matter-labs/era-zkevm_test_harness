@@ -17,6 +17,7 @@ use crate::compute_setups::*;
 use crate::entry_point::create_out_of_circuit_global_context;
 use crate::ethereum_types::*;
 use crate::helper::artifact_utils::TestArtifact;
+use crate::proof_wrapper_utils::{WrapperConfig, DEFAULT_WRAPPER_CONFIG};
 use crate::prover_utils::*;
 use crate::toolset::{create_tools, GeometryConfig};
 use crate::witness::oracle::create_artifacts_from_tracer;
@@ -57,18 +58,17 @@ fn basic_test() {
 
 #[test]
 fn basic_test_compression_only() {
-    let compression = std::env::var("COMPRESSION_NUM")
-        .map(|s| s.parse::<usize>().expect("should be a number"))
-        .unwrap_or(1);
+    let config = testing_wrapper::get_testing_wrapper_config();
 
-    testing_wrapper::test_compression_for_compression_num(compression as u8);
+    testing_wrapper::test_compression_for_compression_num(config);
 }
 
 #[test]
 fn basic_test_compression_all_modes() {
-    for compression in 1..=5 {
+    for compression in 1..=WrapperConfig::MAX_COMPRESSION_LAYERS {
         println!("Testing wrapper for mode {}", compression);
-        testing_wrapper::test_compression_for_compression_num(compression as u8);
+        let config = WrapperConfig::new(compression as u8);
+        testing_wrapper::test_compression_for_compression_num(config);
     }
 }
 
@@ -77,7 +77,7 @@ use circuit_definitions::circuit_definitions::aux_layer::compression_modes::*;
 use circuit_definitions::circuit_definitions::aux_layer::*;
 use circuit_definitions::circuit_definitions::aux_layer::compression::ProofCompressionFunction;
 use circuit_definitions::circuit_definitions::aux_layer::ZkSyncCompressionLayerVerificationKey;
-use crate::data_source::{LocalFileDataSource, SetupDataSource, BlockDataSource};
+use crate::data_source::{local_file_data_source::LocalFileDataSource, SetupDataSource, BlockDataSource};
 use circuit_definitions::circuit_definitions::aux_layer::compression::*;
 use snark_wrapper::verifier_structs::allocated_vk::AllocatedVerificationKey;
 use snark_wrapper::franklin_crypto::plonk::circuit::bigint_new::BITWISE_LOGICAL_OPS_TABLE_NAME;
@@ -101,7 +101,7 @@ use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::gates
 use crate::boojum::algebraic_props::round_function::AbsorptionModeOverwrite;
 use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
 use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
-use crate::in_memory_data_source::InMemoryDataSource;
+use crate::data_source::in_memory_data_source::InMemoryDataSource;
 use crate::witness::full_block_artifact::*;
 
 fn get_geometry_config() -> GeometryConfig {

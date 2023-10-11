@@ -1,20 +1,18 @@
 use super::*;
 use crate::boojum::gadgets::traits::configuration::ConfigurationFunction;
-use crate::boojum::sha3::Keccak256;
-use crate::circuit_definitions::implementations::transcript::Keccak256Transcript;
 
 // no lookup, just enough copiable width, moderate LDE factor,
 // and matrix multiplication gate,
-pub struct CompressionModeToL1;
+pub struct CompressionMode5ForWrapper;
 
-impl ProofCompressionFunction for CompressionModeToL1 {
+impl ProofCompressionFunction for CompressionMode5ForWrapper {
     // no PoW from the previous step
     type PreviousLayerPoW = NoPow;
 
     // no PoW on this step too
-    type ThisLayerPoW = Keccak256;
-    type ThisLayerHasher = Keccak256;
-    type ThisLayerTranscript = Keccak256Transcript;
+    type ThisLayerPoW = NoPow;
+    type ThisLayerHasher = CompressionTreeHasherForWrapper;
+    type ThisLayerTranscript = CompressionTranscriptForWrapper;
 
     fn this_layer_transcript_parameters(
     ) -> <Self::ThisLayerTranscript as Transcript<F>>::TransciptParameters {
@@ -102,7 +100,7 @@ impl ProofCompressionFunction for CompressionModeToL1 {
             merkle_tree_cap_size: 8,
             fri_folding_schedule: None,
             security_level: crate::L1_SECURITY_BITS,
-            pow_bits: 28,
+            pow_bits: 0,
         }
     }
 
