@@ -1,12 +1,12 @@
 #[cfg(test)]
 mod test {
     use crate::boojum::cs::implementations::verifier::*;
-    use snark_wrapper::franklin_crypto::bellman::pairing::bn256::{Bn256, Fr};
-    use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::cs::*;
-    use snark_wrapper::franklin_crypto::plonk::circuit::bigint_new::BITWISE_LOGICAL_OPS_TABLE_NAME;
-    use snark_wrapper::franklin_crypto::plonk::circuit::goldilocks::GoldilocksField;
-    use snark_wrapper::implementations::poseidon2::transcript::CircuitPoseidon2Transcript;
-    use snark_wrapper::implementations::poseidon2::CircuitPoseidon2Sponge;
+    use crate::snark_wrapper::franklin_crypto::bellman::pairing::bn256::{Bn256, Fr};
+    use crate::snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::cs::*;
+    use crate::snark_wrapper::franklin_crypto::plonk::circuit::bigint_new::BITWISE_LOGICAL_OPS_TABLE_NAME;
+    use crate::snark_wrapper::franklin_crypto::plonk::circuit::goldilocks::GoldilocksField;
+    use crate::snark_wrapper::implementations::poseidon2::transcript::CircuitPoseidon2Transcript;
+    use crate::snark_wrapper::implementations::poseidon2::CircuitPoseidon2Sponge;
 
     use crate::boojum::cs::implementations::proof::Proof;
     use crate::boojum::cs::implementations::prover::ProofConfig;
@@ -17,9 +17,9 @@ mod test {
     use crate::boojum::field::U64Representable;
 
     // use crate::snark_wrapper;
-    use snark_wrapper::verifier_structs::allocated_proof::AllocatedProof;
-    use snark_wrapper::verifier_structs::allocated_vk::AllocatedVerificationKey;
-    use snark_wrapper::verifier_structs::WrapperVerifier;
+    use crate::snark_wrapper::verifier_structs::allocated_proof::AllocatedProof;
+    use crate::snark_wrapper::verifier_structs::allocated_vk::AllocatedVerificationKey;
+    use crate::snark_wrapper::verifier_structs::WrapperVerifier;
 
     use circuit_definitions::circuit_definitions::aux_layer::compression::CompressionMode2ForWrapperCircuitBuilder;
     use circuit_definitions::circuit_definitions::aux_layer::compression::ProofCompressionFunction;
@@ -54,7 +54,7 @@ mod test {
         assembly.add_table(bitwise_logic_table).unwrap();
 
         // Allocate proof and vk
-        use snark_wrapper::traits::circuit::ErasedBuilderForWrapperVerifier;
+        use crate::snark_wrapper::traits::circuit::ErasedBuilderForWrapperVerifier;
         let verifier_builder = CompressionMode2ForWrapperCircuitBuilder::default();
         let verifier = verifier_builder.create_wrapper_verifier(&mut assembly);
 
@@ -94,7 +94,12 @@ mod test {
             .unwrap();
 
         // Verify proof
-        snark_wrapper::verifier::verify::<_, _, _, CircuitPoseidon2Transcript<Bn256, 2, 3, 3, true>>(
+        crate::snark_wrapper::verifier::verify::<
+            _,
+            _,
+            _,
+            CircuitPoseidon2Transcript<Bn256, 2, 3, 3, true>,
+        >(
             &mut assembly,
             (),
             &proof_config,
@@ -102,7 +107,8 @@ mod test {
             &verifier,
             &fixed_parameters,
             &vk,
-        ).unwrap();
+        )
+        .unwrap();
 
         let after = assembly.n();
 

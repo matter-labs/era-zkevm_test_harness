@@ -16,9 +16,9 @@ use crate::circuit_definitions::recursion_layer::scheduler::SchedulerCircuitBuil
 use crate::circuit_definitions::traits::circuit::ErasedBuilderForRecursiveVerifier;
 use crate::circuit_definitions::traits::gate::GatePlacementStrategy;
 
-use franklin_crypto::bellman::pairing::bn256::{Bn256, Fr};
-use rescue_poseidon::poseidon2::transcript::Poseidon2Transcript;
-use rescue_poseidon::poseidon2::*;
+use snark_wrapper::franklin_crypto::bellman::pairing::bn256::{Bn256, Fr};
+use snark_wrapper::rescue_poseidon::poseidon2::transcript::Poseidon2Transcript;
+use snark_wrapper::rescue_poseidon::poseidon2::*;
 use snark_wrapper::implementations::poseidon2::tree_hasher::AbsorptionModeReplacement;
 
 use zkevm_circuits::boojum::cs::implementations::prover::ProofConfig;
