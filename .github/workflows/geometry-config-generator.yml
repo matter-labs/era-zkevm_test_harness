@@ -14,7 +14,7 @@ on:
         default: "v1.4.0"
   push:
     branches:
-      - add-geometry-config-generator-workflow
+      - main
 
 
 concurrency:
