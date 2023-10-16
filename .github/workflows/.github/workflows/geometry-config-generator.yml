@@ -8,6 +8,9 @@ on:
         type: string
         required: true
         default: "v1.4.0"
+  push:
+    branches:
+      - add-geometry-config-generator-workflow
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
