@@ -12,9 +12,7 @@ on:
         type: string
         required: true
         default: "v1.4.0"
-  push:
-    branches:
-      - main
+  pull_request:
 
 
 concurrency:
