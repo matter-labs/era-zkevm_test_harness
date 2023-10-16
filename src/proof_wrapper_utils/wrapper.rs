@@ -71,7 +71,7 @@ pub(crate) fn compute_wrapper_proof_and_vk<DS: SetupDataSource + BlockDataSource
 
         println!("Verifying");
         let snark_vk = source.get_wrapper_vk(wrapper_type).unwrap();
-        use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::verifier::verify;
+        use crate::snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::verifier::verify;
         let is_valid =
             verify::<_, _, RollingKeccakTranscript<Fr>>(&snark_vk.into_inner(), &snark_proof, None)
                 .unwrap();

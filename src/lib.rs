@@ -17,6 +17,10 @@ pub use circuit_definitions::boojum;
 pub use circuit_definitions::zk_evm;
 pub use circuit_definitions::zkevm_circuits;
 
+pub use circuit_definitions::snark_wrapper;
+pub use rescue_poseidon::franklin_crypto;
+pub use snark_wrapper::rescue_poseidon;
+
 pub use crate::zk_evm::blake2;
 pub use crate::zk_evm::sha2;
 pub use crate::zk_evm::sha3;
