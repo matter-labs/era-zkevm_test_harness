@@ -1,0 +1,79 @@
+name: Geometry config generator
+
+permissions:
+  contents: write
+  pull-requests: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: "Target branch to generate geometry config against"
+        type: string
+        required: true
+        default: "v1.4.0"
+  pull_request:
+
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  estimate-circuit-limit:
+    runs-on: [ubuntu-latest]
+    strategy:
+      matrix:
+        key: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+    steps:
+      - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3
+      - name: Setup Rust
+        run: |
+          curl https://sh.rustup.rs -sSf | bash -s -- -y
+          source "$HOME/.cargo/env"
+          sudo apt update && sudo apt install clang openssl libssl-dev gcc g++ pkg-config build-essential libclang-dev -y
+      - name: Estimate circuit limit
+        run: |
+          source "$HOME/.cargo/env"
+          cargo run --release --bin circuit_limit_estimator -- --numeric-circuit ${{ matrix.key }}
+      - uses: actions/upload-artifact@83fd05a356d7e2593de66fc9913b3002723633cb # v3
+        with:
+          path: ./circuit_limit_${{ matrix.key }}.txt
+
+  create-pr:
+    runs-on: [ubuntu-latest]
+    needs: ["estimate-circuit-limit"]
+    steps:
+      - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3
+      - uses: actions/download-artifact@9782bd6a9848b53b110e712e20e42d89988822b7 # v3
+        with:
+          path: ./
+      - name: Rename downloaded path
+        run: |
+          mv artifact/* ./
+      - name: Setup Rust
+        run: |
+          curl https://sh.rustup.rs -sSf | bash -s -- -y
+          source "$HOME/.cargo/env"
+          sudo apt update && sudo apt install clang openssl libssl-dev gcc g++ pkg-config build-essential libclang-dev -y
+      - name: Generate commitment
+        run: |
+          source "$HOME/.cargo/env"
+          # cargo run --release --bin geometry_config_generator -- --code-decommitter $(cat circuit_limit_5.txt) --code-decommitter-sorter $(cat circuit_limit_4.txt) --ecrecover $(cat circuit_limit_9.txt) --events-or-l1-messages-sorter $(cat circuit_limit_15.txt) --initial-writes $(cat circuit_limit_13.txt) --keccak256 $(cat circuit_limit_7.txt) --log-demuxer $(cat circuit_limit_6.txt) --ram-permutation $(cat circuit_limit_10.txt) --repeated-writes $(cat circuit_limit_14.txt) --sha256 $(cat circuit_limit_8.txt) --storage-application $(cat circuit_limit_12.txt) --storage-sorter $(cat circuit_limit_11.txt) --vm-snapshot $(cat circuit_limit_3.txt) --l1-messages-merklizer $(cat circuit_limit_18.txt) --l1-messages-pudata-hasher $(cat circuit_limit_17.txt)
+          # rm -rf circuit_limit_*
+      - name: Create Pull Request
+        id: cpr
+        uses: peter-evans/create-pull-request@d7db273d6c7206ba99224e659c982ae34a1025e3 # v4
+        with:
+          base: ${{ github.event.inputs.target_branch }}
+          commit-message: update generated geometry config
+          committer: zksync-admin-bot2 <temp-bot@matterlabs.dev>
+          author: zksync-admin-bot2 <temp-bot@matterlabs.dev>
+          signoff: false
+          branch: update-geometry-config
+          branch-suffix: short-commit-hash
+          delete-branch: true
+          title: Update geometry config from branch ${{ github.event.inputs.target_branch }}
+          body: |
+            Update generated geometry config from branch ${{ github.event.inputs.target_branch }}
+          draft: false
