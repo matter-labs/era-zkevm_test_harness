@@ -53,4 +53,3 @@ And 2 'wrapper'/AUX circuits on top:
 | ------------ | -------------- | ---------------------------------------------------------------------------------------- |
 | Compression  | compression.rs | Compresses the final scheduler proof                                                     |
 | Wrapper      | wrapper.rs     | Wraps the compressed proof into a SNARK to be verifierd on L1. (This is a SNARK circuit) |
-Done in 0.40s.
