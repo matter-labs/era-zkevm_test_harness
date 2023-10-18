@@ -57,14 +57,14 @@ fn basic_test() {
 }
 
 #[test]
-fn basic_test_compression_only() {
+fn test_single_compression() {
     let config = testing_wrapper::get_testing_wrapper_config();
 
     testing_wrapper::test_compression_for_compression_num(config);
 }
 
 #[test]
-fn basic_test_compression_all_modes() {
+fn test_compression_all_modes() {
     for compression in 1..=WrapperConfig::MAX_COMPRESSION_LAYERS {
         println!("Testing wrapper for mode {}", compression);
         let config = WrapperConfig::new(compression as u8);
@@ -105,25 +105,25 @@ use crate::data_source::in_memory_data_source::InMemoryDataSource;
 use crate::witness::full_block_artifact::*;
 
 fn get_geometry_config() -> GeometryConfig {
-    // let geometry = crate::geometry_config::get_geometry_config();
+    crate::geometry_config::get_geometry_config()
 
-    GeometryConfig {
-        // cycles_per_vm_snapshot: 1,
-        cycles_per_vm_snapshot: 1024,
-        cycles_per_ram_permutation: 1024,
-        cycles_per_code_decommitter: 256,
-        cycles_per_storage_application: 4,
-        cycles_per_keccak256_circuit: 7,
-        cycles_per_sha256_circuit: 7,
-        cycles_per_ecrecover_circuit: 2,
-        // cycles_code_decommitter_sorter: 512,
-        cycles_code_decommitter_sorter: 3,
-        cycles_per_log_demuxer: 16,
-        cycles_per_storage_sorter: 16,
-        cycles_per_events_or_l1_messages_sorter: 4,
+    // GeometryConfig {
+    //     // cycles_per_vm_snapshot: 1,
+    //     cycles_per_vm_snapshot: 1024,
+    //     cycles_per_ram_permutation: 1024,
+    //     cycles_per_code_decommitter: 256,
+    //     cycles_per_storage_application: 4,
+    //     cycles_per_keccak256_circuit: 7,
+    //     cycles_per_sha256_circuit: 7,
+    //     cycles_per_ecrecover_circuit: 2,
+    //     // cycles_code_decommitter_sorter: 512,
+    //     cycles_code_decommitter_sorter: 3,
+    //     cycles_per_log_demuxer: 16,
+    //     cycles_per_storage_sorter: 16,
+    //     cycles_per_events_or_l1_messages_sorter: 4,
 
-        limit_for_l1_messages_pudata_hasher: 32,
-    }
+    //     limit_for_l1_messages_pudata_hasher: 32,
+    // }
 }
 
 pub(crate) fn generate_base_layer(
@@ -306,7 +306,8 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
     let mut setup_data = None;
 
-    let mut source = InMemoryDataSource::new();
+    // let mut source = InMemoryDataSource::new();
+    let mut source = LocalFileDataSource;
     use crate::data_source::*;
 
     for (idx, el) in basic_block_circuits
@@ -1098,58 +1099,6 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
         source
             .set_scheduler_proof(ZkSyncRecursionLayerProof::SchedulerCircuit(proof))
             .unwrap();
-    }
-
-    println!("Computing compression proofs");
-
-    try_to_compress_and_wrap_to_snark(scheduler_witness);
-
-    println!("DONE");
-}
-
-fn try_to_compress_and_wrap_to_snark(
-    scheduler_witness: SchedulerCircuitInstanceWitness<
-        GoldilocksField,
-        boojum::gadgets::round_function::CircuitSimpleAlgebraicSponge<
-            GoldilocksField,
-            8,
-            12,
-            4,
-            Poseidon2Goldilocks,
-            true,
-        >,
-        GoldilocksExt2,
-    >,
-) {
-    use crate::data_source::*;
-    use crate::zkevm_circuits::scheduler::SchedulerConfig;
-
-    let worker = Worker::new_with_num_threads(8);
-
-    println!("Computing scheduler proof");
-    let mut source = LocalFileDataSource;
-
-    let node_vk = source.get_recursion_layer_node_vk().unwrap().into_inner();
-
-    let config = SchedulerConfig {
-        proof_config: recursion_layer_proof_config(),
-        vk_fixed_parameters: node_vk.fixed_parameters,
-        capacity: SCHEDULER_CAPACITY,
-        _marker: std::marker::PhantomData,
-    };
-
-    let scheduler_circuit = SchedulerCircuit {
-        witness: scheduler_witness,
-        config,
-        transcript_params: (),
-        _marker: std::marker::PhantomData,
-    };
-
-    let scheduler_circuit = ZkSyncRecursiveLayerCircuit::SchedulerCircuit(scheduler_circuit);
-
-    match source.get_scheduler_proof() {
-        Err(_) => panic!(),
-        Ok(proof) => {}
     }
 
     println!("DONE");
