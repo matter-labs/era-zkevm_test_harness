@@ -32,7 +32,7 @@ pub fn compute_events_dedup_and_sort<
         // return singe dummy witness
         use crate::boojum::gadgets::queue::QueueState;
 
-        let initial_fsm_state = EventsDeduplicatorFSMInputOutput::<F>::placeholder_witness();
+        let mut initial_fsm_state = EventsDeduplicatorFSMInputOutput::<F>::placeholder_witness();
 
         assert_eq!(
             take_queue_state_from_simulator(&unsorted_simulator),
@@ -44,7 +44,13 @@ pub fn compute_events_dedup_and_sort<
             take_queue_state_from_simulator(&unsorted_simulator);
         passthrough_input.intermediate_sorted_queue_state = QueueState::placeholder_witness();
 
-        let final_fsm_state = EventsDeduplicatorFSMInputOutput::<F>::placeholder_witness();
+        let mut final_fsm_state = EventsDeduplicatorFSMInputOutput::<F>::placeholder_witness();
+        // NOTE: little hack to make the trivial case work. we should really however remove the
+        // requirement to have trivial events sorter circuits in the scheduler.
+        initial_fsm_state.lhs_accumulator = [F::ONE; 2];
+        initial_fsm_state.rhs_accumulator = [F::ONE; 2];
+        final_fsm_state.lhs_accumulator = [F::ONE; 2];
+        final_fsm_state.rhs_accumulator = [F::ONE; 2];
 
         let mut passthrough_output = EventsDeduplicatorOutputData::placeholder_witness();
         passthrough_output.final_queue_state = QueueState::placeholder_witness();

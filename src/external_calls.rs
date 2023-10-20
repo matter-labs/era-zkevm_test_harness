@@ -229,7 +229,7 @@ round_function: R, // used for all queues implementation
     // dbg!(tools.witness_tracer.vm_snapshots.len());
 
     let (instance_oracles, artifacts) = create_artifacts_from_tracer(
-        out_of_circuit_vm.witness_tracer,
+        &mut out_of_circuit_vm.witness_tracer,
         &round_function,
         &geometry,
         (
