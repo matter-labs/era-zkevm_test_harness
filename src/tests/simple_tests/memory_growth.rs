@@ -65,7 +65,7 @@ fn test_ret_memory_growth_out_of_ergs() {
         event.first r0, r0
         to_l1.first r0, r0
         add 1, r0, r1
-        shl.s 32, r1, r1
+        shl.s 30, r1, r1
         sub.s 1, r1, r1
         shl.s 96, r1, r1
         ret r1

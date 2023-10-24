@@ -184,6 +184,12 @@ where
 
         let uma_ptr_read_cleanup_table = create_uma_ptr_read_bitmask_table::<F>();
         cs.add_lookup_table::<UMAPtrReadCleanupTable, 3>(uma_ptr_read_cleanup_table);
+
+        let split_table_1 = create_byte_split_table::<F, 1>();
+        cs.add_lookup_table::<ByteSplitTable<1>, 3>(split_table_1);
+
+        let split_table_7 = create_byte_split_table::<F, 7>();
+        cs.add_lookup_table::<ByteSplitTable<7>, 3>(split_table_7);
     }
 
     fn synthesize_into_cs_inner<CS: ConstraintSystem<F>>(
