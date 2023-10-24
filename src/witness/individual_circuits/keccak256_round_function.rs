@@ -320,8 +320,9 @@ pub fn keccak256_decompose_into_per_circuit_witness<
                     zk_evm::zk_evm_abstractions::precompiles::keccak256::transmute_state(
                         internal_state.clone(),
                     );
-                let mut u64_words_buffer_markers =
-                    [false; zkevm_circuits::keccak256_round_function::BUFFER_SIZE_IN_U64_WORDS];
+                let mut u64_words_buffer_markers = [false;
+                    zkevm_circuits::keccak256_round_function::input::KECCAK_PRECOMPILE_BUFFER_SIZE
+                        / 8];
                 for i in 0..input_buffer.filled {
                     u64_words_buffer_markers[i] = true;
                 }
