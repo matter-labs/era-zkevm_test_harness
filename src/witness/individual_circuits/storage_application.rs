@@ -1,9 +1,9 @@
 use super::*;
 use crate::boojum::gadgets::keccak256::{self};
 use crate::boojum::sha3::digest::{FixedOutput, Update};
-use crate::boojum::sha3::Keccak256;
 use crate::witness::individual_circuits::keccak256_round_function::encode_kecca256_inner_state;
 use crate::witness::tree::*;
+use crate::zk_evm::sha3::Keccak256;
 use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::{
     transmute_state, KECCAK_PRECOMPILE_BUFFER_SIZE,
 };
