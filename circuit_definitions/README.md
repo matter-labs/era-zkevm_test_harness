@@ -10,7 +10,7 @@ Scheduler).
 
 Base layer circuits are located in `src/base_layer`, Recursive circuits are in `src/recursion_layer`.
 
-We also have 2 'AUX' circuits: compressor and wrapper, that are run on top of the final Scheduler proof, and they are
+We also have 'AUX' circuits: compressors and wrapper, that are run on top of the final Scheduler proof, and they are
 located in `src/aux_layer`.
 
 ![circuits](https://user-images.githubusercontent.com/128217157/275817097-0a543476-52e5-437b-a7d3-10603d5833fa.png)
@@ -27,10 +27,10 @@ both L1 messages and events).
 | ------------------------ | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Main VM                  | vm_main.rs                   | Executes OpCodes from the VM                                                                                                                                         |
 | CodeDecommittmentsSorter | sort_code_decommit.rs        | Verifies the order of requests for code decommitment (fetching bytecode based on hash).                                                                              |
-| CodeDecommiter           | code_decommiter.rs           | Verifies actual code decommitment - that the bytecode stored in a given memory location, has a correct hash                                                          |
-| LogDemuxer               | log_demux.rs                 | Verifies that all the other queues that go to other circuits (like keccak, sha, storage), are correct - that is, that they are really coming from a single log queue |
-| KeccakRoundFunction      | keccak256_round_functions.rs | Single round of the keccak hash                                                                                                                                      |
-| Sha256RoundFunction      | sha256_round_function.rs     | Single round of sha256 hash                                                                                                                                          |
+| CodeDecommiter           | code_decommiter.rs           | Unpacks the bytecode matching a given hash into memory.                                                                                                              |
+| LogDemuxer               | log_demux.rs                 | Splits the queue into 6 output ones (like keccak, sha, storage).                                                                                                     |
+| KeccakRoundFunction      | keccak256_round_functions.rs | Round of the keccak hash                                                                                                                                             |
+| Sha256RoundFunction      | sha256_round_function.rs     | Round of sha256 hash                                                                                                                                                 |
 | ECRecover                | ecrecover.rs                 | Verifies ECRecover                                                                                                                                                   |
 | RAMPermutation           | ram_permutation.rs           | Verifies the correctness of the RAM accesses - looking at the access queue, and checking that correct bytes values were read                                         |
 | StorageSorter            | storage_sort_dedup.rs        | Similar to RAM permutation, but for storage - checking that correct bytes were stored / read.                                                                        |
@@ -47,7 +47,7 @@ both L1 messages and events).
 | Node         | node_layer.rs | Aggregates 32 leaf (or node) circruits of the same type   |
 | Scheduler    | scheduler.rs  | Aggregates 13 nodes (1 from each type) into a final proof |
 
-And 2 'wrapper'/AUX circuits on top:
+And  'wrapper'/AUX circuits on top:
 
 | Circuit name | Location       | Description                                                                              |
 | ------------ | -------------- | ---------------------------------------------------------------------------------------- |
