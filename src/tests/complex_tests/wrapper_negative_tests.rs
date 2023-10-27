@@ -68,7 +68,7 @@ fn try_to_synthesize_wrapper(
     let proof = proof.into_inner();
     let vk = vk.into_inner();
 
-    let mut assembly = ProvingAssembly::<
+    let mut assembly = TrivialAssembly::<
         Bn256,
         PlonkCsWidth4WithNextStepAndCustomGatesParams,
         SelectorOptimizedWidth4MainGateWithDNext,
