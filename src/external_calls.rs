@@ -572,10 +572,14 @@ round_function: R, // used for all queues implementation
 use crate::boojum::field::goldilocks::GoldilocksExt2;
 use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
 
+/// Executes a given set of instructions, and returns things necessary to do the proving:
+/// - list of circuits with their inputs and witnesses
+/// - partial witness for the scheduler circuit (later we have to add proof witnesses for the nodes)
+/// - witness with AUX data (with information that might be useful during verification to generate the public input)
 pub fn run_with_fixed_params<S: Storage>(
     caller: Address,                 // for real block must be zero
     entry_point_address: Address,    // for real block must be the bootloader
-    entry_point_code: Vec<[u8; 32]>, // for read lobkc must be a bootloader code
+    entry_point_code: Vec<[u8; 32]>, // for real block must be a bootloader code
     initial_heap_content: Vec<u8>,   // bootloader starts with non-deterministic heap
     zk_porter_is_available: bool,
     default_aa_code_hash: U256,
