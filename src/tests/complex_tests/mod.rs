@@ -308,6 +308,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
     // let mut source = InMemoryDataSource::new();
     let mut source = LocalFileDataSource;
+    LocalFileDataSource::create_folders_for_storing_data();
     use crate::data_source::*;
 
     for (idx, el) in basic_block_circuits
@@ -1133,6 +1134,7 @@ fn run_single() {
         ZkSyncRecursionLayerStorageType::NodeLayerCircuit,
     );
     let verifier = verifier_builder.create_verifier();
+    LocalFileDataSource::create_folders_for_storing_data();
     let source = LocalFileDataSource;
     let vk = source.get_recursion_layer_node_vk().unwrap().into_inner();
 
