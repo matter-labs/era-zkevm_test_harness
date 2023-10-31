@@ -102,7 +102,7 @@ pub fn sort_storage_access_queries<'a, L: LogQueryLike, I: IntoIterator<Item = &
         .collect();
 
     sorted_storage_queries_with_extra_timestamp.par_sort_by(|a, b| {
-        match a.raw_query.shard_id().cmp(&a.raw_query.shard_id()) {
+        match a.raw_query.shard_id().cmp(&b.raw_query.shard_id()) {
             Ordering::Equal => match a.raw_query.address().cmp(&b.raw_query.address()) {
                 Ordering::Equal => match a.raw_query.key().cmp(&b.raw_query.key()) {
                     Ordering::Equal => a.extended_timestamp.cmp(&b.extended_timestamp),
@@ -145,33 +145,22 @@ pub fn sort_storage_access_queries<'a, L: LogQueryLike, I: IntoIterator<Item = &
                     "invalid for query {:?}",
                     el
                 );
-                // first read potentially
+
                 if el.raw_query.rw_flag() == false {
                     current_element_history.did_read_at_depth_zero = true;
+                } else {
+                    assert!(el.raw_query.rollback() == false);
+                    // note: We apply updates few lines later
                 }
+
+                current_element_history.initial_value = Some(el.raw_query.read_value());
+                current_element_history.current_value = Some(el.raw_query.read_value());
             } else {
                 // explicit read at zero
                 if el.raw_query.rw_flag() == false
                     && current_element_history.changes_stack.is_empty()
                 {
                     current_element_history.did_read_at_depth_zero = true;
-                }
-            }
-
-            if current_element_history.current_value.is_none() {
-                assert!(
-                    current_element_history.initial_value.is_none(),
-                    "invalid for query {:?}",
-                    el
-                );
-                if el.raw_query.rw_flag() == false {
-                    current_element_history.initial_value = Some(el.raw_query.read_value());
-                    current_element_history.current_value = Some(el.raw_query.read_value());
-                } else {
-                    assert!(el.raw_query.rollback() == false);
-                    current_element_history.initial_value = Some(el.raw_query.read_value());
-                    current_element_history.current_value = Some(el.raw_query.read_value());
-                    // note: We apply updates few lines later
                 }
             }
 
