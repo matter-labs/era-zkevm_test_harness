@@ -104,26 +104,26 @@ use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksP
 use crate::data_source::in_memory_data_source::InMemoryDataSource;
 use crate::witness::full_block_artifact::*;
 
-fn get_geometry_config() -> GeometryConfig {
-    crate::geometry_config::get_geometry_config()
+/// Lover memory requirements
+/// Used only for base layer debugging
+fn get_testing_geometry_config() -> GeometryConfig {
+    GeometryConfig {
+        // cycles_per_vm_snapshot: 1,
+        cycles_per_vm_snapshot: 1024,
+        cycles_per_ram_permutation: 1024,
+        cycles_per_code_decommitter: 256,
+        cycles_per_storage_application: 4,
+        cycles_per_keccak256_circuit: 7,
+        cycles_per_sha256_circuit: 7,
+        cycles_per_ecrecover_circuit: 2,
+        // cycles_code_decommitter_sorter: 512,
+        cycles_code_decommitter_sorter: 3,
+        cycles_per_log_demuxer: 16,
+        cycles_per_storage_sorter: 16,
+        cycles_per_events_or_l1_messages_sorter: 4,
 
-    // GeometryConfig {
-    //     // cycles_per_vm_snapshot: 1,
-    //     cycles_per_vm_snapshot: 1024,
-    //     cycles_per_ram_permutation: 1024,
-    //     cycles_per_code_decommitter: 256,
-    //     cycles_per_storage_application: 4,
-    //     cycles_per_keccak256_circuit: 7,
-    //     cycles_per_sha256_circuit: 7,
-    //     cycles_per_ecrecover_circuit: 2,
-    //     // cycles_code_decommitter_sorter: 512,
-    //     cycles_code_decommitter_sorter: 3,
-    //     cycles_per_log_demuxer: 16,
-    //     cycles_per_storage_sorter: 16,
-    //     cycles_per_events_or_l1_messages_sorter: 4,
-
-    //     limit_for_l1_messages_pudata_hasher: 32,
-    // }
+        limit_for_l1_messages_pudata_hasher: 32,
+    }
 }
 
 pub(crate) fn generate_base_layer(
@@ -255,7 +255,8 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
     use crate::external_calls::run;
     use crate::toolset::GeometryConfig;
 
-    let geometry = get_geometry_config();
+    // let geometry = get_testing_geometry_config();
+    let geometry = crate::geometry_config::get_geometry_config();
 
     // let (basic_block_circuits, basic_block_circuits_inputs, mut scheduler_partial_input) = run(
     let (
