@@ -57,8 +57,8 @@ jobs:
       - name: Generate commitment
         run: |
           source "$HOME/.cargo/env"
-          # cargo run --release --bin geometry_config_generator -- --code-decommitter $(cat circuit_limit_5.txt) --code-decommitter-sorter $(cat circuit_limit_4.txt) --ecrecover $(cat circuit_limit_9.txt) --events-or-l1-messages-sorter $(cat circuit_limit_15.txt) --initial-writes $(cat circuit_limit_13.txt) --keccak256 $(cat circuit_limit_7.txt) --log-demuxer $(cat circuit_limit_6.txt) --ram-permutation $(cat circuit_limit_10.txt) --repeated-writes $(cat circuit_limit_14.txt) --sha256 $(cat circuit_limit_8.txt) --storage-application $(cat circuit_limit_12.txt) --storage-sorter $(cat circuit_limit_11.txt) --vm-snapshot $(cat circuit_limit_3.txt) --l1-messages-merklizer $(cat circuit_limit_18.txt) --l1-messages-pudata-hasher $(cat circuit_limit_17.txt)
-          # rm -rf circuit_limit_*
+          cargo run --release --bin geometry_config_generator -- --code-decommitter $(cat circuit_limit_5.txt) --code-decommitter-sorter $(cat circuit_limit_4.txt) --ecrecover $(cat circuit_limit_9.txt) --events-or-l1-messages-sorter $(cat circuit_limit_15.txt) --initial-writes $(cat circuit_limit_13.txt) --keccak256 $(cat circuit_limit_7.txt) --log-demuxer $(cat circuit_limit_6.txt) --ram-permutation $(cat circuit_limit_10.txt) --repeated-writes $(cat circuit_limit_14.txt) --sha256 $(cat circuit_limit_8.txt) --storage-application $(cat circuit_limit_12.txt) --storage-sorter $(cat circuit_limit_11.txt) --vm-snapshot $(cat circuit_limit_3.txt) --l1-messages-merklizer $(cat circuit_limit_18.txt) --l1-messages-pudata-hasher $(cat circuit_limit_17.txt)
+          rm -rf circuit_limit_*
       - name: Create Pull Request
         id: cpr
         uses: peter-evans/create-pull-request@d7db273d6c7206ba99224e659c982ae34a1025e3 # v4
