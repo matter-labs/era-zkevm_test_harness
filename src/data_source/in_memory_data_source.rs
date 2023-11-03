@@ -122,7 +122,12 @@ impl SetupDataSource for InMemoryDataSource {
     }
 
     fn get_recursion_layer_node_vk(&self) -> SourceResult<ZkSyncRecursionLayerVerificationKey> {
-        Ok(self.recursion_layer_node_vk.clone().unwrap())
+        self.recursion_layer_node_vk
+            .clone()
+            .ok_or(Box::new(Error::new(
+                ErrorKind::Other,
+                format!("no data for recursion layer node vk"),
+            )))
     }
 
     fn get_recursion_layer_padding_proof(
@@ -152,17 +157,32 @@ impl SetupDataSource for InMemoryDataSource {
     }
 
     fn get_recursion_layer_leaf_padding_proof(&self) -> SourceResult<ZkSyncRecursionLayerProof> {
-        Ok(self.recursion_layer_leaf_padding_proof.clone().unwrap())
+        self.recursion_layer_leaf_padding_proof
+            .clone()
+            .ok_or(Box::new(Error::new(
+                ErrorKind::Other,
+                format!("no data for recursion layer node vk"),
+            )))
     }
 
     fn get_recursion_layer_node_padding_proof(&self) -> SourceResult<ZkSyncRecursionLayerProof> {
-        Ok(self.recursion_layer_node_padding_proof.clone().unwrap())
+        self.recursion_layer_node_padding_proof
+            .clone()
+            .ok_or(Box::new(Error::new(
+                ErrorKind::Other,
+                format!("no data for recursion layer node vk"),
+            )))
     }
 
     fn get_recursion_layer_node_finalization_hint(
         &self,
     ) -> SourceResult<ZkSyncRecursionLayerFinalizationHint> {
-        Ok(self.recursion_layer_node_finalization_hint.clone().unwrap())
+        self.recursion_layer_node_finalization_hint
+            .clone()
+            .ok_or(Box::new(Error::new(
+                ErrorKind::Other,
+                format!("no data for recursion layer node vk"),
+            )))
     }
 
     fn get_compression_vk(
