@@ -22,6 +22,8 @@ type EXT = GoldilocksExt2;
 type H = GoldilocksPoseidon2Sponge<AbsorptionModeOverwrite>;
 type RH = CircuitGoldilocksPoseidon2Sponge;
 
+/// 'Outer' layer for the node recursive circuit, that aggregates up to 32 children (leafs or other nodes) of the same type.
+/// The circuit logic is in ``node_layer_recursion_entry_point`` method (in era-zkevm_circuits repo).
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone, Debug(bound = ""))]
 #[serde(bound = "")]
