@@ -1,30 +1,31 @@
 use super::*;
 
-use crate::boojum::field::{Field, ExtensionField};
-use crate::data_source::{SetupDataSource, BlockDataSource,
-    local_file_data_source::LocalFileDataSource,
+use crate::boojum::field::{ExtensionField, Field};
+use crate::data_source::{
+    local_file_data_source::LocalFileDataSource, BlockDataSource, SetupDataSource,
 };
-use crate::tests::complex_tests::testing_wrapper::get_testing_wrapper_config;
-use crate::proof_wrapper_utils::{WrapperConfig,
-    compute_compression_vks_and_write, 
-    compute_compression_for_wrapper_vk_and_write,
-    compute_compression_circuits,
-    compute_compression_for_wrapper_circuit,
-};
-use crate::tests::{Worker,
-    ZkSyncCompressionForWrapperProof,
-    ZkSyncCompressionForWrapperVerificationKey,
+use crate::proof_wrapper_utils::{
+    compute_compression_circuits, compute_compression_for_wrapper_circuit,
+    compute_compression_for_wrapper_vk_and_write, compute_compression_vks_and_write, WrapperConfig,
 };
 use crate::snark_wrapper::franklin_crypto::bellman::{
-    worker::Worker as BellmanWorker,
-    Field as BellmanField
+    worker::Worker as BellmanWorker, Field as BellmanField,
+};
+use crate::tests::complex_tests::testing_wrapper::get_testing_wrapper_config;
+use crate::tests::{
+    Worker, ZkSyncCompressionForWrapperProof, ZkSyncCompressionForWrapperVerificationKey,
 };
 
-fn get_compression_for_wrapper_vk_for_testing(config: WrapperConfig) -> ZkSyncCompressionForWrapperVerificationKey {
+fn get_compression_for_wrapper_vk_for_testing(
+    config: WrapperConfig,
+) -> ZkSyncCompressionForWrapperVerificationKey {
     let mut source = LocalFileDataSource;
 
     let compression_for_wrapper_type = config.get_compression_for_wrapper_type();
-    if source.get_compression_for_wrapper_vk(compression_for_wrapper_type).is_err() {
+    if source
+        .get_compression_for_wrapper_vk(compression_for_wrapper_type)
+        .is_err()
+    {
         // Scheduler vk should be present!
         let worker = Worker::new();
         // 1. All but one layers of compression with Goldilocks Poseidon2 hash
@@ -32,15 +33,22 @@ fn get_compression_for_wrapper_vk_for_testing(config: WrapperConfig) -> ZkSyncCo
         // 2. Final compression with Bn256 Poseidon2 hash
         compute_compression_for_wrapper_vk_and_write(config, &mut source, &worker);
     }
-    
-    source.get_compression_for_wrapper_vk(compression_for_wrapper_type).unwrap()
+
+    source
+        .get_compression_for_wrapper_vk(compression_for_wrapper_type)
+        .unwrap()
 }
 
-fn get_compression_for_wrapper_proof_for_testing(config: WrapperConfig) -> ZkSyncCompressionForWrapperProof {
+fn get_compression_for_wrapper_proof_for_testing(
+    config: WrapperConfig,
+) -> ZkSyncCompressionForWrapperProof {
     let mut source = LocalFileDataSource;
 
     let compression_for_wrapper_type = config.get_compression_for_wrapper_type();
-    if source.get_compression_for_wrapper_proof(compression_for_wrapper_type).is_err() {
+    if source
+        .get_compression_for_wrapper_proof(compression_for_wrapper_type)
+        .is_err()
+    {
         // Scheduler vk and proof should be present!
         let worker = Worker::new();
         // 1. All but one layers of compression with Goldilocks Poseidon2 hash
@@ -48,11 +56,15 @@ fn get_compression_for_wrapper_proof_for_testing(config: WrapperConfig) -> ZkSyn
         // 2. Final compression with Bn256 Poseidon2 hash
         compute_compression_for_wrapper_circuit(&mut source, config, &worker);
     }
-    
-    source.get_compression_for_wrapper_proof(compression_for_wrapper_type).unwrap()
+
+    source
+        .get_compression_for_wrapper_proof(compression_for_wrapper_type)
+        .unwrap()
 }
 
-use crate::proof_wrapper_utils::{L1_VERIFIER_DOMAIN_SIZE_LOG, TreeHasherForWrapper, TranscriptForWrapper};
+use crate::proof_wrapper_utils::{
+    TranscriptForWrapper, TreeHasherForWrapper, L1_VERIFIER_DOMAIN_SIZE_LOG,
+};
 
 fn try_to_synthesize_wrapper(
     proof: ZkSyncCompressionForWrapperProof,
@@ -132,7 +144,7 @@ mod wrapper_tests {
             get_compression_for_wrapper_proof_for_testing(config),
             get_compression_for_wrapper_vk_for_testing(config),
         );
-        
+
         let mut proof = proof.into_inner();
         proof.public_inputs[0] = GoldilocksField::ZERO;
 
@@ -149,7 +161,7 @@ mod wrapper_tests {
             get_compression_for_wrapper_proof_for_testing(config),
             get_compression_for_wrapper_vk_for_testing(config),
         );
-        
+
         let mut proof = proof.into_inner();
         proof.stage_2_oracle_cap[0] = Fr::zero();
 
@@ -166,7 +178,7 @@ mod wrapper_tests {
             get_compression_for_wrapper_proof_for_testing(config),
             get_compression_for_wrapper_vk_for_testing(config),
         );
-        
+
         let mut proof = proof.into_inner();
         proof.values_at_z[0] = ExtensionField::ZERO;
 
@@ -183,7 +195,7 @@ mod wrapper_tests {
             get_compression_for_wrapper_proof_for_testing(config),
             get_compression_for_wrapper_vk_for_testing(config),
         );
-        
+
         let mut proof = proof.into_inner();
         proof.queries_per_fri_repetition[0].quotient_query.proof[0] = Fr::zero();
 
