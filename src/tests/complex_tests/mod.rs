@@ -4,6 +4,7 @@ pub mod invididual_debugs;
 mod test_synthesis;
 
 pub mod testing_wrapper;
+pub mod wrapper_negative_tests;
 
 use std::collections::{HashMap, VecDeque};
 
