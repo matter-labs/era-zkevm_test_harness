@@ -14,7 +14,6 @@ use zkevm_circuits::recursion::leaf_layer::*;
 use super::*;
 
 type F = GoldilocksField;
-type P = GoldilocksField;
 type TR = GoldilocksPoisedon2Transcript;
 type R = Poseidon2Goldilocks;
 type CTR = CircuitAlgebraicSpongeBasedTranscript<GoldilocksField, 8, 12, 4, R>;
@@ -22,12 +21,12 @@ type EXT = GoldilocksExt2;
 type H = GoldilocksPoseidon2Sponge<AbsorptionModeOverwrite>;
 type RH = CircuitGoldilocksPoseidon2Sponge;
 
+/// Leaf layer circuit is aggreagating a bunch (in practice 32) basic circuits of the same type into one.
+/// The code in this file is the 'outer' stage - the actual code for the circuit is in
+/// ``leaf_layer_recursion_entry_point`` in era-zkevm_circuits repo.
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone, Debug(bound = ""))]
 #[serde(bound = "")]
-// #[serde(bound = "RecursionLeafInstanceWitness<F, H, EXT>: serde::Serialize + serde::de::DeserializeOwned,
-//     LeafLayerRecursionConfig<F, H::NonCircuitSimulator, EXT>: serde::Serialize + serde::de::DeserializeOwned,
-//     TR::TransciptParameters: serde::Serialize + serde::de::DeserializeOwned")]
 pub struct LeafLayerRecursiveCircuit<POW: RecursivePoWRunner<F>> {
     pub witness: RecursionLeafInstanceWitness<F, RH, EXT>,
     pub config: LeafLayerRecursionConfig<F, H, EXT>,
@@ -84,6 +83,8 @@ where
             self.base_layer_circuit_type as u8
         )
     }
+
+    /// Returns maximum trace length, and number of variables.
     pub fn size_hint(&self) -> (Option<usize>, Option<usize>) {
         (
             Some(TARGET_CIRCUIT_TRACE_LENGTH),

@@ -86,6 +86,7 @@ mod test {
 
     #[test]
     fn preform_step_1_compression() {
+        LocalFileDataSource::create_folders_for_storing_data();
         let source = LocalFileDataSource;
         let proof = source.get_scheduler_proof().unwrap();
         let vk = source
@@ -300,6 +301,7 @@ mod test {
 
     #[test]
     fn compress_1() {
+        LocalFileDataSource::create_folders_for_storing_data();
         let source = LocalFileDataSource;
         let proof = source.get_scheduler_proof().unwrap();
         let vk = source

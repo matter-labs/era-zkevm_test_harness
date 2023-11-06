@@ -17,6 +17,7 @@ pub(crate) fn test_compression_for_compression_num(config: WrapperConfig) {
     let worker = Worker::new();
     let bellman_worker = BellmanWorker::new();
 
+    LocalFileDataSource::create_folders_for_storing_data();
     let mut file_source = LocalFileDataSource;
     let mut source = InMemoryDataSource::new();
 
@@ -73,6 +74,7 @@ pub(crate) fn test_wrapper_pi_inner<DS: SetupDataSource + BlockDataSource>(
 fn test_wrapper_pi() {
     let config = get_testing_wrapper_config();
 
+    LocalFileDataSource::create_folders_for_storing_data();
     let mut source = LocalFileDataSource;
 
     test_wrapper_pi_inner(&mut source, config);
@@ -115,6 +117,7 @@ fn test_pi_aggregation_function() {
 fn test_wrapper_vk_generation() {
     let config = get_testing_wrapper_config();
 
+    LocalFileDataSource::create_folders_for_storing_data();
     let mut source = LocalFileDataSource;
 
     let scheduler_vk = source
