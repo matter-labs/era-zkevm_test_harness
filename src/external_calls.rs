@@ -359,6 +359,8 @@ round_function: R, // used for all queues implementation
             bootloader_heap_initial_content,
             rollup_state_diff_for_compression,
             l1_messages_linear_hash: l1_messages_linear_hash,
+            eip4844_linear_hashes: [[0u8; 32]; MAX_4844_BLOBS_PER_BLOCK],
+            eip4844_output_commitment_hashes: [[0u8; 32]; MAX_4844_BLOBS_PER_BLOCK],
         };
 
         use crate::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
@@ -548,6 +550,9 @@ round_function: R, // used for all queues implementation
 
             previous_block_meta_hash: [0u8; 32],
             previous_block_aux_hash: [0u8; 32],
+
+            eip4844_witnesses: None,
+            eip4844_proofs: VecDeque::new(),
 
             node_layer_vk_witness: VerificationKey::default(),
             leaf_layer_parameters: std::array::from_fn(|_| {
