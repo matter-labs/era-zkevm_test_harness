@@ -236,6 +236,7 @@ pub(crate) fn generate_base_layer(
         default_account_codehash,
         used_bytecodes,
         vec![],
+        None,
         cycle_limit,
         round_function.clone(),
         geometry,
