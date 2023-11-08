@@ -79,6 +79,7 @@ round_function: R, // used for all queues implementation
     BlockBasicCircuitsPublicCompactFormsWitnesses<F>,
     SchedulerCircuitInstanceWitness<F, H, EXT>,
     BlockAuxilaryOutputWitness<F>,
+    Option<[[[u8; BLOB_CHUNK_SIZE]; ELEMENTS_PER_4844_BLOCK]; 2]>,
 )
     where [(); <crate::zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <crate::zkevm_circuits::base_structures::memory_query::MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
@@ -357,27 +358,6 @@ round_function: R, // used for all queues implementation
             })
             .expect("at least 1 L2 to L1 message");
 
-        // aux
-        let aux_data = BlockAuxilaryOutputWitness::<F> {
-            events_queue_state,
-            bootloader_heap_initial_content,
-            rollup_state_diff_for_compression,
-            l1_messages_linear_hash: l1_messages_linear_hash,
-            eip4844_linear_hashes: [[0u8; 32]; MAX_4844_BLOBS_PER_BLOCK],
-            eip4844_output_commitment_hashes: [[0u8; 32]; MAX_4844_BLOBS_PER_BLOCK],
-        };
-
-        use crate::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
-        let per_circuit_inputs: VecDeque<ClosedFormInputCompactFormWitness<F>> =
-            compact_form_witnesses
-                .clone()
-                .into_flattened_set()
-                .into_iter()
-                .map(|el| el.into_inner())
-                .collect();
-
-        // let memory_verification_queries: [sync_vm::glue::code_unpacker_sha256::memory_query_updated::MemoryQueryWitness<Bn256>; NUM_MEMORY_QUERIES_TO_VERIFY] = memory_verification_queries.try_into().unwrap();
-
         use crate::boojum::pairing::bls12_381::fr::{Fr, FrRepr};
         use crate::sha3::{Digest, Keccak256};
         use circuit_definitions::franklin_crypto::bellman::Field;
@@ -468,6 +448,50 @@ round_function: R, // used for all queues implementation
         } else {
             None
         };
+
+        let eip4844_linear_hashes = if let Some(witness_data) = eip4844_witnesses.clone() {
+            witness_data
+                .iter()
+                .map(|d| d.linear_hash)
+                .collect::<Vec<[u8; 32]>>()
+                .try_into()
+                .expect("should be able to create array from 2-vec")
+        } else {
+            [[0u8; 32]; MAX_4844_BLOBS_PER_BLOCK]
+        };
+
+        let eip4844_output_commitment_hashes = if let Some(witness_data) = eip4844_witnesses.clone()
+        {
+            witness_data
+                .iter()
+                .map(|d| d.output_hash)
+                .collect::<Vec<[u8; 32]>>()
+                .try_into()
+                .expect("should be able to create array from 2-vec")
+        } else {
+            [[0u8; 32]; MAX_4844_BLOBS_PER_BLOCK]
+        };
+
+        // aux
+        let aux_data = BlockAuxilaryOutputWitness::<F> {
+            events_queue_state,
+            bootloader_heap_initial_content,
+            rollup_state_diff_for_compression,
+            l1_messages_linear_hash: l1_messages_linear_hash,
+            eip4844_linear_hashes,
+            eip4844_output_commitment_hashes,
+        };
+
+        use crate::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
+        let per_circuit_inputs: VecDeque<ClosedFormInputCompactFormWitness<F>> =
+            compact_form_witnesses
+                .clone()
+                .into_flattened_set()
+                .into_iter()
+                .map(|el| el.into_inner())
+                .collect();
+
+        // let memory_verification_queries: [sync_vm::glue::code_unpacker_sha256::memory_query_updated::MemoryQueryWitness<Bn256>; NUM_MEMORY_QUERIES_TO_VERIFY] = memory_verification_queries.try_into().unwrap();
 
         use crate::zkevm_circuits::recursion::leaf_layer::input::RecursionLeafParameters;
         use crate::zkevm_circuits::recursion::VK_COMMITMENT_LENGTH;
@@ -660,12 +684,26 @@ round_function: R, // used for all queues implementation
         (scheduler_circuit_witness, aux_data)
     };
 
+    let blobs = if let Some(blobs) = eip4844_blobs {
+        Some(
+            blobs
+                .iter()
+                .map(|b| b.0)
+                .collect::<Vec<[[u8; BLOB_CHUNK_SIZE]; ELEMENTS_PER_4844_BLOCK]>>()
+                .try_into()
+                .expect("should be able to create array from 2-vec"),
+        )
+    } else {
+        None
+    };
+
     (
         basic_circuits,
         basic_circuits_inputs,
         compact_form_witnesses,
         scheduler_circuit_witness,
         aux_data,
+        blobs,
     )
 }
 
@@ -698,6 +736,7 @@ pub fn run_with_fixed_params<S: Storage>(
         GoldilocksExt2,
     >,
     BlockAuxilaryOutputWitness<GoldilocksField>,
+    Option<[[[u8; BLOB_CHUNK_SIZE]; ELEMENTS_PER_4844_BLOCK]; 2]>,
 ) {
     let round_function = ZkSyncDefaultRoundFunction::default();
 

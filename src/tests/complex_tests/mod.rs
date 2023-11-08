@@ -29,6 +29,7 @@ use crate::zk_evm::testing::storage::InMemoryStorage;
 use crate::zk_evm::utils::{bytecode_to_code_hash, contract_bytecode_to_words};
 use crate::zk_evm::witness_trace::VmWitnessTracer;
 use crate::zk_evm::GenericNoopTracer;
+use crate::zkevm_circuits::eip_4844::input::*;
 use crate::zkevm_circuits::scheduler::input::SchedulerCircuitInstanceWitness;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use circuit_definitions::circuit_definitions::aux_layer::compression::{
@@ -139,6 +140,7 @@ pub(crate) fn generate_base_layer(
         CircuitGoldilocksPoseidon2Sponge,
         GoldilocksExt2,
     >,
+    Option<[[[u8; BLOB_CHUNK_SIZE]; ELEMENTS_PER_4844_BLOCK]; 2]>,
 ) {
     use crate::zk_evm::zkevm_opcode_defs::system_params::BOOTLOADER_FORMAL_ADDRESS;
 
@@ -227,6 +229,7 @@ pub(crate) fn generate_base_layer(
         closed_form_inputs,
         scheduler_partial_input,
         _aux_data,
+        blobs,
     ) = run(
         Address::zero(),
         test_artifact.entry_point_address,
@@ -249,6 +252,7 @@ pub(crate) fn generate_base_layer(
         basic_block_circuits_inputs,
         closed_form_inputs,
         scheduler_partial_input,
+        blobs,
     )
 }
 
@@ -264,6 +268,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
         basic_block_circuits_inputs,
         per_circuit_closed_form_inputs,
         scheduler_partial_input,
+        eip4844_blobs,
     ) = generate_base_layer(test_artifact, cycle_limit, geometry);
 
     let _num_vm_circuits = basic_block_circuits.main_vm_circuits.len();
@@ -1005,6 +1010,15 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
         scheduler_proofs.push(proof.into_inner());
     }
 
+    // run eip4844 if any
+    let mut eip4844_proofs = VecDeque::new();
+    if let Some(blobs) = eip4844_blobs {
+        blobs
+            .iter()
+            .zip(scheduler_partial_input.eip4844_witnesses.iter())
+            .for_each(|(blob, witness)| {});
+    }
+
     assert_eq!(scheduler_proofs.len(), NUM_CIRCUIT_TYPES_TO_SCHEDULE);
 
     let mut scheduler_witness = scheduler_partial_input;
@@ -1023,6 +1037,7 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
     scheduler_witness.leaf_layer_parameters = leaf_layer_params;
     // proofs
     scheduler_witness.proof_witnesses = scheduler_proofs.into();
+    scheduler_witness.eip4844_proofs = eip4844_proofs;
 
     // ideally we need to fill previous block meta and aux hashes, but here we are fine
 

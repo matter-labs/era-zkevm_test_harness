@@ -11,7 +11,7 @@ use std::time::Instant;
 fn test_base_layer_circuit_synthesis() {
     let test_artifact = read_basic_test_artifact();
     let geometry = crate::geometry_config::get_geometry_config();
-    let (base_layer_circuit, _, _, _) = generate_base_layer(test_artifact, 20000, geometry);
+    let (base_layer_circuit, _, _, _, _) = generate_base_layer(test_artifact, 20000, geometry);
     let circuit = base_layer_circuit
         .into_flattened_set()
         .into_iter()
