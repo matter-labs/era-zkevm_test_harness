@@ -1065,7 +1065,9 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
                         eip4844_proof_config.merkle_tree_cap_size,
                     );
 
-                eip4844_vk = Some(vk.clone());
+                if eip4844_vk.is_none() {
+                    eip4844_vk = Some(vk.clone());
+                }
 
                 let proof = prove_eip4844_circuit::<NoPow>(
                     circuit.clone(),
