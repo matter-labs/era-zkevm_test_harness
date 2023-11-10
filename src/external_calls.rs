@@ -79,7 +79,9 @@ round_function: R, // used for all queues implementation
     BlockBasicCircuitsPublicCompactFormsWitnesses<F>,
     SchedulerCircuitInstanceWitness<F, H, EXT>,
     BlockAuxilaryOutputWitness<F>,
-    Option<[[[u8; BLOB_CHUNK_SIZE]; ELEMENTS_PER_4844_BLOCK]; 2]>,
+    Option<
+        [([[u8; BLOB_CHUNK_SIZE]; ELEMENTS_PER_4844_BLOCK], [u8; 32]); MAX_4844_BLOBS_PER_BLOCK],
+    >,
 )
     where [(); <crate::zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <crate::zkevm_circuits::base_structures::memory_query::MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
@@ -684,26 +686,13 @@ round_function: R, // used for all queues implementation
         (scheduler_circuit_witness, aux_data)
     };
 
-    let blobs = if let Some(blobs) = eip4844_blobs {
-        Some(
-            blobs
-                .iter()
-                .map(|b| b.0)
-                .collect::<Vec<[[u8; BLOB_CHUNK_SIZE]; ELEMENTS_PER_4844_BLOCK]>>()
-                .try_into()
-                .expect("should be able to create array from 2-vec"),
-        )
-    } else {
-        None
-    };
-
     (
         basic_circuits,
         basic_circuits_inputs,
         compact_form_witnesses,
         scheduler_circuit_witness,
         aux_data,
-        blobs,
+        eip4844_blobs,
     )
 }
 
@@ -736,7 +725,9 @@ pub fn run_with_fixed_params<S: Storage>(
         GoldilocksExt2,
     >,
     BlockAuxilaryOutputWitness<GoldilocksField>,
-    Option<[[[u8; BLOB_CHUNK_SIZE]; ELEMENTS_PER_4844_BLOCK]; 2]>,
+    Option<
+        [([[u8; BLOB_CHUNK_SIZE]; ELEMENTS_PER_4844_BLOCK], [u8; 32]); MAX_4844_BLOBS_PER_BLOCK],
+    >,
 ) {
     let round_function = ZkSyncDefaultRoundFunction::default();
 
