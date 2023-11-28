@@ -372,7 +372,6 @@ impl<F: SmallField> FullBlockArtifacts<F> {
             round_function,
             geometry.cycles_per_storage_application as usize,
         );
-        println!("{:?}", rollup_storage_application_circuit_data);
 
         self.rollup_storage_application_circuit_data = rollup_storage_application_circuit_data;
 
