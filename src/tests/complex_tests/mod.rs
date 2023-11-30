@@ -62,7 +62,6 @@ fn basic_test() {
 
 #[test]
 fn basic_test_compression_only() {
-    panic!();
     let compression = std::env::var("COMPRESSION_NUM")
         .map(|s| s.parse::<usize>().expect("should be a number"))
         .unwrap_or(1);
@@ -72,7 +71,6 @@ fn basic_test_compression_only() {
 
 #[test]
 fn basic_test_compression_all_modes() {
-    panic!();
     for compression in 1..=5 {
         println!("Testing wrapper for mode {}", compression);
         testing_wrapper::test_compression_for_compression_num(compression as u8);
