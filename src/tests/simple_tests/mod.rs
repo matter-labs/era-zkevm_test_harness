@@ -4,6 +4,7 @@ use super::*;
 use zkevm_assembly::Assembly;
 
 mod context;
+mod eip4844;
 mod far_calls;
 mod fat_pointer_erasure;
 mod kernel_ops;
