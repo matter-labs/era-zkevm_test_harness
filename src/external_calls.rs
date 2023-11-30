@@ -65,9 +65,6 @@ initial_heap_content: Vec<u8>, // bootloader starts with non-deterministic heap
     default_aa_code_hash: U256,
 used_bytecodes: std::collections::HashMap<U256, Vec<[u8; 32]>>, // auxilary information to avoid passing a full set of all used codes
 ram_verification_queries: Vec<(u32, U256)>, // we may need to check that after the bootloader's memory is filled
-    eip4844_blobs: Option<
-        [([[u8; BLOB_CHUNK_SIZE]; ELEMENTS_PER_4844_BLOCK], [u8; 32]); MAX_4844_BLOBS_PER_BLOCK],
->, // linear hash, versioned hash
     cycle_limit: usize,
 round_function: R, // used for all queues implementation
     geometry: GeometryConfig,
@@ -79,9 +76,6 @@ round_function: R, // used for all queues implementation
     BlockBasicCircuitsPublicCompactFormsWitnesses<F>,
     SchedulerCircuitInstanceWitness<F, H, EXT>,
     BlockAuxilaryOutputWitness<F>,
-    Option<
-        [([[u8; BLOB_CHUNK_SIZE]; ELEMENTS_PER_4844_BLOCK], [u8; 32]); MAX_4844_BLOBS_PER_BLOCK],
-    >,
 )
     where [(); <crate::zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <crate::zkevm_circuits::base_structures::memory_query::MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
@@ -360,128 +354,14 @@ round_function: R, // used for all queues implementation
             })
             .expect("at least 1 L2 to L1 message");
 
-        use crate::boojum::pairing::bls12_381::fr::{Fr, FrRepr};
-        use crate::sha3::{Digest, Keccak256};
-        use circuit_definitions::franklin_crypto::bellman::Field;
-        use circuit_definitions::franklin_crypto::bellman::PrimeField;
-        let eip4844_witnesses: Option<[EIP4844OutputDataWitness<F>; 2]> = if let Some(blobs) =
-            eip4844_blobs
-        {
-            Some(
-                blobs
-                    .iter()
-                    .map(|(blob, versioned_hash)| {
-                        if versioned_hash.iter().all(|x| *x == 0) {
-                            let linear_hash = Keccak256::digest(
-                                blob.clone().into_iter().flatten().collect::<Vec<u8>>(),
-                            );
-                            let evaluation_point = &Keccak256::digest(
-                                &linear_hash
-                                    .iter()
-                                    .chain(versioned_hash)
-                                    .map(|x| *x)
-                                    .collect::<Vec<u8>>(),
-                            )[16..];
-                            let evaluation_repr = u128::from_be_bytes(
-                                evaluation_point.try_into().expect("should have 16 bytes"),
-                            );
-                            let evaluation_point_fe = Fr::from_repr(FrRepr([
-                                evaluation_repr as u64,
-                                (evaluation_repr >> 64) as u64,
-                                0u64,
-                                0u64,
-                            ]))
-                            .expect("should have a valid field element from 16 bytes");
-                            let opening_value =
-                                blob.iter().enumerate().fold(Fr::zero(), |mut acc, (i, x)| {
-                                    let repr = x
-                                        .chunks(8)
-                                        .map(|bytes| {
-                                            let mut arr = [0u8; 8];
-                                            for (i, b) in bytes.iter().enumerate() {
-                                                arr[i] = *b;
-                                            }
-                                            u64::from_le_bytes(arr)
-                                        })
-                                        .collect::<Vec<u64>>();
-                                    let el =
-                                        Fr::from_repr(FrRepr([repr[0], repr[1], repr[2], repr[3]]))
-                                            .expect("31 bytes should create valid field element");
-                                    acc.add_assign(&el);
-                                    if i != ELEMENTS_PER_4844_BLOCK - 1 {
-                                        acc.mul_assign(&evaluation_point_fe);
-                                    }
-                                    acc
-                                });
-                            let opening_value_bytes = opening_value
-                                .into_repr()
-                                .0
-                                .iter()
-                                .rev()
-                                .flat_map(|el| el.to_be_bytes())
-                                .collect::<Vec<u8>>();
-
-                            let output_hash: [u8; 32] = Keccak256::digest(
-                                versioned_hash
-                                    .iter()
-                                    .chain(evaluation_point.iter())
-                                    .chain(opening_value_bytes.iter())
-                                    .map(|x| *x)
-                                    .collect::<Vec<u8>>(),
-                            )
-                            .try_into()
-                            .expect("should be able to convert genericarray to array");
-
-                            EIP4844OutputDataWitness {
-                                linear_hash: linear_hash.into(),
-                                output_hash,
-                            }
-                        } else {
-                            EIP4844OutputDataWitness {
-                                linear_hash: [0u8; 32],
-                                output_hash: [0u8; 32],
-                            }
-                        }
-                    })
-                    .collect::<Vec<EIP4844OutputDataWitness<F>>>()
-                    .try_into()
-                    .expect("should be able to convert to an array"),
-            )
-        } else {
-            None
-        };
-
-        let eip4844_linear_hashes = if let Some(witness_data) = eip4844_witnesses.clone() {
-            witness_data
-                .iter()
-                .map(|d| d.linear_hash)
-                .collect::<Vec<[u8; 32]>>()
-                .try_into()
-                .expect("should be able to create array from 2-vec")
-        } else {
-            [[0u8; 32]; MAX_4844_BLOBS_PER_BLOCK]
-        };
-
-        let eip4844_output_commitment_hashes = if let Some(witness_data) = eip4844_witnesses.clone()
-        {
-            witness_data
-                .iter()
-                .map(|d| d.output_hash)
-                .collect::<Vec<[u8; 32]>>()
-                .try_into()
-                .expect("should be able to create array from 2-vec")
-        } else {
-            [[0u8; 32]; MAX_4844_BLOBS_PER_BLOCK]
-        };
-
         // aux
         let aux_data = BlockAuxilaryOutputWitness::<F> {
             events_queue_state,
             bootloader_heap_initial_content,
             rollup_state_diff_for_compression,
             l1_messages_linear_hash: l1_messages_linear_hash,
-            eip4844_linear_hashes,
-            eip4844_output_commitment_hashes,
+            eip4844_linear_hashes: [[0u8; 32]; 2],
+            eip4844_output_commitment_hashes: [[0u8; 32]; 2],
         };
 
         use crate::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
@@ -672,7 +552,7 @@ round_function: R, // used for all queues implementation
             previous_block_meta_hash: [0u8; 32],
             previous_block_aux_hash: [0u8; 32],
 
-            eip4844_witnesses,
+            eip4844_witnesses: None,
             eip4844_proofs: VecDeque::new(),
 
             node_layer_vk_witness: VerificationKey::default(),
@@ -692,7 +572,6 @@ round_function: R, // used for all queues implementation
         compact_form_witnesses,
         scheduler_circuit_witness,
         aux_data,
-        eip4844_blobs,
     )
 }
 
@@ -708,9 +587,6 @@ pub fn run_with_fixed_params<S: Storage>(
     default_aa_code_hash: U256,
     used_bytecodes: std::collections::HashMap<U256, Vec<[u8; 32]>>, // auxilary information to avoid passing a full set of all used codes
     ram_verification_queries: Vec<(u32, U256)>, // we may need to check that after the bootloader's memory is filled
-    eip4844_blobs: Option<
-        [([[u8; BLOB_CHUNK_SIZE]; ELEMENTS_PER_4844_BLOCK], [u8; 32]); MAX_4844_BLOBS_PER_BLOCK],
-    >, // linear hash, versioned hash
     cycle_limit: usize,
     geometry: GeometryConfig,
     storage: S,
@@ -725,9 +601,6 @@ pub fn run_with_fixed_params<S: Storage>(
         GoldilocksExt2,
     >,
     BlockAuxilaryOutputWitness<GoldilocksField>,
-    Option<
-        [([[u8; BLOB_CHUNK_SIZE]; ELEMENTS_PER_4844_BLOCK], [u8; 32]); MAX_4844_BLOBS_PER_BLOCK],
-    >,
 ) {
     let round_function = ZkSyncDefaultRoundFunction::default();
 
@@ -740,7 +613,6 @@ pub fn run_with_fixed_params<S: Storage>(
         default_aa_code_hash,
         used_bytecodes,
         ram_verification_queries,
-        eip4844_blobs,
         cycle_limit,
         round_function,
         geometry,

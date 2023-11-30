@@ -219,7 +219,7 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
     save_predeployed_contracts(&mut storage_impl, &mut tree, &known_contracts);
 
     // let (basic_block_circuits, basic_block_circuits_inputs, scheduler_input) = run(
-    let (basic_block_circuits, basic_block_circuits_inputs, closed_form_inputs, _, _, _) =
+    let (basic_block_circuits, basic_block_circuits_inputs, closed_form_inputs, _, _) =
         run_with_fixed_params(
             Address::zero(),
             *BOOTLOADER_FORMAL_ADDRESS,
@@ -229,7 +229,6 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
             U256::zero(),
             used_bytecodes_and_hashes,
             vec![],
-            None,
             cycle_limit,
             geometry,
             storage_impl,

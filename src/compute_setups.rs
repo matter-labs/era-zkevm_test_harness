@@ -37,7 +37,7 @@ pub fn generate_base_layer_vks_and_proofs(
 ) -> crate::data_source::SourceResult<()> {
     let test_artifact = read_basic_test_artifact();
     let geometry = crate::geometry_config::get_geometry_config();
-    let (base_layer_circuit, _, _, _, _) = generate_base_layer(test_artifact, 20000, geometry);
+    let (base_layer_circuit, _, _, _) = generate_base_layer(test_artifact, 20000, geometry);
 
     let worker = Worker::new();
 

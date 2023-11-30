@@ -158,3 +158,124 @@ pub fn finalized_queue_state_as_bytes<F: SmallField>(
 
     result
 }
+
+use crate::boojum::pairing::bls12_381::fr::{Fr, FrRepr};
+use crate::sha3::{Digest, Keccak256};
+use crate::zkevm_circuits::eip_4844::input::EIP4844OutputDataWitness;
+use crate::zkevm_circuits::eip_4844::input::ELEMENTS_PER_4844_BLOCK;
+use crate::zkevm_circuits::scheduler::block_header::MAX_4844_BLOBS_PER_BLOCK;
+use circuit_definitions::franklin_crypto::bellman::Field;
+use circuit_definitions::franklin_crypto::bellman::PrimeField;
+
+pub fn generate_eip4844_witness<F: SmallField>(
+    blob: Vec<u8>,
+) -> (
+    [[u8; 31]; ELEMENTS_PER_4844_BLOCK],
+    [u8; 32],
+    [u8; 32],
+    [u8; 32],
+) {
+    // create blob array from vec
+    assert!(blob.len() <= 31 * 4096);
+    let mut blob_arr = [[0u8; 31]; ELEMENTS_PER_4844_BLOCK];
+    blob.chunks(31).enumerate().for_each(|(i, chunk)| {
+        if chunk.len() == 31 {
+            blob_arr[i].copy_from_slice(chunk);
+        } else {
+            blob_arr[i][..chunk.len()].copy_from_slice(chunk);
+        }
+    });
+
+    // compute versioned hash
+    let blob_fr = blob_arr
+        .iter()
+        .map(|chunk| {
+            let repr = chunk
+                .chunks(8)
+                .map(|bytes| {
+                    let mut arr = [0u8; 8];
+                    for (i, b) in bytes.iter().enumerate() {
+                        arr[i] = *b;
+                    }
+                    u64::from_le_bytes(arr)
+                })
+                .collect::<Vec<u64>>();
+            Fr::from_repr(FrRepr([repr[0], repr[1], repr[2], repr[3]]))
+                .expect("31 bytes should create valid field element")
+        })
+        .collect::<Vec<Fr>>();
+
+    use crate::kzg::compute_commitment;
+    use circuit_definitions::boojum::pairing::CurveAffine;
+    let commitment = compute_commitment(&blob_fr);
+    let mut versioned_hash: [u8; 32] = Keccak256::digest(&commitment.into_compressed())
+        .try_into()
+        .expect("should be able to create an array from a keccak digest");
+    versioned_hash[0] = 1;
+
+    // compute linear hash
+    let linear_hash: [u8; 32] =
+        Keccak256::digest(&blob_arr.clone().into_iter().flatten().collect::<Vec<u8>>())
+            .try_into()
+            .expect("should be able to create an array from a keccak digest");
+
+    // compute output commitment
+    let evaluation_point = &Keccak256::digest(
+        &linear_hash
+            .iter()
+            .chain(&versioned_hash)
+            .map(|x| *x)
+            .collect::<Vec<u8>>(),
+    )[16..];
+    let evaluation_repr =
+        u128::from_be_bytes(evaluation_point.try_into().expect("should have 16 bytes"));
+    let evaluation_point_fe = Fr::from_repr(FrRepr([
+        evaluation_repr as u64,
+        (evaluation_repr >> 64) as u64,
+        0u64,
+        0u64,
+    ]))
+    .expect("should have a valid field element from 16 bytes");
+    let opening_value = blob_arr
+        .iter()
+        .enumerate()
+        .fold(Fr::zero(), |mut acc, (i, x)| {
+            let repr = x
+                .chunks(8)
+                .map(|bytes| {
+                    let mut arr = [0u8; 8];
+                    for (i, b) in bytes.iter().enumerate() {
+                        arr[i] = *b;
+                    }
+                    u64::from_le_bytes(arr)
+                })
+                .collect::<Vec<u64>>();
+            let el = Fr::from_repr(FrRepr([repr[0], repr[1], repr[2], repr[3]]))
+                .expect("31 bytes should create valid field element");
+            acc.add_assign(&el);
+            if i != ELEMENTS_PER_4844_BLOCK - 1 {
+                acc.mul_assign(&evaluation_point_fe);
+            }
+            acc
+        });
+    let opening_value_bytes = opening_value
+        .into_repr()
+        .0
+        .iter()
+        .rev()
+        .flat_map(|el| el.to_be_bytes())
+        .collect::<Vec<u8>>();
+
+    let output_hash: [u8; 32] = Keccak256::digest(
+        versioned_hash
+            .iter()
+            .chain(evaluation_point.iter())
+            .chain(opening_value_bytes.iter())
+            .map(|x| *x)
+            .collect::<Vec<u8>>(),
+    )
+    .try_into()
+    .expect("should be able to convert genericarray to array");
+
+    (blob_arr, linear_hash, versioned_hash, output_hash)
+}
