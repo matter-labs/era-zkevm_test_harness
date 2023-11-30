@@ -21,7 +21,6 @@ pub fn compute_storage_dedup_and_sort<
     const SHARD_ID_TO_PROCEED: u8 = 0; // rollup shard ID
 
     if artifacts.demuxed_rollup_storage_queries.is_empty() {
-        println!("adding dummy witness");
         // return singe dummy witness
         use crate::boojum::gadgets::queue::QueueState;
 
