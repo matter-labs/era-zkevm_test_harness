@@ -459,6 +459,7 @@ impl<
         (element, intermediate_info)
     }
 
+    /// Splits the queue into the smaller queues of length `chunk_size`. The last queue might be shorter.
     pub fn split_by<
         R: CircuitRoundFunction<F, AW, SW, CW> + AlgebraicRoundFunction<F, AW, SW, CW>,
         const AW: usize,
@@ -700,4 +701,78 @@ pub(crate) fn linear_combination<F: SmallField>(input: &[(F, F)]) -> F {
     }
 
     result
+}
+
+#[cfg(test)]
+mod tests {
+    //use franklin_crypto::boojum::field::goldilocks::GoldilocksField;
+    use crate::boojum::field::goldilocks::GoldilocksField;
+
+    use crate::ZkSyncDefaultRoundFunction;
+
+    use super::{recursion_request::RecursionRequest, *};
+
+    fn create_recursion_request(x: u64) -> RecursionRequest<GoldilocksField> {
+        RecursionRequest {
+            circuit_type: GoldilocksField::from_nonreduced_u64(x),
+            public_input: [GoldilocksField::from_nonreduced_u64(x); 4],
+        }
+    }
+
+    /// Basic test to cover push, pop and split.
+    #[test]
+    fn basic_queue_test() {
+        let recursion_request = RecursionRequest {
+            circuit_type: GoldilocksField::from_nonreduced_u64(0),
+            public_input: [GoldilocksField::from_nonreduced_u64(0); 4],
+        };
+
+        let mut queue: FullWidthQueueSimulator<
+            GoldilocksField,
+            RecursionRequest<GoldilocksField>,
+            8,
+            12,
+            1,
+        > = FullWidthQueueSimulator::default();
+
+        let empty_head = queue.head;
+        assert_eq!(queue.num_items, 0);
+
+        // First push 1 element, and then remaining 9.
+        let round_function = ZkSyncDefaultRoundFunction::default();
+        queue.push(recursion_request, &round_function);
+        assert_eq!(queue.num_items, 1);
+        let tail_after_first = queue.tail;
+
+        for i in 1..10 {
+            queue.push(create_recursion_request(i), &round_function)
+        }
+        assert_eq!(queue.num_items, 10);
+
+        // pop one element
+        let (element, data) = queue.pop_and_output_intermediate_data(&round_function);
+        // it should return the first one that we entered (with circuit 0).
+        assert_eq!(element.circuit_type, 0);
+
+        assert_eq!(queue.num_items, 9);
+        assert_eq!(data.num_items, 9);
+
+        assert_eq!(data.head, tail_after_first);
+        assert_eq!(data.old_head, empty_head);
+        assert_eq!(data.old_tail, data.tail);
+
+        let mut parts = queue.split_by(3, &round_function);
+
+        assert_eq!(3, parts.len());
+        // The queue was cut in 3 pieces, check that head and tails are matching.
+        assert_eq!(parts[0].head, tail_after_first);
+        assert_eq!(parts[0].tail, parts[1].head);
+        assert_eq!(parts[1].tail, parts[2].head);
+        assert_eq!(parts[2].tail, data.tail);
+        for i in 0..3 {
+            assert_eq!(parts[i].num_items, 3);
+        }
+        let (element, _) = parts[2].pop_and_output_intermediate_data(&round_function);
+        assert_eq!(element.circuit_type, 7);
+    }
 }

@@ -4,6 +4,7 @@ pub mod invididual_debugs;
 mod test_synthesis;
 
 pub mod testing_wrapper;
+pub mod wrapper_negative_tests;
 
 use std::collections::{HashMap, VecDeque};
 
@@ -17,6 +18,7 @@ use crate::compute_setups::*;
 use crate::entry_point::create_out_of_circuit_global_context;
 use crate::ethereum_types::*;
 use crate::helper::artifact_utils::TestArtifact;
+use crate::proof_wrapper_utils::{WrapperConfig, DEFAULT_WRAPPER_CONFIG};
 use crate::prover_utils::*;
 use crate::toolset::{create_tools, GeometryConfig};
 use crate::witness::oracle::create_artifacts_from_tracer;
@@ -61,19 +63,18 @@ fn basic_test() {
 }
 
 #[test]
-fn basic_test_compression_only() {
-    let compression = std::env::var("COMPRESSION_NUM")
-        .map(|s| s.parse::<usize>().expect("should be a number"))
-        .unwrap_or(1);
+fn test_single_compression() {
+    let config = testing_wrapper::get_testing_wrapper_config();
 
-    testing_wrapper::test_compression_for_compression_num(compression as u8);
+    testing_wrapper::test_compression_for_compression_num(config);
 }
 
 #[test]
-fn basic_test_compression_all_modes() {
-    for compression in 1..=5 {
+fn test_compression_all_modes() {
+    for compression in 1..=WrapperConfig::MAX_COMPRESSION_LAYERS {
         println!("Testing wrapper for mode {}", compression);
-        testing_wrapper::test_compression_for_compression_num(compression as u8);
+        let config = WrapperConfig::new(compression as u8);
+        testing_wrapper::test_compression_for_compression_num(config);
     }
 }
 
@@ -82,7 +83,7 @@ use circuit_definitions::circuit_definitions::aux_layer::compression_modes::*;
 use circuit_definitions::circuit_definitions::aux_layer::*;
 use circuit_definitions::circuit_definitions::aux_layer::compression::ProofCompressionFunction;
 use circuit_definitions::circuit_definitions::aux_layer::ZkSyncCompressionLayerVerificationKey;
-use crate::data_source::{LocalFileDataSource, SetupDataSource, BlockDataSource};
+use crate::data_source::{local_file_data_source::LocalFileDataSource, SetupDataSource, BlockDataSource};
 use circuit_definitions::circuit_definitions::aux_layer::compression::*;
 use snark_wrapper::verifier_structs::allocated_vk::AllocatedVerificationKey;
 use snark_wrapper::franklin_crypto::plonk::circuit::bigint_new::BITWISE_LOGICAL_OPS_TABLE_NAME;
@@ -106,12 +107,12 @@ use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::gates
 use crate::boojum::algebraic_props::round_function::AbsorptionModeOverwrite;
 use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
 use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
-use crate::in_memory_data_source::InMemoryDataSource;
+use crate::data_source::in_memory_data_source::InMemoryDataSource;
 use crate::witness::full_block_artifact::*;
 
-fn get_geometry_config() -> GeometryConfig {
-    // let geometry = crate::geometry_config::get_geometry_config();
-
+/// Lover memory requirements
+/// Used only for base layer debugging
+fn get_testing_geometry_config() -> GeometryConfig {
     GeometryConfig {
         // cycles_per_vm_snapshot: 1,
         cycles_per_vm_snapshot: 1024,
@@ -264,7 +265,8 @@ fn run_and_try_create_witness_inner(
     use crate::external_calls::run;
     use crate::toolset::GeometryConfig;
 
-    let geometry = get_geometry_config();
+    // let geometry = get_testing_geometry_config();
+    let geometry = crate::geometry_config::get_geometry_config();
 
     // let (basic_block_circuits, basic_block_circuits_inputs, mut scheduler_partial_input) = run(
     let (
@@ -315,7 +317,9 @@ fn run_and_try_create_witness_inner(
 
     let mut setup_data = None;
 
-    let mut source = InMemoryDataSource::new();
+    // let mut source = InMemoryDataSource::new();
+    let mut source = LocalFileDataSource;
+    LocalFileDataSource::create_folders_for_storing_data();
     use crate::data_source::*;
 
     for (idx, el) in basic_block_circuits
@@ -1191,61 +1195,6 @@ fn run_and_try_create_witness_inner(
             .unwrap();
     }
 
-    println!("Computing compression proofs");
-
-    try_to_compress_and_wrap_to_snark(scheduler_witness);
-
-    println!("DONE");
-}
-
-fn try_to_compress_and_wrap_to_snark(
-    scheduler_witness: SchedulerCircuitInstanceWitness<
-        GoldilocksField,
-        boojum::gadgets::round_function::CircuitSimpleAlgebraicSponge<
-            GoldilocksField,
-            8,
-            12,
-            4,
-            Poseidon2Goldilocks,
-            true,
-        >,
-        GoldilocksExt2,
-    >,
-) {
-    use crate::data_source::*;
-    use crate::zkevm_circuits::scheduler::SchedulerConfig;
-
-    let worker = Worker::new_with_num_threads(8);
-
-    println!("Computing scheduler proof");
-    let mut source = LocalFileDataSource;
-
-    let node_vk = source.get_recursion_layer_node_vk().unwrap().into_inner();
-
-    let config = SchedulerConfig {
-        proof_config: recursion_layer_proof_config(),
-        vk_fixed_parameters: node_vk.fixed_parameters,
-        capacity: SCHEDULER_CAPACITY,
-        _marker: std::marker::PhantomData,
-    };
-
-    let scheduler_circuit = SchedulerCircuit {
-        witness: scheduler_witness,
-        config,
-        transcript_params: (),
-        eip4844_proof_config: None,
-        eip4844_vk_fixed_parameters: None,
-        eip4844_vk: None,
-        _marker: std::marker::PhantomData,
-    };
-
-    let scheduler_circuit = ZkSyncRecursiveLayerCircuit::SchedulerCircuit(scheduler_circuit);
-
-    match source.get_scheduler_proof() {
-        Err(_) => panic!(),
-        Ok(proof) => {}
-    }
-
     println!("DONE");
 }
 
@@ -1278,6 +1227,7 @@ fn run_single() {
         ZkSyncRecursionLayerStorageType::NodeLayerCircuit,
     );
     let verifier = verifier_builder.create_verifier();
+    LocalFileDataSource::create_folders_for_storing_data();
     let source = LocalFileDataSource;
     let vk = source.get_recursion_layer_node_vk().unwrap().into_inner();
 

@@ -375,7 +375,7 @@ pub(crate) fn test_compression_circuit(circuit: ZkSyncCompressionLayerCircuit) {
         ZkSyncCompressionLayerCircuit::CompressionMode2Circuit(inner) => test_inner(inner),
         ZkSyncCompressionLayerCircuit::CompressionMode3Circuit(inner) => test_inner(inner),
         ZkSyncCompressionLayerCircuit::CompressionMode4Circuit(inner) => test_inner(inner),
-        ZkSyncCompressionLayerCircuit::CompressionModeToL1Circuit(inner) => test_inner(inner),
+        ZkSyncCompressionLayerCircuit::CompressionMode5Circuit(inner) => test_inner(inner),
     };
 
     let is_satisfied = cs.check_if_satisfied(&worker);
@@ -426,7 +426,7 @@ pub(crate) fn test_compression_for_wrapper_circuit(circuit: ZkSyncCompressionFor
         ZkSyncCompressionForWrapperCircuit::CompressionMode2Circuit(inner) => test_inner(inner),
         ZkSyncCompressionForWrapperCircuit::CompressionMode3Circuit(inner) => test_inner(inner),
         ZkSyncCompressionForWrapperCircuit::CompressionMode4Circuit(inner) => test_inner(inner),
-        ZkSyncCompressionForWrapperCircuit::CompressionModeToL1Circuit(inner) => test_inner(inner),
+        ZkSyncCompressionForWrapperCircuit::CompressionMode5Circuit(inner) => test_inner(inner),
     };
 
     let is_satisfied = cs.check_if_satisfied(&worker);
