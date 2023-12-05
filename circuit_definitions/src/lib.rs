@@ -16,7 +16,7 @@ pub const RECURSION_LAYER_CAP_SIZE: usize = 16;
 
 pub const L1_SECURITY_BITS: usize = 80;
 
-pub use franklin_crypto;
+pub use snark_wrapper;
 
 use crate::boojum::cs::implementations::prover::ProofConfig;
 

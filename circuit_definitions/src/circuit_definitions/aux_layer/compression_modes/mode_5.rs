@@ -5,16 +5,16 @@ use crate::circuit_definitions::implementations::transcript::Keccak256Transcript
 
 // no lookup, just enough copiable width, moderate LDE factor,
 // and matrix multiplication gate,
-pub struct CompressionModeToL1ForWrapper;
+pub struct CompressionMode5;
 
-impl ProofCompressionFunction for CompressionModeToL1ForWrapper {
+impl ProofCompressionFunction for CompressionMode5 {
     // no PoW from the previous step
     type PreviousLayerPoW = NoPow;
 
     // no PoW on this step too
-    type ThisLayerPoW = NoPow;
-    type ThisLayerHasher = CompressionTreeHasherForWrapper;
-    type ThisLayerTranscript = CompressionTranscriptForWrapper;
+    type ThisLayerPoW = Keccak256;
+    type ThisLayerHasher = Keccak256;
+    type ThisLayerTranscript = Keccak256Transcript;
 
     fn this_layer_transcript_parameters(
     ) -> <Self::ThisLayerTranscript as Transcript<F>>::TransciptParameters {
