@@ -164,8 +164,8 @@ use crate::sha3::{Digest, Keccak256};
 use crate::zkevm_circuits::eip_4844::input::EIP4844OutputDataWitness;
 use crate::zkevm_circuits::eip_4844::input::ELEMENTS_PER_4844_BLOCK;
 use crate::zkevm_circuits::scheduler::block_header::MAX_4844_BLOBS_PER_BLOCK;
-use circuit_definitions::franklin_crypto::bellman::Field;
-use circuit_definitions::franklin_crypto::bellman::PrimeField;
+use snark_wrapper::franklin_crypto::bellman::Field;
+use snark_wrapper::franklin_crypto::bellman::PrimeField;
 
 pub fn generate_eip4844_witness<F: SmallField>(
     blob: Vec<u8>,
