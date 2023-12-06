@@ -1,5 +1,11 @@
 use crate::helper::artifact_utils::TestArtifact;
 use crate::helper::serialize_utils::{deserialize_bytecode, deserialize_bytecodes_with_addresses};
+use compiler_solidity::SolcCompiler as Compiler;
+use compiler_solidity::SolcPipeline as Pipeline;
+use compiler_solidity::SolcStandardJsonInput as Input;
+use compiler_solidity::SolcStandardJsonInputLanguage as Language;
+use compiler_solidity::SolcStandardJsonInputSettings as Settings;
+use compiler_solidity::SolcStandardJsonInputSettingsOptimizer as Optimizer;
 use compiler_solidity::SolcStandardJsonInputSource as Source;
 use std::{
     collections::BTreeMap,
@@ -73,22 +79,22 @@ fn get_latest_commit_hash() -> String {
 fn compile_latest_test_contract() -> Result<String, ArtifactError> {
     let binary_name = get_solc_binary_name()?;
     download_solc_binary(&binary_name)?;
-    let mut solc = compiler_solidity::SolcCompiler::new(binary_name.clone());
+    let mut solc = Compiler::new(binary_name.clone());
 
     download_contracts()?;
     let sources = construct_sources_map();
 
     let output = solc
         .standard_json(
-            compiler_solidity::SolcStandardJsonInput {
-                language: compiler_solidity::SolcStandardJsonInputLanguage::Solidity,
+            Input {
+                language: Language::Solidity,
                 sources,
-                settings: compiler_solidity::SolcStandardJsonInputSettings {
+                settings: Settings {
                     libraries: None,
                     remappings: None,
                     output_selection: None,
                     via_ir: None,
-                    optimizer: compiler_solidity::SolcStandardJsonInputSettingsOptimizer {
+                    optimizer: Optimizer {
                         enabled: true,
                         mode: Some(200 as char),
                         details: Default::default(),
@@ -97,7 +103,7 @@ fn compile_latest_test_contract() -> Result<String, ArtifactError> {
                 },
                 suppressed_warnings: None,
             },
-            compiler_solidity::SolcPipeline::Yul,
+            Pipeline::Yul,
             None,
             vec![],
             None,
@@ -117,7 +123,7 @@ fn download_contracts() -> Result<(), ArtifactError> {
 }
 
 fn delete_contracts_folder() -> Result<(), ArtifactError> {
-    Err(ArtifactError::ContractsDeletionFailed)
+    fs::remove_dir_all("contracts").map_err(|_| ArtifactError::ContractsDeletionFailed)
 }
 
 fn download_solc_binary(binary_name: &str) -> Result<(), ArtifactError> {
