@@ -10,6 +10,8 @@ const VERSION: &str = "v1.4.1";
 const BASIC_TEST_JSON_LOCATION: &str = "test_artifacts/basic_test.json";
 const BASIC_TEST_COMMIT_HASH_LOCATION: &str = "test_artifacts/basic_test_commit_hash";
 
+const SOLC_VERSION: &str = "0.8.8"; // as used in test-contract
+
 pub fn read_basic_test_artifact() -> TestArtifact {
     let no_hash = !Path::new(BASIC_TEST_COMMIT_HASH_LOCATION).exists();
     if no_hash {
@@ -55,7 +57,10 @@ fn get_latest_commit_hash(version: &str) -> String {
     body[8..47].to_owned()
 }
 
-// TODO
 fn compile_latest_test_contract(url: &str) -> String {
+    // TODO download solc with version and architecture
+    let mut solc = era_compiler_solidity::solc::Compiler::new();
+    solc.standard_json(false, false, true, , , , None).expect("should be able to compile contracts");
+    // should return bytecode here
     return "".to_owned();
 }

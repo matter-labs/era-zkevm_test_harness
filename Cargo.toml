@@ -29,6 +29,8 @@ rescue_poseidon = {git = "https://github.com/matter-labs/rescue-poseidon.git", b
 
 zkevm-assembly = {git = "https://github.com/matter-labs/era-zkEVM-assembly.git", branch = "v1.4.1"}
 
+era-compiler-solidity = { git = "https://github.com/matter-labs/era-compiler-solidity" }
+
 rand = "0.4"
 rayon = "*"
 derivative = "*"
@@ -44,7 +46,7 @@ smallvec = "*"
 structopt = "0.3.26"
 codegen = "0.2.0"
 lazy_static = "1.4"
-reqwest = { version = "0.11", features = ["blocking", "json"] }
+reqwest = { version = "0.11", features = ["blocking"] }
 
 [dev-dependencies]
 rand = "0.4"
