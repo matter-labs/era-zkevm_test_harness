@@ -14,15 +14,21 @@ use std::{
 };
 
 const TEST_CONTRACT_REPO: &str = "https://github.com/matter-labs/test-contract";
-const VERSION: &str = "v1.4.1";
+const BRANCH: &str = "v1.4.1";
 const BASIC_TEST_JSON_LOCATION: &str = "test_artifacts/basic_test.json";
 const BASIC_TEST_COMMIT_HASH_LOCATION: &str = "test_artifacts/basic_test_commit_hash";
 
 const SOLC_VERSION: &str = "v0.8.8"; // as used in test-contract
+const FILE_NAMES: [&str; 4] = [
+    "HeapLibrary.sol",
+    "Helper.sol",
+    "Main.sol",
+    "ReentrancyGuard.sol",
+];
 
 #[derive(Debug)]
 enum ArtifactError {
-    ContractDownloadFailed,
+    ContractDownloadFailed(String),
     SolcDownloadFailed(String),
     ContractsDeletionFailed,
     SolcDeletionFailed,
@@ -47,6 +53,8 @@ pub fn read_basic_test_artifact() -> TestArtifact {
         let contract_json =
             compile_latest_test_contract().expect("should be able to compile contract");
 
+        // TODO: we need to also fetch precompiles and correctly put everything together in the
+        // JSON, raw contract data won't do
         fs::write(BASIC_TEST_JSON_LOCATION, contract_json)
             .expect("should be able to write contract json");
         fs::write(BASIC_TEST_COMMIT_HASH_LOCATION, latest_hash)
@@ -65,7 +73,7 @@ fn get_latest_commit_hash() -> String {
         .build()
         .expect("should be able to build client");
     let body = client
-        .get("https://api.github.com/repos/matter-labs/test-contract/commits/".to_owned() + VERSION)
+        .get("https://api.github.com/repos/matter-labs/test-contract/commits/".to_owned() + BRANCH)
         .send()
         .expect("should be able to fetch commit hash")
         .text()
@@ -118,8 +126,18 @@ fn compile_latest_test_contract() -> Result<String, ArtifactError> {
 }
 
 fn download_contracts() -> Result<(), ArtifactError> {
-    let url = TEST_CONTRACT_REPO.to_owned() + "/blob/" + VERSION + "/contracts";
-    Err(ArtifactError::ContractDownloadFailed)
+    fs::create_dir("contracts")
+        .map_err(|e| ArtifactError::ContractDownloadFailed(e.to_string()))?;
+
+    for file_name in FILE_NAMES {
+        let url = "https://raw.githubusercontent.com/matter-labs/test-contract/".to_owned()
+            + BRANCH
+            + "/contracts/basic_test/"
+            + file_name;
+        download_to_disk(&url, &("contracts/".to_owned() + file_name))?;
+    }
+
+    Ok(())
 }
 
 fn delete_contracts_folder() -> Result<(), ArtifactError> {
@@ -127,22 +145,39 @@ fn delete_contracts_folder() -> Result<(), ArtifactError> {
 }
 
 fn download_solc_binary(binary_name: &str) -> Result<(), ArtifactError> {
-    use curl::easy::Easy;
     let url = "https://github.com/yarnpkg/yarn/releases/download/".to_owned()
         + SOLC_VERSION
         + "/"
         + binary_name;
-    let mut easy = Easy::new();
-    easy.url(&url)
-        .map_err(|e| ArtifactError::SolcDownloadFailed(e.to_string()))?;
-    easy.write_function(|data| Ok(0))
-        .map_err(|e| ArtifactError::SolcDownloadFailed(e.to_string()))?;
-    easy.perform()
-        .map_err(|e| ArtifactError::SolcDownloadFailed(e.to_string()))
+    download_to_disk(&url, binary_name)
 }
 
 fn delete_solc_binary(binary_name: &str) -> Result<(), ArtifactError> {
     fs::remove_file(binary_name).map_err(|_| ArtifactError::SolcDeletionFailed)
+}
+
+fn download_to_disk(url: &str, write_location: &str) -> Result<(), ArtifactError> {
+    use curl::easy::Easy;
+
+    let mut file_data = vec![];
+    let mut easy = Easy::new();
+    easy.url(&url)
+        .map_err(|e| ArtifactError::SolcDownloadFailed(e.to_string()))?;
+    {
+        let mut transfer = easy.transfer();
+        transfer
+            .write_function(|data| {
+                file_data.extend_from_slice(data);
+                Ok(data.len())
+            })
+            .map_err(|e| ArtifactError::SolcDownloadFailed(e.to_string()))?;
+        transfer
+            .perform()
+            .map_err(|e| ArtifactError::SolcDownloadFailed(e.to_string()))?;
+    }
+
+    fs::write(write_location, file_data)
+        .map_err(|e| ArtifactError::SolcDownloadFailed(e.to_string()))
 }
 
 fn get_solc_binary_name() -> Result<String, ArtifactError> {
@@ -161,26 +196,13 @@ fn get_solc_binary_name() -> Result<String, ArtifactError> {
 
 fn construct_sources_map() -> BTreeMap<String, Source> {
     let mut sources = BTreeMap::new();
-    sources.insert(
-        "contracts/HeapLibrary.sol".to_owned(),
-        Source::try_from(Path::new("./contracts/HeapLibrary.sol"))
-            .expect("should be able to grab source from contract"),
-    );
-    sources.insert(
-        "contracts/Helper.sol".to_owned(),
-        Source::try_from(Path::new("contracts/Helper.sol"))
-            .expect("should be able to grab source from contract"),
-    );
-    sources.insert(
-        "contracts/Main.sol".to_owned(),
-        Source::try_from(Path::new("contracts/Main.sol"))
-            .expect("should be able to grab source from contract"),
-    );
-    sources.insert(
-        "contracts/ReentrancyGuard.sol".to_owned(),
-        Source::try_from(Path::new("contracts/ReentrancyGuard.sol"))
-            .expect("should be able to grab source from contract"),
-    );
+    for file_name in FILE_NAMES {
+        sources.insert(
+            "contracts/".to_owned() + file_name,
+            Source::try_from(Path::new(&("./contracts/".to_owned() + file_name)))
+                .expect("should be able to grab source from contract"),
+        );
+    }
 
     sources
 }
