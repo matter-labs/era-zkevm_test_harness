@@ -18,12 +18,12 @@ const VERSION: &str = "v1.4.1";
 const BASIC_TEST_JSON_LOCATION: &str = "test_artifacts/basic_test.json";
 const BASIC_TEST_COMMIT_HASH_LOCATION: &str = "test_artifacts/basic_test_commit_hash";
 
-const SOLC_VERSION: &str = "0.8.8"; // as used in test-contract
+const SOLC_VERSION: &str = "v0.8.8"; // as used in test-contract
 
 #[derive(Debug)]
 enum ArtifactError {
     ContractDownloadFailed,
-    SolcDownloadFailed,
+    SolcDownloadFailed(String),
     ContractsDeletionFailed,
     SolcDeletionFailed,
     UnsupportedArch,
@@ -127,7 +127,18 @@ fn delete_contracts_folder() -> Result<(), ArtifactError> {
 }
 
 fn download_solc_binary(binary_name: &str) -> Result<(), ArtifactError> {
-    Err(ArtifactError::SolcDownloadFailed)
+    use curl::easy::Easy;
+    let url = "https://github.com/yarnpkg/yarn/releases/download/".to_owned()
+        + SOLC_VERSION
+        + "/"
+        + binary_name;
+    let mut easy = Easy::new();
+    easy.url(&url)
+        .map_err(|e| ArtifactError::SolcDownloadFailed(e.to_string()))?;
+    easy.write_function(|data| Ok(0))
+        .map_err(|e| ArtifactError::SolcDownloadFailed(e.to_string()))?;
+    easy.perform()
+        .map_err(|e| ArtifactError::SolcDownloadFailed(e.to_string()))
 }
 
 fn delete_solc_binary(binary_name: &str) -> Result<(), ArtifactError> {

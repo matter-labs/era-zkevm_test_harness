@@ -47,6 +47,7 @@ structopt = "0.3.26"
 codegen = "0.2.0"
 lazy_static = "1.4"
 reqwest = { version = "0.11", features = ["blocking"] }
+curl = "0.4"
 
 [dev-dependencies]
 rand = "0.4"
