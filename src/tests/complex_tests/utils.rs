@@ -1,6 +1,8 @@
 use crate::helper::artifact_utils::TestArtifact;
 use crate::helper::serialize_utils::{deserialize_bytecode, deserialize_bytecodes_with_addresses};
+use compiler_solidity::SolcStandardJsonInputSource as Source;
 use std::{
+    collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
 };
@@ -12,26 +14,37 @@ const BASIC_TEST_COMMIT_HASH_LOCATION: &str = "test_artifacts/basic_test_commit_
 
 const SOLC_VERSION: &str = "0.8.8"; // as used in test-contract
 
+#[derive(Debug)]
+enum ArtifactError {
+    ContractDownloadFailed,
+    SolcDownloadFailed,
+    ContractsDeletionFailed,
+    SolcDeletionFailed,
+    UnsupportedArch,
+    UnsupportedOS,
+}
+
 pub fn read_basic_test_artifact() -> TestArtifact {
     let no_hash = !Path::new(BASIC_TEST_COMMIT_HASH_LOCATION).exists();
-    if no_hash {
-        let hash = get_latest_commit_hash(VERSION);
-        fs::write(BASIC_TEST_COMMIT_HASH_LOCATION, hash)
-            .expect("should be able to write commit hash");
-    }
+    let latest_hash = get_latest_commit_hash();
+    let hash = if no_hash {
+        latest_hash.clone()
+    } else {
+        let bytes =
+            fs::read(BASIC_TEST_COMMIT_HASH_LOCATION).expect("should be able to read commit hash");
+        std::str::from_utf8(&bytes)
+            .expect("commit hash should be utf8-encoded")
+            .to_owned()
+    };
 
-    let commit_hash_bytes =
-        fs::read(BASIC_TEST_COMMIT_HASH_LOCATION).expect("should be able to read commit hash");
-    let commit_hash =
-        std::str::from_utf8(&commit_hash_bytes).expect("commit hash should be utf8 encoded string");
-    if !Path::new(BASIC_TEST_JSON_LOCATION).exists()
-        || get_latest_commit_hash(VERSION) != commit_hash
-        || no_hash
-    {
-        let url = TEST_CONTRACT_REPO.to_owned() + "/blob/" + VERSION + "/contracts";
-        let contract_json = compile_latest_test_contract(&url);
+    if !Path::new(BASIC_TEST_JSON_LOCATION).exists() || latest_hash != hash || no_hash {
+        let contract_json =
+            compile_latest_test_contract().expect("should be able to compile contract");
+
         fs::write(BASIC_TEST_JSON_LOCATION, contract_json)
             .expect("should be able to write contract json");
+        fs::write(BASIC_TEST_COMMIT_HASH_LOCATION, latest_hash)
+            .expect("should be able to write new commit hash");
     }
 
     let basic_test_bytes = fs::read(BASIC_TEST_JSON_LOCATION).expect("failed reading file");
@@ -40,7 +53,7 @@ pub fn read_basic_test_artifact() -> TestArtifact {
     serde_json::from_str(text).unwrap()
 }
 
-fn get_latest_commit_hash(version: &str) -> String {
+fn get_latest_commit_hash() -> String {
     let client = reqwest::blocking::Client::builder()
         .user_agent("a")
         .build()
@@ -57,10 +70,100 @@ fn get_latest_commit_hash(version: &str) -> String {
     body[8..47].to_owned()
 }
 
-fn compile_latest_test_contract(url: &str) -> String {
-    // TODO download solc with version and architecture
-    let mut solc = era_compiler_solidity::solc::Compiler::new();
-    solc.standard_json(false, false, true, , , , None).expect("should be able to compile contracts");
+fn compile_latest_test_contract() -> Result<String, ArtifactError> {
+    let binary_name = get_solc_binary_name()?;
+    download_solc_binary(&binary_name)?;
+    let mut solc = compiler_solidity::SolcCompiler::new(binary_name.clone());
+
+    download_contracts()?;
+    let sources = construct_sources_map();
+
+    let output = solc
+        .standard_json(
+            compiler_solidity::SolcStandardJsonInput {
+                language: compiler_solidity::SolcStandardJsonInputLanguage::Solidity,
+                sources,
+                settings: compiler_solidity::SolcStandardJsonInputSettings {
+                    libraries: None,
+                    remappings: None,
+                    output_selection: None,
+                    via_ir: None,
+                    optimizer: compiler_solidity::SolcStandardJsonInputSettingsOptimizer {
+                        enabled: true,
+                        mode: Some(200 as char),
+                        details: Default::default(),
+                    },
+                    metadata: None,
+                },
+                suppressed_warnings: None,
+            },
+            compiler_solidity::SolcPipeline::Yul,
+            None,
+            vec![],
+            None,
+        )
+        .expect("should be able to compile contracts");
+    println!("{:?}", output);
+    delete_solc_binary(&binary_name)?;
+    delete_contracts_folder()?;
+    panic!("DEAD");
     // should return bytecode here
-    return "".to_owned();
+    Ok("".to_owned())
+}
+
+fn download_contracts() -> Result<(), ArtifactError> {
+    let url = TEST_CONTRACT_REPO.to_owned() + "/blob/" + VERSION + "/contracts";
+    Err(ArtifactError::ContractDownloadFailed)
+}
+
+fn delete_contracts_folder() -> Result<(), ArtifactError> {
+    Err(ArtifactError::ContractsDeletionFailed)
+}
+
+fn download_solc_binary(binary_name: &str) -> Result<(), ArtifactError> {
+    Err(ArtifactError::SolcDownloadFailed)
+}
+
+fn delete_solc_binary(binary_name: &str) -> Result<(), ArtifactError> {
+    fs::remove_file(binary_name).map_err(|_| ArtifactError::SolcDeletionFailed)
+}
+
+fn get_solc_binary_name() -> Result<String, ArtifactError> {
+    // as far as i know, no arm pre-compiles for solc
+    if std::env::consts::ARCH != "x86_64" {
+        return Err(ArtifactError::UnsupportedArch);
+    }
+
+    match std::env::consts::OS {
+        "linux" => Ok("solc-static-linux".to_owned()),
+        "macos" => Ok("solc-macos".to_owned()),
+        "windows" => Ok("solc-windows.exe".to_owned()),
+        _ => Err(ArtifactError::UnsupportedOS),
+    }
+}
+
+fn construct_sources_map() -> BTreeMap<String, Source> {
+    let mut sources = BTreeMap::new();
+    sources.insert(
+        "contracts/HeapLibrary.sol".to_owned(),
+        Source::try_from(Path::new("./contracts/HeapLibrary.sol"))
+            .expect("should be able to grab source from contract"),
+    );
+    sources.insert(
+        "contracts/Helper.sol".to_owned(),
+        Source::try_from(Path::new("contracts/Helper.sol"))
+            .expect("should be able to grab source from contract"),
+    );
+    sources.insert(
+        "contracts/Main.sol".to_owned(),
+        Source::try_from(Path::new("contracts/Main.sol"))
+            .expect("should be able to grab source from contract"),
+    );
+    sources.insert(
+        "contracts/ReentrancyGuard.sol".to_owned(),
+        Source::try_from(Path::new("contracts/ReentrancyGuard.sol"))
+            .expect("should be able to grab source from contract"),
+    );
+
+    sources
 }
