@@ -37,6 +37,7 @@ env_logger = "*"
 smallvec = "*"
 structopt = "0.3.26"
 codegen = "0.2.0"
+datasize = "0.2"
 
 [profile.release]
 debug = false

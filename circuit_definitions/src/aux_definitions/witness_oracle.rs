@@ -2,6 +2,7 @@ use crate::boojum::field::SmallField;
 use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 use crate::encodings::callstack_entry::*;
 use crate::ethereum_types::U256;
+use datasize::DataSize;
 use derivative::*;
 use std::collections::VecDeque;
 use zk_evm::aux_structures::DecommittmentQuery;
@@ -19,6 +20,14 @@ pub fn u128_as_u32_le(value: u128) -> [u32; 4] {
     ]
 }
 
+fn data_size_of_vecdeque<T>(q: &VecDeque<T>) -> usize {
+    q.len() * std::mem::size_of::<T>()
+}
+
+fn data_size_of_option_vecdeque<T>(q: &Option<VecDeque<T>>) -> usize {
+    q.as_ref().map(|x| x.len()).unwrap_or_default() * std::mem::size_of::<T>()
+}
+
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Default(bound = ""), Clone(bound = ""))]
 #[serde(bound = "")]
@@ -33,6 +42,23 @@ pub struct VmWitnessOracle<F: SmallField> {
     pub callstack_new_frames_witnesses: VecDeque<(u32, CallStackEntry)>,
     pub callstack_values_witnesses:
         VecDeque<(u32, (ExtendedCallstackEntry<F>, CallstackSimulatorState<F>))>,
+}
+
+impl<F: SmallField> DataSize for VmWitnessOracle<F> {
+    const IS_DYNAMIC: bool = true;
+
+    const STATIC_HEAP_SIZE: usize = 0;
+
+    fn estimate_heap_size(&self) -> usize {
+        data_size_of_vecdeque(&self.memory_read_witness)
+            + data_size_of_option_vecdeque(&self.memory_write_witness)
+            + data_size_of_vecdeque(&self.decommittment_requests_witness)
+            + data_size_of_vecdeque(&self.rollback_queue_initial_tails_for_new_frames)
+            + data_size_of_vecdeque(&self.storage_queries)
+            + data_size_of_vecdeque(&self.storage_refund_queries)
+            + data_size_of_vecdeque(&self.callstack_new_frames_witnesses)
+            + data_size_of_vecdeque(&self.callstack_values_witnesses)
+    }
 }
 
 use zkevm_circuits::base_structures::decommit_query::DecommitQueryWitness;

@@ -28,6 +28,7 @@ use crate::zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use circuit_definitions::encodings::callstack_entry::ExtendedCallstackEntry;
 use circuit_definitions::encodings::LogQueueSimulator;
+use datasize::DataSize;
 use derivative::Derivative;
 use rayon::slice::ParallelSliceMut;
 use smallvec::SmallVec;
@@ -82,7 +83,10 @@ pub struct StorageLogDetailedState<F: SmallField> {
 
 #[derive(Derivative)]
 #[derivative(Clone(bound = ""), Debug)]
-pub struct VmInCircuitAuxilaryParameters<F: SmallField> {
+pub struct VmInCircuitAuxilaryParameters<F>
+where
+    F: SmallField,
+{
     pub callstack_state: ([F; FULL_SPONGE_QUEUE_STATE_WIDTH], CallStackEntry),
     pub decommittment_queue_state: QueueStateWitness<F, FULL_SPONGE_QUEUE_STATE_WIDTH>,
     pub memory_queue_state: QueueStateWitness<F, FULL_SPONGE_QUEUE_STATE_WIDTH>,
@@ -109,19 +113,36 @@ impl<F: SmallField> std::default::Default for VmInCircuitAuxilaryParameters<F> {
     }
 }
 
-#[derive(Derivative)]
+fn estimate_local_state_size(vm: &VmLocalState) -> usize {
+    std::mem::size_of::<VmLocalState>()
+        + std::mem::size_of::<CallStackEntry>() * (vm.callstack.depth() + 1)
+}
+
+fn size_of_pointerless_struct<T>(_: T) -> usize {
+    std::mem::size_of::<T>()
+}
+
+#[derive(Derivative, DataSize)]
 #[derivative(Debug, Clone)]
-pub struct VmInstanceWitness<F: SmallField, O: WitnessOracle<F>> {
+pub struct VmInstanceWitness<F, O>
+where
+    F: SmallField,
+    O: WitnessOracle<F>,
+{
     // we need everything to start a circuit from this point of time
 
     // initial state - just copy the local state in full
+    #[data_size(with = estimate_local_state_size)]
     pub initial_state: VmLocalState,
     pub witness_oracle: O,
+    #[data_size(with = size_of_pointerless_struct)]
     pub auxilary_initial_parameters: VmInCircuitAuxilaryParameters<F>,
     pub cycles_range: std::ops::Range<u32>,
 
     // final state for test purposes
+    #[data_size(with = estimate_local_state_size)]
     pub final_state: VmLocalState,
+    #[data_size(with = size_of_pointerless_struct)]
     pub auxilary_final_parameters: VmInCircuitAuxilaryParameters<F>,
 }
 
@@ -1234,6 +1255,11 @@ pub fn create_artifacts_from_tracer<
             assert_eq!(o, i);
         }
     }
+
+    println!(
+        "VM witnessses memory consumption: {:?}",
+        datasize::data_size(&all_instances_witnesses)
+    );
 
     (all_instances_witnesses, artifacts)
 }
