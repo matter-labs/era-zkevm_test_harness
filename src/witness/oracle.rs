@@ -204,7 +204,6 @@ pub fn create_artifacts_from_tracer<
     Vec<VmInstanceWitness<F, VmWitnessOracle<F>>>,
     FullBlockArtifacts<F>,
 ) {
-    panic!();
     let WitnessTracer {
         memory_queries,
         storage_queries,
@@ -1260,6 +1259,19 @@ pub fn create_artifacts_from_tracer<
     println!(
         "VM witnessses memory consumption: {:?}",
         datasize::data_size(&all_instances_witnesses)
+    );
+
+    dbg!(
+        artifacts.vm_memory_queries_accumulated.len(),
+        artifacts.vm_memory_queue_states.len(),
+        artifacts.all_memory_queries_accumulated.len(),
+        artifacts.sorted_memory_queries_accumulated.len(),
+        artifacts.all_memory_queue_states.len(),
+        artifacts.sorted_memory_queue_states.len(),
+    );
+    dbg!(
+        std::mem::size_of::<circuit_definitions::encodings::memory_query::MemoryQueueState<F>>(),
+        std::mem::size_of::<MemoryQuery>(),
     );
 
     (all_instances_witnesses, artifacts)
