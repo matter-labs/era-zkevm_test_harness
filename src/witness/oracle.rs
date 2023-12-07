@@ -204,6 +204,7 @@ pub fn create_artifacts_from_tracer<
     Vec<VmInstanceWitness<F, VmWitnessOracle<F>>>,
     FullBlockArtifacts<F>,
 ) {
+    panic!();
     let WitnessTracer {
         memory_queries,
         storage_queries,
