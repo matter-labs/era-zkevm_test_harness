@@ -215,9 +215,17 @@ pub fn keccak256_decompose_into_per_circuit_witness<
         use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::NUM_WORDS_PER_QUERY;
         let mut words_buffer = [0u8; NUM_WORDS_PER_QUERY * MEMORY_READS_PER_CYCLE * 8];
 
+        use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::KECCAK_RATE_BYTES;
         use crate::zk_evm::zk_evm_abstractions::precompiles::precompile_abi_in_log;
         let mut precompile_request = precompile_abi_in_log(request);
-        let num_rounds = precompile_request.precompile_interpreted_data as usize;
+        let num_rounds = {
+            let mut num_rounds =
+                (precompile_request.input_memory_length as usize) / KECCAK_RATE_BYTES;
+            if (precompile_request.input_memory_length as usize) % KECCAK_RATE_BYTES > 0 {
+                num_rounds += 1;
+            }
+            num_rounds
+        };
         assert_eq!(num_rounds, round_witness.len());
 
         let mut num_rounds_left = num_rounds;
@@ -266,7 +274,7 @@ pub fn keccak256_decompose_into_per_circuit_witness<
             }
 
             let words: Vec<u64> = input_buffer
-                .consume::<KECCAK_PRECOMPILE_BUFFER_SIZE>()
+                .consume::<KECCAK_RATE_BYTES>()
                 .chunks(8)
                 .map(|chunk| u64::from_le_bytes(chunk.try_into().unwrap()))
                 .collect();
