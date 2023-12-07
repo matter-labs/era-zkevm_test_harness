@@ -1274,6 +1274,11 @@ pub fn create_artifacts_from_tracer<
         std::mem::size_of::<MemoryQuery>(),
     );
 
+    dbg!(
+        artifacts.memory_queue_simulator.witness.len(),
+        std::mem::size_of::<([F; 8], [F; 12], MemoryQuery)>()
+    );
+
     (all_instances_witnesses, artifacts)
 }
 
