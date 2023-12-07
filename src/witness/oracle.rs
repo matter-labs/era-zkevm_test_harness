@@ -1279,6 +1279,18 @@ pub fn create_artifacts_from_tracer<
         std::mem::size_of::<([F; 8], [F; 12], MemoryQuery)>()
     );
 
+    let el_size = std::mem::size_of::<(
+        <circuit_definitions::zkevm_circuits::base_structures::memory_query::MemoryQuery<F> as circuit_definitions::boojum::gadgets::traits::allocatable::CSAllocatable<F>>::Witness,
+        [F; 12],
+    )>();
+    let mut ram_perm_bytes = 0;
+    for x in &artifacts.ram_permutation_circuits_data {
+        ram_perm_bytes += x.unsorted_queue_witness.elements.len() * el_size
+            + x.sorted_queue_witness.elements.len() * el_size
+            + std::mem::size_of::<circuit_definitions::zkevm_circuits::ram_permutation::input::RamPermutationCircuitInstanceWitness<F>>();
+    }
+    dbg!(ram_perm_bytes);
+
     (all_instances_witnesses, artifacts)
 }
 
