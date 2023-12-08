@@ -20,7 +20,6 @@ const BRANCH: &str = "v1.4.1";
 const BASIC_TEST_JSON_LOCATION: &str = "src/tests/complex_tests/test_artifacts/basic_test.json";
 const BASIC_TEST_COMMIT_HASH_LOCATION: &str =
     "src/tests/complex_tests/test_artifacts/basic_test_commit_hash";
-
 const SOLC_VERSION: &str = "v0.8.17";
 const ZKSOLC_VERSION: &str = "v1.3.18";
 const FILE_NAMES: [&str; 4] = [
@@ -57,19 +56,24 @@ pub fn read_basic_test_artifact() -> TestArtifact {
         let zksolc_binary_name =
             get_zksolc_binary_name().expect("should be able to figure out a zksolc binary");
 
-        match compile_latest_test_contract(&solc_binary_name, &zksolc_binary_name) {
-            Ok(contract_json) => {
+        // delay checking result so that we clean up in all cases
+        let result = compile_latest_test_contract(&solc_binary_name, &zksolc_binary_name);
+        delete_binary(&solc_binary_name);
+        delete_binary(&zksolc_binary_name);
+        delete_contracts_folder();
+        match result {
+            Ok(bytecode) => {
+                println!("{:?}", bytecode);
+                panic!();
+
                 // TODO: we need to also fetch precompiles and correctly put everything together in the
                 // JSON, raw contract data won't do
-                fs::write(BASIC_TEST_JSON_LOCATION, contract_json)
+                fs::write(BASIC_TEST_JSON_LOCATION, bytecode)
                     .expect("should be able to write contract json");
                 fs::write(BASIC_TEST_COMMIT_HASH_LOCATION, latest_hash)
                     .expect("should be able to write new commit hash");
             }
             Err(e) => {
-                delete_binary(&solc_binary_name);
-                delete_binary(&zksolc_binary_name);
-                delete_contracts_folder();
                 panic!("{:?}", e);
             }
         }
@@ -83,7 +87,7 @@ pub fn read_basic_test_artifact() -> TestArtifact {
 
 fn get_latest_commit_hash() -> String {
     let client = reqwest::blocking::Client::builder()
-        .user_agent("a")
+        .user_agent("a") // this call needs a user agent but it doesn't matter what it is really
         .build()
         .expect("should be able to build client");
     let body = client
@@ -98,56 +102,57 @@ fn get_latest_commit_hash() -> String {
     body[8..47].to_owned()
 }
 
-fn download_compiler_binary(binary_name: &str) -> Result<PathBuf, ArtifactError> {
-    download_zksolc_binary(binary_name)?;
+fn set_binary_perms(binary_name: &str) -> Result<PathBuf, ArtifactError> {
     let mut full_path =
         std::env::current_dir().map_err(|e| ArtifactError::DownloadFailed(e.to_string()))?;
     full_path.push(binary_name);
     match std::env::consts::OS {
         "linux" | "macos" => {
             fs::set_permissions(full_path.clone(), fs::Permissions::from_mode(0o777))
-                .map_err(|e| ArtifactError::DownloadFailed(e.to_string()))?
+                .map_err(|e| ArtifactError::DownloadFailed(e.to_string()))?;
         }
         // XXX windows?
         _ => {}
     }
 
-    full_path
+    Ok(full_path)
 }
 
 fn compile_latest_test_contract(
     solc_binary_name: &str,
     zksolc_binary_name: &str,
 ) -> Result<Vec<u8>, ArtifactError> {
-    let _ = download_compiler_binary(zksolc_binary_name)?;
-    let solc_compiler_path = download_compiler_binary(solc_binary_name)?;
+    download_solc_binary(solc_binary_name)?;
+    let solc_compiler_path = set_binary_perms(solc_binary_name)?;
     let mut solc = Compiler::new(
         solc_compiler_path
             .to_str()
-            .map_err(|e| ArtifactError::CompilationFailed(e.to_string()))?
+            .ok_or(ArtifactError::CompilationFailed(
+                "could not convert solc compiler path to string".to_owned(),
+            ))?
             .to_owned(),
     );
-
     download_contracts()?;
 
-    let file_names = FILE_NAMES
-        .iter()
-        .map(|name| {
-            let mut path = std::env::current_dir()
-                .map_err(|e| ArtifactError::CompilationFailed(e.to_string()))?;
-            path.push("contracts");
-            path.push(name);
-            path
-        })
-        .collect::<Vec<PathBuf>>();
-
     // set zksolc as executable for compiler
-    let mut path =
-        std::env::current_dir().map_err(|e| ArtifactError::CompilationFailed(e.to_string()))?;
-    path.push(zksolc_binary_name);
+    download_zksolc_binary(zksolc_binary_name)?;
+    let zksolc_compiler_path = set_binary_perms(zksolc_binary_name)?;
     compiler_solidity::EXECUTABLE
-        .set(path)
-        .map_err(|e| ArtifactError::CompilationFailed(e.to_string()))?;
+        .set(zksolc_compiler_path)
+        .map_err(|_| {
+            ArtifactError::CompilationFailed("couldn't set zksolc as executable".to_owned())
+        })?;
+
+    // create full filepaths for all contracts
+    // NOTE: the constant should be updated if we add more contracts
+    let mut file_names = vec![];
+    for name in FILE_NAMES {
+        let mut path =
+            std::env::current_dir().map_err(|e| ArtifactError::CompilationFailed(e.to_string()))?;
+        path.push("contracts");
+        path.push(name);
+        file_names.push(path);
+    }
 
     Ok(compiler_solidity::standard_output(
         &file_names,
@@ -166,7 +171,16 @@ fn compile_latest_test_contract(
         None,
     )
     .map_err(|e| ArtifactError::CompilationFailed(e.to_string()))?
-    .bytecode)
+    .contracts[&(file_names[3]
+        .to_str()
+        .ok_or(ArtifactError::CompilationFailed(
+            "could not convert main contract path to string".to_owned(),
+        ))?
+        .to_owned()
+        + ":Main")]
+        .build
+        .bytecode
+        .clone())
 }
 
 fn download_contracts() -> Result<(), ArtifactError> {
