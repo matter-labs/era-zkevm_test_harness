@@ -70,7 +70,7 @@ pub fn read_basic_test_artifact() -> TestArtifact {
         match result {
             Ok(bytecode) => {
                 let artifact = create_artifact(bytecode);
-                let artifact_string = serde_json::to_string_pretty(&artifact)
+                let artifact_string = serde_json::to_string(&artifact)
                     .expect("should be able to stringify test artifact");
                 fs::write(BASIC_TEST_JSON_LOCATION, artifact_string)
                     .expect("should be able to write contract json");
