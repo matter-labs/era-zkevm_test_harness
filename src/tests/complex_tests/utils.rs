@@ -90,37 +90,25 @@ pub fn read_basic_test_artifact() -> TestArtifact {
 }
 
 fn create_artifact(bytecode: Vec<u8>) -> TestArtifact {
-    let entry_point_code = bytecode
-        .chunks(32)
-        .map(|chunk| {
-            let mut arr = [0u8; 32];
-            arr[..chunk.len()].copy_from_slice(chunk);
-            arr
-        })
-        .collect();
-    let default_account_code = hex::decode(DEFAULT_ACCOUNT_CODE[2..].to_owned())
-        .unwrap()
-        .chunks(32)
-        .map(|chunk| {
-            let mut arr = [0u8; 32];
-            arr[..chunk.len()].copy_from_slice(chunk);
-            arr
-        })
-        .collect();
+    let segment_byte_vector = |bytes: Vec<u8>| -> Vec<[u8; 32]> {
+        bytes
+            .chunks(32)
+            .map(|chunk| {
+                let mut arr = [0u8; 32];
+                arr[..chunk.len()].copy_from_slice(chunk);
+                arr
+            })
+            .collect()
+    };
 
+    let entry_point_code = segment_byte_vector(bytecode);
+    let default_account_code =
+        segment_byte_vector(hex::decode(DEFAULT_ACCOUNT_CODE[2..].to_owned()).unwrap());
     let predeployed = PREDEPLOYED_CONTRACTS
         .iter()
         .map(|(address, code)| {
             let address = Address::from_str(address).unwrap();
-            let code = hex::decode(code[2..].to_owned())
-                .unwrap()
-                .chunks(32)
-                .map(|chunk| {
-                    let mut arr = [0u8; 32];
-                    arr[..chunk.len()].copy_from_slice(chunk);
-                    arr
-                })
-                .collect();
+            let code = segment_byte_vector(hex::decode(code[2..].to_owned()).unwrap());
             (address, code)
         })
         .collect::<Vec<(Address, Vec<[u8; 32]>)>>();
