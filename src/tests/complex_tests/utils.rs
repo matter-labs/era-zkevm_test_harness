@@ -10,28 +10,29 @@ use compiler_solidity::SolcStandardJsonInputSource as Source;
 use std::{
     collections::BTreeMap,
     fs,
+    io::Write,
+    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
 };
 
 const TEST_CONTRACT_REPO: &str = "https://github.com/matter-labs/test-contract";
 const BRANCH: &str = "v1.4.1";
-const BASIC_TEST_JSON_LOCATION: &str = "test_artifacts/basic_test.json";
-const BASIC_TEST_COMMIT_HASH_LOCATION: &str = "test_artifacts/basic_test_commit_hash";
+const BASIC_TEST_JSON_LOCATION: &str = "src/tests/complex_tests/test_artifacts/basic_test.json";
+const BASIC_TEST_COMMIT_HASH_LOCATION: &str =
+    "src/tests/complex_tests/test_artifacts/basic_test_commit_hash";
 
-const SOLC_VERSION: &str = "v0.8.8"; // as used in test-contract
+const SOLC_VERSION: &str = "v0.8.17";
 const FILE_NAMES: [&str; 4] = [
-    "HeapLibrary.sol",
-    "Helper.sol",
-    "Main.sol",
     "ReentrancyGuard.sol",
+    "Helper.sol",
+    "HeapLibrary.sol",
+    "Main.sol",
 ];
 
 #[derive(Debug)]
 enum ArtifactError {
-    ContractDownloadFailed(String),
-    SolcDownloadFailed(String),
-    ContractsDeletionFailed,
-    SolcDeletionFailed,
+    DownloadFailed(String),
+    CompilationFailed(String),
     UnsupportedArch,
     UnsupportedOS,
 }
@@ -50,8 +51,17 @@ pub fn read_basic_test_artifact() -> TestArtifact {
     };
 
     if !Path::new(BASIC_TEST_JSON_LOCATION).exists() || latest_hash != hash || no_hash {
-        let contract_json =
-            compile_latest_test_contract().expect("should be able to compile contract");
+        let binary_name =
+            get_solc_binary_name().expect("should be able to figure out a solc binary");
+
+        // delay unwrapping so we always clean up after ourselves even in case of failure
+        let contract_json = compile_latest_test_contract(&binary_name);
+        delete_solc_binary(&binary_name);
+        delete_contracts_folder();
+        let contract_json = match contract_json {
+            Ok(c) => c,
+            Err(e) => panic!("{:?}", e),
+        };
 
         // TODO: we need to also fetch precompiles and correctly put everything together in the
         // JSON, raw contract data won't do
@@ -84,50 +94,52 @@ fn get_latest_commit_hash() -> String {
     body[8..47].to_owned()
 }
 
-fn compile_latest_test_contract() -> Result<String, ArtifactError> {
-    let binary_name = get_solc_binary_name()?;
-    download_solc_binary(&binary_name)?;
-    let mut solc = Compiler::new(binary_name.clone());
+fn compile_latest_test_contract(solc_binary_name: &str) -> Result<String, ArtifactError> {
+    download_solc_binary(solc_binary_name)?;
+    let mut full_path = std::env::current_dir().unwrap();
+    full_path.push(solc_binary_name);
+    // XXX windows?
+    fs::set_permissions(full_path.clone(), fs::Permissions::from_mode(0o777)).unwrap();
+    let mut solc = Compiler::new(full_path.to_str().unwrap().to_owned());
 
     download_contracts()?;
-    let sources = construct_sources_map();
 
-    let output = solc
-        .standard_json(
-            Input {
-                language: Language::Solidity,
-                sources,
-                settings: Settings {
-                    libraries: None,
-                    remappings: None,
-                    output_selection: None,
-                    via_ir: None,
-                    optimizer: Optimizer {
-                        enabled: true,
-                        mode: Some(200 as char),
-                        details: Default::default(),
-                    },
-                    metadata: None,
-                },
-                suppressed_warnings: None,
-            },
-            Pipeline::Yul,
-            None,
-            vec![],
-            None,
-        )
-        .expect("should be able to compile contracts");
+    let file_names = FILE_NAMES
+        .iter()
+        .map(|name| {
+            let mut path = std::env::current_dir().unwrap();
+            path.push("contracts");
+            path.push(name);
+            path
+        })
+        .collect::<Vec<PathBuf>>();
+    let mut output = compiler_solidity::standard_output(
+        &file_names,
+        vec![],
+        &mut solc,
+        true,
+        compiler_llvm_context::OptimizerSettings::cycles(),
+        false,
+        true,
+        false,
+        None,
+        vec![],
+        None,
+        None,
+        None,
+        None,
+    )
+    .map_err(|e| ArtifactError::CompilationFailed(e.to_string()))?;
+
     println!("{:?}", output);
-    delete_solc_binary(&binary_name)?;
-    delete_contracts_folder()?;
-    panic!("DEAD");
+
+    panic!();
     // should return bytecode here
     Ok("".to_owned())
 }
 
 fn download_contracts() -> Result<(), ArtifactError> {
-    fs::create_dir("contracts")
-        .map_err(|e| ArtifactError::ContractDownloadFailed(e.to_string()))?;
+    fs::create_dir("contracts").map_err(|e| ArtifactError::DownloadFailed(e.to_string()))?;
 
     for file_name in FILE_NAMES {
         let url = "https://raw.githubusercontent.com/matter-labs/test-contract/".to_owned()
@@ -140,20 +152,20 @@ fn download_contracts() -> Result<(), ArtifactError> {
     Ok(())
 }
 
-fn delete_contracts_folder() -> Result<(), ArtifactError> {
-    fs::remove_dir_all("contracts").map_err(|_| ArtifactError::ContractsDeletionFailed)
+fn delete_contracts_folder() {
+    let _ = fs::remove_dir_all("contracts");
 }
 
 fn download_solc_binary(binary_name: &str) -> Result<(), ArtifactError> {
-    let url = "https://github.com/yarnpkg/yarn/releases/download/".to_owned()
+    let url = "https://github.com/ethereum/solidity/releases/download/".to_owned()
         + SOLC_VERSION
         + "/"
         + binary_name;
     download_to_disk(&url, binary_name)
 }
 
-fn delete_solc_binary(binary_name: &str) -> Result<(), ArtifactError> {
-    fs::remove_file(binary_name).map_err(|_| ArtifactError::SolcDeletionFailed)
+fn delete_solc_binary(binary_name: &str) {
+    let _ = fs::remove_file(binary_name);
 }
 
 fn download_to_disk(url: &str, write_location: &str) -> Result<(), ArtifactError> {
@@ -162,7 +174,9 @@ fn download_to_disk(url: &str, write_location: &str) -> Result<(), ArtifactError
     let mut file_data = vec![];
     let mut easy = Easy::new();
     easy.url(&url)
-        .map_err(|e| ArtifactError::SolcDownloadFailed(e.to_string()))?;
+        .map_err(|e| ArtifactError::DownloadFailed(e.to_string()))?;
+    easy.follow_location(true)
+        .map_err(|e| ArtifactError::DownloadFailed(e.to_string()))?;
     {
         let mut transfer = easy.transfer();
         transfer
@@ -170,14 +184,13 @@ fn download_to_disk(url: &str, write_location: &str) -> Result<(), ArtifactError
                 file_data.extend_from_slice(data);
                 Ok(data.len())
             })
-            .map_err(|e| ArtifactError::SolcDownloadFailed(e.to_string()))?;
+            .map_err(|e| ArtifactError::DownloadFailed(e.to_string()))?;
         transfer
             .perform()
-            .map_err(|e| ArtifactError::SolcDownloadFailed(e.to_string()))?;
+            .map_err(|e| ArtifactError::DownloadFailed(e.to_string()))?;
     }
 
-    fs::write(write_location, file_data)
-        .map_err(|e| ArtifactError::SolcDownloadFailed(e.to_string()))
+    fs::write(write_location, file_data).map_err(|e| ArtifactError::DownloadFailed(e.to_string()))
 }
 
 fn get_solc_binary_name() -> Result<String, ArtifactError> {
