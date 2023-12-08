@@ -1,5 +1,7 @@
+use super::consts::*;
 use crate::helper::artifact_utils::TestArtifact;
 use crate::helper::serialize_utils::{deserialize_bytecode, deserialize_bytecodes_with_addresses};
+use crate::zk_evm::ethereum_types::Address;
 use compiler_solidity::SolcCompiler as Compiler;
 use compiler_solidity::SolcPipeline as Pipeline;
 use compiler_solidity::SolcStandardJsonInput as Input;
@@ -8,11 +10,12 @@ use compiler_solidity::SolcStandardJsonInputSettings as Settings;
 use compiler_solidity::SolcStandardJsonInputSettingsOptimizer as Optimizer;
 use compiler_solidity::SolcStandardJsonInputSource as Source;
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     fs,
     io::Write,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
+    str::FromStr,
 };
 
 const TEST_CONTRACT_REPO: &str = "https://github.com/matter-labs/test-contract";
@@ -28,6 +31,8 @@ const FILE_NAMES: [&str; 4] = [
     "HeapLibrary.sol",
     "Main.sol",
 ];
+
+const ENTRY_POINT_ADDRESS: &str = "0xc54E30ABB6a3eeD1b9DC0494D90c9C22D76FbA7e";
 
 #[derive(Debug)]
 enum ArtifactError {
@@ -51,6 +56,7 @@ pub fn read_basic_test_artifact() -> TestArtifact {
     };
 
     if !Path::new(BASIC_TEST_JSON_LOCATION).exists() || latest_hash != hash || no_hash {
+        println!("test json is outdated, updating...");
         let solc_binary_name =
             get_solc_binary_name().expect("should be able to figure out a solc binary");
         let zksolc_binary_name =
@@ -63,12 +69,10 @@ pub fn read_basic_test_artifact() -> TestArtifact {
         delete_contracts_folder();
         match result {
             Ok(bytecode) => {
-                println!("{:?}", bytecode);
-                panic!();
-
-                // TODO: we need to also fetch precompiles and correctly put everything together in the
-                // JSON, raw contract data won't do
-                fs::write(BASIC_TEST_JSON_LOCATION, bytecode)
+                let artifact = create_artifact(bytecode);
+                let artifact_string = serde_json::to_string_pretty(&artifact)
+                    .expect("should be able to stringify test artifact");
+                fs::write(BASIC_TEST_JSON_LOCATION, artifact_string)
                     .expect("should be able to write contract json");
                 fs::write(BASIC_TEST_COMMIT_HASH_LOCATION, latest_hash)
                     .expect("should be able to write new commit hash");
@@ -83,6 +87,50 @@ pub fn read_basic_test_artifact() -> TestArtifact {
     let text = std::str::from_utf8(&basic_test_bytes)
         .expect("basic test json should be utf8 encoded string");
     serde_json::from_str(text).unwrap()
+}
+
+fn create_artifact(bytecode: Vec<u8>) -> TestArtifact {
+    let entry_point_code = bytecode
+        .chunks(32)
+        .map(|chunk| {
+            let mut arr = [0u8; 32];
+            arr[..chunk.len()].copy_from_slice(chunk);
+            arr
+        })
+        .collect();
+    let default_account_code = hex::decode(DEFAULT_ACCOUNT_CODE[2..].to_owned())
+        .unwrap()
+        .chunks(32)
+        .map(|chunk| {
+            let mut arr = [0u8; 32];
+            arr[..chunk.len()].copy_from_slice(chunk);
+            arr
+        })
+        .collect();
+
+    let predeployed = PREDEPLOYED_CONTRACTS
+        .iter()
+        .map(|(address, code)| {
+            let address = Address::from_str(address).unwrap();
+            let code = hex::decode(code[2..].to_owned())
+                .unwrap()
+                .chunks(32)
+                .map(|chunk| {
+                    let mut arr = [0u8; 32];
+                    arr[..chunk.len()].copy_from_slice(chunk);
+                    arr
+                })
+                .collect();
+            (address, code)
+        })
+        .collect::<Vec<(Address, Vec<[u8; 32]>)>>();
+    TestArtifact {
+        entry_point_address: Address::from_str(ENTRY_POINT_ADDRESS)
+            .expect("should be able to decode from constant entry point address"),
+        entry_point_code,
+        default_account_code,
+        predeployed_contracts: HashMap::from_iter(predeployed),
+    }
 }
 
 fn get_latest_commit_hash() -> String {
