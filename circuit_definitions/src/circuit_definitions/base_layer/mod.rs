@@ -4,6 +4,8 @@ use crate::boojum::cs::implementations::setup::FinalizationHintsForProver;
 use crate::boojum::cs::traits::gate::GatePlacementStrategy;
 use crate::boojum::field::goldilocks::{GoldilocksExt2, GoldilocksField};
 use crate::boojum::gadgets::tables::*;
+use snark_wrapper::boojum::dag::CircuitResolverOpts;
+use snark_wrapper::boojum::dag::sorter_runtime::RuntimeResolverSorter;
 use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
 use zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
 use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord;
@@ -70,6 +72,8 @@ pub type L1MessagesSorterCircuit<F, R> =
     ZkSyncUniformCircuitInstance<F, EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction<F, R>>;
 pub type L1MessagesHasherCircuit<F, R> =
     ZkSyncUniformCircuitInstance<F, LinearHasherInstanceSynthesisFunction<F, R>>;
+
+type RCfg = <ProvingCSConfig as snark_wrapper::boojum::config::CSConfig>::ResolverConfig;
 
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone(bound = ""), Debug)]
@@ -289,17 +293,18 @@ where
     fn synthesis_inner<P: PrimeFieldLikeVectorized<Base = F>>(
         inner: &ZkSyncUniformCircuitInstance<F, impl ZkSyncUniformSynthesisFunction<F>>,
         hint: &FinalizationHintsForProver,
-    ) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig, RuntimeResolverSorter<F, RCfg>> {
         let geometry = inner.geometry_proxy();
         let (max_trace_len, num_vars) = inner.size_hint();
-        let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig>::new(
+        let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig,
+        RuntimeResolverSorter<F, RCfg>>::new(
             geometry,
             num_vars.unwrap(),
             max_trace_len.unwrap(),
         );
         let cs_builder = new_builder::<_, F>(builder_impl);
         let builder = inner.configure_builder_proxy(cs_builder);
-        let mut cs = builder.build(());
+        let mut cs = builder.build(CircuitResolverOpts::new(num_vars.unwrap()));
         inner.add_tables_proxy(&mut cs);
         inner.clone().synthesize_proxy(&mut cs);
         cs.pad_and_shrink_using_hint(hint);
@@ -309,7 +314,7 @@ where
     pub fn synthesis<P: PrimeFieldLikeVectorized<Base = F>>(
         &self,
         hint: &FinalizationHintsForProver,
-    ) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig, RuntimeResolverSorter<F, RCfg>> {
         match &self {
             ZkSyncBaseLayerCircuit::MainVM(inner) => Self::synthesis_inner(inner, hint),
             ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {

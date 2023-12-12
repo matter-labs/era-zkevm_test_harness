@@ -9,11 +9,12 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 # zk_evm = {path = "../../zk_evm"}
 # zkevm_circuits = {path = "../../zkevm_circuits", features = ["verbose_circuits"]}
+zkevm_circuits = {path = "../../era-zkevm_circuits"}
 
-snark_wrapper = {git = "https://github.com/matter-labs/snark-wrapper.git", branch = "main"}
-# snark_wrapper = {path = "../../snark_wrapper"}
+# snark_wrapper = {git = "https://github.com/matter-labs/snark-wrapper.git", branch = "main"}
+snark_wrapper = {path = "../../snark-wrapper"}
 
-zkevm_circuits = {git = "https://github.com/matter-labs/era-zkevm_circuits.git", branch = "main"}
+# zkevm_circuits = {git = "https://github.com/matter-labs/era-zkevm_circuits.git", branch = "main"}
 zk_evm = {git = "https://github.com/matter-labs/era-zk_evm.git", branch = "v1.4.0"}
 
 derivative = "*"

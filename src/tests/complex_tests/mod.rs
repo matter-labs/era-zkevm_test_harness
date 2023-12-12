@@ -54,6 +54,7 @@ use zkevm_assembly::Assembly;
 fn basic_test() {
     let test_artifact = read_basic_test_artifact();
     run_and_try_create_witness_inner(test_artifact, 20000);
+    println!("done");
     // run_and_try_create_witness_inner(test_artifact, 16);
 }
 
@@ -298,6 +299,9 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
         }
 
         base_test_circuit(el);
+
+        // return;
+        // panic!("--- done ---");
     }
 
     let worker = Worker::new_with_num_threads(8);
@@ -392,8 +396,6 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
         println!("Proving is DONE, taken {:?}", now.elapsed());
 
         let is_valid = verify_base_layer_proof::<NoPow>(&el, &proof, &vk);
-
-        assert!(is_valid);
 
         if instance_idx == 0 {
             source

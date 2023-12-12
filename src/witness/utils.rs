@@ -27,6 +27,9 @@ use crate::zkevm_circuits::base_structures::vm_state::{
     FULL_SPONGE_QUEUE_STATE_WIDTH, QUEUE_STATE_WIDTH,
 };
 use crate::zkevm_circuits::fsm_input_output::circuit_inputs::INPUT_OUTPUT_COMMITMENT_LENGTH;
+use circuit_definitions::boojum::config::CSConfig;
+use circuit_definitions::boojum::dag::CircuitResolverOpts;
+use circuit_definitions::boojum::dag::sorter_runtime::RuntimeResolverSorter;
 use circuit_definitions::encodings::*;
 use circuit_definitions::ZkSyncDefaultRoundFunction;
 
@@ -139,11 +142,14 @@ pub fn transform_queue_witness<
     }
 }
 
+use crate::boojum::dag::ResolverSortingMode;
 use crate::boojum::gadgets::traits::allocatable::*;
 use crate::boojum::gadgets::traits::encodable::CircuitVarLengthEncodable;
 use crate::boojum::gadgets::traits::witnessable::WitnessHookable;
 use crate::zk_evm::aux_structures::MemoryQuery;
 use crate::zkevm_circuits::fsm_input_output::*;
+
+type RCfg = <ProvingCSConfig as CSConfig>::ResolverConfig;
 
 pub const TRACE_LEN_LOG_2_FOR_CALCULATION: usize = 20;
 pub const MAX_VARS_LOG_2_FOR_CALCULATION: usize = 26;
@@ -164,6 +170,7 @@ pub fn create_cs_for_witness_generation<
     ProvingCSConfig,
     impl GateConfigurationHolder<F>,
     impl StaticToolboxHolder,
+    impl ResolverSortingMode<F>,
 > {
     // create temporary cs, and allocate in full
 
@@ -178,7 +185,8 @@ pub fn create_cs_for_witness_generation<
 
     use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
 
-    let builder_impl = CsReferenceImplementationBuilder::<F, F, ProvingCSConfig>::new(
+    let builder_impl = CsReferenceImplementationBuilder::<F, F, ProvingCSConfig,
+    RuntimeResolverSorter<F, RCfg>>::new(
         geometry,
         num_vars,
         max_trace_len,
@@ -212,7 +220,7 @@ pub fn create_cs_for_witness_generation<
     let builder =
         SelectionGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
 
-    let mut cs = builder.build(());
+    let mut cs = builder.build(CircuitResolverOpts::new(num_vars));
 
     use crate::boojum::cs::traits::cs::ConstraintSystem;
     use crate::boojum::gadgets::tables::*;

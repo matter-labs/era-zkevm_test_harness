@@ -4,8 +4,10 @@ pub mod compression;
 pub mod compression_modes;
 pub mod wrapper;
 
-use crate::boojum::config::ProvingCSConfig;
+use crate::boojum::config::{ CSConfig, ProvingCSConfig };
 use crate::boojum::field::traits::field_like::PrimeFieldLikeVectorized;
+use crate::boojum::dag::sorter_runtime::RuntimeResolverSorter;
+use crate::boojum::dag::CircuitResolverOpts;
 use crate::circuit_definitions::aux_layer::compression::*;
 use crate::circuit_definitions::aux_layer::compression_modes::*;
 use crate::circuit_definitions::cs_builder_reference::CsReferenceImplementationBuilder;
@@ -20,6 +22,8 @@ use crate::ProofConfig;
 type F = GoldilocksField;
 type EXT = GoldilocksExt2;
 type H = GoldilocksPoseidon2Sponge<AbsorptionModeOverwrite>;
+
+type RCfg = <ProvingCSConfig as CSConfig>::ResolverConfig;
 
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone(bound = ""))]
@@ -142,18 +146,20 @@ impl ZkSyncCompressionLayerCircuit {
     >(
         inner: &CompressionLayerCircuit<CF>,
         hint: &FinalizationHintsForProver,
-    ) -> CSReferenceAssembly<GoldilocksField, P, ProvingCSConfig> {
+    ) -> CSReferenceAssembly<GoldilocksField, P, ProvingCSConfig,
+    RuntimeResolverSorter<GoldilocksField, RCfg>> {
         let geometry = inner.geometry();
         let (max_trace_len, num_vars) = inner.size_hint();
         let builder_impl =
-            CsReferenceImplementationBuilder::<GoldilocksField, P, ProvingCSConfig>::new(
+            CsReferenceImplementationBuilder::<GoldilocksField, P, ProvingCSConfig,
+        RuntimeResolverSorter<GoldilocksField, RCfg>>::new(
                 geometry,
                 num_vars.unwrap(),
                 max_trace_len.unwrap(),
             );
         let cs_builder = new_builder::<_, GoldilocksField>(builder_impl);
         let builder = inner.configure_builder_proxy(cs_builder);
-        let mut cs = builder.build(());
+        let mut cs = builder.build(CircuitResolverOpts::new(num_vars.unwrap()));
         inner.add_tables(&mut cs);
         inner.clone().synthesize_into_cs(&mut cs);
         cs.pad_and_shrink_using_hint(hint);
@@ -163,7 +169,7 @@ impl ZkSyncCompressionLayerCircuit {
     pub fn synthesis<P: PrimeFieldLikeVectorized<Base = F>>(
         &self,
         hint: &FinalizationHintsForProver,
-    ) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig, RuntimeResolverSorter<F, RCfg>> {
         match &self {
             Self::CompressionMode1Circuit(inner) => Self::synthesis_inner(inner, hint),
             Self::CompressionMode2Circuit(inner) => Self::synthesis_inner(inner, hint),
@@ -453,18 +459,20 @@ impl ZkSyncCompressionForWrapperCircuit {
     >(
         inner: &CompressionLayerCircuit<CF>,
         hint: &FinalizationHintsForProver,
-    ) -> CSReferenceAssembly<GoldilocksField, P, ProvingCSConfig> {
+    ) -> CSReferenceAssembly<GoldilocksField, P, ProvingCSConfig,
+    RuntimeResolverSorter<GoldilocksField, RCfg>> {
         let geometry = inner.geometry();
         let (max_trace_len, num_vars) = inner.size_hint();
         let builder_impl =
-            CsReferenceImplementationBuilder::<GoldilocksField, P, ProvingCSConfig>::new(
+            CsReferenceImplementationBuilder::<GoldilocksField, P, ProvingCSConfig,
+        RuntimeResolverSorter<GoldilocksField, RCfg>>::new(
                 geometry,
                 num_vars.unwrap(),
                 max_trace_len.unwrap(),
             );
         let cs_builder = new_builder::<_, GoldilocksField>(builder_impl);
         let builder = inner.configure_builder_proxy(cs_builder);
-        let mut cs = builder.build(());
+        let mut cs = builder.build(CircuitResolverOpts::new(num_vars.unwrap()));
         inner.add_tables(&mut cs);
         inner.clone().synthesize_into_cs(&mut cs);
         cs.pad_and_shrink_using_hint(hint);
@@ -474,7 +482,7 @@ impl ZkSyncCompressionForWrapperCircuit {
     pub fn synthesis<P: PrimeFieldLikeVectorized<Base = F>>(
         &self,
         hint: &FinalizationHintsForProver,
-    ) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig, RuntimeResolverSorter<F, RCfg>> {
         match &self {
             Self::CompressionMode1Circuit(inner) => Self::synthesis_inner(inner, hint),
             Self::CompressionMode2Circuit(inner) => Self::synthesis_inner(inner, hint),

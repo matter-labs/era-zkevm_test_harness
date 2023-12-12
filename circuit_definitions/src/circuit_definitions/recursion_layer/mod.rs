@@ -4,6 +4,8 @@ use crate::boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcrip
 use crate::boojum::field::goldilocks::{GoldilocksExt2, GoldilocksField};
 use crate::boojum::gadgets::recursion::recursive_transcript::CircuitAlgebraicSpongeBasedTranscript;
 use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
+use snark_wrapper::boojum::dag::CircuitResolverOpts;
+use snark_wrapper::boojum::dag::sorter_runtime::RuntimeResolverSorter;
 use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
 use zkevm_circuits::boojum::cs::traits::circuit::CircuitBuilder;
 use zkevm_circuits::recursion::leaf_layer::input::RecursionLeafParametersWitness;
@@ -314,7 +316,7 @@ pub type ZkSyncRecursionLayerFinalizationHint =
 
 use crate::boojum::algebraic_props::round_function::AbsorptionModeOverwrite;
 use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
-use crate::boojum::config::ProvingCSConfig;
+use crate::boojum::config::{ CSConfig, ProvingCSConfig };
 use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
 use crate::boojum::cs::implementations::reference_cs::CSReferenceAssembly;
 
@@ -345,6 +347,8 @@ type CTR = CircuitAlgebraicSpongeBasedTranscript<GoldilocksField, 8, 12, 4, R>;
 type EXT = GoldilocksExt2;
 type H = GoldilocksPoseidon2Sponge<AbsorptionModeOverwrite>;
 type RH = CircuitGoldilocksPoseidon2Sponge;
+
+type RCfg = <ProvingCSConfig as CSConfig>::ResolverConfig;
 
 impl ZkSyncRecursiveLayerCircuit {
     pub fn short_description(&self) -> &'static str {
@@ -458,17 +462,18 @@ impl ZkSyncRecursiveLayerCircuit {
     fn synthesis_inner<P: PrimeFieldLikeVectorized<Base = F>>(
         inner: &ZkSyncLeafLayerRecursiveCircuit,
         hint: &FinalizationHintsForProver,
-    ) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig, RuntimeResolverSorter<F, RCfg>> {
         let geometry = ZkSyncLeafLayerRecursiveCircuit::geometry();
         let (max_trace_len, num_vars) = inner.size_hint();
-        let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig>::new(
+        let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig,
+        RuntimeResolverSorter<F, RCfg>>::new(
             geometry,
             num_vars.unwrap(),
             max_trace_len.unwrap(),
         );
         let cs_builder = new_builder::<_, F>(builder_impl);
         let builder = inner.configure_builder_proxy(cs_builder);
-        let mut cs = builder.build(());
+        let mut cs = builder.build(CircuitResolverOpts::new(num_vars.unwrap()));
         let round_function = ZkSyncDefaultRoundFunction::default();
         inner.add_tables(&mut cs);
         inner.clone().synthesize_into_cs(&mut cs, &round_function);
@@ -479,19 +484,20 @@ impl ZkSyncRecursiveLayerCircuit {
     pub fn synthesis<P: PrimeFieldLikeVectorized<Base = F>>(
         &self,
         hint: &FinalizationHintsForProver,
-    ) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig, RuntimeResolverSorter<F, RCfg>> {
         match &self {
             Self::SchedulerCircuit(inner) => {
                 let geometry = ZkSyncSchedulerCircuit::geometry();
                 let (max_trace_len, num_vars) = inner.size_hint();
-                let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig>::new(
+                let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig,
+                RuntimeResolverSorter<F, RCfg>>::new(
                     geometry,
                     num_vars.unwrap(),
                     max_trace_len.unwrap(),
                 );
                 let cs_builder = new_builder::<_, F>(builder_impl);
                 let builder = inner.configure_builder_proxy(cs_builder);
-                let mut cs = builder.build(());
+                let mut cs = builder.build(CircuitResolverOpts::new(num_vars.unwrap()));
                 let round_function = ZkSyncDefaultRoundFunction::default();
                 inner.add_tables(&mut cs);
                 inner.clone().synthesize_into_cs(&mut cs, &round_function);
@@ -501,14 +507,15 @@ impl ZkSyncRecursiveLayerCircuit {
             Self::NodeLayerCircuit(inner) => {
                 let geometry = ZkSyncNodeLayerRecursiveCircuit::geometry();
                 let (max_trace_len, num_vars) = inner.size_hint();
-                let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig>::new(
+                let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig,
+                RuntimeResolverSorter<F, RCfg>>::new(
                     geometry,
                     num_vars.unwrap(),
                     max_trace_len.unwrap(),
                 );
                 let cs_builder = new_builder::<_, F>(builder_impl);
                 let builder = inner.configure_builder_proxy(cs_builder);
-                let mut cs = builder.build(());
+                let mut cs = builder.build(CircuitResolverOpts::new(num_vars.unwrap()));
                 let round_function = ZkSyncDefaultRoundFunction::default();
                 inner.add_tables(&mut cs);
                 inner.clone().synthesize_into_cs(&mut cs, &round_function);

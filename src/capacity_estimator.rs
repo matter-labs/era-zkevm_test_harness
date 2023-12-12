@@ -5,6 +5,9 @@ use crate::boojum::field::goldilocks::GoldilocksField;
 
 use crate::boojum::cs::traits::circuit::CircuitBuilder;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
+use circuit_definitions::boojum::config::CSConfig;
+use circuit_definitions::boojum::dag::CircuitResolverOpts;
+use circuit_definitions::boojum::dag::sorter_runtime::RuntimeResolverSorter;
 use circuit_definitions::circuit_definitions::base_layer::*;
 use circuit_definitions::circuit_definitions::ZkSyncUniformSynthesisFunction;
 use circuit_definitions::ZkSyncDefaultRoundFunction;
@@ -53,9 +56,11 @@ where
             use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
 
             type P = GoldilocksField;
+            type RCfg = <SetupCSConfig as CSConfig>::ResolverConfig;
 
             let builder_impl =
-                CsReferenceImplementationBuilder::<GoldilocksField, P, SetupCSConfig>::new(
+                CsReferenceImplementationBuilder::<GoldilocksField, P, SetupCSConfig,
+            RuntimeResolverSorter<GoldilocksField, RCfg>>::new(
                     geometry,
                     1, // resolver is inactive in this mode
                     1 << max_trace_len_log_2,
@@ -67,7 +72,7 @@ where
             let config = config;
 
             let builder = SF::configure_builder(builder);
-            let mut cs = builder.build(());
+            let mut cs = builder.build(CircuitResolverOpts::new(1));
             SF::add_tables(&mut cs);
             let _ = SF::synthesize_into_cs_inner(&mut cs, witness, &round_function, config);
             let (max_trace_len, _) = cs.pad_and_shrink();

@@ -20,9 +20,12 @@ type RH = CircuitGoldilocksPoseidon2Sponge;
 
 #[cfg(test)]
 mod test {
+    use circuit_definitions::boojum::config::CSConfig;
     use circuit_definitions::boojum::cs::implementations::pow::NoPow;
     use circuit_definitions::boojum::cs::implementations::proof::Proof;
     use circuit_definitions::boojum::cs::implementations::verifier::VerificationKey;
+    use circuit_definitions::boojum::dag::CircuitResolverOpts;
+    use circuit_definitions::boojum::dag::sorter_runtime::RuntimeResolverSorter;
     use circuit_definitions::circuit_definitions::aux_layer::compression_modes::*;
     use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit;
     use circuit_definitions::{
@@ -40,6 +43,8 @@ mod test {
         local_file_data_source::LocalFileDataSource, BlockDataSource, SetupDataSource,
     };
 
+    type RCfg = <DevCSConfig as CSConfig>::ResolverConfig;
+
     fn prove_and_save<CF: ProofCompressionFunction>(
         circuit: CompressionLayerCircuit<CF>,
         file_prefix: String,
@@ -54,14 +59,15 @@ mod test {
         let proof_config = CF::proof_config_for_compression_step();
         let transcript_params = CF::this_layer_transcript_parameters();
 
-        let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
+        let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig,
+            RuntimeResolverSorter<GoldilocksField, RCfg>>::new(
             geometry,
             num_vars.unwrap(),
             max_trace_len.unwrap(),
         );
         let builder = new_builder::<_, GoldilocksField>(builder_impl);
         let builder = circuit.configure_builder_proxy(builder);
-        let mut cs_owned = builder.build(());
+        let mut cs_owned = builder.build(CircuitResolverOpts::new(num_vars.unwrap()));
         circuit.synthesize_into_cs(&mut cs_owned);
 
         cs_owned.pad_and_shrink();
@@ -335,14 +341,15 @@ mod test {
         let geometry = circuit.geometry();
         let (max_trace_len, num_vars) = circuit.size_hint();
 
-        let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
+        let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig,
+            RuntimeResolverSorter<GoldilocksField, RCfg>>::new(
             geometry,
             num_vars.unwrap(),
             max_trace_len.unwrap(),
         );
         let builder = new_builder::<_, GoldilocksField>(builder_impl);
         let builder = circuit.configure_builder_proxy(builder);
-        let mut cs_owned = builder.build(());
+        let mut cs_owned = builder.build(CircuitResolverOpts::new(num_vars.unwrap()));
         circuit.synthesize_into_cs(&mut cs_owned);
         let _num_gates = cs_owned.pad_and_shrink();
 
