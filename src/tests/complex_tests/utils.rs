@@ -8,6 +8,7 @@ use std::{
     io::Write,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
+    process::Command,
     str::FromStr,
 };
 
@@ -24,9 +25,10 @@ const TEST_CONTRACT_FILE_NAMES: [&str; 4] = [
     "HeapLibrary.sol",
     "Main.sol",
 ];
-const PREDEPLOYED_CONTRACTS_BRANCH: &str = "v1-4-1-integration";
-const PREDEPLOYED_PREFIX_URL: &str =
-    "https://raw.githubusercontent.com/matter-labs/era-system-contracts/";
+const SYSTEM_CONTRACTS_BRANCH: &str = "v1-4-1-integration";
+const SYTEM_CONTRACTS_URL: &str = "https://github.com/matter-labs/era-system-contracts/";
+const SYSTEM_CONTRACTS_COMMIT_HASH_LOCATION: &str =
+    "src/tests/complex_tests/test_artifacts/system_contracts_commit_hash";
 
 // Contract name, contract address, is precompile
 const PREDEPLOYED_CONTRACTS: [(&str, &str, bool); 20] = [
@@ -47,7 +49,7 @@ const PREDEPLOYED_CONTRACTS: [(&str, &str, bool); 20] = [
         "Bootloader",
         "0x0000000000000000000000000000000000008001",
         false,
-    ), // XXX
+    ),
     (
         "AccountCodeStorage",
         "0x0000000000000000000000000000000000008002",
@@ -130,25 +132,58 @@ enum ArtifactError {
     UnsupportedOS,
 }
 
-pub fn read_basic_test_artifact() -> TestArtifact {
-    let no_hash = !Path::new(BASIC_TEST_COMMIT_HASH_LOCATION).exists();
-    let latest_hash = get_latest_commit_hash();
-    let hash = if no_hash {
-        latest_hash.clone()
+fn retrieve_latest_commit_hash(url: &str, hash_location: &str) -> (String, String) {
+    let no_hash = !Path::new(hash_location).exists();
+    let latest_hash = get_latest_commit_hash(url);
+    if no_hash {
+        (String::new(), latest_hash)
     } else {
-        let bytes =
-            fs::read(BASIC_TEST_COMMIT_HASH_LOCATION).expect("should be able to read commit hash");
-        std::str::from_utf8(&bytes)
-            .expect("commit hash should be utf8-encoded")
-            .to_owned()
-    };
+        let bytes = fs::read(hash_location).expect("should be able to read commit hash");
+        (
+            std::str::from_utf8(&bytes)
+                .expect("commit hash should be utf8-encoded")
+                .to_owned(),
+            latest_hash,
+        )
+    }
+}
 
-    if !Path::new(BASIC_TEST_JSON_LOCATION).exists() || latest_hash != hash || no_hash {
-        println!("test json is outdated, updating...");
+pub fn read_basic_test_artifact() -> TestArtifact {
+    let (basic_test_hash, latest_basic_test_hash) =
+        retrieve_latest_commit_hash(TEST_CONTRACT_REPO.to_owned() + BRANCH);
+    let (system_contract_hash, latest_system_contract_hash) =
+        retrieve_latest_commit_hash(SYSTEM_CONTRACTS_URL.to_owned() + SYSTEM_CONTRACTS_BRANCH);
+
+    if !Path::new(BASIC_TEST_JSON_LOCATION).exists()
+        || !Path::new(SYSTEM_CONTRACTS_COMMIT_HASH_LOCATION).exists()
+        || latest_basic_test_hash != basic_test_hash
+        || latest_system_contract_hash != system_contract_hash
+    {
+        println!("test artifacts are outdated, updating...");
         let solc_binary_name =
             get_solc_binary_name().expect("should be able to figure out a solc binary");
         let zksolc_binary_name =
             get_zksolc_binary_name().expect("should be able to figure out a zksolc binary");
+
+        download_solc_binary(solc_binary_name)?;
+        let solc_compiler_path = set_binary_perms(solc_binary_name)?;
+        let mut solc = Compiler::new(
+            solc_compiler_path
+                .to_str()
+                .ok_or(ArtifactError::CompilationFailed(
+                    "could not convert solc compiler path to string".to_owned(),
+                ))?
+                .to_owned(),
+        );
+
+        // set zksolc as executable for compiler
+        download_zksolc_binary(zksolc_binary_name)?;
+        let zksolc_compiler_path = set_binary_perms(zksolc_binary_name)?;
+        compiler_solidity::EXECUTABLE
+            .set(zksolc_compiler_path)
+            .map_err(|_| {
+                ArtifactError::CompilationFailed("couldn't set zksolc as executable".to_owned())
+            })?;
 
         // delay checking result so that we clean up in all cases
         let result = compile_latest_artifacts(&solc_binary_name, &zksolc_binary_name);
@@ -215,13 +250,13 @@ fn create_artifact(
     }
 }
 
-fn get_latest_commit_hash() -> String {
+fn get_latest_commit_hash(url: &str) -> String {
     let client = reqwest::blocking::Client::builder()
         .user_agent("a") // this call needs a user agent but it doesn't matter what it is really
         .build()
         .expect("should be able to build client");
     let body = client
-        .get("https://api.github.com/repos/matter-labs/test-contract/commits/".to_owned() + BRANCH)
+        .get(url)
         .send()
         .expect("should be able to fetch commit hash")
         .text()
@@ -249,41 +284,19 @@ fn set_binary_perms(binary_name: &str) -> Result<PathBuf, ArtifactError> {
 }
 
 fn compile_latest_artifacts(
-    solc_binary_name: &str,
-    zksolc_binary_name: &str,
+    solc: &mut SolcCompiler,
 ) -> Result<(Vec<u8>, Vec<u8>, Vec<(&str, Vec<u8>)>), ArtifactError> {
-    let bytecode = compile_latest_test_contract(solc_binary_name, zksolc_binary_name)?;
-    let default_account_code = compile_default_account_code(solc_binary_name, zksolc_binary_name)?;
-    let predeployed_contracts =
-        compile_predeployed_contracts(solc_binary_name, zksolc_binary_name)?;
+    download_contracts()?;
+    let bytecode = compile_latest_test_contract(solc)?;
+    clone_system_contracts()?;
+    let default_account_code = compile_default_account_code(solc)?;
+    let mut predeployed_contracts = compile_predeployed_contracts(solc)?;
+    let precompiles = compile_precompiles(solc)?;
+    predeployed_contracts.extend(precompiles);
     Ok((bytecode, default_account_code, predeployed_contracts))
 }
 
-fn compile_latest_test_contract(
-    solc_binary_name: &str,
-    zksolc_binary_name: &str,
-) -> Result<Vec<u8>, ArtifactError> {
-    download_solc_binary(solc_binary_name)?;
-    let solc_compiler_path = set_binary_perms(solc_binary_name)?;
-    let mut solc = Compiler::new(
-        solc_compiler_path
-            .to_str()
-            .ok_or(ArtifactError::CompilationFailed(
-                "could not convert solc compiler path to string".to_owned(),
-            ))?
-            .to_owned(),
-    );
-    download_contracts()?;
-
-    // set zksolc as executable for compiler
-    download_zksolc_binary(zksolc_binary_name)?;
-    let zksolc_compiler_path = set_binary_perms(zksolc_binary_name)?;
-    compiler_solidity::EXECUTABLE
-        .set(zksolc_compiler_path)
-        .map_err(|_| {
-            ArtifactError::CompilationFailed("couldn't set zksolc as executable".to_owned())
-        })?;
-
+fn compile_latest_test_contract(solc: &mut SolcCompiler) -> Result<Vec<u8>, ArtifactError> {
     // create full filepaths for all contracts
     // NOTE: the constant should be updated if we add more contracts
     let mut file_names = vec![];
@@ -295,10 +308,116 @@ fn compile_latest_test_contract(
         file_names.push(path);
     }
 
-    Ok(compiler_solidity::standard_output(
-        &file_names,
+    compile_solidity(solc, file_names, "Main")
+}
+
+fn compile_default_account_code(solc: &mut SolcCompiler) -> Result<Vec<u8>, ArtifactError> {
+    // Include all libraries for ease
+    let mut file_names = fs::read_dir("./era_system_contracts/contracts/libraries")
+        .map_err(|e| ArtifactError::CompilationFailed(e.to_string()))?
+        .iter()
+        .map(|e| e.path())
+        .collect();
+    file_names.push("./era_system_contracts/contracts/DefaultAccountCode.sol".into());
+    compile_solidity(solc, paths, "DefaultAccountCode")
+}
+
+fn compile_predeployed_contracts(
+    solc: &mut SolcCompiler,
+) -> Result<Vec<(&str, Vec<u8>)>, ArtifactError> {
+    let mut file_names = fs::read_dir("./era_system_contracts/contracts/libraries")
+        .map_err(|e| ArtifactError::CompilationFailed(e.to_string()))?
+        .iter()
+        .map(|e| e.path())
+        .collect();
+    let contract_file_names = fs::read_dir("./era_system_contracts/contracts")
+        .map_err(|e| ArtifactError::CompilationFailed(e.to_string()))?
+        .iter()
+        .map(|e| e.path())
+        .collect();
+    file_names.extend(contract_file_names);
+    let output = compiler_solidity::standard_output(
+        file_names,
         vec![],
-        &mut solc,
+        solc,
+        true,
+        compiler_llvm_context::OptimizerSettings::cycles(),
+        false,
+        true,
+        false,
+        None,
+        vec![],
+        None,
+        None,
+        None,
+        None,
+    )
+    .map_err(|e| ArtifactError::CompilationFailed(e.to_string()))?;
+
+    let mut results = vec![];
+    for (contract_name, address, is_precompile) in PREDEPLOYED_CONTRACTS {
+        if is_precompile {
+            continue;
+        }
+
+        let file_path = file_names
+            .iter()
+            .find(|p| p.ends_with(contract_name.to_owned() + ".sol"))
+            .map_err(|e| ArtifactError::CompilationFailed(e.to_string()))?;
+
+        results.push((
+            address,
+            output[file_path
+                .to_str()
+                .ok_or(ArtifactError::CompilationFailed(
+                    "could not convert main contract path to string".to_owned(),
+                ))?
+                .to_owned()
+                + ":"
+                + contract_name]
+                .build
+                .bytecode
+                .clone(),
+        ));
+    }
+
+    Ok(results)
+}
+
+fn compile_precompiles(solc: &mut SolcCompiler) -> Result<Vec<(&str, Vec<u8>)>, ArtifactError> {
+    let file_names = fs::read_dir("./era_system_contracts/contracts/precompiles")
+        .map_err(|e| ArtifactError::CompilationFailed(e.to_string()))?
+        .iter()
+        .map(|e| e.path())
+        .collect();
+
+    let mut results = vec![];
+    for (contract_name, address, is_precompile) in PREDEPLOYED_CONTRACTS {
+        if !is_precompile {
+            continue;
+        }
+
+        let file_path = file_names
+            .iter()
+            .find(|p| p.ends_with(contract_name.to_owned() + ".yul"))
+            .map_err(|e| ArtifactError::CompilationFailed(e.to_string()))?;
+
+        results.push((address, compile_yul(solc, file_path, contract_name)?));
+    }
+
+    Ok(results)
+}
+
+fn compile_solidity(
+    solc: &mut SolcCompiler,
+    file_names: &[PathBuf],
+    contract_name: &str,
+) -> Result<Vec<u8>, ArtifactError> {
+    // NOTE: expects the relevant contract to be the last one in `file_names`.
+    Ok(compiler_solidity::standard_output(
+        file_names,
+        vec![],
+        solc,
         true,
         compiler_llvm_context::OptimizerSettings::cycles(),
         false,
@@ -312,30 +431,46 @@ fn compile_latest_test_contract(
         None,
     )
     .map_err(|e| ArtifactError::CompilationFailed(e.to_string()))?
-    .contracts[&(file_names[3]
+    .contracts[&(file_names
+        .last()
+        .unwrap()
         .to_str()
         .ok_or(ArtifactError::CompilationFailed(
             "could not convert main contract path to string".to_owned(),
         ))?
         .to_owned()
-        + ":Main")]
+        + ":"
+        + contract_name)]
         .build
         .bytecode
         .clone())
 }
 
-fn compile_default_account_code(
-    solc_binary_name: &str,
-    zksolc_binary_name: &str,
+fn compile_yul(
+    solc: &mut SolcCompiler,
+    file_name: PathBuf,
+    contract_name: &str,
 ) -> Result<Vec<u8>, ArtifactError> {
-    Ok(vec![])
-}
-
-fn compile_predeployed_contracts(
-    solc_binary_name: &str,
-    zksolc_binary_name: &str,
-) -> Result<Vec<(&str, Vec<u8>)>, ArtifactError> {
-    Ok(vec![])
+    Ok(compiler_solidty::yul(
+        &[file_names],
+        solc,
+        compiler_llvm_context::OptimizerSettings::cycles(),
+        true,
+        false,
+        None,
+    )
+    .map_err(|e| ArtifactError::CompilationFailed(e.to_string()))?
+    .contracts[file_name
+        .to_str()
+        .ok_or(ArtifactError::CompilationFailed(
+            "could not convert main contract path to string".to_owned(),
+        ))?
+        .to_owned()
+        + ":"
+        + contract_name]
+        .build
+        .bytecode
+        .clone())
 }
 
 fn download_contracts() -> Result<(), ArtifactError> {
@@ -354,6 +489,17 @@ fn download_contracts() -> Result<(), ArtifactError> {
 
 fn delete_contracts_folder() {
     let _ = fs::remove_dir_all("contracts");
+}
+
+fn clone_system_contracts() -> Result<(), ArtifactError> {
+    Command::new("git")
+        .args(&("clone ".to_owned() + SYSTEM_CONTRACTS_URL))
+        .output()
+        .map_err(|e| ArtifactError::DownloadFailed(e.to_string()))
+}
+
+fn delete_system_contracts_folder() {
+    let _ = fs::remove_dir_all("era-system-contracts");
 }
 
 fn download_solc_binary(binary_name: &str) -> Result<(), ArtifactError> {
