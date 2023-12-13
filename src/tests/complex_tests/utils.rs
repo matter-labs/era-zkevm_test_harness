@@ -1,14 +1,7 @@
-use super::consts::*;
 use crate::helper::artifact_utils::TestArtifact;
 use crate::helper::serialize_utils::{deserialize_bytecode, deserialize_bytecodes_with_addresses};
 use crate::zk_evm::ethereum_types::Address;
 use compiler_solidity::SolcCompiler as Compiler;
-use compiler_solidity::SolcPipeline as Pipeline;
-use compiler_solidity::SolcStandardJsonInput as Input;
-use compiler_solidity::SolcStandardJsonInputLanguage as Language;
-use compiler_solidity::SolcStandardJsonInputSettings as Settings;
-use compiler_solidity::SolcStandardJsonInputSettingsOptimizer as Optimizer;
-use compiler_solidity::SolcStandardJsonInputSource as Source;
 use std::{
     collections::{BTreeMap, HashMap},
     fs,
@@ -25,11 +18,106 @@ const BASIC_TEST_COMMIT_HASH_LOCATION: &str =
     "src/tests/complex_tests/test_artifacts/basic_test_commit_hash";
 const SOLC_VERSION: &str = "v0.8.17";
 const ZKSOLC_VERSION: &str = "v1.3.18";
-const FILE_NAMES: [&str; 4] = [
+const TEST_CONTRACT_FILE_NAMES: [&str; 4] = [
     "ReentrancyGuard.sol",
     "Helper.sol",
     "HeapLibrary.sol",
     "Main.sol",
+];
+const PREDEPLOYED_CONTRACTS_BRANCH: &str = "v1-4-1-integration";
+const PREDEPLOYED_PREFIX_URL: &str =
+    "https://raw.githubusercontent.com/matter-labs/era-system-contracts/";
+
+// Contract name, contract address, is precompile
+const PREDEPLOYED_CONTRACTS: [(&str, &str, bool); 20] = [
+    (
+        "ZeroAddress",
+        "0x0000000000000000000000000000000000000000",
+        false,
+    ),
+    (
+        "Ecrecover",
+        "0x0000000000000000000000000000000000000001",
+        true,
+    ),
+    ("SHA256", "0x0000000000000000000000000000000000000002", true),
+    ("EcAdd", "0x0000000000000000000000000000000000000006", true),
+    ("EcMul", "0x0000000000000000000000000000000000000007", true),
+    (
+        "Bootloader",
+        "0x0000000000000000000000000000000000008001",
+        false,
+    ), // XXX
+    (
+        "AccountCodeStorage",
+        "0x0000000000000000000000000000000000008002",
+        false,
+    ),
+    (
+        "NonceHolder",
+        "0x0000000000000000000000000000000000008003",
+        false,
+    ),
+    (
+        "KnownCodesStorage",
+        "0x0000000000000000000000000000000000008004",
+        false,
+    ),
+    (
+        "ImmutableSimulator",
+        "0x0000000000000000000000000000000000008005",
+        false,
+    ),
+    (
+        "ContractDeployer",
+        "0x0000000000000000000000000000000000008006",
+        false,
+    ),
+    (
+        "L1Messenger",
+        "0x0000000000000000000000000000000000008008",
+        false,
+    ),
+    (
+        "MsgValueSimulator",
+        "0x0000000000000000000000000000000000008009",
+        false,
+    ),
+    (
+        "L2EthToken",
+        "0x000000000000000000000000000000000000800a",
+        false,
+    ),
+    (
+        "SystemContext",
+        "0x000000000000000000000000000000000000800b",
+        false,
+    ),
+    (
+        "BootloaderUtilities",
+        "0x000000000000000000000000000000000000800c",
+        false,
+    ),
+    (
+        "EventWriter",
+        "0x000000000000000000000000000000000000800d",
+        false,
+    ),
+    (
+        "Compressor",
+        "0x000000000000000000000000000000000000800e",
+        false,
+    ),
+    (
+        "ComplexUpgrader",
+        "0x000000000000000000000000000000000000800f",
+        false,
+    ),
+    (
+        "Keccak256",
+        "0x0000000000000000000000000000000000008010",
+        true,
+    ),
 ];
 
 const ENTRY_POINT_ADDRESS: &str = "0xc54E30ABB6a3eeD1b9DC0494D90c9C22D76FbA7e";
@@ -63,13 +151,14 @@ pub fn read_basic_test_artifact() -> TestArtifact {
             get_zksolc_binary_name().expect("should be able to figure out a zksolc binary");
 
         // delay checking result so that we clean up in all cases
-        let result = compile_latest_test_contract(&solc_binary_name, &zksolc_binary_name);
+        let result = compile_latest_artifacts(&solc_binary_name, &zksolc_binary_name);
         delete_binary(&solc_binary_name);
         delete_binary(&zksolc_binary_name);
         delete_contracts_folder();
         match result {
-            Ok(bytecode) => {
-                let artifact = create_artifact(bytecode);
+            Ok((bytecode, default_account_code, predeployed_contracts)) => {
+                let artifact =
+                    create_artifact(bytecode, default_account_code, predeployed_contracts);
                 let artifact_string = serde_json::to_string(&artifact)
                     .expect("should be able to stringify test artifact");
                 fs::write(BASIC_TEST_JSON_LOCATION, artifact_string)
@@ -89,7 +178,11 @@ pub fn read_basic_test_artifact() -> TestArtifact {
     serde_json::from_str(text).unwrap()
 }
 
-fn create_artifact(bytecode: Vec<u8>) -> TestArtifact {
+fn create_artifact(
+    bytecode: Vec<u8>,
+    default_account_code: Vec<u8>,
+    predeployed_contracts: Vec<(&str, Vec<u8>)>,
+) -> TestArtifact {
     let segment_byte_vector = |bytes: Vec<u8>| -> Vec<[u8; 32]> {
         bytes
             .chunks(32)
@@ -102,22 +195,23 @@ fn create_artifact(bytecode: Vec<u8>) -> TestArtifact {
     };
 
     let entry_point_code = segment_byte_vector(bytecode);
-    let default_account_code =
-        segment_byte_vector(hex::decode(DEFAULT_ACCOUNT_CODE[2..].to_owned()).unwrap());
-    let predeployed = PREDEPLOYED_CONTRACTS
-        .iter()
-        .map(|(address, code)| {
-            let address = Address::from_str(address).unwrap();
-            let code = segment_byte_vector(hex::decode(code[2..].to_owned()).unwrap());
-            (address, code)
-        })
-        .collect::<Vec<(Address, Vec<[u8; 32]>)>>();
+    let default_account_code = segment_byte_vector(default_account_code);
+    let predeployed_contracts = HashMap::from_iter(
+        predeployed_contracts
+            .iter()
+            .map(|(address, code)| {
+                let address = Address::from_str(address).unwrap();
+                let code = segment_byte_vector(code);
+                (address, code)
+            })
+            .collect::<Vec<(Address, Vec<[u8; 32]>)>>(),
+    );
     TestArtifact {
         entry_point_address: Address::from_str(ENTRY_POINT_ADDRESS)
             .expect("should be able to decode from constant entry point address"),
         entry_point_code,
         default_account_code,
-        predeployed_contracts: HashMap::from_iter(predeployed),
+        predeployed_contracts,
     }
 }
 
@@ -154,6 +248,17 @@ fn set_binary_perms(binary_name: &str) -> Result<PathBuf, ArtifactError> {
     Ok(full_path)
 }
 
+fn compile_latest_artifacts(
+    solc_binary_name: &str,
+    zksolc_binary_name: &str,
+) -> Result<(Vec<u8>, Vec<u8>, Vec<(&str, Vec<u8>)>), ArtifactError> {
+    let bytecode = compile_latest_test_contract(solc_binary_name, zksolc_binary_name)?;
+    let default_account_code = compile_default_account_code(solc_binary_name, zksolc_binary_name)?;
+    let predeployed_contracts =
+        compile_predeployed_contracts(solc_binary_name, zksolc_binary_name)?;
+    Ok((bytecode, default_account_code, predeployed_contracts))
+}
+
 fn compile_latest_test_contract(
     solc_binary_name: &str,
     zksolc_binary_name: &str,
@@ -182,7 +287,7 @@ fn compile_latest_test_contract(
     // create full filepaths for all contracts
     // NOTE: the constant should be updated if we add more contracts
     let mut file_names = vec![];
-    for name in FILE_NAMES {
+    for name in TEST_CONTRACT_FILE_NAMES {
         let mut path =
             std::env::current_dir().map_err(|e| ArtifactError::CompilationFailed(e.to_string()))?;
         path.push("contracts");
@@ -219,10 +324,24 @@ fn compile_latest_test_contract(
         .clone())
 }
 
+fn compile_default_account_code(
+    solc_binary_name: &str,
+    zksolc_binary_name: &str,
+) -> Result<Vec<u8>, ArtifactError> {
+    Ok(vec![])
+}
+
+fn compile_predeployed_contracts(
+    solc_binary_name: &str,
+    zksolc_binary_name: &str,
+) -> Result<Vec<(&str, Vec<u8>)>, ArtifactError> {
+    Ok(vec![])
+}
+
 fn download_contracts() -> Result<(), ArtifactError> {
     fs::create_dir("contracts").map_err(|e| ArtifactError::DownloadFailed(e.to_string()))?;
 
-    for file_name in FILE_NAMES {
+    for file_name in TEST_CONTRACT_FILE_NAMES {
         let url = "https://raw.githubusercontent.com/matter-labs/test-contract/".to_owned()
             + BRANCH
             + "/contracts/basic_test/"
