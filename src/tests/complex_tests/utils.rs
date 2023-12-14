@@ -30,95 +30,52 @@ const SYTEM_CONTRACTS_URL: &str = "https://github.com/matter-labs/era-system-con
 const SYSTEM_CONTRACTS_COMMIT_HASH_LOCATION: &str =
     "src/tests/complex_tests/test_artifacts/system_contracts_commit_hash";
 
-// Contract name, contract address, is precompile
-const PREDEPLOYED_CONTRACTS: [(&str, &str, bool); 20] = [
-    (
-        "ZeroAddress",
-        "0x0000000000000000000000000000000000000000",
-        false,
-    ),
-    (
-        "Ecrecover",
-        "0x0000000000000000000000000000000000000001",
-        true,
-    ),
-    ("SHA256", "0x0000000000000000000000000000000000000002", true),
-    ("EcAdd", "0x0000000000000000000000000000000000000006", true),
-    ("EcMul", "0x0000000000000000000000000000000000000007", true),
-    (
-        "Bootloader",
-        "0x0000000000000000000000000000000000008001",
-        false,
-    ),
+const PRECOMPILE_CONTRACTS: [(&str, &str); 5] = [
+    ("Ecrecover", "0x0000000000000000000000000000000000000001"),
+    ("SHA256", "0x0000000000000000000000000000000000000002"),
+    ("EcAdd", "0x0000000000000000000000000000000000000006"),
+    ("EcMul", "0x0000000000000000000000000000000000000007"),
+    ("Keccak256", "0x0000000000000000000000000000000000008010"),
+];
+const PREDEPLOYED_CONTRACTS: [(&str, &str); 15] = [
+    ("ZeroAddress", "0x0000000000000000000000000000000000000000"),
+    ("Bootloader", "0x0000000000000000000000000000000000008001"),
     (
         "AccountCodeStorage",
         "0x0000000000000000000000000000000000008002",
-        false,
     ),
-    (
-        "NonceHolder",
-        "0x0000000000000000000000000000000000008003",
-        false,
-    ),
+    ("NonceHolder", "0x0000000000000000000000000000000000008003"),
     (
         "KnownCodesStorage",
         "0x0000000000000000000000000000000000008004",
-        false,
     ),
     (
         "ImmutableSimulator",
         "0x0000000000000000000000000000000000008005",
-        false,
     ),
     (
         "ContractDeployer",
         "0x0000000000000000000000000000000000008006",
-        false,
     ),
-    (
-        "L1Messenger",
-        "0x0000000000000000000000000000000000008008",
-        false,
-    ),
+    ("L1Messenger", "0x0000000000000000000000000000000000008008"),
     (
         "MsgValueSimulator",
         "0x0000000000000000000000000000000000008009",
-        false,
     ),
-    (
-        "L2EthToken",
-        "0x000000000000000000000000000000000000800a",
-        false,
-    ),
+    ("L2EthToken", "0x000000000000000000000000000000000000800a"),
     (
         "SystemContext",
         "0x000000000000000000000000000000000000800b",
-        false,
     ),
     (
         "BootloaderUtilities",
         "0x000000000000000000000000000000000000800c",
-        false,
     ),
-    (
-        "EventWriter",
-        "0x000000000000000000000000000000000000800d",
-        false,
-    ),
-    (
-        "Compressor",
-        "0x000000000000000000000000000000000000800e",
-        false,
-    ),
+    ("EventWriter", "0x000000000000000000000000000000000000800d"),
+    ("Compressor", "0x000000000000000000000000000000000000800e"),
     (
         "ComplexUpgrader",
         "0x000000000000000000000000000000000000800f",
-        false,
-    ),
-    (
-        "Keccak256",
-        "0x0000000000000000000000000000000000008010",
-        true,
     ),
 ];
 
@@ -355,11 +312,7 @@ fn compile_predeployed_contracts(
     .map_err(|e| ArtifactError::CompilationFailed(e.to_string()))?;
 
     let mut results = vec![];
-    for (contract_name, address, is_precompile) in PREDEPLOYED_CONTRACTS {
-        if is_precompile {
-            continue;
-        }
-
+    for (contract_name, address) in PREDEPLOYED_CONTRACTS {
         let file_path = file_names
             .iter()
             .find(|p| p.ends_with(contract_name.to_owned() + ".sol"))
@@ -392,11 +345,7 @@ fn compile_precompiles(solc: &mut SolcCompiler) -> Result<Vec<(&str, Vec<u8>)>, 
         .collect();
 
     let mut results = vec![];
-    for (contract_name, address, is_precompile) in PREDEPLOYED_CONTRACTS {
-        if !is_precompile {
-            continue;
-        }
-
+    for (contract_name, address) in PRECOMPILE_CONTRACTS {
         let file_path = file_names
             .iter()
             .find(|p| p.ends_with(contract_name.to_owned() + ".yul"))
