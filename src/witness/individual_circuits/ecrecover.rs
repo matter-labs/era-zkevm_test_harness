@@ -86,7 +86,7 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
                 },
                 hidden_fsm_output: EcrecoverCircuitFSMInputOutputWitness::<F> {
                     log_queue_state: take_queue_state_from_simulator(
-                        &artifacts.demuxed_sha256_precompile_queue_simulator,
+                        &artifacts.demuxed_ecrecover_queue_simulator,
                     ),
                     memory_queue_state: current_memory_queue_state.clone(),
                 },
