@@ -263,17 +263,6 @@ pub fn create_artifacts_from_tracer<
     let mut demuxed_keccak_precompile_queries = vec![];
     let mut demuxed_sha256_precompile_queries = vec![];
     let mut demuxed_ecrecover_queries = vec![];
-    let original_log_queue: Vec<_> = forward
-        .iter()
-        .filter(|el| match el {
-            ExtendedLogQuery::Query { .. } => true,
-            _ => false,
-        })
-        .map(|el| match el {
-            ExtendedLogQuery::Query { cycle, query, .. } => (*cycle, *query),
-            _ => unreachable!(),
-        })
-        .collect();
 
     let mut original_log_queue_states = vec![];
     let mut chain_of_states = vec![];
@@ -938,13 +927,11 @@ pub fn create_artifacts_from_tracer<
     artifacts.keccak_round_function_witnesses = keccak_round_function_witnesses;
     artifacts.sha256_round_function_witnesses = sha256_round_function_witnesses;
     artifacts.ecrecover_witnesses = ecrecover_witnesses;
-    artifacts.original_log_queue = original_log_queue;
     artifacts.original_log_queue_simulator =
         original_log_queue_simulator.unwrap_or(LogQueueSimulator::empty());
     artifacts.original_log_queue_states = original_log_queue_states;
 
     artifacts.demuxed_rollup_storage_queries = demuxed_rollup_storage_queries;
-    artifacts.demuxed_porter_storage_queries = demuxed_porter_storage_queries;
     artifacts.demuxed_event_queries = demuxed_event_queries;
     artifacts.demuxed_to_l1_queries = demuxed_to_l1_queries;
     artifacts.demuxed_keccak_precompile_queries = demuxed_keccak_precompile_queries;

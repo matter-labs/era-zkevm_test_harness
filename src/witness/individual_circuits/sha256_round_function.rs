@@ -1,5 +1,6 @@
 use super::*;
 use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
+use crate::witness::full_block_artifact::LogQueue;
 use crate::zk_evm::zkevm_opcode_defs::ethereum_types::U256;
 use crate::zkevm_circuits::base_structures::log_query::*;
 use crate::zkevm_circuits::sha256_round_function::input::*;
@@ -24,6 +25,7 @@ pub fn sha256_decompose_into_per_circuit_witness<
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     artifacts: &mut FullBlockArtifacts<F>,
+    mut demuxed_sha256_precompile_queue: LogQueue<F>,
     num_rounds_per_circuit: usize,
     round_function: &R,
 ) -> Vec<Sha256RoundFunctionCircuitInstanceWitness<F>> {
@@ -38,6 +40,7 @@ pub fn sha256_decompose_into_per_circuit_witness<
 
     // split into aux witness, don't mix with the memory
     use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Sha256RoundWitness;
+    let mut sha256_memory_queries = vec![];
 
     for (_cycle, _query, witness) in artifacts.sha256_round_function_witnesses.iter() {
         for el in witness.iter() {
@@ -48,10 +51,10 @@ pub fn sha256_decompose_into_per_circuit_witness<
             } = el;
 
             // we read, then write
-            artifacts.sha256_memory_queries.extend_from_slice(reads);
+            sha256_memory_queries.extend_from_slice(reads);
 
             if let Some(writes) = writes.as_ref() {
-                artifacts.sha256_memory_queries.extend_from_slice(writes);
+                sha256_memory_queries.extend_from_slice(writes);
             }
         }
     }
@@ -60,19 +63,17 @@ pub fn sha256_decompose_into_per_circuit_witness<
 
     let precompile_calls =
         std::mem::replace(&mut artifacts.demuxed_sha256_precompile_queries, vec![]);
-    let precompile_calls_queue_states = std::mem::replace(
-        &mut artifacts.demuxed_sha256_precompile_queue_states,
-        vec![],
-    );
-    let simulator_witness: Vec<_> = artifacts
-        .demuxed_sha256_precompile_queue_simulator
+    let precompile_calls_queue_states =
+        std::mem::replace(&mut demuxed_sha256_precompile_queue.states, vec![]);
+    let simulator_witness: Vec<_> = demuxed_sha256_precompile_queue
+        .simulator
         .witness
         .clone()
         .into();
     let round_function_witness =
         std::mem::replace(&mut artifacts.sha256_round_function_witnesses, vec![]);
 
-    let memory_queries = std::mem::replace(&mut artifacts.sha256_memory_queries, vec![]);
+    let memory_queries = std::mem::replace(&mut sha256_memory_queries, vec![]);
 
     // check basic consistency
     assert!(precompile_calls.len() == precompile_calls_queue_states.len());
@@ -81,7 +82,7 @@ pub fn sha256_decompose_into_per_circuit_witness<
     if precompile_calls.len() == 0 {
         // we can not skip the circuit (at least for now), so we have to create a dummy on
         let log_queue_input_state =
-            take_queue_state_from_simulator(&artifacts.demuxed_sha256_precompile_queue_simulator);
+            take_queue_state_from_simulator(&demuxed_sha256_precompile_queue.simulator);
         let memory_queue_input_state =
             take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
         let current_memory_queue_state = memory_queue_input_state.clone();
@@ -128,7 +129,7 @@ pub fn sha256_decompose_into_per_circuit_witness<
                 hidden_fsm_output: Sha256RoundFunctionFSMInputOutputWitness::<F> {
                     internal_fsm: hidden_fsm_output_state,
                     log_queue_state: take_queue_state_from_simulator(
-                        &artifacts.demuxed_sha256_precompile_queue_simulator,
+                        &demuxed_sha256_precompile_queue.simulator,
                     ),
                     memory_queue_state: current_memory_queue_state.clone(),
                 },
@@ -153,7 +154,7 @@ pub fn sha256_decompose_into_per_circuit_witness<
 
     // convension
     let mut log_queue_input_state =
-        take_queue_state_from_simulator(&artifacts.demuxed_sha256_precompile_queue_simulator);
+        take_queue_state_from_simulator(&demuxed_sha256_precompile_queue.simulator);
     let mut hidden_fsm_input_state = Sha256RoundFunctionFSM::<F>::placeholder_witness();
     hidden_fsm_input_state.read_precompile_call = true;
 
@@ -176,8 +177,8 @@ pub fn sha256_decompose_into_per_circuit_witness<
         .zip(round_function_witness.into_iter())
         .enumerate()
     {
-        let _ = artifacts
-            .demuxed_sha256_precompile_queue_simulator
+        let _ = demuxed_sha256_precompile_queue
+            .simulator
             .pop_and_output_intermediate_data(round_function);
 
         use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Sha256;
@@ -357,7 +358,7 @@ pub fn sha256_decompose_into_per_circuit_witness<
                         hidden_fsm_output: Sha256RoundFunctionFSMInputOutputWitness::<F> {
                             internal_fsm: hidden_fsm_output_state.clone(),
                             log_queue_state: take_queue_state_from_simulator(
-                                &artifacts.demuxed_sha256_precompile_queue_simulator,
+                                &demuxed_sha256_precompile_queue.simulator,
                             ),
                             memory_queue_state: current_memory_queue_state.clone(),
                         },
@@ -379,9 +380,8 @@ pub fn sha256_decompose_into_per_circuit_witness<
 
                 result.push(witness);
 
-                log_queue_input_state = take_queue_state_from_simulator(
-                    &artifacts.demuxed_sha256_precompile_queue_simulator,
-                );
+                log_queue_input_state =
+                    take_queue_state_from_simulator(&demuxed_sha256_precompile_queue.simulator);
                 hidden_fsm_input_state = hidden_fsm_output_state;
                 memory_queue_input_state = current_memory_queue_state.clone();
             }

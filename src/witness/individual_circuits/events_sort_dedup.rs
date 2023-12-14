@@ -1,5 +1,6 @@
 use super::*;
 use crate::ethereum_types::U256;
+use crate::witness::full_block_artifact::LogQueue;
 use crate::zk_evm::aux_structures::*;
 use crate::zkevm_circuits::base_structures::log_query::{
     LOG_QUERY_ABSORBTION_ROUNDS, LOG_QUERY_PACKED_WIDTH,
@@ -17,11 +18,7 @@ pub fn compute_events_dedup_and_sort<
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     unsorted_queries: &Vec<LogQuery>,
-    target_deduplicated_queries: &mut Vec<LogQuery>,
-    unsorted_simulator: &LogQueueSimulator<F>,
-    unsorted_simulator_states: &Vec<
-        QueueIntermediateStates<F, QUEUE_STATE_WIDTH, 12, LOG_QUERY_ABSORBTION_ROUNDS>,
-    >,
+    unsorted_queue: &LogQueue<F>,
     result_queue_simulator: &mut LogQueueSimulator<F>,
     per_circuit_capacity: usize,
     round_function: &R,
@@ -35,13 +32,13 @@ pub fn compute_events_dedup_and_sort<
         let initial_fsm_state = EventsDeduplicatorFSMInputOutput::<F>::placeholder_witness();
 
         assert_eq!(
-            take_queue_state_from_simulator(&unsorted_simulator),
+            take_queue_state_from_simulator(&unsorted_queue.simulator),
             QueueState::placeholder_witness()
         );
 
         let mut passthrough_input = EventsDeduplicatorInputData::placeholder_witness();
         passthrough_input.initial_log_queue_state =
-            take_queue_state_from_simulator(&unsorted_simulator);
+            take_queue_state_from_simulator(&unsorted_queue.simulator);
         passthrough_input.intermediate_sorted_queue_state = QueueState::placeholder_witness();
 
         let final_fsm_state = EventsDeduplicatorFSMInputOutput::<F>::placeholder_witness();
@@ -98,7 +95,7 @@ pub fn compute_events_dedup_and_sort<
         take_queue_state_from_simulator(&intermediate_sorted_simulator);
     let sorted_queries = sort_and_dedup_events_log(sorted_queries);
 
-    let unsorted_simulator_final_state = take_queue_state_from_simulator(unsorted_simulator);
+    let unsorted_simulator_final_state = take_queue_state_from_simulator(&unsorted_queue.simulator);
 
     let challenges = produce_fs_challenges::<
         F,
@@ -107,7 +104,7 @@ pub fn compute_events_dedup_and_sort<
         { LOG_QUERY_PACKED_WIDTH + 1 },
         DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS,
     >(
-        take_queue_state_from_simulator(&unsorted_simulator).tail,
+        take_queue_state_from_simulator(&unsorted_queue.simulator).tail,
         take_queue_state_from_simulator(&intermediate_sorted_simulator).tail,
         round_function,
     );
@@ -117,7 +114,12 @@ pub fn compute_events_dedup_and_sort<
         intermediate_sorted_simulator_final_state.tail.length
     );
 
-    let lhs_contributions: Vec<_> = unsorted_simulator.witness.iter().map(|el| el.0).collect();
+    let lhs_contributions: Vec<_> = unsorted_queue
+        .simulator
+        .witness
+        .iter()
+        .map(|el| el.0)
+        .collect();
     let rhs_contributions: Vec<_> = intermediate_sorted_simulator
         .witness
         .iter()
@@ -142,7 +144,7 @@ pub fn compute_events_dedup_and_sort<
 
         assert_eq!(
             lhs_grand_product_chain.len(),
-            unsorted_simulator.witness.len()
+            unsorted_queue.simulator.witness.len()
         );
         assert_eq!(
             lhs_grand_product_chain.len(),
@@ -156,25 +158,26 @@ pub fn compute_events_dedup_and_sort<
     let transposed_lhs_chains = transpose_chunks(&lhs_grand_product_chains, per_circuit_capacity);
     let transposed_rhs_chains = transpose_chunks(&rhs_grand_product_chains, per_circuit_capacity);
 
-    assert!(unsorted_simulator_states.len() > 0);
-    assert!(unsorted_simulator_states.chunks(per_circuit_capacity).len() > 0);
+    assert!(unsorted_queue.states.len() > 0);
+    assert!(unsorted_queue.states.chunks(per_circuit_capacity).len() > 0);
     assert_eq!(
-        unsorted_simulator_states.chunks(per_circuit_capacity).len(),
+        unsorted_queue.states.chunks(per_circuit_capacity).len(),
         intermediate_sorted_log_simulator_states
             .chunks(per_circuit_capacity)
             .len()
     );
     assert_eq!(
-        unsorted_simulator_states.chunks(per_circuit_capacity).len(),
+        unsorted_queue.states.chunks(per_circuit_capacity).len(),
         transposed_lhs_chains.len()
     );
     assert_eq!(
-        unsorted_simulator_states.chunks(per_circuit_capacity).len(),
+        unsorted_queue.states.chunks(per_circuit_capacity).len(),
         transposed_rhs_chains.len()
     );
     assert_eq!(
-        unsorted_simulator_states.chunks(per_circuit_capacity).len(),
-        unsorted_simulator
+        unsorted_queue.states.chunks(per_circuit_capacity).len(),
+        unsorted_queue
+            .simulator
             .witness
             .as_slices()
             .0
@@ -182,7 +185,7 @@ pub fn compute_events_dedup_and_sort<
             .len()
     );
     assert_eq!(
-        unsorted_simulator_states.chunks(per_circuit_capacity).len(),
+        unsorted_queue.states.chunks(per_circuit_capacity).len(),
         intermediate_sorted_simulator
             .witness
             .as_slices()
@@ -191,13 +194,15 @@ pub fn compute_events_dedup_and_sort<
             .len()
     );
 
-    let it = unsorted_simulator_states
+    let it = unsorted_queue
+        .states
         .chunks(per_circuit_capacity)
         .zip(intermediate_sorted_log_simulator_states.chunks(per_circuit_capacity))
         .zip(transposed_lhs_chains.into_iter())
         .zip(transposed_rhs_chains.into_iter())
         .zip(
-            unsorted_simulator
+            unsorted_queue
+                .simulator
                 .witness
                 .as_slices()
                 .0
@@ -490,8 +495,6 @@ pub fn compute_events_dedup_and_sort<
         .closed_form_input
         .observable_output
         .final_queue_state = final_sorted_queue_state.clone();
-
-    *target_deduplicated_queries = sorted_queries;
 
     results
 }
