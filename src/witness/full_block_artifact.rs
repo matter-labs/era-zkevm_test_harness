@@ -45,70 +45,28 @@ pub struct FullBlockArtifacts<F: SmallField> {
     pub vm_memory_queue_states: Vec<(u32, bool, MemoryQueueState<F>)>,
     //
     pub all_memory_queries_accumulated: Vec<MemoryQuery>,
-    pub sorted_memory_queries_accumulated: Vec<MemoryQuery>,
     // all the RAM queue states
     pub all_memory_queue_states: Vec<MemoryQueueState<F>>,
-    pub sorted_memory_queue_states: Vec<MemoryQueueState<F>>,
     // decommittment queue
     pub all_decommittment_queries: Vec<(u32, DecommittmentQuery, Vec<U256>)>,
-    pub sorted_decommittment_queries: Vec<DecommittmentQuery>,
-    pub deduplicated_decommittment_queries: Vec<DecommittmentQuery>,
     pub all_decommittment_queue_states: Vec<(u32, DecommittmentQueueState<F>)>,
 
-    pub deduplicated_decommittment_queue_simulator: DecommittmentQueueSimulator<F>,
-    pub deduplicated_decommittment_queue_states: Vec<DecommittmentQueueState<F>>,
-    pub deduplicated_decommit_requests_with_data: Vec<(DecommittmentQuery, Vec<U256>)>,
     // log queue
-    pub original_log_queue: Vec<(u32, LogQuery)>,
     pub original_log_queue_simulator: LogQueueSimulator<F>,
     pub original_log_queue_states: Vec<(u32, LogQueueState<F>)>,
 
     // demuxed log queues
     pub demuxed_rollup_storage_queries: Vec<LogQuery>,
-    pub demuxed_rollup_storage_queue_states: Vec<LogQueueState<F>>,
-    pub demuxed_rollup_storage_queue_simulator: LogQueueSimulator<F>,
-    pub demuxed_porter_storage_queries: Vec<LogQuery>,
-    pub demuxed_porter_storage_queue_states: Vec<LogQueueState<F>>,
-    pub demuxed_porter_storage_queue_simulator: LogQueueSimulator<F>,
     pub demuxed_event_queries: Vec<LogQuery>,
-    pub demuxed_events_queue_simulator: LogQueueSimulator<F>,
-    pub demuxed_event_queue_states: Vec<LogQueueState<F>>,
     pub demuxed_to_l1_queries: Vec<LogQuery>,
-    pub demuxed_to_l1_queue_simulator: LogQueueSimulator<F>,
-    pub demuxed_to_l1_queue_states: Vec<LogQueueState<F>>,
     pub demuxed_keccak_precompile_queries: Vec<LogQuery>,
-    pub demuxed_keccak_precompile_queue_simulator: LogQueueSimulator<F>,
-    pub demuxed_keccak_precompile_queue_states: Vec<LogQueueState<F>>,
     pub demuxed_sha256_precompile_queries: Vec<LogQuery>,
-    pub demuxed_sha256_precompile_queue_simulator: LogQueueSimulator<F>,
-    pub demuxed_sha256_precompile_queue_states: Vec<LogQueueState<F>>,
     pub demuxed_ecrecover_queries: Vec<LogQuery>,
-    pub demuxed_ecrecover_queue_simulator: LogQueueSimulator<F>,
-    pub demuxed_ecrecover_queue_states: Vec<LogQueueState<F>>,
-
-    // // sorted and deduplicated log-like queues for ones that support reverts
-    // // sorted
-    // pub _sorted_rollup_storage_queries: Vec<LogQuery>,
-    // pub _sorted_rollup_storage_queue_states: Vec<LogQueueState<F>>,
-    // pub _sorted_porter_storage_queries: Vec<LogQuery>,
-    // pub _sorted_porter_storage_queue_states: Vec<LogQueueState<F>>,
-    // pub _sorted_event_queries: Vec<LogQuery>,
-    // pub sorted_event_queue_states: Vec<LogQueueState<F>>,
-    // pub _sorted_to_l1_queries: Vec<LogQuery>,
-    // pub sorted_to_l1_queue_states: Vec<LogQueueState<F>>,
 
     // deduplicated
     pub deduplicated_rollup_storage_queries: Vec<LogQuery>,
-    pub deduplicated_rollup_storage_queue_states: Vec<LogQueueState<F>>,
     pub deduplicated_rollup_storage_queue_simulator: LogQueueSimulator<F>,
-    pub deduplicated_porter_storage_queries: Vec<LogQuery>,
-    pub deduplicated_porter_storage_queue_states: Vec<LogQueueState<F>>,
-    pub deduplicated_event_queries: Vec<LogQuery>,
-    pub deduplicated_event_queue_simulator: LogQueueSimulator<F>,
-    pub deduplicated_event_queue_states: Vec<LogQueueState<F>>,
-    pub deduplicated_to_l1_queries: Vec<LogQuery>,
     pub deduplicated_to_l1_queue_simulator: LogQueueSimulator<F>,
-    pub deduplicated_to_l1_queue_states: Vec<LogQueueState<F>>,
 
     //
     pub special_initial_decommittment_queries: Vec<(DecommittmentQuery, Vec<U256>)>,
@@ -117,18 +75,6 @@ pub struct FullBlockArtifacts<F: SmallField> {
     pub keccak_round_function_witnesses: Vec<(u32, LogQuery, Vec<Keccak256RoundWitness>)>,
     pub sha256_round_function_witnesses: Vec<(u32, LogQuery, Vec<Sha256RoundWitness>)>,
     pub ecrecover_witnesses: Vec<(u32, LogQuery, ECRecoverRoundWitness)>,
-
-    // also separate copy of memory queries that are contributions from individual precompiles
-    pub keccak_256_memory_queries: Vec<MemoryQuery>,
-    pub keccak_256_memory_states: Vec<MemoryQueueState<F>>,
-
-    // also separate copy of memory queries that are contributions from individual precompiles
-    pub sha256_memory_queries: Vec<MemoryQuery>,
-    pub sha256_memory_states: Vec<MemoryQueueState<F>>,
-
-    // also separate copy of memory queries that are contributions from individual precompiles
-    pub ecrecover_memory_queries: Vec<MemoryQuery>,
-    pub ecrecover_memory_states: Vec<MemoryQueueState<F>>,
 
     // processed RAM circuit information
     pub ram_permutation_circuits_data: Vec<RamPermutationCircuitInstanceWitness<F>>,
@@ -152,6 +98,13 @@ pub struct FullBlockArtifacts<F: SmallField> {
     pub ecrecover_circuits_data: Vec<EcrecoverCircuitInstanceWitness<F>>,
     //
     pub l1_messages_linear_hash_data: Vec<LinearHasherCircuitInstanceWitness<F>>,
+}
+
+#[derive(Derivative)]
+#[derivative(Default(bound = ""))]
+pub struct LogQueue<F: SmallField> {
+    pub states: Vec<LogQueueState<F>>,
+    pub simulator: LogQueueSimulator<F>,
 }
 
 use crate::boojum::algebraic_props::round_function::AlgebraicRoundFunction;
@@ -211,8 +164,15 @@ impl<F: SmallField> FullBlockArtifacts<F> {
 
         tracing::debug!("Running code decommittments sorter simulation");
 
+        let mut deduplicated_decommitment_queue_simulator = Default::default();
+        let mut deduplicated_decommittment_queue_states = Default::default();
+        let mut deduplicated_decommit_requests_with_data = Default::default();
+
         let decommittments_deduplicator_witness = compute_decommitts_sorter_circuit_snapshots(
             self,
+            &mut deduplicated_decommitment_queue_simulator,
+            &mut deduplicated_decommittment_queue_states,
+            &mut deduplicated_decommit_requests_with_data,
             round_function,
             geometry.cycles_code_decommitter_sorter as usize,
         );
@@ -225,6 +185,9 @@ impl<F: SmallField> FullBlockArtifacts<F> {
 
         let code_decommitter_circuits_data = compute_decommitter_circuit_snapshots(
             self,
+            &mut deduplicated_decommitment_queue_simulator,
+            &mut deduplicated_decommittment_queue_states,
+            &mut deduplicated_decommit_requests_with_data,
             round_function,
             geometry.cycles_per_code_decommitter as usize,
         );
@@ -236,7 +199,15 @@ impl<F: SmallField> FullBlockArtifacts<F> {
 
         tracing::debug!("Running log demux simulation");
 
-        let log_demuxer_witness = compute_logs_demux(
+        let (
+            log_demuxer_witness,
+            demuxed_rollup_storage_queue,
+            demuxed_event_queue,
+            demuxed_to_l1_queue,
+            demuxed_keccak_precompile_queue,
+            demuxed_sha256_precompile_queue,
+            demuxed_ecrecover_queue,
+        ) = compute_logs_demux(
             self,
             geometry.cycles_per_log_demuxer as usize,
             round_function,
@@ -252,6 +223,7 @@ impl<F: SmallField> FullBlockArtifacts<F> {
 
         let keccak256_circuits_data = keccak256_decompose_into_per_circuit_witness(
             self,
+            demuxed_keccak_precompile_queue,
             geometry.cycles_per_keccak256_circuit as usize,
             round_function,
         );
@@ -265,6 +237,7 @@ impl<F: SmallField> FullBlockArtifacts<F> {
 
         let sha256_circuits_data = sha256_decompose_into_per_circuit_witness(
             self,
+            demuxed_sha256_precompile_queue,
             geometry.cycles_per_sha256_circuit as usize,
             round_function,
         );
@@ -278,6 +251,7 @@ impl<F: SmallField> FullBlockArtifacts<F> {
 
         let ecrecover_circuits_data = ecrecover_decompose_into_per_circuit_witness(
             self,
+            demuxed_ecrecover_queue,
             geometry.cycles_per_ecrecover_circuit as usize,
             round_function,
         );
@@ -306,6 +280,7 @@ impl<F: SmallField> FullBlockArtifacts<F> {
 
         let storage_deduplicator_circuit_data = compute_storage_dedup_and_sort(
             self,
+            demuxed_rollup_storage_queue,
             geometry.cycles_per_storage_sorter as usize,
             round_function,
         );
@@ -317,10 +292,8 @@ impl<F: SmallField> FullBlockArtifacts<F> {
 
         let events_deduplicator_circuit_data = compute_events_dedup_and_sort(
             &self.demuxed_event_queries,
-            &mut self.deduplicated_event_queries,
-            &self.demuxed_events_queue_simulator,
-            &self.demuxed_event_queue_states,
-            &mut self.deduplicated_event_queue_simulator,
+            &demuxed_event_queue,
+            &mut Default::default(),
             geometry.cycles_per_events_or_l1_messages_sorter as usize,
             round_function,
         );
@@ -329,12 +302,11 @@ impl<F: SmallField> FullBlockArtifacts<F> {
 
         tracing::debug!("Running L1 messages deduplication simulation");
 
+        let mut deduplicated_to_l1_queue_simulator = Default::default();
         let l1_messages_deduplicator_circuit_data = compute_events_dedup_and_sort(
             &self.demuxed_to_l1_queries,
-            &mut self.deduplicated_to_l1_queries,
-            &self.demuxed_to_l1_queue_simulator,
-            &self.demuxed_to_l1_queue_states,
-            &mut self.deduplicated_to_l1_queue_simulator,
+            &demuxed_to_l1_queue,
+            &mut deduplicated_to_l1_queue_simulator,
             geometry.cycles_per_events_or_l1_messages_sorter as usize,
             round_function,
         );
@@ -346,7 +318,7 @@ impl<F: SmallField> FullBlockArtifacts<F> {
         tracing::debug!("Running L1 messages linear hash simulation");
 
         assert!(
-            self.deduplicated_to_l1_queue_simulator.num_items
+            deduplicated_to_l1_queue_simulator.num_items
                 <= geometry.limit_for_l1_messages_pudata_hasher,
             "too many L1 messages to linearly hash by single circuit"
         );
@@ -354,7 +326,7 @@ impl<F: SmallField> FullBlockArtifacts<F> {
         use crate::witness::individual_circuits::data_hasher_and_merklizer::compute_linear_keccak256;
 
         let l1_messages_pubdata_hasher_data = compute_linear_keccak256(
-            &self.deduplicated_to_l1_queue_simulator,
+            &deduplicated_to_l1_queue_simulator,
             geometry.limit_for_l1_messages_pudata_hasher as usize,
             round_function,
         );

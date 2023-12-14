@@ -1,4 +1,5 @@
 use super::*;
+use crate::witness::full_block_artifact::LogQueue;
 use crate::zkevm_circuits::base_structures::log_query::*;
 use crate::zkevm_circuits::keccak256_round_function::{
     input::*, Keccak256PrecompileCallParamsWitness,
@@ -24,6 +25,7 @@ pub fn keccak256_decompose_into_per_circuit_witness<
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     artifacts: &mut FullBlockArtifacts<F>,
+    mut demuxed_keccak_precompile_queue: LogQueue<F>,
     num_rounds_per_circuit: usize,
     round_function: &R,
 ) -> Vec<Keccak256RoundFunctionCircuitInstanceWitness<F>> {
@@ -39,6 +41,8 @@ pub fn keccak256_decompose_into_per_circuit_witness<
     // split into aux witness, don't mix with the memory
     use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::Keccak256RoundWitness;
 
+    let mut keccak_256_memory_queries = vec![];
+
     for (_cycle, _query, witness) in artifacts.keccak_round_function_witnesses.iter() {
         for el in witness.iter() {
             let Keccak256RoundWitness {
@@ -50,14 +54,12 @@ pub fn keccak256_decompose_into_per_circuit_witness<
             // we read, then write
             reads.iter().for_each(|read| {
                 if let Some(read) = read {
-                    artifacts.keccak_256_memory_queries.push(*read);
+                    keccak_256_memory_queries.push(*read);
                 }
             });
 
             if let Some(writes) = writes.as_ref() {
-                artifacts
-                    .keccak_256_memory_queries
-                    .extend_from_slice(writes);
+                keccak_256_memory_queries.extend_from_slice(writes);
             }
         }
     }
@@ -66,14 +68,12 @@ pub fn keccak256_decompose_into_per_circuit_witness<
 
     let keccak_precompile_calls =
         std::mem::replace(&mut artifacts.demuxed_keccak_precompile_queries, vec![]);
-    let keccak_precompile_calls_queue_states = std::mem::replace(
-        &mut artifacts.demuxed_keccak_precompile_queue_states,
-        vec![],
-    );
+    let keccak_precompile_calls_queue_states =
+        std::mem::replace(&mut demuxed_keccak_precompile_queue.states, vec![]);
     let round_function_witness =
         std::mem::replace(&mut artifacts.keccak_round_function_witnesses, vec![]);
 
-    let memory_queries = std::mem::replace(&mut artifacts.keccak_256_memory_queries, vec![]);
+    let memory_queries = std::mem::replace(&mut keccak_256_memory_queries, vec![]);
 
     // check basic consistency
     assert_eq!(
@@ -82,16 +82,14 @@ pub fn keccak256_decompose_into_per_circuit_witness<
     );
     assert_eq!(keccak_precompile_calls.len(), round_function_witness.len());
     assert_eq!(
-        artifacts
-            .demuxed_keccak_precompile_queue_simulator
-            .num_items as usize,
+        demuxed_keccak_precompile_queue.simulator.num_items as usize,
         round_function_witness.len()
     );
 
     if keccak_precompile_calls.len() == 0 {
         // we can not skip the circuit (at least for now), so we have to create a dummy on
         let log_queue_input_state =
-            take_queue_state_from_simulator(&artifacts.demuxed_keccak_precompile_queue_simulator);
+            take_queue_state_from_simulator(&demuxed_keccak_precompile_queue.simulator);
         let memory_queue_input_state =
             take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
         let current_memory_queue_state = memory_queue_input_state.clone();
@@ -138,7 +136,7 @@ pub fn keccak256_decompose_into_per_circuit_witness<
                 hidden_fsm_output: Keccak256RoundFunctionFSMInputOutputWitness::<F> {
                     internal_fsm: hidden_fsm_output_state,
                     log_queue_state: take_queue_state_from_simulator(
-                        &artifacts.demuxed_keccak_precompile_queue_simulator,
+                        &demuxed_keccak_precompile_queue.simulator,
                     ),
                     memory_queue_state: current_memory_queue_state.clone(),
                 },
@@ -161,8 +159,8 @@ pub fn keccak256_decompose_into_per_circuit_witness<
     let mut round_counter = 0;
     let mut starting_request_idx_for_circuit = 0;
     let num_requests = keccak_precompile_calls.len();
-    let keccak_requests_queue_witness_copy: Vec<_> = artifacts
-        .demuxed_keccak_precompile_queue_simulator
+    let keccak_requests_queue_witness_copy: Vec<_> = demuxed_keccak_precompile_queue
+        .simulator
         .witness
         .iter()
         .map(|el| {
@@ -174,7 +172,7 @@ pub fn keccak256_decompose_into_per_circuit_witness<
 
     // convension
     let mut log_queue_input_state =
-        take_queue_state_from_simulator(&artifacts.demuxed_keccak_precompile_queue_simulator);
+        take_queue_state_from_simulator(&demuxed_keccak_precompile_queue.simulator);
 
     let mut hidden_fsm_input_state = Keccak256RoundFunctionFSM::<F>::placeholder_witness();
     hidden_fsm_input_state.read_precompile_call = true;
@@ -197,8 +195,8 @@ pub fn keccak256_decompose_into_per_circuit_witness<
     {
         // request level. Each request can be broken into few rounds
 
-        let _ = artifacts
-            .demuxed_keccak_precompile_queue_simulator
+        let _ = demuxed_keccak_precompile_queue
+            .simulator
             .pop_and_output_intermediate_data(round_function);
 
         use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::Keccak256;
@@ -490,7 +488,7 @@ pub fn keccak256_decompose_into_per_circuit_witness<
                         hidden_fsm_output: Keccak256RoundFunctionFSMInputOutputWitness::<F> {
                             internal_fsm: hidden_fsm_output_state.clone(),
                             log_queue_state: take_queue_state_from_simulator(
-                                &artifacts.demuxed_keccak_precompile_queue_simulator,
+                                &demuxed_keccak_precompile_queue.simulator,
                             ),
                             memory_queue_state: current_memory_queue_state.clone(),
                         },
@@ -509,9 +507,8 @@ pub fn keccak256_decompose_into_per_circuit_witness<
                 // make non-inclusize
                 result.push(witness);
 
-                log_queue_input_state = take_queue_state_from_simulator(
-                    &artifacts.demuxed_keccak_precompile_queue_simulator,
-                );
+                log_queue_input_state =
+                    take_queue_state_from_simulator(&demuxed_keccak_precompile_queue.simulator);
                 hidden_fsm_input_state = hidden_fsm_output_state;
                 memory_queue_input_state = current_memory_queue_state.clone();
             }
