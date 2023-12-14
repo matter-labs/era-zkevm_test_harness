@@ -73,7 +73,7 @@ pub fn sha256_decompose_into_per_circuit_witness<
     let round_function_witness =
         std::mem::replace(&mut artifacts.sha256_round_function_witnesses, vec![]);
 
-    let memory_queries = std::mem::replace(&mut sha256_memory_queries, vec![]);
+    let memory_queries = sha256_memory_queries;
 
     // check basic consistency
     assert!(precompile_calls.len() == precompile_calls_queue_states.len());

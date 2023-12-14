@@ -53,7 +53,7 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
     let simulator_witness: Vec<_> = demuxed_ecrecover_queue.simulator.witness.clone().into();
     let round_function_witness = std::mem::replace(&mut artifacts.ecrecover_witnesses, vec![]);
 
-    let memory_queries = std::mem::replace(&mut ecrecover_memory_queries, vec![]);
+    let memory_queries = ecrecover_memory_queries;
 
     // check basic consistency
     assert!(precompile_calls.len() == precompile_calls_queue_states.len());

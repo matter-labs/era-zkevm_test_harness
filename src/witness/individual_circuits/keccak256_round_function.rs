@@ -75,7 +75,7 @@ pub fn keccak256_decompose_into_per_circuit_witness<
     let round_function_witness =
         std::mem::replace(&mut artifacts.keccak_round_function_witnesses, vec![]);
 
-    let memory_queries = std::mem::replace(&mut keccak_256_memory_queries, vec![]);
+    let memory_queries = keccak_256_memory_queries;
 
     // check basic consistency
     assert_eq!(
