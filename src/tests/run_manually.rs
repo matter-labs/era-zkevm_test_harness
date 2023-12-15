@@ -237,8 +237,7 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
 
     println!("Simulation and witness creation are completed");
 
-    let flattened = basic_block_circuits.into_flattened_set();
-    for el in flattened.into_iter() {
+    for el in basic_block_circuits.into_flat_iterator() {
         println!("Doing {} circuit", el.short_description());
         base_test_circuit(el);
     }

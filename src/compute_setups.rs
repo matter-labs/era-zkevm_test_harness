@@ -45,7 +45,7 @@ pub fn generate_base_layer_vks_and_proofs(
 
     let mut processed = HashSet::new();
 
-    for el in base_layer_circuit.into_flattened_set().into_iter() {
+    for el in base_layer_circuit.into_flat_iterator() {
         let name = el.short_description();
         if processed.contains(&name) {
             continue;

@@ -280,14 +280,8 @@ fn run_and_try_create_witness_inner(
 
     for (idx, (el, input_value)) in basic_block_circuits
         .clone()
-        .into_flattened_set()
-        .into_iter()
-        .zip(
-            basic_block_circuits_inputs
-                .clone()
-                .into_flattened_set()
-                .into_iter(),
-        )
+        .into_flat_iterator()
+        .zip(basic_block_circuits_inputs.clone().into_flat_iterator())
         .enumerate()
     {
         let descr = el.short_description();
@@ -324,8 +318,7 @@ fn run_and_try_create_witness_inner(
 
     for (idx, el) in basic_block_circuits
         .clone()
-        .into_flattened_set()
-        .into_iter()
+        .into_flat_iterator()
         .enumerate()
     {
         let descr = el.short_description();

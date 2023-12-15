@@ -368,8 +368,7 @@ round_function: R, // used for all queues implementation
         let per_circuit_inputs: VecDeque<ClosedFormInputCompactFormWitness<F>> =
             compact_form_witnesses
                 .clone()
-                .into_flattened_set()
-                .into_iter()
+                .into_flat_iterator()
                 .map(|el| el.into_inner())
                 .collect();
 

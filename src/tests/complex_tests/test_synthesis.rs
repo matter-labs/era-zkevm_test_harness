@@ -13,8 +13,7 @@ fn test_base_layer_circuit_synthesis() {
     let geometry = crate::geometry_config::get_geometry_config();
     let (base_layer_circuit, _, _, _) = generate_base_layer(test_artifact, 20000, geometry);
     let circuit = base_layer_circuit
-        .into_flattened_set()
-        .into_iter()
+        .into_flat_iterator()
         .next()
         .expect("failed to get circuit");
     let worker = Worker::new_with_num_threads(8);
