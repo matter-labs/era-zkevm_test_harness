@@ -12,7 +12,8 @@ use std::{
 };
 
 const TEST_CONTRACT_REPO: &str = "https://github.com/matter-labs/test-contract";
-const TEST_CONTRACT_COMMITS_URL: &str = "https://api.github.com/repos/matter-labs/test-contract";
+const TEST_CONTRACT_COMMITS_URL: &str =
+    "https://api.github.com/repos/matter-labs/test-contract/commits/";
 const BRANCH: &str = "v1.4.1";
 const BASIC_TEST_JSON_LOCATION: &str = "src/tests/complex_tests/test_artifacts/basic_test.json";
 const BASIC_TEST_COMMIT_HASH_LOCATION: &str =
@@ -28,7 +29,7 @@ const TEST_CONTRACT_FILE_NAMES: [&str; 4] = [
 const SYSTEM_CONTRACTS_BRANCH: &str = "v1-4-1-integration";
 const SYSTEM_CONTRACTS_URL: &str = "https://github.com/matter-labs/era-system-contracts/";
 const SYSTEM_CONTRACTS_COMMITS_URL: &str =
-    "https://api.github.com/repos/matter-labs/era-system-contracts/";
+    "https://api.github.com/repos/matter-labs/era-system-contracts/commits/";
 const SYSTEM_CONTRACTS_COMMIT_HASH_LOCATION: &str =
     "src/tests/complex_tests/test_artifacts/system_contracts_commit_hash";
 
@@ -39,15 +40,7 @@ const PRECOMPILE_CONTRACTS: [(&str, &str); 5] = [
     ("EcMul", "0x0000000000000000000000000000000000000007"),
     ("Keccak256", "0x0000000000000000000000000000000000008010"),
 ];
-const PREDEPLOYED_CONTRACTS_SOL: [(&str, &str); 14] = [
-    (
-        "EmptyContract",
-        "0x0000000000000000000000000000000000000000",
-    ),
-    (
-        "EmptyContract",
-        "0x0000000000000000000000000000000000008001",
-    ),
+const PREDEPLOYED_CONTRACTS_SOL: [(&str, &str); 12] = [
     (
         "AccountCodeStorage",
         "0x0000000000000000000000000000000000008002",
@@ -137,10 +130,10 @@ pub fn read_basic_test_artifact() -> TestArtifact {
 
         // delay checking result so that we clean up in all cases
         let result = compile_latest_artifacts(&solc_binary_name, &zksolc_binary_name);
-        delete_binary(&solc_binary_name);
-        delete_binary(&zksolc_binary_name);
-        delete_contracts_folder();
-        delete_system_contracts_folder();
+        let _ = fs::remove_file(&solc_binary_name);
+        let _ = fs::remove_file(&zksolc_binary_name);
+        let _ = fs::remove_dir_all("contracts");
+        let _ = fs::remove_dir_all("era-system-contracts");
         match result {
             Ok((bytecode, default_account_code, predeployed_contracts)) => {
                 let artifact =
@@ -344,34 +337,32 @@ fn compile_predeployed_contracts(
     file_names.push("./era-system-contracts/contracts/Constants.sol".into());
 
     // separate the sol and yul files
-    let sol_file_names: Vec<PathBuf> = file_names
-        .iter()
-        .filter_map(|path| {
-            if path.extension().unwrap() == "sol" {
-                Some(path.clone())
-            } else {
-                None
-            }
-        })
-        .collect();
-    let yul_file_names: Vec<PathBuf> = file_names
-        .iter()
-        .filter_map(|path| {
-            if path.extension().unwrap() == "yul" {
-                Some(path.clone())
-            } else {
-                None
-            }
-        })
-        .collect();
+    let separate_by_extension = |file_names: &[PathBuf], extension: &str| -> Vec<PathBuf> {
+        file_names
+            .iter()
+            .filter_map(|path| {
+                if path.extension().unwrap() == extension {
+                    Some(path.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    };
+
+    let sol_file_names = separate_by_extension(&file_names, "sol");
+    let yul_file_names = separate_by_extension(&file_names, "yul");
+
     let sol_stdout = compile_solidity(solc_compiler_path, zksolc_compiler_path, &sol_file_names)?;
+
     let mut yul_stdout = vec![];
     for file_name in &yul_file_names {
         let contract_name = PREDEPLOYED_CONTRACTS_YUL
             .iter()
             .find(|(name, _)| file_name.ends_with((*name).to_owned() + ".yul"))
             .ok_or(ArtifactError::CompilationFailed(
-                "couldn't find contract".to_owned() + file_name.to_str().unwrap(),
+                "couldn't find contract for yul compilation ".to_owned()
+                    + file_name.to_str().unwrap(),
             ))?;
         yul_stdout.push(compile_yul(
             solc_compiler_path,
@@ -381,59 +372,60 @@ fn compile_predeployed_contracts(
         )?);
     }
 
+    let extract_results = |contracts: &[(&str, &str)],
+                           extension: &str,
+                           file_names: &[PathBuf],
+                           outputs: Vec<String>,
+                           results: &mut Vec<(String, Vec<u8>)>|
+     -> Result<(), ArtifactError> {
+        for (contract_name, address) in contracts {
+            let file_path = file_names
+                .iter()
+                .find(|p| p.ends_with((*contract_name).to_owned() + extension))
+                .ok_or(ArtifactError::CompilationFailed(
+                    "couldn't find contract".to_owned() + contract_name,
+                ))?;
+
+            let mut found = false;
+            for output in &outputs {
+                if output.contains(&((*contract_name).to_owned() + extension)) {
+                    results.push((
+                        (*address).to_owned(),
+                        output.split(' ').last().unwrap().as_bytes().to_vec(),
+                    ));
+                    found = true;
+                }
+            }
+
+            if !found {
+                return Err(ArtifactError::CompilationFailed(
+                    "couldn't find contract bytecode".to_owned() + contract_name,
+                ));
+            }
+        }
+
+        Ok(())
+    };
+
     let mut results = vec![];
-    for (contract_name, address) in PREDEPLOYED_CONTRACTS_SOL {
-        let file_path = sol_file_names
-            .iter()
-            .find(|p| p.ends_with(contract_name.to_owned() + ".sol"))
-            .ok_or(ArtifactError::CompilationFailed(
-                "couldn't find contract".to_owned() + contract_name,
-            ))?;
-
-        let mut found = false;
-        for line in String::from_utf8_lossy(&sol_stdout).to_string().lines() {
-            if line.contains(&(contract_name.to_owned() + ".sol:" + contract_name)) {
-                results.push((
-                    address.to_owned(),
-                    line.split(' ').last().unwrap().as_bytes().to_vec(),
-                ));
-                found = true;
-            }
-        }
-
-        if !found {
-            return Err(ArtifactError::CompilationFailed(
-                "couldn't find contract bytecode".to_owned() + contract_name,
-            ));
-        }
-    }
-
-    for (contract_name, address) in PREDEPLOYED_CONTRACTS_YUL {
-        let file_path = yul_file_names
-            .iter()
-            .find(|p| p.ends_with(contract_name.to_owned() + ".yul"))
-            .ok_or(ArtifactError::CompilationFailed(
-                "couldn't find contract".to_owned() + contract_name,
-            ))?;
-
-        let mut found = false;
-        for output in &yul_stdout {
-            if output.contains(&(contract_name.to_owned() + ".yul")) {
-                results.push((
-                    address.to_owned(),
-                    output.split(' ').last().unwrap().as_bytes().to_vec(),
-                ));
-                found = true;
-            }
-        }
-
-        if !found {
-            return Err(ArtifactError::CompilationFailed(
-                "couldn't find contract bytecode".to_owned() + contract_name,
-            ));
-        }
-    }
-
+    extract_results(
+        &PREDEPLOYED_CONTRACTS_SOL,
+        ".sol",
+        &sol_file_names,
+        String::from_utf8_lossy(&sol_stdout)
+            .to_string()
+            .lines()
+            .map(|s| s.to_owned())
+            .collect(),
+        &mut results,
+    )?;
+    extract_results(
+        &PREDEPLOYED_CONTRACTS_YUL,
+        ".yul",
+        &yul_file_names,
+        yul_stdout,
+        &mut results,
+    )?;
     Ok(results)
 }
 
@@ -579,20 +571,12 @@ fn download_contracts() -> Result<(), ArtifactError> {
     Ok(())
 }
 
-fn delete_contracts_folder() {
-    let _ = fs::remove_dir_all("contracts");
-}
-
 fn clone_system_contracts() -> Result<(), ArtifactError> {
     let _ = Command::new("git")
         .args(["clone", SYSTEM_CONTRACTS_URL])
         .output()
         .map_err(|e| ArtifactError::DownloadFailed(e.to_string()))?;
     Ok(())
-}
-
-fn delete_system_contracts_folder() {
-    let _ = fs::remove_dir_all("era-system-contracts");
 }
 
 fn download_solc_binary(binary_name: &str) -> Result<(), ArtifactError> {
@@ -609,10 +593,6 @@ fn download_zksolc_binary(binary_name: &str) -> Result<(), ArtifactError> {
         + "/"
         + binary_name;
     download_to_disk(&url, binary_name)
-}
-
-fn delete_binary(binary_name: &str) {
-    let _ = fs::remove_file(binary_name);
 }
 
 fn download_to_disk(url: &str, write_location: &str) -> Result<(), ArtifactError> {
