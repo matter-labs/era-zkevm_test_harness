@@ -29,9 +29,6 @@ rescue_poseidon = {git = "https://github.com/matter-labs/rescue-poseidon.git", b
 
 zkevm-assembly = {git = "https://github.com/matter-labs/era-zkEVM-assembly.git", branch = "v1.4.1"}
 
-compiler-solidity = { git = "https://github.com/matter-labs/era-compiler-solidity.git" }
-compiler-llvm-context = { git = "https://github.com/matter-labs/era-compiler-llvm-context.git", branch = "main" }
-
 rand = "0.4"
 rayon = "*"
 derivative = "*"
