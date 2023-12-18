@@ -592,7 +592,7 @@ fn download_contracts() -> Result<(), ArtifactError> {
 
 fn clone_system_contracts() -> Result<(), ArtifactError> {
     let _ = Command::new("git")
-        .args(["clone", SYSTEM_CONTRACTS_URL])
+        .args(["clone", "-b", SYSTEM_CONTRACTS_BRANCH, SYSTEM_CONTRACTS_URL])
         .output()
         .map_err(|e| ArtifactError::DownloadFailed(e.to_string()))?;
     Ok(())
