@@ -32,6 +32,7 @@ const SYSTEM_CONTRACTS_COMMITS_URL: &str =
     "https://api.github.com/repos/matter-labs/era-system-contracts/commits/";
 const SYSTEM_CONTRACTS_COMMIT_HASH_LOCATION: &str =
     "src/tests/complex_tests/test_artifacts/system_contracts_commit_hash";
+const COMPILER_METADATA_LOCATION: &str = "src/tests/complex_tests/test_artifacts/compiler_metadata";
 
 const PRECOMPILE_CONTRACTS: [(&str, &str); 5] = [
     ("Ecrecover", "0x0000000000000000000000000000000000000001"),
@@ -92,6 +93,12 @@ enum ArtifactError {
     UnsupportedOS,
 }
 
+#[derive(Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+struct CompilerMetadata {
+    solc_compiler_version: String,
+    zksolc_compiler_version: String,
+}
+
 fn retrieve_latest_commit_hash(url: &str, hash_location: &str) -> (String, String) {
     let no_hash = !Path::new(hash_location).exists();
     let latest_hash = get_latest_commit_hash(url);
@@ -109,6 +116,13 @@ fn retrieve_latest_commit_hash(url: &str, hash_location: &str) -> (String, Strin
 }
 
 pub fn read_basic_test_artifact() -> TestArtifact {
+    let current_compiler_metadata = CompilerMetadata {
+        solc_compiler_version: SOLC_VERSION.to_owned(),
+        zksolc_compiler_version: ZKSOLC_VERSION.to_owned(),
+    };
+    let last_compiler_metadata =
+        serde_json::from_slice(&fs::read(COMPILER_METADATA_LOCATION).unwrap_or_default())
+            .unwrap_or_default();
     let (basic_test_hash, latest_basic_test_hash) = retrieve_latest_commit_hash(
         &(TEST_CONTRACT_COMMITS_URL.to_owned() + BRANCH),
         BASIC_TEST_COMMIT_HASH_LOCATION,
@@ -122,6 +136,7 @@ pub fn read_basic_test_artifact() -> TestArtifact {
         || !Path::new(SYSTEM_CONTRACTS_COMMIT_HASH_LOCATION).exists()
         || latest_basic_test_hash != basic_test_hash
         || latest_system_contract_hash != system_contract_hash
+        || current_compiler_metadata != last_compiler_metadata
     {
         println!("test artifacts are outdated, updating...");
         let solc_binary_name = get_solc_binary_name().expect("should be able to get binary name");
@@ -149,6 +164,10 @@ pub fn read_basic_test_artifact() -> TestArtifact {
                     latest_system_contract_hash,
                 )
                 .expect("should be able to write new commit hash");
+                let compiler_metadata_string = serde_json::to_string(&current_compiler_metadata)
+                    .expect("should be able to stringify compiler metadata");
+                fs::write(COMPILER_METADATA_LOCATION, compiler_metadata_string)
+                    .expect("should be able to write compiler metadata");
             }
             Err(e) => {
                 panic!("{:?}", e);
