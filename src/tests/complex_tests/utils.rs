@@ -18,7 +18,7 @@ const BRANCH: &str = "v1.4.1";
 const BASIC_TEST_JSON_LOCATION: &str = "src/tests/complex_tests/test_artifacts/basic_test.json";
 const BASIC_TEST_COMMIT_HASH_LOCATION: &str =
     "src/tests/complex_tests/test_artifacts/basic_test_commit_hash";
-const SOLC_VERSION: &str = "v0.8.20";
+const SOLC_VERSION: &str = "v0.8.23";
 const ZKSOLC_VERSION: &str = "v1.3.18";
 const TEST_CONTRACT_FILE_NAMES: [&str; 4] = [
     "ReentrancyGuard.sol",
@@ -27,9 +27,9 @@ const TEST_CONTRACT_FILE_NAMES: [&str; 4] = [
     "Main.sol",
 ];
 const SYSTEM_CONTRACTS_BRANCH: &str = "v1-4-1-integration";
-const SYSTEM_CONTRACTS_URL: &str = "https://github.com/matter-labs/era-system-contracts/";
+const SYSTEM_CONTRACTS_URL: &str = "https://github.com/jules/era-system-contracts/";
 const SYSTEM_CONTRACTS_COMMITS_URL: &str =
-    "https://api.github.com/repos/matter-labs/era-system-contracts/commits/";
+    "https://api.github.com/repos/jules/era-system-contracts/commits/";
 const SYSTEM_CONTRACTS_COMMIT_HASH_LOCATION: &str =
     "src/tests/complex_tests/test_artifacts/system_contracts_commit_hash";
 const COMPILER_METADATA_LOCATION: &str = "src/tests/complex_tests/test_artifacts/compiler_metadata";
@@ -410,7 +410,16 @@ fn compile_predeployed_contracts(
                 if output.contains(&((*contract_name).to_owned() + extension)) {
                     results.push((
                         (*address).to_owned(),
-                        output.split(' ').last().unwrap().as_bytes().to_vec(),
+                        hex::decode(
+                            output
+                                .split(' ')
+                                .last()
+                                .unwrap()
+                                .strip_prefix("0x")
+                                .expect("should have 0x prefix")
+                                .trim(),
+                        )
+                        .expect("bytecode should be hex encoded"),
                     ));
                     found = true;
                 }
@@ -468,17 +477,21 @@ fn compile_precompiles(
 
         results.push((
             address.to_owned(),
-            compile_yul(
-                solc_compiler_path,
-                zksolc_compiler_path,
-                file_path.clone(),
-                contract_name,
-            )?
-            .split(' ')
-            .last()
-            .unwrap()
-            .as_bytes()
-            .to_vec(),
+            hex::decode(
+                compile_yul(
+                    solc_compiler_path,
+                    zksolc_compiler_path,
+                    file_path.clone(),
+                    contract_name,
+                )?
+                .split(' ')
+                .last()
+                .unwrap()
+                .strip_prefix("0x")
+                .expect("should have 0x prefix")
+                .trim(),
+            )
+            .expect("bytecode should be hex encoded"),
         ));
     }
 
@@ -531,7 +544,15 @@ fn compile_solidity_for_contract(
 
     for line in String::from_utf8_lossy(&stdout).to_string().lines() {
         if line.contains(&(contract_name.to_owned() + ".sol:" + contract_name)) {
-            return Ok(line.split(' ').last().unwrap().as_bytes().to_vec());
+            return Ok(hex::decode(
+                line.split(' ')
+                    .last()
+                    .unwrap()
+                    .strip_prefix("0x")
+                    .expect("should have 0x prefix")
+                    .trim(),
+            )
+            .expect("bytecode should be hex encoded"));
         }
     }
 
