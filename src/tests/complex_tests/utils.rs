@@ -283,7 +283,10 @@ fn compile_latest_test_contract(
         file_names.push(path);
     }
 
-    compile_solidity_for_contract(solc_compiler_path, zksolc_compiler_path, file_names, "Main")
+    grab_bytecode(
+        &compile_solidity(solc_compiler_path, zksolc_compiler_path, file_names)?,
+        "Main",
+    )
 }
 
 // The default account code compilation is kept separate as it isn't deployed and needs to be
@@ -304,80 +307,60 @@ fn compile_default_account_code(
     }
 
     // we can then only extract the default account code
-    compile_solidity_for_contract(
-        solc_compiler_path,
-        zksolc_compiler_path,
-        file_names,
-        "DefaultAccount",
+    grab_bytecode(
+        &compile_solidity(solc_compiler_path, zksolc_compiler_path, file_names)?,
+        "DefaultAccount.sol",
     )
 }
 
-fn compile_predeployed_contracts(
+fn compile_predeployed_contract_for_extension(
     solc_compiler_path: &PathBuf,
     zksolc_compiler_path: &PathBuf,
+    extension: &str,
+    compile_fn: fn(&PathBuf, &PathBuf, Vec<PathBuf>) -> Result<Vec<u8>, ArtifactError>,
+    contracts: &[(&str, &str)],
 ) -> Result<Vec<(String, Vec<u8>)>, ArtifactError> {
     let mut file_names: Vec<PathBuf> = vec![];
     for entry in WalkDir::new(SYSTEM_CONTRACTS_PATH)
         .into_iter()
         .filter_map(|e| e.ok())
     {
-        let name = entry.file_name().to_string_lossy();
-        if name.ends_with(".sol") || name.ends_with(".yul") {
+        if entry.file_name().to_string_lossy().ends_with(extension) {
             file_names.push(entry.into_path());
         }
     }
 
-    // sol and yul files need a different compilation strategy so we separate the vector into two
-    let (sol_file_names, yul_file_names): (Vec<PathBuf>, Vec<PathBuf>) = file_names
-        .into_iter()
-        .partition(|path| path.extension().unwrap() == "sol");
-
-    let sol_stdout = compile_solidity(solc_compiler_path, zksolc_compiler_path, sol_file_names)?;
-
-    let mut yul_stdout = vec![];
-    for file_name in yul_file_names.into_iter() {
-        yul_stdout.push(compile_yul(
-            solc_compiler_path,
-            zksolc_compiler_path,
-            file_name,
-        )?);
-    }
-
-    // generic output extraction closure
-    let extract_results = |contracts: &[(&str, &str)],
-                           extension: &str,
-                           outputs: Vec<String>,
-                           results: &mut Vec<(String, Vec<u8>)>|
-     -> Result<(), ArtifactError> {
-        for (contract_name, address) in contracts {
-            results.push((
-                (*address).to_owned(),
-                grab_bytecode(
-                    outputs
-                        .iter()
-                        .find(|output| output.contains(&((*contract_name).to_owned() + extension)))
-                        .ok_or(ArtifactError::CompilationFailed(
-                            "couldn't find contract bytecode".to_owned() + contract_name,
-                        ))?,
-                ),
-            ));
-        }
-
-        Ok(())
-    };
+    let stdout = compile_fn(solc_compiler_path, zksolc_compiler_path, file_names)?;
 
     let mut results = vec![];
-    extract_results(
-        &PREDEPLOYED_CONTRACTS_SOL,
+    for (name, address) in contracts {
+        let ident = (*name).to_owned() + extension;
+        results.push(((*address).to_owned(), grab_bytecode(&stdout, &ident)?));
+    }
+    Ok(results)
+}
+
+fn compile_predeployed_contracts(
+    solc_compiler_path: &PathBuf,
+    zksolc_compiler_path: &PathBuf,
+) -> Result<Vec<(String, Vec<u8>)>, ArtifactError> {
+    let mut results = compile_predeployed_contract_for_extension(
+        solc_compiler_path,
+        zksolc_compiler_path,
         ".sol",
-        String::from_utf8_lossy(&sol_stdout)
-            .to_string()
-            .lines()
-            .map(|s| s.to_owned())
-            .collect(),
-        &mut results,
+        compile_solidity,
+        &PREDEPLOYED_CONTRACTS_SOL,
     )?;
-    extract_results(&PREDEPLOYED_CONTRACTS_YUL, ".yul", yul_stdout, &mut results)?;
+
+    let yul_results = compile_predeployed_contract_for_extension(
+        solc_compiler_path,
+        zksolc_compiler_path,
+        ".yul",
+        compile_yul_many,
+        &PREDEPLOYED_CONTRACTS_YUL,
+    )?;
+
+    results.extend(yul_results);
     Ok(results)
 }
 
@@ -404,32 +387,11 @@ fn compile_solidity(
     Ok(run_process(command)?)
 }
 
-fn compile_solidity_for_contract(
-    solc_compiler_path: &PathBuf,
-    zksolc_compiler_path: &PathBuf,
-    file_names: Vec<PathBuf>,
-    contract_name: &str,
-) -> Result<Vec<u8>, ArtifactError> {
-    Ok(grab_bytecode(
-        String::from_utf8_lossy(&compile_solidity(
-            solc_compiler_path,
-            zksolc_compiler_path,
-            file_names,
-        )?)
-        .to_string()
-        .lines()
-        .find(|line| line.contains(&(contract_name.to_owned() + ".sol")))
-        .ok_or(ArtifactError::CompilationFailed(
-            "couldn't find compiled contract".to_owned(),
-        ))?,
-    ))
-}
-
 fn compile_yul(
     solc_compiler_path: &PathBuf,
     zksolc_compiler_path: &PathBuf,
     file_name: PathBuf,
-) -> Result<String, ArtifactError> {
+) -> Result<Vec<u8>, ArtifactError> {
     let mut command = Command::new(zksolc_compiler_path);
     command.args([
         "--solc",
@@ -444,7 +406,24 @@ fn compile_yul(
     command.arg("--yul");
     command.arg(file_name);
 
-    Ok(String::from_utf8_lossy(&run_process(command)?).to_string())
+    Ok(run_process(command)?)
+}
+
+fn compile_yul_many(
+    solc_compiler_path: &PathBuf,
+    zksolc_compiler_path: &PathBuf,
+    file_names: Vec<PathBuf>,
+) -> Result<Vec<u8>, ArtifactError> {
+    let mut results = vec![];
+    for file_name in file_names.into_iter() {
+        results.extend(compile_yul(
+            solc_compiler_path,
+            zksolc_compiler_path,
+            file_name,
+        )?);
+        results.push(b'\n');
+    }
+    Ok(results)
 }
 
 fn run_process(mut command: Command) -> Result<Vec<u8>, ArtifactError> {
@@ -464,9 +443,15 @@ fn run_process(mut command: Command) -> Result<Vec<u8>, ArtifactError> {
     }
 }
 
-fn grab_bytecode(output: &str) -> Vec<u8> {
-    hex::decode(
-        output
+fn grab_bytecode(outputs: &[u8], ident: &str) -> Result<Vec<u8>, ArtifactError> {
+    Ok(hex::decode(
+        String::from_utf8_lossy(outputs)
+            .to_string()
+            .lines()
+            .find(|line| line.contains(ident))
+            .ok_or(ArtifactError::CompilationFailed(
+                "couldn't find contract bytecode for ".to_owned() + ident,
+            ))?
             .split(' ')
             .last()
             .unwrap()
@@ -474,7 +459,7 @@ fn grab_bytecode(output: &str) -> Vec<u8> {
             .strip_prefix("0x")
             .expect("should have 0x prefix"),
     )
-    .expect("bytecode should be hex encoded")
+    .expect("bytecode should be hex encoded"))
 }
 
 fn download_contracts() -> Result<(), ArtifactError> {
