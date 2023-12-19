@@ -10,15 +10,15 @@ use std::{
     process::Command,
     str::FromStr,
 };
+use walkdir::WalkDir;
 
-const TEST_CONTRACT_REPO: &str = "https://github.com/matter-labs/test-contract";
 const TEST_CONTRACT_COMMITS_URL: &str =
     "https://api.github.com/repos/matter-labs/test-contract/commits/";
 const BRANCH: &str = "v1.4.1";
 const BASIC_TEST_JSON_LOCATION: &str = "src/tests/complex_tests/test_artifacts/basic_test.json";
 const BASIC_TEST_COMMIT_HASH_LOCATION: &str =
     "src/tests/complex_tests/test_artifacts/basic_test_commit_hash";
-const SOLC_VERSION: &str = "v0.8.23";
+const SOLC_VERSION: &str = "v0.8.20";
 const ZKSOLC_VERSION: &str = "v1.3.18";
 const TEST_CONTRACT_FILE_NAMES: [&str; 4] = [
     "ReentrancyGuard.sol",
@@ -27,20 +27,14 @@ const TEST_CONTRACT_FILE_NAMES: [&str; 4] = [
     "Main.sol",
 ];
 const SYSTEM_CONTRACTS_BRANCH: &str = "v1-4-1-integration";
-const SYSTEM_CONTRACTS_URL: &str = "https://github.com/jules/era-system-contracts/";
+const SYSTEM_CONTRACTS_URL: &str = "https://github.com/matter-labs/era-system-contracts/";
 const SYSTEM_CONTRACTS_COMMITS_URL: &str =
-    "https://api.github.com/repos/jules/era-system-contracts/commits/";
+    "https://api.github.com/repos/matter-labs/era-system-contracts/commits/";
 const SYSTEM_CONTRACTS_COMMIT_HASH_LOCATION: &str =
     "src/tests/complex_tests/test_artifacts/system_contracts_commit_hash";
+const SYSTEM_CONTRACTS_PATH: &str = "./era-system-contracts/contracts";
 const COMPILER_METADATA_LOCATION: &str = "src/tests/complex_tests/test_artifacts/compiler_metadata";
 
-const PRECOMPILE_CONTRACTS: [(&str, &str); 5] = [
-    ("Ecrecover", "0x0000000000000000000000000000000000000001"),
-    ("SHA256", "0x0000000000000000000000000000000000000002"),
-    ("EcAdd", "0x0000000000000000000000000000000000000006"),
-    ("EcMul", "0x0000000000000000000000000000000000000007"),
-    ("Keccak256", "0x0000000000000000000000000000000000008010"),
-];
 const PREDEPLOYED_CONTRACTS_SOL: [(&str, &str); 12] = [
     (
         "AccountCodeStorage",
@@ -79,9 +73,14 @@ const PREDEPLOYED_CONTRACTS_SOL: [(&str, &str); 12] = [
         "0x000000000000000000000000000000000000800f",
     ),
 ];
-
-const PREDEPLOYED_CONTRACTS_YUL: [(&str, &str); 1] =
-    [("EventWriter", "0x000000000000000000000000000000000000800d")];
+const PREDEPLOYED_CONTRACTS_YUL: [(&str, &str); 6] = [
+    ("Ecrecover", "0x0000000000000000000000000000000000000001"),
+    ("SHA256", "0x0000000000000000000000000000000000000002"),
+    ("EcAdd", "0x0000000000000000000000000000000000000006"),
+    ("EcMul", "0x0000000000000000000000000000000000000007"),
+    ("EventWriter", "0x000000000000000000000000000000000000800d"),
+    ("Keccak256", "0x0000000000000000000000000000000000008010"),
+];
 
 const ENTRY_POINT_ADDRESS: &str = "0xc54E30ABB6a3eeD1b9DC0494D90c9C22D76FbA7e";
 
@@ -99,22 +98,6 @@ struct CompilerMetadata {
     zksolc_compiler_version: String,
 }
 
-fn retrieve_latest_commit_hash(url: &str, hash_location: &str) -> (String, String) {
-    let no_hash = !Path::new(hash_location).exists();
-    let latest_hash = get_latest_commit_hash(url);
-    if no_hash {
-        (String::new(), latest_hash)
-    } else {
-        let bytes = fs::read(hash_location).expect("should be able to read commit hash");
-        (
-            std::str::from_utf8(&bytes)
-                .expect("commit hash should be utf8-encoded")
-                .to_owned(),
-            latest_hash,
-        )
-    }
-}
-
 pub fn read_basic_test_artifact() -> TestArtifact {
     let current_compiler_metadata = CompilerMetadata {
         solc_compiler_version: SOLC_VERSION.to_owned(),
@@ -123,6 +106,7 @@ pub fn read_basic_test_artifact() -> TestArtifact {
     let last_compiler_metadata =
         serde_json::from_slice(&fs::read(COMPILER_METADATA_LOCATION).unwrap_or_default())
             .unwrap_or_default();
+
     let (basic_test_hash, latest_basic_test_hash) = retrieve_latest_commit_hash(
         &(TEST_CONTRACT_COMMITS_URL.to_owned() + BRANCH),
         BASIC_TEST_COMMIT_HASH_LOCATION,
@@ -209,12 +193,26 @@ fn create_artifact(
             })
             .collect::<Vec<(Address, Vec<[u8; 32]>)>>(),
     );
+
     TestArtifact {
         entry_point_address: Address::from_str(ENTRY_POINT_ADDRESS)
             .expect("should be able to decode from constant entry point address"),
         entry_point_code,
         default_account_code,
         predeployed_contracts,
+    }
+}
+
+fn retrieve_latest_commit_hash(url: &str, hash_location: &str) -> (String, String) {
+    let latest_hash = get_latest_commit_hash(url);
+    match fs::read(hash_location) {
+        Ok(bytes) => (
+            std::str::from_utf8(&bytes)
+                .expect("commit hash should be utf8-encoded")
+                .to_owned(),
+            latest_hash,
+        ),
+        Err(_) => (String::new(), latest_hash),
     }
 }
 
@@ -262,15 +260,12 @@ fn compile_latest_artifacts(
     let zksolc_compiler_path = set_binary_perms(zksolc_binary_name)?;
 
     download_contracts()?;
-    let bytecode = compile_latest_test_contract(&solc_compiler_path, &zksolc_compiler_path)?;
     clone_system_contracts()?;
-    let default_account_code =
-        compile_default_account_code(&solc_compiler_path, &zksolc_compiler_path)?;
-    let mut predeployed_contracts =
-        compile_predeployed_contracts(&solc_compiler_path, &zksolc_compiler_path)?;
-    let precompiles = compile_precompiles(&solc_compiler_path, &zksolc_compiler_path)?;
-    predeployed_contracts.extend(precompiles);
-    Ok((bytecode, default_account_code, predeployed_contracts))
+    Ok((
+        compile_latest_test_contract(&solc_compiler_path, &zksolc_compiler_path)?,
+        compile_default_account_code(&solc_compiler_path, &zksolc_compiler_path)?,
+        compile_predeployed_contracts(&solc_compiler_path, &zksolc_compiler_path)?,
+    ))
 }
 
 fn compile_latest_test_contract(
@@ -288,38 +283,31 @@ fn compile_latest_test_contract(
         file_names.push(path);
     }
 
-    compile_solidity_for_contract(
-        solc_compiler_path,
-        zksolc_compiler_path,
-        &file_names,
-        "Main",
-    )
+    compile_solidity_for_contract(solc_compiler_path, zksolc_compiler_path, file_names, "Main")
 }
 
+// The default account code compilation is kept separate as it isn't deployed and needs to be
+// extracted from all the other predeployed contracts.
 fn compile_default_account_code(
     solc_compiler_path: &PathBuf,
     zksolc_compiler_path: &PathBuf,
 ) -> Result<Vec<u8>, ArtifactError> {
-    // Include all libraries for ease
-    let mut file_names: Vec<PathBuf> = fs::read_dir("./era-system-contracts/contracts/libraries")
-        .map_err(|e| ArtifactError::CompilationFailed(e.to_string()))?
-        .map(|e| e.expect("should be able to read dir").path())
-        .collect();
-    let interfaces: Vec<PathBuf> = fs::read_dir("./era-system-contracts/contracts/interfaces")
-        .map_err(|e| ArtifactError::CompilationFailed(e.to_string()))?
-        .map(|e| e.expect("should be able to read dir").path())
-        .collect();
-    file_names.extend(interfaces);
-    file_names.push("./era-system-contracts/contracts/openzeppelin/utils/Address.sol".into());
-    file_names.push(
-        "./era-system-contracts/contracts/openzeppelin/token/ERC20/utils/SafeERC20.sol".into(),
-    );
-    file_names.push("./era-system-contracts/contracts/Constants.sol".into());
-    file_names.push("./era-system-contracts/contracts/DefaultAccount.sol".into());
+    let mut file_names: Vec<PathBuf> = vec![];
+    // we just naively grab all sol files to ensure we satisfy imports with minimal hassle
+    for entry in WalkDir::new(SYSTEM_CONTRACTS_PATH)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        if entry.file_name().to_string_lossy().ends_with(".sol") {
+            file_names.push(entry.into_path());
+        }
+    }
+
+    // we can then only extract the default account code
     compile_solidity_for_contract(
         solc_compiler_path,
         zksolc_compiler_path,
-        &file_names,
+        file_names,
         "DefaultAccount",
     )
 }
@@ -328,108 +316,51 @@ fn compile_predeployed_contracts(
     solc_compiler_path: &PathBuf,
     zksolc_compiler_path: &PathBuf,
 ) -> Result<Vec<(String, Vec<u8>)>, ArtifactError> {
-    let mut file_names: Vec<PathBuf> = fs::read_dir("./era-system-contracts/contracts/libraries")
-        .map_err(|e| ArtifactError::CompilationFailed(e.to_string()))?
-        .map(|e| e.expect("should be able to read dir").path())
-        .collect();
-    let contract_file_names: Vec<PathBuf> = fs::read_dir("./era-system-contracts/contracts")
-        .map_err(|e| ArtifactError::CompilationFailed(e.to_string()))?
-        .filter_map(|e| {
-            let path = e.expect("should be able to read dir").path();
-            if path.is_dir() {
-                None
-            } else {
-                Some(path)
-            }
-        })
-        .collect();
-    file_names.extend(contract_file_names);
-    let interfaces: Vec<PathBuf> = fs::read_dir("./era-system-contracts/contracts/interfaces")
-        .map_err(|e| ArtifactError::CompilationFailed(e.to_string()))?
-        .map(|e| e.expect("should be able to read dir").path())
-        .collect();
-    file_names.extend(interfaces);
-    file_names.push("./era-system-contracts/contracts/openzeppelin/utils/Address.sol".into());
-    file_names.push(
-        "./era-system-contracts/contracts/openzeppelin/token/ERC20/utils/SafeERC20.sol".into(),
-    );
-    file_names.push("./era-system-contracts/contracts/Constants.sol".into());
+    let mut file_names: Vec<PathBuf> = vec![];
+    for entry in WalkDir::new(SYSTEM_CONTRACTS_PATH)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        let name = entry.file_name().to_string_lossy();
+        if name.ends_with(".sol") || name.ends_with(".yul") {
+            file_names.push(entry.into_path());
+        }
+    }
 
-    // separate the sol and yul files
-    let separate_by_extension = |file_names: &[PathBuf], extension: &str| -> Vec<PathBuf> {
-        file_names
-            .iter()
-            .filter_map(|path| {
-                if path.extension().unwrap() == extension {
-                    Some(path.clone())
-                } else {
-                    None
-                }
-            })
-            .collect()
-    };
+    // sol and yul files need a different compilation strategy so we separate the vector into two
+    let (sol_file_names, yul_file_names): (Vec<PathBuf>, Vec<PathBuf>) = file_names
+        .into_iter()
+        .partition(|path| path.extension().unwrap() == "sol");
 
-    let sol_file_names = separate_by_extension(&file_names, "sol");
-    let yul_file_names = separate_by_extension(&file_names, "yul");
-
-    let sol_stdout = compile_solidity(solc_compiler_path, zksolc_compiler_path, &sol_file_names)?;
+    let sol_stdout = compile_solidity(solc_compiler_path, zksolc_compiler_path, sol_file_names)?;
 
     let mut yul_stdout = vec![];
-    for file_name in &yul_file_names {
-        let contract_name = PREDEPLOYED_CONTRACTS_YUL
-            .iter()
-            .find(|(name, _)| file_name.ends_with((*name).to_owned() + ".yul"))
-            .ok_or(ArtifactError::CompilationFailed(
-                "couldn't find contract for yul compilation ".to_owned()
-                    + file_name.to_str().unwrap(),
-            ))?;
+    for file_name in yul_file_names.into_iter() {
         yul_stdout.push(compile_yul(
             solc_compiler_path,
             zksolc_compiler_path,
-            file_name.to_path_buf(),
-            contract_name.0,
+            file_name,
         )?);
     }
 
+    // generic output extraction closure
     let extract_results = |contracts: &[(&str, &str)],
                            extension: &str,
-                           file_names: &[PathBuf],
                            outputs: Vec<String>,
                            results: &mut Vec<(String, Vec<u8>)>|
      -> Result<(), ArtifactError> {
         for (contract_name, address) in contracts {
-            let file_path = file_names
-                .iter()
-                .find(|p| p.ends_with((*contract_name).to_owned() + extension))
-                .ok_or(ArtifactError::CompilationFailed(
-                    "couldn't find contract".to_owned() + contract_name,
-                ))?;
-
-            let mut found = false;
-            for output in &outputs {
-                if output.contains(&((*contract_name).to_owned() + extension)) {
-                    results.push((
-                        (*address).to_owned(),
-                        hex::decode(
-                            output
-                                .split(' ')
-                                .last()
-                                .unwrap()
-                                .strip_prefix("0x")
-                                .expect("should have 0x prefix")
-                                .trim(),
-                        )
-                        .expect("bytecode should be hex encoded"),
-                    ));
-                    found = true;
-                }
-            }
-
-            if !found {
-                return Err(ArtifactError::CompilationFailed(
-                    "couldn't find contract bytecode".to_owned() + contract_name,
-                ));
-            }
+            results.push((
+                (*address).to_owned(),
+                grab_bytecode(
+                    outputs
+                        .iter()
+                        .find(|output| output.contains(&((*contract_name).to_owned() + extension)))
+                        .ok_or(ArtifactError::CompilationFailed(
+                            "couldn't find contract bytecode".to_owned() + contract_name,
+                        ))?,
+                ),
+            ));
         }
 
         Ok(())
@@ -439,7 +370,6 @@ fn compile_predeployed_contracts(
     extract_results(
         &PREDEPLOYED_CONTRACTS_SOL,
         ".sol",
-        &sol_file_names,
         String::from_utf8_lossy(&sol_stdout)
             .to_string()
             .lines()
@@ -447,61 +377,14 @@ fn compile_predeployed_contracts(
             .collect(),
         &mut results,
     )?;
-    extract_results(
-        &PREDEPLOYED_CONTRACTS_YUL,
-        ".yul",
-        &yul_file_names,
-        yul_stdout,
-        &mut results,
-    )?;
-    Ok(results)
-}
-
-fn compile_precompiles(
-    solc_compiler_path: &PathBuf,
-    zksolc_compiler_path: &PathBuf,
-) -> Result<Vec<(String, Vec<u8>)>, ArtifactError> {
-    let file_names: Vec<PathBuf> = fs::read_dir("./era-system-contracts/contracts/precompiles")
-        .map_err(|e| ArtifactError::CompilationFailed(e.to_string()))?
-        .map(|e| e.expect("should be able to read dir").path())
-        .collect();
-
-    let mut results = vec![];
-    for (contract_name, address) in PRECOMPILE_CONTRACTS {
-        let file_path = file_names
-            .iter()
-            .find(|p| p.ends_with(contract_name.to_owned() + ".yul"))
-            .ok_or(ArtifactError::CompilationFailed(
-                "couldn't find filepath".to_owned() + contract_name,
-            ))?;
-
-        results.push((
-            address.to_owned(),
-            hex::decode(
-                compile_yul(
-                    solc_compiler_path,
-                    zksolc_compiler_path,
-                    file_path.clone(),
-                    contract_name,
-                )?
-                .split(' ')
-                .last()
-                .unwrap()
-                .strip_prefix("0x")
-                .expect("should have 0x prefix")
-                .trim(),
-            )
-            .expect("bytecode should be hex encoded"),
-        ));
-    }
-
+    extract_results(&PREDEPLOYED_CONTRACTS_YUL, ".yul", yul_stdout, &mut results)?;
     Ok(results)
 }
 
 fn compile_solidity(
     solc_compiler_path: &PathBuf,
     zksolc_compiler_path: &PathBuf,
-    file_names: &[PathBuf],
+    file_names: Vec<PathBuf>,
 ) -> Result<Vec<u8>, ArtifactError> {
     let mut command = Command::new(zksolc_compiler_path);
     command.args([
@@ -518,46 +401,27 @@ fn compile_solidity(
         command.arg(name);
     }
 
-    let process = command
-        .spawn()
-        .map_err(|e| ArtifactError::CompilationFailed(e.to_string()))?;
-    let output = command
-        .output()
-        .map_err(|e| ArtifactError::CompilationFailed(e.to_string()))?;
-
-    if !output.status.success() {
-        return Err(ArtifactError::CompilationFailed(
-            String::from_utf8_lossy(output.stderr.as_slice()).to_string(),
-        ));
-    }
-
-    Ok(output.stdout)
+    Ok(run_process(command)?)
 }
 
 fn compile_solidity_for_contract(
     solc_compiler_path: &PathBuf,
     zksolc_compiler_path: &PathBuf,
-    file_names: &[PathBuf],
+    file_names: Vec<PathBuf>,
     contract_name: &str,
 ) -> Result<Vec<u8>, ArtifactError> {
-    let stdout = compile_solidity(solc_compiler_path, zksolc_compiler_path, file_names)?;
-
-    for line in String::from_utf8_lossy(&stdout).to_string().lines() {
-        if line.contains(&(contract_name.to_owned() + ".sol:" + contract_name)) {
-            return Ok(hex::decode(
-                line.split(' ')
-                    .last()
-                    .unwrap()
-                    .strip_prefix("0x")
-                    .expect("should have 0x prefix")
-                    .trim(),
-            )
-            .expect("bytecode should be hex encoded"));
-        }
-    }
-
-    Err(ArtifactError::CompilationFailed(
-        "couldn't find compiled contract".to_owned(),
+    Ok(grab_bytecode(
+        String::from_utf8_lossy(&compile_solidity(
+            solc_compiler_path,
+            zksolc_compiler_path,
+            file_names,
+        )?)
+        .to_string()
+        .lines()
+        .find(|line| line.contains(&(contract_name.to_owned() + ".sol")))
+        .ok_or(ArtifactError::CompilationFailed(
+            "couldn't find compiled contract".to_owned(),
+        ))?,
     ))
 }
 
@@ -565,7 +429,6 @@ fn compile_yul(
     solc_compiler_path: &PathBuf,
     zksolc_compiler_path: &PathBuf,
     file_name: PathBuf,
-    contract_name: &str,
 ) -> Result<String, ArtifactError> {
     let mut command = Command::new(zksolc_compiler_path);
     command.args([
@@ -581,7 +444,11 @@ fn compile_yul(
     command.arg("--yul");
     command.arg(file_name);
 
-    let process = command
+    Ok(String::from_utf8_lossy(&run_process(command)?).to_string())
+}
+
+fn run_process(mut command: Command) -> Result<Vec<u8>, ArtifactError> {
+    let _ = command
         .spawn()
         .map_err(|e| ArtifactError::CompilationFailed(e.to_string()))?;
     let output = command
@@ -589,12 +456,25 @@ fn compile_yul(
         .map_err(|e| ArtifactError::CompilationFailed(e.to_string()))?;
 
     if !output.status.success() {
-        return Err(ArtifactError::CompilationFailed(
+        Err(ArtifactError::CompilationFailed(
             String::from_utf8_lossy(output.stderr.as_slice()).to_string(),
-        ));
+        ))
+    } else {
+        Ok(output.stdout)
     }
+}
 
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+fn grab_bytecode(output: &str) -> Vec<u8> {
+    hex::decode(
+        output
+            .split(' ')
+            .last()
+            .unwrap()
+            .trim()
+            .strip_prefix("0x")
+            .expect("should have 0x prefix"),
+    )
+    .expect("bytecode should be hex encoded")
 }
 
 fn download_contracts() -> Result<(), ArtifactError> {
