@@ -6,7 +6,6 @@
 #![feature(iter_array_chunks)]
 #![feature(iter_next_chunk)]
 #![feature(associated_type_defaults)]
-#![feature(return_position_impl_trait_in_trait)]
 #![feature(bigint_helper_methods)]
 #![allow(unused_imports)]
 #![allow(clippy::drop_ref)]

@@ -4,6 +4,7 @@ use crate::boojum::cs::implementations::setup::FinalizationHintsForProver;
 use crate::boojum::cs::traits::gate::GatePlacementStrategy;
 use crate::boojum::field::goldilocks::{GoldilocksExt2, GoldilocksField};
 use crate::boojum::gadgets::tables::*;
+use crate::{Field, RoundFunction};
 use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
 use zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
 use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord;
@@ -231,6 +232,126 @@ pub enum ZkSyncBaseLayerCircuit<
     EventsSorter(EventsSorterCircuit<F, R>),
     L1MessagesSorter(L1MessagesSorterCircuit<F, R>),
     L1MessagesHasher(L1MessagesHasherCircuit<F, R>),
+}
+
+impl<W> From<L1MessagesHasherCircuit<Field, RoundFunction>>
+    for ZkSyncBaseLayerCircuit<Field, W, RoundFunction>
+where
+    W: WitnessOracle<Field>,
+{
+    fn from(value: L1MessagesHasherCircuit<Field, RoundFunction>) -> Self {
+        ZkSyncBaseLayerCircuit::L1MessagesHasher(value)
+    }
+}
+
+impl<W> From<EventsSorterCircuit<Field, RoundFunction>>
+    for ZkSyncBaseLayerCircuit<Field, W, RoundFunction>
+where
+    W: WitnessOracle<Field>,
+{
+    fn from(value: EventsSorterCircuit<Field, RoundFunction>) -> Self {
+        ZkSyncBaseLayerCircuit::EventsSorter(value)
+    }
+}
+
+impl<W> From<VMMainCircuit<Field, W, RoundFunction>>
+    for ZkSyncBaseLayerCircuit<Field, W, RoundFunction>
+where
+    W: WitnessOracle<Field>,
+{
+    fn from(value: VMMainCircuit<Field, W, RoundFunction>) -> Self {
+        ZkSyncBaseLayerCircuit::MainVM(value)
+    }
+}
+
+impl<W> From<CodeDecommitterCircuit<Field, RoundFunction>>
+    for ZkSyncBaseLayerCircuit<Field, W, RoundFunction>
+where
+    W: WitnessOracle<Field>,
+{
+    fn from(value: CodeDecommitterCircuit<Field, RoundFunction>) -> Self {
+        ZkSyncBaseLayerCircuit::CodeDecommitter(value)
+    }
+}
+
+impl<W> From<CodeDecommittsSorterCircuit<Field, RoundFunction>>
+    for ZkSyncBaseLayerCircuit<Field, W, RoundFunction>
+where
+    W: WitnessOracle<Field>,
+{
+    fn from(value: CodeDecommittsSorterCircuit<Field, RoundFunction>) -> Self {
+        ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(value)
+    }
+}
+
+impl<W> From<LogDemuxerCircuit<Field, RoundFunction>>
+    for ZkSyncBaseLayerCircuit<Field, W, RoundFunction>
+where
+    W: WitnessOracle<Field>,
+{
+    fn from(value: LogDemuxerCircuit<Field, RoundFunction>) -> Self {
+        ZkSyncBaseLayerCircuit::LogDemuxer(value)
+    }
+}
+
+impl<W> From<Keccak256RoundFunctionCircuit<Field, RoundFunction>>
+    for ZkSyncBaseLayerCircuit<Field, W, RoundFunction>
+where
+    W: WitnessOracle<Field>,
+{
+    fn from(value: Keccak256RoundFunctionCircuit<Field, RoundFunction>) -> Self {
+        ZkSyncBaseLayerCircuit::KeccakRoundFunction(value)
+    }
+}
+
+impl<W> From<ECRecoverFunctionCircuit<Field, RoundFunction>>
+    for ZkSyncBaseLayerCircuit<Field, W, RoundFunction>
+where
+    W: WitnessOracle<Field>,
+{
+    fn from(value: ECRecoverFunctionCircuit<Field, RoundFunction>) -> Self {
+        ZkSyncBaseLayerCircuit::ECRecover(value)
+    }
+}
+
+impl<W> From<Sha256RoundFunctionCircuit<Field, RoundFunction>>
+    for ZkSyncBaseLayerCircuit<Field, W, RoundFunction>
+where
+    W: WitnessOracle<Field>,
+{
+    fn from(value: Sha256RoundFunctionCircuit<Field, RoundFunction>) -> Self {
+        ZkSyncBaseLayerCircuit::Sha256RoundFunction(value)
+    }
+}
+
+impl<W> From<RAMPermutationCircuit<Field, RoundFunction>>
+    for ZkSyncBaseLayerCircuit<Field, W, RoundFunction>
+where
+    W: WitnessOracle<Field>,
+{
+    fn from(value: RAMPermutationCircuit<Field, RoundFunction>) -> Self {
+        ZkSyncBaseLayerCircuit::RAMPermutation(value)
+    }
+}
+
+impl<W> From<StorageSorterCircuit<Field, RoundFunction>>
+    for ZkSyncBaseLayerCircuit<Field, W, RoundFunction>
+where
+    W: WitnessOracle<Field>,
+{
+    fn from(value: StorageSorterCircuit<Field, RoundFunction>) -> Self {
+        ZkSyncBaseLayerCircuit::StorageSorter(value)
+    }
+}
+
+impl<W> From<StorageApplicationCircuit<Field, RoundFunction>>
+    for ZkSyncBaseLayerCircuit<Field, W, RoundFunction>
+where
+    W: WitnessOracle<Field>,
+{
+    fn from(value: StorageApplicationCircuit<Field, RoundFunction>) -> Self {
+        ZkSyncBaseLayerCircuit::StorageApplication(value)
+    }
 }
 
 impl<

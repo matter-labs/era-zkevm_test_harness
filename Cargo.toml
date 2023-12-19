@@ -57,3 +57,7 @@ lto = false
 
 [profile.bench]
 debug = false
+
+[patch."https://github.com/matter-labs/era-boojum.git"]
+boojum = {path = "../era-boojum"}
+#cs_derive = {path = "../era-boojum"}

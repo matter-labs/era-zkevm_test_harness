@@ -7,6 +7,9 @@
 #![feature(associated_type_defaults)]
 #![feature(return_position_impl_trait_in_trait)]
 
+pub type Field = GoldilocksField;
+pub type RoundFunction = Poseidon2Goldilocks;
+
 pub const BASE_LAYER_FRI_LDE_FACTOR: usize = 2;
 pub const BASE_LAYER_CAP_SIZE: usize = 16;
 pub const SECURITY_BITS_TARGET: usize = 100;
@@ -17,6 +20,7 @@ pub const RECURSION_LAYER_CAP_SIZE: usize = 16;
 pub const L1_SECURITY_BITS: usize = 80;
 
 pub use snark_wrapper;
+use snark_wrapper::boojum::field::goldilocks::GoldilocksField;
 
 use crate::boojum::cs::implementations::prover::ProofConfig;
 
