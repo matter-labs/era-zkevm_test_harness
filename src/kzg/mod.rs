@@ -12,7 +12,10 @@ use crate::sha3::Keccak256;
 use rayon::prelude::*;
 use serde::Serialize;
 
-mod consts;
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+struct TrustedSetup {
+    g1_lagrange: Vec<String>,
+}
 
 const BLS_MODULUS: [u64; 4] = [
     0xffffffff00000001,
@@ -21,6 +24,7 @@ const BLS_MODULUS: [u64; 4] = [
     0x73eda753299d7d48,
 ];
 const FIELD_ELEMENTS_PER_BLOB: usize = 4096;
+const SETUP_JSON: &str = "src/kzg/trusted_setup.json";
 
 // reverse bit order of given number assuming an order of 4096
 fn bit_reverse_4096(n: usize) -> usize {
@@ -78,8 +82,9 @@ lazy_static::lazy_static! {
     };
     // Bit-reversed Lagrange bases of the eip4844 setup ceremony
     static ref LAGRANGE_SETUP_BRP: [G1Affine; FIELD_ELEMENTS_PER_BLOB] = {
-        let mut base_setup: Vec<G1> = consts::SETUP_HEX.iter().map(|hex| {
-            let bytes = hex_to_bytes(hex);
+        let setup: TrustedSetup = serde_json::from_slice(&std::fs::read(SETUP_JSON).unwrap()).unwrap();
+        let mut base_setup: Vec<G1> = setup.g1_lagrange.iter().map(|hex| {
+            let bytes = hex_to_bytes(&hex[2..]);
             let mut point = G1Compressed::empty();
             let v = point.as_mut();
             v.copy_from_slice(bytes.as_slice());
