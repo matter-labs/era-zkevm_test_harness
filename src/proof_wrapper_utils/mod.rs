@@ -39,7 +39,8 @@ use crate::data_source::{BlockDataSource, SetupDataSource, SourceResult};
 use crate::prover_utils::{
     create_compression_for_wrapper_setup_data, create_compression_layer_setup_data,
     prove_compression_for_wrapper_circuit, prove_compression_layer_circuit,
-    verify_compression_for_wrapper_proof, verify_compression_layer_proof, verify_recursion_layer_proof, verify_recursion_layer_proof_for_type,
+    verify_compression_for_wrapper_proof, verify_compression_layer_proof,
+    verify_recursion_layer_proof, verify_recursion_layer_proof_for_type,
 };
 use crate::tests::{test_compression_circuit, test_compression_for_wrapper_circuit};
 
@@ -115,7 +116,11 @@ pub fn wrap_proof(
         ZkSyncRecursionLayerStorageType::SchedulerCircuit as u8
     );
 
-    let valid = verify_recursion_layer_proof_for_type::<NoPow>(ZkSyncRecursionLayerStorageType::SchedulerCircuit, &proof.clone().into_inner(), &vk.clone().into_inner());
+    let valid = verify_recursion_layer_proof_for_type::<NoPow>(
+        ZkSyncRecursionLayerStorageType::SchedulerCircuit,
+        &proof.clone().into_inner(),
+        &vk.clone().into_inner(),
+    );
     assert!(valid);
 
     // Initialize RAM storage and upload scheduler proof and vk
