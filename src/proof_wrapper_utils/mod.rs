@@ -39,7 +39,7 @@ use crate::data_source::{BlockDataSource, SetupDataSource, SourceResult};
 use crate::prover_utils::{
     create_compression_for_wrapper_setup_data, create_compression_layer_setup_data,
     prove_compression_for_wrapper_circuit, prove_compression_layer_circuit,
-    verify_compression_for_wrapper_proof, verify_compression_layer_proof,
+    verify_compression_for_wrapper_proof, verify_compression_layer_proof, verify_recursion_layer_proof, verify_recursion_layer_proof_for_type,
 };
 use crate::tests::{test_compression_circuit, test_compression_for_wrapper_circuit};
 
@@ -115,6 +115,9 @@ pub fn wrap_proof(
         ZkSyncRecursionLayerStorageType::SchedulerCircuit as u8
     );
 
+    let valid = verify_recursion_layer_proof_for_type::<NoPow>(ZkSyncRecursionLayerStorageType::SchedulerCircuit, &proof.clone().into_inner(), &vk.clone().into_inner());
+    assert!(valid);
+
     // Initialize RAM storage and upload scheduler proof and vk
     let mut source = InMemoryDataSource::new();
     source
@@ -125,11 +128,17 @@ pub fn wrap_proof(
         .expect("Failed to set scheduler vk");
 
     // 1. All but one layers of compression with Goldilocks Poseidon2 hash
+    println!("Computing a sequence of compressing circuits");
     compute_compression_circuits(&mut source, config, &worker);
+    println!("Done computing a sequence of compressing circuits");
     // 2. Final compression with Bn256 Poseidon2 hash
+    println!("Computing a Boojum circuit using Bn256 Poseidon2 hash");
     compute_compression_for_wrapper_circuit(&mut source, config, &worker);
+    println!("Done computing a Boojum circuit using Bn256 Poseidon2 hash");
     // 3. Wrapper
+    println!("Computing a Bellman circuit over Bn256");
     compute_wrapper_proof_and_vk(&mut source, config, &bellman_worker);
+    println!("Done computing a Bellman circuit over Bn256");
 
     // Get and return wrapper proof and vk
     let wrapper_type = config.get_wrapper_type();
