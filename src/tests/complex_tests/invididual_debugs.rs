@@ -160,7 +160,6 @@ mod test {
         let mut content = std::fs::File::open(proof_file_name).unwrap();
         let mut buffer = vec![];
         content.read_to_end(&mut buffer).unwrap();
-
         let proof: FriProofWrapper = bincode::deserialize(&buffer).unwrap();
 
         let vk_file_name = "scheduler_vk.json";
@@ -168,7 +167,6 @@ mod test {
         let mut content = std::fs::File::open(vk_file_name).unwrap();
         let mut buffer = vec![];
         content.read_to_end(&mut buffer).unwrap();
-
         let vk: ZkSyncRecursionLayerVerificationKey = serde_json::from_slice(&buffer).unwrap();
 
         let FriProofWrapper::Recursive(proof) = proof else {
