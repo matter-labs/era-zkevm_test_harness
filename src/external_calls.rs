@@ -26,7 +26,8 @@ use crate::zk_evm::witness_trace::VmWitnessTracer;
 use crate::zk_evm::GenericNoopTracer;
 use crate::zkevm_circuits::{
     base_structures::vm_state::FULL_SPONGE_QUEUE_STATE_WIDTH,
-    scheduler::input::SchedulerCircuitInstanceWitness,
+    eip_4844::input::*,
+    scheduler::{block_header::MAX_4844_BLOBS_PER_BLOCK, input::SchedulerCircuitInstanceWitness},
 };
 use crate::{
     ethereum_types::{Address, U256},
@@ -359,6 +360,8 @@ round_function: R, // used for all queues implementation
             bootloader_heap_initial_content,
             rollup_state_diff_for_compression,
             l1_messages_linear_hash: l1_messages_linear_hash,
+            eip4844_linear_hashes: [[0u8; 32]; 2],
+            eip4844_output_commitment_hashes: [[0u8; 32]; 2],
         };
 
         use crate::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
@@ -548,6 +551,9 @@ round_function: R, // used for all queues implementation
 
             previous_block_meta_hash: [0u8; 32],
             previous_block_aux_hash: [0u8; 32],
+
+            eip4844_witnesses: None,
+            eip4844_proofs: VecDeque::new(),
 
             node_layer_vk_witness: VerificationKey::default(),
             leaf_layer_parameters: std::array::from_fn(|_| {

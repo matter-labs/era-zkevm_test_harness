@@ -5,6 +5,11 @@ use crate::aux_definitions::witness_oracle::VmWitnessOracle;
 use crate::boojum::cs::traits::circuit::CircuitBuilderProxy;
 use crate::circuit_definitions::base_layer::*;
 
+use crate::circuit_definitions::eip4844::EIP4844InstanceSynthesisFunction;
+
+pub type EIP4844VerifierBuilder<F, R> =
+    CircuitBuilderProxy<F, EIP4844InstanceSynthesisFunction<F, R>>;
+
 pub type VMMainCircuitVerifierBuilder<F, W, R> =
     CircuitBuilderProxy<F, VmMainInstanceSynthesisFunction<F, W, R>>;
 pub type CodeDecommittsSorterVerifierBuilder<F, R> =

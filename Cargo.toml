@@ -21,7 +21,13 @@ resolver = "2"
 [dependencies]
 circuit_definitions = {path = "./circuit_definitions"}
 
-zkevm-assembly = {git = "https://github.com/matter-labs/era-zkEVM-assembly.git", branch = "v1.3.2"}
+snark_wrapper = {git = "https://github.com/matter-labs/snark-wrapper.git", branch = "main"}
+rescue_poseidon = {git = "https://github.com/matter-labs/rescue-poseidon.git", branch = "poseidon2"}
+
+# snark_wrapper = {path = "../snark_wrapper"}
+# rescue_poseidon = {path = "../rescue-poseidon"}
+
+zkevm-assembly = {git = "https://github.com/matter-labs/era-zkEVM-assembly.git", branch = "v1.4.1"}
 
 rand = "0.4"
 rayon = "*"
@@ -37,6 +43,10 @@ env_logger = "*"
 smallvec = "*"
 structopt = "0.3.26"
 codegen = "0.2.0"
+lazy_static = "1.4"
+
+[dev-dependencies]
+rand = "0.4"
 
 [profile.release]
 debug = false

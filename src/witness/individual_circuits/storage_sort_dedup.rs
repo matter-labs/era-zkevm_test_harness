@@ -24,7 +24,7 @@ pub fn compute_storage_dedup_and_sort<
         // return singe dummy witness
         use crate::boojum::gadgets::queue::QueueState;
 
-        let initial_fsm_state = StorageDeduplicatorFSMInputOutput::<F>::placeholder_witness();
+        let mut initial_fsm_state = StorageDeduplicatorFSMInputOutput::<F>::placeholder_witness();
 
         assert_eq!(
             take_queue_state_from_simulator(&artifacts.demuxed_rollup_storage_queue_simulator),
@@ -37,7 +37,10 @@ pub fn compute_storage_dedup_and_sort<
             take_queue_state_from_simulator(&artifacts.demuxed_rollup_storage_queue_simulator);
         passthrough_input.intermediate_sorted_queue_state = QueueState::placeholder_witness();
 
-        let final_fsm_state = StorageDeduplicatorFSMInputOutput::<F>::placeholder_witness();
+        let mut final_fsm_state = StorageDeduplicatorFSMInputOutput::<F>::placeholder_witness();
+        final_fsm_state.lhs_accumulator = [F::from_u64_unchecked(1); 2];
+        final_fsm_state.rhs_accumulator = [F::from_u64_unchecked(1); 2];
+        final_fsm_state.cycle_idx = 4;
 
         let mut passthrough_output = StorageDeduplicatorOutputData::placeholder_witness();
         passthrough_output.final_sorted_queue_state = QueueState::placeholder_witness();

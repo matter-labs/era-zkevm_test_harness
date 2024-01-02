@@ -40,6 +40,16 @@ pub fn recursion_layer_proof_config() -> ProofConfig {
     }
 }
 
+pub fn eip4844_proof_config() -> ProofConfig {
+    ProofConfig {
+        fri_lde_factor: BASE_LAYER_FRI_LDE_FACTOR,
+        merkle_tree_cap_size: BASE_LAYER_CAP_SIZE,
+        fri_folding_schedule: None,
+        security_level: SECURITY_BITS_TARGET,
+        pow_bits: 0,
+    }
+}
+
 pub mod aux_definitions;
 pub mod circuit_definitions;
 pub mod encodings;

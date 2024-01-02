@@ -8,6 +8,10 @@ use crate::boojum::cs::traits::gate::GatePlacementStrategy;
 use crate::boojum::gadgets::recursion::circuit_pow::*;
 use crate::boojum::gadgets::tables::*;
 use crate::circuit_definitions::base_layer::TARGET_CIRCUIT_TRACE_LENGTH;
+use crate::circuit_definitions::implementations::verifier::VerificationKeyCircuitGeometry;
+use crate::circuit_definitions::traits::circuit::ErasedBuilderForRecursiveVerifier;
+use crate::circuit_definitions::verifier_builder::EIP4844VerifierBuilder;
+use crate::ProofConfig;
 use zkevm_circuits::base_structures::recursion_query::RecursionQuery;
 use zkevm_circuits::scheduler::input::SchedulerCircuitInstanceWitness;
 use zkevm_circuits::scheduler::*;
@@ -29,15 +33,18 @@ type RH = CircuitGoldilocksPoseidon2Sponge;
 // #[serde(bound = "RecursionNodeInstanceWitness<F, H, EXT>: serde::Serialize + serde::de::DeserializeOwned,
 //     NodeLayerRecursionConfig<F, H::NonCircuitSimulator, EXT>: serde::Serialize + serde::de::DeserializeOwned,
 //     TR::TransciptParameters: serde::Serialize + serde::de::DeserializeOwned")]
-pub struct SchedulerCircuit<POW: RecursivePoWRunner<F>> {
+pub struct SchedulerCircuit<POW: RecursivePoWRunner<F>, const USE_4844: bool> {
     pub witness: SchedulerCircuitInstanceWitness<F, RH, EXT>,
     pub config: SchedulerConfig<F, H, EXT>,
     pub transcript_params: <TR as Transcript<F>>::TransciptParameters,
+    pub eip4844_proof_config: Option<ProofConfig>,
+    pub eip4844_vk_fixed_parameters: Option<VerificationKeyCircuitGeometry>,
+    pub eip4844_vk: Option<VerificationKey<F, H>>,
     pub _marker: std::marker::PhantomData<(R, POW)>,
 }
 
-impl<POW: RecursivePoWRunner<F>> crate::boojum::cs::traits::circuit::CircuitBuilder<F>
-    for SchedulerCircuit<POW>
+impl<POW: RecursivePoWRunner<F>, const USE_4844: bool>
+    crate::boojum::cs::traits::circuit::CircuitBuilder<F> for SchedulerCircuit<POW, USE_4844>
 where
     [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
@@ -129,7 +136,7 @@ where
     }
 }
 
-impl<POW: RecursivePoWRunner<F>> SchedulerCircuit<POW>
+impl<POW: RecursivePoWRunner<F>, const USE_4844: bool> SchedulerCircuit<POW, USE_4844>
 where
     [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
@@ -188,17 +195,30 @@ where
             witness,
             config,
             transcript_params,
+            eip4844_proof_config,
+            eip4844_vk_fixed_parameters,
             ..
         } = self;
 
         let verifier_builder =
             NodeLayerCircuitBuilder::<POW>::dyn_recursive_verifier_builder::<EXT, CS>();
-        scheduler_function::<F, CS, R, RH, EXT, TR, CTR, POW>(
+
+        let eip4844_verifier_builder = if eip4844_proof_config.is_some() {
+            Some(EIP4844VerifierBuilder::<F, ZkSyncDefaultRoundFunction>::dyn_recursive_verifier_builder())
+        } else {
+            None
+        };
+
+        scheduler_function::<F, CS, R, RH, EXT, TR, CTR, POW, USE_4844>(
             cs,
             witness,
             round_function,
             config,
             verifier_builder,
+            eip4844_proof_config,
+            eip4844_vk_fixed_parameters,
+            self.eip4844_vk,
+            eip4844_verifier_builder,
             transcript_params,
         )
     }
@@ -212,9 +232,10 @@ pub type ZkSyncSchedulerCircuit = SchedulerCircuit<
     // GoldilocksPoisedon2Transcript,
     // CircuitAlgebraicSpongeBasedTranscript<GoldilocksField, 8, 12, 4, ZkSyncDefaultRoundFunction>,
     NoPow,
+    false,
 >;
 
 use crate::boojum::cs::traits::circuit::CircuitBuilderProxy;
 
-pub type SchedulerCircuitBuilder<POW> = CircuitBuilderProxy<F, SchedulerCircuit<POW>>;
+pub type SchedulerCircuitBuilder<POW> = CircuitBuilderProxy<F, SchedulerCircuit<POW, false>>;
 pub type ConcreteSchedulerCircuitBuilder = SchedulerCircuitBuilder<NoPow>;
