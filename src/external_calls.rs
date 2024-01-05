@@ -298,6 +298,7 @@ pub fn run<
         let t = basic_circuits
             .events_sorter_circuits
             .last
+            .clone()
             .map(|el| {
                 let wit = el.clone_witness().unwrap();
                 wit.closed_form_input
@@ -317,6 +318,7 @@ pub fn run<
         let t = basic_circuits
             .main_vm_circuits
             .first
+            .clone()
             .map(|el| {
                 let wit = el.clone_witness().unwrap();
                 wit.closed_form_input
@@ -333,6 +335,7 @@ pub fn run<
         let rollup_state_diff_for_compression = basic_circuits
             .storage_application_circuits
             .last
+            .clone()
             .map(|el| {
                 let wit = el.clone_witness().unwrap();
                 wit.closed_form_input
@@ -344,6 +347,7 @@ pub fn run<
         let l1_messages_linear_hash = basic_circuits
             .l1_messages_hasher_circuits
             .last
+            .clone()
             .map(|el| {
                 let wit = el.clone_witness().unwrap();
                 wit.closed_form_input.observable_output.keccak256_hash
@@ -476,6 +480,7 @@ pub fn run<
             storage_log_tail: basic_circuits
                 .main_vm_circuits
                 .first
+                .clone()
                 .unwrap()
                 .clone_witness()
                 .unwrap()

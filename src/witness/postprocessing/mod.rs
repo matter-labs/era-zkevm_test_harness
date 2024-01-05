@@ -207,8 +207,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
             main_vm_circuits.last = Some(instance.clone());
         }
 
-        let instance = instance.into();
-        circuit_callback(instance);
+        let instance: ZkSyncBaseLayerCircuit<_, _, _> = instance.into();
 
         let recursive_request = RecursionRequest {
             circuit_type: GoldilocksField::from_u64_unchecked(
@@ -218,6 +217,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
         };
         let _ = queue_simulator.push(recursive_request, &*round_function);
 
+        circuit_callback(instance);
         main_vm_circuits_compact_forms_witnesses.push(compact_form_witness);
     }
     queue_simulator_callback(queue_simulator);
@@ -226,7 +226,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
 
     let mut maker = CircuitMaker::new(
         geometry.cycles_code_decommitter_sorter,
-        round_function,
+        round_function.clone(),
         &mut cs_for_witness_generation,
         &mut cycles_used,
     );
@@ -246,7 +246,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
 
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_code_decommitter,
-        round_function,
+        round_function.clone(),
         &mut cs_for_witness_generation,
         &mut cycles_used,
     );
@@ -266,7 +266,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
 
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_log_demuxer,
-        round_function,
+        round_function.clone(),
         &mut cs_for_witness_generation,
         &mut cycles_used,
     );
@@ -283,7 +283,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
 
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_keccak256_circuit,
-        round_function,
+        round_function.clone(),
         &mut cs_for_witness_generation,
         &mut cycles_used,
     );
@@ -303,7 +303,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
 
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_sha256_circuit,
-        round_function,
+        round_function.clone(),
         &mut cs_for_witness_generation,
         &mut cycles_used,
     );
@@ -323,7 +323,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
 
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_ecrecover_circuit,
-        round_function,
+        round_function.clone(),
         &mut cs_for_witness_generation,
         &mut cycles_used,
     );
@@ -343,7 +343,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
 
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_ram_permutation,
-        round_function,
+        round_function.clone(),
         &mut cs_for_witness_generation,
         &mut cycles_used,
     );
@@ -363,7 +363,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
 
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_storage_sorter,
-        round_function,
+        round_function.clone(),
         &mut cs_for_witness_generation,
         &mut cycles_used,
     );
@@ -380,7 +380,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
 
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_storage_application,
-        round_function,
+        round_function.clone(),
         &mut cs_for_witness_generation,
         &mut cycles_used,
     );
@@ -400,7 +400,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
 
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_events_or_l1_messages_sorter,
-        round_function,
+        round_function.clone(),
         &mut cs_for_witness_generation,
         &mut cycles_used,
     );
@@ -417,7 +417,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
 
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_events_or_l1_messages_sorter,
-        round_function,
+        round_function.clone(),
         &mut cs_for_witness_generation,
         &mut cycles_used,
     );
@@ -437,7 +437,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
 
     let mut maker = CircuitMaker::new(
         geometry.limit_for_l1_messages_pudata_hasher,
-        round_function,
+        round_function.clone(),
         &mut cs_for_witness_generation,
         &mut cycles_used,
     );
@@ -491,7 +491,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     (basic_circuits, basic_circuits_public_inputs)
 }
 
-struct BlockFirstAndLastBasicCircuits {
+pub struct BlockFirstAndLastBasicCircuits {
     pub main_vm_circuits: FirstAndLastCircuit<
         VmMainInstanceSynthesisFunction<Field, VmWitnessOracle<Field>, RoundFunction>,
     >,
@@ -523,7 +523,7 @@ struct BlockFirstAndLastBasicCircuits {
         FirstAndLastCircuit<LinearHasherInstanceSynthesisFunction<Field, RoundFunction>>,
 }
 
-struct FirstAndLastCircuit<S>
+pub struct FirstAndLastCircuit<S>
 where
     S: ZkSyncUniformSynthesisFunction<Field>,
 {
@@ -722,7 +722,7 @@ where
     extremes: FirstAndLastCircuit<S>,
 }
 
-impl<T, S> CircuitMaker<'_, T, S>
+impl<'a, T, S> CircuitMaker<'a, T, S>
 where
     T: ClosedFormInputField<GoldilocksField>,
     <T::T as CSAllocatable<GoldilocksField>>::Witness:
@@ -743,8 +743,11 @@ where
     fn new(
         geometry: u32,
         round_function: Arc<Poseidon2Goldilocks>,
-        cs_for_witness_generation: &mut ConstraintSystemImpl<GoldilocksField, Poseidon2Goldilocks>,
-        cycles_used: &mut usize,
+        cs_for_witness_generation: &'a mut ConstraintSystemImpl<
+            GoldilocksField,
+            Poseidon2Goldilocks,
+        >,
+        cycles_used: &'a mut usize,
     ) -> Self {
         Self {
             geometry,
@@ -760,7 +763,7 @@ where
 
     fn process(
         &mut self,
-        circuit_input: T,
+        mut circuit_input: T,
     ) -> ZkSyncBaseLayerCircuit<
         GoldilocksField,
         VmWitnessOracle<GoldilocksField>,
