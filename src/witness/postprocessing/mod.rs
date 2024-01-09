@@ -61,6 +61,7 @@ use circuit_definitions::zkevm_circuits::log_sorter::input::EventsDeduplicatorOu
 use circuit_definitions::zkevm_circuits::ram_permutation::input::RamPermutationCircuitInstanceWitness;
 use circuit_definitions::zkevm_circuits::ram_permutation::input::RamPermutationFSMInputOutput;
 use circuit_definitions::zkevm_circuits::ram_permutation::input::RamPermutationInputData;
+use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use circuit_definitions::zkevm_circuits::sha256_round_function::input::Sha256RoundFunctionCircuitInstanceWitness;
 use circuit_definitions::zkevm_circuits::sha256_round_function::input::Sha256RoundFunctionFSMInputOutput;
 use circuit_definitions::zkevm_circuits::sort_decommittment_requests::input::CodeDecommittmentsDeduplicatorFSMInputOutput;
@@ -99,6 +100,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
         >,
     ),
     QSCB: FnMut(
+        u8,
         RecursionQueueSimulator<GoldilocksField>,
         Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
     ),
@@ -224,7 +226,11 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
         main_vm_circuits_compact_forms_witnesses.push(compact_form_witness);
     }
     all_compact_forms.extend(main_vm_circuits_compact_forms_witnesses.clone());
-    queue_simulator_callback(queue_simulator, main_vm_circuits_compact_forms_witnesses);
+    queue_simulator_callback(
+        BaseLayerCircuitType::VM as u8,
+        queue_simulator,
+        main_vm_circuits_compact_forms_witnesses,
+    );
 
     // Code decommitter sorter
 
@@ -246,6 +252,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     ) = maker.into_results();
     all_compact_forms.extend(code_decommittments_sorter_circuits_compact_forms_witnesses.clone());
     queue_simulator_callback(
+        BaseLayerCircuitType::DecommitmentsFilter as u8,
         queue_simulator,
         code_decommittments_sorter_circuits_compact_forms_witnesses,
     );
@@ -270,6 +277,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     ) = maker.into_results();
     all_compact_forms.extend(code_decommitter_circuits_compact_forms_witnesses.clone());
     queue_simulator_callback(
+        BaseLayerCircuitType::Decommiter as u8,
         queue_simulator,
         code_decommitter_circuits_compact_forms_witnesses,
     );
@@ -290,7 +298,11 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     let (log_demux_circuits, queue_simulator, log_demux_circuits_compact_forms_witnesses) =
         maker.into_results();
     all_compact_forms.extend(log_demux_circuits_compact_forms_witnesses.clone());
-    queue_simulator_callback(queue_simulator, log_demux_circuits_compact_forms_witnesses);
+    queue_simulator_callback(
+        BaseLayerCircuitType::LogDemultiplexer as u8,
+        queue_simulator,
+        log_demux_circuits_compact_forms_witnesses,
+    );
 
     // keccak precompiles
 
@@ -312,6 +324,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     ) = maker.into_results();
     all_compact_forms.extend(keccak_precompile_circuits_compact_forms_witnesses.clone());
     queue_simulator_callback(
+        BaseLayerCircuitType::KeccakPrecompile as u8,
         queue_simulator,
         keccak_precompile_circuits_compact_forms_witnesses,
     );
@@ -336,6 +349,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     ) = maker.into_results();
     all_compact_forms.extend(sha256_precompile_circuits_compact_forms_witnesses.clone());
     queue_simulator_callback(
+        BaseLayerCircuitType::Sha256Precompile as u8,
         queue_simulator,
         sha256_precompile_circuits_compact_forms_witnesses,
     );
@@ -360,6 +374,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     ) = maker.into_results();
     all_compact_forms.extend(ecrecover_precompile_circuits_compact_forms_witnesses.clone());
     queue_simulator_callback(
+        BaseLayerCircuitType::EcrecoverPrecompile as u8,
         queue_simulator,
         ecrecover_precompile_circuits_compact_forms_witnesses,
     );
@@ -384,6 +399,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     ) = maker.into_results();
     all_compact_forms.extend(ram_permutation_circuits_compact_forms_witnesses.clone());
     queue_simulator_callback(
+        BaseLayerCircuitType::RamValidation as u8,
         queue_simulator,
         ram_permutation_circuits_compact_forms_witnesses,
     );
@@ -405,6 +421,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
         maker.into_results();
     all_compact_forms.extend(storage_sorter_circuit_compact_form_witnesses.clone());
     queue_simulator_callback(
+        BaseLayerCircuitType::StorageFilter as u8,
         queue_simulator,
         storage_sorter_circuit_compact_form_witnesses,
     );
@@ -429,6 +446,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     ) = maker.into_results();
     all_compact_forms.extend(storage_application_circuits_compact_forms_witnesses.clone());
     queue_simulator_callback(
+        BaseLayerCircuitType::StorageApplicator as u8,
         queue_simulator,
         storage_application_circuits_compact_forms_witnesses,
     );
@@ -450,6 +468,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
         maker.into_results();
     all_compact_forms.extend(events_sorter_circuits_compact_forms_witnesses.clone());
     queue_simulator_callback(
+        BaseLayerCircuitType::EventsRevertsFilter as u8,
         queue_simulator,
         events_sorter_circuits_compact_forms_witnesses,
     );
@@ -474,6 +493,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     ) = maker.into_results();
     all_compact_forms.extend(l1_messages_sorter_circuits_compact_forms_witnesses.clone());
     queue_simulator_callback(
+        BaseLayerCircuitType::L1MessagesRevertsFilter as u8,
         queue_simulator,
         l1_messages_sorter_circuits_compact_forms_witnesses,
     );
@@ -498,6 +518,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     ) = maker.into_results();
     all_compact_forms.extend(l1_messages_hasher_circuits_compact_forms_witnesses.clone());
     queue_simulator_callback(
+        BaseLayerCircuitType::L1MessagesHasher as u8,
         queue_simulator,
         l1_messages_hasher_circuits_compact_forms_witnesses,
     );

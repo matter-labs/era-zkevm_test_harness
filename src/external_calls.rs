@@ -61,7 +61,11 @@ pub fn run<
     EXT: FieldExtension<2, BaseField = MainField>,
     S: Storage,
     CB: FnMut(ZkSyncBaseLayerCircuit<MainField, VmWitnessOracle<MainField>, RoundFunction>),
-    QSCB: FnMut(RecursionQueueSimulator<MainField>, Vec<ClosedFormInputCompactFormWitness<MainField>>),
+    QSCB: FnMut(
+        u8,
+        RecursionQueueSimulator<MainField>,
+        Vec<ClosedFormInputCompactFormWitness<MainField>>,
+    ),
 >(
     caller: Address,                 // for real block must be zero
     entry_point_address: Address,    // for real block must be the bootloader
