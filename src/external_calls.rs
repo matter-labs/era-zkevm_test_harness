@@ -35,6 +35,7 @@ use circuit_definitions::boojum::field::Field;
 use circuit_definitions::boojum::implementations::poseidon2::Poseidon2Goldilocks;
 use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit;
 use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
+use circuit_definitions::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
 use circuit_definitions::{Field as MainField, RoundFunction, ZkSyncDefaultRoundFunction};
 
 pub const SCHEDULER_TIMESTAMP: u32 = 1;
@@ -43,22 +44,24 @@ use crate::boojum::field::FieldExtension;
 use crate::boojum::gadgets::num::Num;
 use crate::boojum::gadgets::recursion::recursive_tree_hasher::RecursiveTreeHasher;
 use crate::boojum::gadgets::traits::allocatable::*;
-use crate::witness::full_block_artifact::{
-    BlockBasicCircuitsPublicCompactFormsWitnesses, FullBlockArtifacts,
-};
+use crate::witness::full_block_artifact::FullBlockArtifacts;
 use crate::witness::oracle::VmInstanceWitness;
 use crate::zkevm_circuits::scheduler::block_header::BlockAuxilaryOutputWitness;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 
-/// This is a testing interface that basically will
-/// setup the environment and will run out-of-circuit and then in-circuit
-/// and perform intermediate tests
+/// Executes a given set of instructions, and returns things necessary to do the proving:
+/// - all circuits as a callback
+/// - circuit recursion queues and associated inputs as a callback
+/// - partial witness for the scheduler circuit (later we have to add proof witnesses for the nodes)
+/// - witness with AUX data (with information that might be useful during verification to generate the public input)
+///
+/// This function will setup the environment and will run out-of-circuit and then in-circuit
 pub fn run<
     H: RecursiveTreeHasher<MainField, Num<MainField>>,
     EXT: FieldExtension<2, BaseField = MainField>,
     S: Storage,
     CB: FnMut(ZkSyncBaseLayerCircuit<MainField, VmWitnessOracle<MainField>, RoundFunction>),
-    QSCB: FnMut(RecursionQueueSimulator<MainField>),
+    QSCB: FnMut(RecursionQueueSimulator<MainField>, Vec<ClosedFormInputCompactFormWitness<MainField>>),
 >(
     caller: Address,                 // for real block must be zero
     entry_point_address: Address,    // for real block must be the bootloader
@@ -69,17 +72,17 @@ pub fn run<
     used_bytecodes: std::collections::HashMap<U256, Vec<[u8; 32]>>, // auxilary information to avoid passing a full set of all used codes
     ram_verification_queries: Vec<(u32, U256)>, // we may need to check that after the bootloader's memory is filled
     cycle_limit: usize,
-    round_function: RoundFunction, // used for all queues implementation
     geometry: GeometryConfig,
     storage: S,
     tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
     mut circuit_callback: CB,
     mut queue_simulator_callback: QSCB,
 ) -> (
-    BlockBasicCircuitsPublicCompactFormsWitnesses<MainField>,
     SchedulerCircuitInstanceWitness<MainField, H, EXT>,
     BlockAuxilaryOutputWitness<MainField>,
 ) {
+    let round_function = ZkSyncDefaultRoundFunction::default();
+
     assert!(zk_porter_is_available == false);
     assert_eq!(
         ram_verification_queries.len(),
@@ -364,14 +367,6 @@ pub fn run<
             eip4844_output_commitment_hashes: [[0u8; 32]; 2],
         };
 
-        use crate::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
-        let per_circuit_inputs: VecDeque<ClosedFormInputCompactFormWitness<MainField>> =
-            compact_form_witnesses
-                .clone()
-                .into_flat_iterator()
-                .map(|el| el.into_inner())
-                .collect();
-
         // let memory_verification_queries: [sync_vm::glue::code_unpacker_sha256::memory_query_updated::MemoryQueryWitness<Bn256>; NUM_MEMORY_QUERIES_TO_VERIFY] = memory_verification_queries.try_into().unwrap();
 
         use crate::zkevm_circuits::recursion::leaf_layer::input::RecursionLeafParameters;
@@ -487,7 +482,7 @@ pub fn run<
                 .closed_form_input
                 .observable_input
                 .rollback_queue_tail_for_block,
-            per_circuit_closed_form_inputs: per_circuit_inputs,
+            per_circuit_closed_form_inputs: compact_form_witnesses.into(),
 
             bootloader_heap_memory_state: basic_circuits
                 .main_vm_circuits
@@ -566,67 +561,5 @@ pub fn run<
         (scheduler_circuit_witness, aux_data)
     };
 
-    (compact_form_witnesses, scheduler_circuit_witness, aux_data)
-}
-
-use crate::boojum::field::goldilocks::GoldilocksExt2;
-use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
-
-/// Executes a given set of instructions, and returns things necessary to do the proving:
-/// - list of circuits with their inputs and witnesses
-/// - partial witness for the scheduler circuit (later we have to add proof witnesses for the nodes)
-/// - witness with AUX data (with information that might be useful during verification to generate the public input)
-pub fn run_with_fixed_params<
-    S: Storage,
-    CB: FnMut(
-        ZkSyncBaseLayerCircuit<
-            GoldilocksField,
-            VmWitnessOracle<GoldilocksField>,
-            Poseidon2Goldilocks,
-        >,
-    ),
-    QSCB: FnMut(RecursionQueueSimulator<GoldilocksField>),
->(
-    caller: Address,                 // for real block must be zero
-    entry_point_address: Address,    // for real block must be the bootloader
-    entry_point_code: Vec<[u8; 32]>, // for real block must be a bootloader code
-    initial_heap_content: Vec<u8>,   // bootloader starts with non-deterministic heap
-    zk_porter_is_available: bool,
-    default_aa_code_hash: U256,
-    used_bytecodes: std::collections::HashMap<U256, Vec<[u8; 32]>>, // auxilary information to avoid passing a full set of all used codes
-    ram_verification_queries: Vec<(u32, U256)>, // we may need to check that after the bootloader's memory is filled
-    cycle_limit: usize,
-    geometry: GeometryConfig,
-    storage: S,
-    tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
-    mut circuit_callback: CB,
-    mut queue_simulator_callback: QSCB,
-) -> (
-    BlockBasicCircuitsPublicCompactFormsWitnesses<GoldilocksField>,
-    SchedulerCircuitInstanceWitness<
-        GoldilocksField,
-        CircuitGoldilocksPoseidon2Sponge,
-        GoldilocksExt2,
-    >,
-    BlockAuxilaryOutputWitness<GoldilocksField>,
-) {
-    let round_function = ZkSyncDefaultRoundFunction::default();
-
-    run(
-        caller,
-        entry_point_address,
-        entry_point_code,
-        initial_heap_content,
-        zk_porter_is_available,
-        default_aa_code_hash,
-        used_bytecodes,
-        ram_verification_queries,
-        cycle_limit,
-        round_function,
-        geometry,
-        storage,
-        tree,
-        circuit_callback,
-        queue_simulator_callback,
-    )
+    (scheduler_circuit_witness, aux_data)
 }

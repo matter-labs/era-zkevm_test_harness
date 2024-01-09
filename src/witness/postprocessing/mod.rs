@@ -4,7 +4,6 @@ use crate::boojum::algebraic_props::round_function;
 use crate::boojum::config::ProvingCSConfig;
 use crate::ethereum_types::U256;
 use crate::toolset::GeometryConfig;
-use crate::witness::full_block_artifact::BlockBasicCircuitsPublicCompactFormsWitnesses;
 use crate::witness::full_block_artifact::FullBlockArtifacts;
 use crate::witness::oracle::VmInstanceWitness;
 use crate::witness::utils::*;
@@ -99,7 +98,10 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
             Poseidon2Goldilocks,
         >,
     ),
-    QSCB: FnMut(RecursionQueueSimulator<GoldilocksField>),
+    QSCB: FnMut(
+        RecursionQueueSimulator<GoldilocksField>,
+        Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
+    ),
 >(
     zkporter_is_available: bool,
     default_aa_code_hash: U256,
@@ -111,7 +113,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     mut queue_simulator_callback: QSCB,
 ) -> (
     BlockFirstAndLastBasicCircuits,
-    BlockBasicCircuitsPublicCompactFormsWitnesses<GoldilocksField>,
+    Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
 ) {
     assert!(artifacts.is_processed);
 
@@ -148,8 +150,9 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
             TRACE_LEN_LOG_2_FOR_CALCULATION,
             MAX_VARS_LOG_2_FOR_CALCULATION,
         );
-
     let mut cycles_used: usize = 0;
+
+    let mut all_compact_forms = vec![];
 
     // VM
 
@@ -220,7 +223,8 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
         circuit_callback(instance);
         main_vm_circuits_compact_forms_witnesses.push(compact_form_witness);
     }
-    queue_simulator_callback(queue_simulator);
+    all_compact_forms.extend(main_vm_circuits_compact_forms_witnesses.clone());
+    queue_simulator_callback(queue_simulator, main_vm_circuits_compact_forms_witnesses);
 
     // Code decommitter sorter
 
@@ -240,7 +244,11 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
         queue_simulator,
         code_decommittments_sorter_circuits_compact_forms_witnesses,
     ) = maker.into_results();
-    queue_simulator_callback(queue_simulator);
+    all_compact_forms.extend(code_decommittments_sorter_circuits_compact_forms_witnesses.clone());
+    queue_simulator_callback(
+        queue_simulator,
+        code_decommittments_sorter_circuits_compact_forms_witnesses,
+    );
 
     // Actual decommitter
 
@@ -260,7 +268,11 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
         queue_simulator,
         code_decommitter_circuits_compact_forms_witnesses,
     ) = maker.into_results();
-    queue_simulator_callback(queue_simulator);
+    all_compact_forms.extend(code_decommitter_circuits_compact_forms_witnesses.clone());
+    queue_simulator_callback(
+        queue_simulator,
+        code_decommitter_circuits_compact_forms_witnesses,
+    );
 
     // log demux
 
@@ -277,7 +289,8 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
 
     let (log_demux_circuits, queue_simulator, log_demux_circuits_compact_forms_witnesses) =
         maker.into_results();
-    queue_simulator_callback(queue_simulator);
+    all_compact_forms.extend(log_demux_circuits_compact_forms_witnesses.clone());
+    queue_simulator_callback(queue_simulator, log_demux_circuits_compact_forms_witnesses);
 
     // keccak precompiles
 
@@ -297,7 +310,11 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
         queue_simulator,
         keccak_precompile_circuits_compact_forms_witnesses,
     ) = maker.into_results();
-    queue_simulator_callback(queue_simulator);
+    all_compact_forms.extend(keccak_precompile_circuits_compact_forms_witnesses.clone());
+    queue_simulator_callback(
+        queue_simulator,
+        keccak_precompile_circuits_compact_forms_witnesses,
+    );
 
     // sha256 precompiles
 
@@ -317,7 +334,11 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
         queue_simulator,
         sha256_precompile_circuits_compact_forms_witnesses,
     ) = maker.into_results();
-    queue_simulator_callback(queue_simulator);
+    all_compact_forms.extend(sha256_precompile_circuits_compact_forms_witnesses.clone());
+    queue_simulator_callback(
+        queue_simulator,
+        sha256_precompile_circuits_compact_forms_witnesses,
+    );
 
     // ecrecover precompiles
 
@@ -337,7 +358,11 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
         queue_simulator,
         ecrecover_precompile_circuits_compact_forms_witnesses,
     ) = maker.into_results();
-    queue_simulator_callback(queue_simulator);
+    all_compact_forms.extend(ecrecover_precompile_circuits_compact_forms_witnesses.clone());
+    queue_simulator_callback(
+        queue_simulator,
+        ecrecover_precompile_circuits_compact_forms_witnesses,
+    );
 
     // RAM permutation
 
@@ -357,7 +382,11 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
         queue_simulator,
         ram_permutation_circuits_compact_forms_witnesses,
     ) = maker.into_results();
-    queue_simulator_callback(queue_simulator);
+    all_compact_forms.extend(ram_permutation_circuits_compact_forms_witnesses.clone());
+    queue_simulator_callback(
+        queue_simulator,
+        ram_permutation_circuits_compact_forms_witnesses,
+    );
 
     // storage sorter
 
@@ -374,7 +403,11 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
 
     let (storage_sorter_circuits, queue_simulator, storage_sorter_circuit_compact_form_witnesses) =
         maker.into_results();
-    queue_simulator_callback(queue_simulator);
+    all_compact_forms.extend(storage_sorter_circuit_compact_form_witnesses.clone());
+    queue_simulator_callback(
+        queue_simulator,
+        storage_sorter_circuit_compact_form_witnesses,
+    );
 
     // storage application
 
@@ -394,7 +427,11 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
         queue_simulator,
         storage_application_circuits_compact_forms_witnesses,
     ) = maker.into_results();
-    queue_simulator_callback(queue_simulator);
+    all_compact_forms.extend(storage_application_circuits_compact_forms_witnesses.clone());
+    queue_simulator_callback(
+        queue_simulator,
+        storage_application_circuits_compact_forms_witnesses,
+    );
 
     // events sorter
 
@@ -411,7 +448,11 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
 
     let (events_sorter_circuits, queue_simulator, events_sorter_circuits_compact_forms_witnesses) =
         maker.into_results();
-    queue_simulator_callback(queue_simulator);
+    all_compact_forms.extend(events_sorter_circuits_compact_forms_witnesses.clone());
+    queue_simulator_callback(
+        queue_simulator,
+        events_sorter_circuits_compact_forms_witnesses,
+    );
 
     // l1 messages sorter
 
@@ -431,7 +472,11 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
         queue_simulator,
         l1_messages_sorter_circuits_compact_forms_witnesses,
     ) = maker.into_results();
-    queue_simulator_callback(queue_simulator);
+    all_compact_forms.extend(l1_messages_sorter_circuits_compact_forms_witnesses.clone());
+    queue_simulator_callback(
+        queue_simulator,
+        l1_messages_sorter_circuits_compact_forms_witnesses,
+    );
 
     // l1 messages pubdata hasher
 
@@ -451,7 +496,11 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
         queue_simulator,
         l1_messages_hasher_circuits_compact_forms_witnesses,
     ) = maker.into_results();
-    queue_simulator_callback(queue_simulator);
+    all_compact_forms.extend(l1_messages_hasher_circuits_compact_forms_witnesses.clone());
+    queue_simulator_callback(
+        queue_simulator,
+        l1_messages_hasher_circuits_compact_forms_witnesses,
+    );
 
     // done!
 
@@ -471,24 +520,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
         l1_messages_hasher_circuits,
     };
 
-    let basic_circuits_public_inputs = BlockBasicCircuitsPublicCompactFormsWitnesses {
-        main_vm_circuits: main_vm_circuits_compact_forms_witnesses,
-        code_decommittments_sorter_circuits:
-            code_decommittments_sorter_circuits_compact_forms_witnesses,
-        code_decommitter_circuits: code_decommitter_circuits_compact_forms_witnesses,
-        log_demux_circuits: log_demux_circuits_compact_forms_witnesses,
-        keccak_precompile_circuits: keccak_precompile_circuits_compact_forms_witnesses,
-        sha256_precompile_circuits: sha256_precompile_circuits_compact_forms_witnesses,
-        ecrecover_precompile_circuits: ecrecover_precompile_circuits_compact_forms_witnesses,
-        ram_permutation_circuits: ram_permutation_circuits_compact_forms_witnesses,
-        storage_sorter_circuits: storage_sorter_circuit_compact_form_witnesses,
-        storage_application_circuits: storage_application_circuits_compact_forms_witnesses,
-        events_sorter_circuits: events_sorter_circuits_compact_forms_witnesses,
-        l1_messages_sorter_circuits: l1_messages_sorter_circuits_compact_forms_witnesses,
-        l1_messages_hasher_circuits_compact_forms_witnesses,
-    };
-
-    (basic_circuits, basic_circuits_public_inputs)
+    (basic_circuits, all_compact_forms)
 }
 
 pub struct BlockFirstAndLastBasicCircuits {
