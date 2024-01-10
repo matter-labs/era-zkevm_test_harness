@@ -2,6 +2,10 @@ use derivative::*;
 
 use super::*;
 use crate::boojum::cs::traits::circuit::CircuitBuilder;
+use zkevm_circuits::ecrecover::{
+    decomp_table::*, ecrecover_function_entry_point, naf_abs_div2_table::*,
+    secp256k1::fixed_base_mul_table::*,
+};
 
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone, Copy, Debug, Default(bound = ""))]
@@ -69,7 +73,10 @@ where
                 share_constants: false,
             },
         );
-
+        let builder = U8x4FMAGate::configure_builder(
+            builder,
+            GatePlacementStrategy::UseGeneralPurposeColumns,
+        );
         let builder = ZeroCheckGate::configure_builder(
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,
@@ -84,6 +91,10 @@ where
             GatePlacementStrategy::UseGeneralPurposeColumns,
         );
         let builder = UIntXAddGate::<16>::configure_builder(
+            builder,
+            GatePlacementStrategy::UseGeneralPurposeColumns,
+        );
+        let builder = UIntXAddGate::<8>::configure_builder(
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,
         );
@@ -146,6 +157,31 @@ where
 
         let table = create_and8_table();
         cs.add_lookup_table::<And8Table, 3>(table);
+
+        let table = create_naf_abs_div2_table();
+        cs.add_lookup_table::<NafAbsDiv2Table, 3>(table);
+
+        let table = create_wnaf_decomp_table();
+        cs.add_lookup_table::<WnafDecompTable, 3>(table);
+
+        seq_macro::seq!(C in 0..32 {
+            let table = create_fixed_base_mul_table::<F, 0, C>();
+            cs.add_lookup_table::<FixedBaseMulTable<0, C>, 3>(table);
+            let table = create_fixed_base_mul_table::<F, 1, C>();
+            cs.add_lookup_table::<FixedBaseMulTable<1, C>, 3>(table);
+            let table = create_fixed_base_mul_table::<F, 2, C>();
+            cs.add_lookup_table::<FixedBaseMulTable<2, C>, 3>(table);
+            let table = create_fixed_base_mul_table::<F, 3, C>();
+            cs.add_lookup_table::<FixedBaseMulTable<3, C>, 3>(table);
+            let table = create_fixed_base_mul_table::<F, 4, C>();
+            cs.add_lookup_table::<FixedBaseMulTable<4, C>, 3>(table);
+            let table = create_fixed_base_mul_table::<F, 5, C>();
+            cs.add_lookup_table::<FixedBaseMulTable<5, C>, 3>(table);
+            let table = create_fixed_base_mul_table::<F, 6, C>();
+            cs.add_lookup_table::<FixedBaseMulTable<6, C>, 3>(table);
+            let table = create_fixed_base_mul_table::<F, 7, C>();
+            cs.add_lookup_table::<FixedBaseMulTable<7, C>, 3>(table);
+        });
 
         let table = create_byte_split_table::<F, 1>();
         cs.add_lookup_table::<ByteSplitTable<1>, 3>(table);
