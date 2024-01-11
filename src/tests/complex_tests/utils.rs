@@ -116,48 +116,48 @@ pub fn read_basic_test_artifact() -> TestArtifact {
         SYSTEM_CONTRACTS_COMMIT_HASH_LOCATION,
     );
 
-    if !Path::new(BASIC_TEST_JSON_LOCATION).exists()
-        || !Path::new(SYSTEM_CONTRACTS_COMMIT_HASH_LOCATION).exists()
-        || latest_basic_test_hash != basic_test_hash
-        || latest_system_contract_hash != system_contract_hash
-        || current_compiler_metadata != last_compiler_metadata
-    {
-        println!("test artifacts are outdated, updating...");
-        let solc_binary_name = get_solc_binary_name().expect("should be able to get binary name");
-        let zksolc_binary_name =
-            get_zksolc_binary_name().expect("should be able to get binary name");
-
-        // delay checking result so that we clean up in all cases
-        let result = compile_latest_artifacts(&solc_binary_name, &zksolc_binary_name);
-        let _ = fs::remove_file(&solc_binary_name);
-        let _ = fs::remove_file(&zksolc_binary_name);
-        let _ = fs::remove_dir_all("contracts");
-        let _ = fs::remove_dir_all("era-system-contracts");
-        match result {
-            Ok((bytecode, default_account_code, predeployed_contracts)) => {
-                let artifact =
-                    create_artifact(bytecode, default_account_code, predeployed_contracts);
-                let artifact_string = serde_json::to_string(&artifact)
-                    .expect("should be able to stringify test artifact");
-                fs::write(BASIC_TEST_JSON_LOCATION, artifact_string)
-                    .expect("should be able to write contract json");
-                fs::write(BASIC_TEST_COMMIT_HASH_LOCATION, latest_basic_test_hash)
-                    .expect("should be able to write new commit hash");
-                fs::write(
-                    SYSTEM_CONTRACTS_COMMIT_HASH_LOCATION,
-                    latest_system_contract_hash,
-                )
-                .expect("should be able to write new commit hash");
-                let compiler_metadata_string = serde_json::to_string(&current_compiler_metadata)
-                    .expect("should be able to stringify compiler metadata");
-                fs::write(COMPILER_METADATA_LOCATION, compiler_metadata_string)
-                    .expect("should be able to write compiler metadata");
-            }
-            Err(e) => {
-                panic!("{:?}", e);
-            }
-        }
-    }
+    // if !Path::new(BASIC_TEST_JSON_LOCATION).exists()
+    //     || !Path::new(SYSTEM_CONTRACTS_COMMIT_HASH_LOCATION).exists()
+    //     || latest_basic_test_hash != basic_test_hash
+    //     || latest_system_contract_hash != system_contract_hash
+    //     || current_compiler_metadata != last_compiler_metadata
+    // {
+    //     println!("test artifacts are outdated, updating...");
+    //     let solc_binary_name = get_solc_binary_name().expect("should be able to get binary name");
+    //     let zksolc_binary_name =
+    //         get_zksolc_binary_name().expect("should be able to get binary name");
+    //
+    //     // delay checking result so that we clean up in all cases
+    //     let result = compile_latest_artifacts(&solc_binary_name, &zksolc_binary_name);
+    //     let _ = fs::remove_file(&solc_binary_name);
+    //     let _ = fs::remove_file(&zksolc_binary_name);
+    //     let _ = fs::remove_dir_all("contracts");
+    //     let _ = fs::remove_dir_all("era-system-contracts");
+    //     match result {
+    //         Ok((bytecode, default_account_code, predeployed_contracts)) => {
+    //             let artifact =
+    //                 create_artifact(bytecode, default_account_code, predeployed_contracts);
+    //             let artifact_string = serde_json::to_string(&artifact)
+    //                 .expect("should be able to stringify test artifact");
+    //             fs::write(BASIC_TEST_JSON_LOCATION, artifact_string)
+    //                 .expect("should be able to write contract json");
+    //             fs::write(BASIC_TEST_COMMIT_HASH_LOCATION, latest_basic_test_hash)
+    //                 .expect("should be able to write new commit hash");
+    //             fs::write(
+    //                 SYSTEM_CONTRACTS_COMMIT_HASH_LOCATION,
+    //                 latest_system_contract_hash,
+    //             )
+    //             .expect("should be able to write new commit hash");
+    //             let compiler_metadata_string = serde_json::to_string(&current_compiler_metadata)
+    //                 .expect("should be able to stringify compiler metadata");
+    //             fs::write(COMPILER_METADATA_LOCATION, compiler_metadata_string)
+    //                 .expect("should be able to write compiler metadata");
+    //         }
+    //         Err(e) => {
+    //             panic!("{:?}", e);
+    //         }
+    //     }
+    // }
 
     let basic_test_bytes = fs::read(BASIC_TEST_JSON_LOCATION).expect("failed reading file");
     let text = std::str::from_utf8(&basic_test_bytes)
