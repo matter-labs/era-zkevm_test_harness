@@ -15,6 +15,7 @@ on:
   push:
     branches:
       - add-geometry-config-generator-workflow
+      - v1.4.1-trigger-workflow
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
