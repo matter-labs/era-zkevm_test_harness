@@ -99,22 +99,22 @@ struct CompilerMetadata {
 }
 
 pub fn read_basic_test_artifact() -> TestArtifact {
-    let current_compiler_metadata = CompilerMetadata {
-        solc_compiler_version: SOLC_VERSION.to_owned(),
-        zksolc_compiler_version: ZKSOLC_VERSION.to_owned(),
-    };
-    let last_compiler_metadata =
-        serde_json::from_slice(&fs::read(COMPILER_METADATA_LOCATION).unwrap_or_default())
-            .unwrap_or_default();
-
-    let (basic_test_hash, latest_basic_test_hash) = retrieve_latest_commit_hash(
-        &(TEST_CONTRACT_COMMITS_URL.to_owned() + BRANCH),
-        BASIC_TEST_COMMIT_HASH_LOCATION,
-    );
-    let (system_contract_hash, latest_system_contract_hash) = retrieve_latest_commit_hash(
-        &(SYSTEM_CONTRACTS_COMMITS_URL.to_owned() + SYSTEM_CONTRACTS_BRANCH),
-        SYSTEM_CONTRACTS_COMMIT_HASH_LOCATION,
-    );
+    // let current_compiler_metadata = CompilerMetadata {
+    //     solc_compiler_version: SOLC_VERSION.to_owned(),
+    //     zksolc_compiler_version: ZKSOLC_VERSION.to_owned(),
+    // };
+    // let last_compiler_metadata =
+    //     serde_json::from_slice(&fs::read(COMPILER_METADATA_LOCATION).unwrap_or_default())
+    //         .unwrap_or_default();
+    //
+    // let (basic_test_hash, latest_basic_test_hash) = retrieve_latest_commit_hash(
+    //     &(TEST_CONTRACT_COMMITS_URL.to_owned() + BRANCH),
+    //     BASIC_TEST_COMMIT_HASH_LOCATION,
+    // );
+    // let (system_contract_hash, latest_system_contract_hash) = retrieve_latest_commit_hash(
+    //     &(SYSTEM_CONTRACTS_COMMITS_URL.to_owned() + SYSTEM_CONTRACTS_BRANCH),
+    //     SYSTEM_CONTRACTS_COMMIT_HASH_LOCATION,
+    // );
 
     // if !Path::new(BASIC_TEST_JSON_LOCATION).exists()
     //     || !Path::new(SYSTEM_CONTRACTS_COMMIT_HASH_LOCATION).exists()
