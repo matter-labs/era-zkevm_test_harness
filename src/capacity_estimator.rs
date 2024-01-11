@@ -171,7 +171,7 @@ pub fn keccak256_rf_capacity() -> usize {
         ZkSyncDefaultRoundFunction,
     >;
 
-    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(512), |x: usize| x)
+    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(100), |x: usize| x)
 }
 
 pub fn sha256_rf_capacity() -> usize {
