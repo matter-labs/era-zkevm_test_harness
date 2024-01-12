@@ -526,6 +526,8 @@ fn download_to_disk(url: &str, write_location: &str) -> Result<(), ArtifactError
 }
 
 fn get_solc_binary_name() -> Result<String, ArtifactError> {
+    dbg!(std::env::consts::OS);
+    dbg!(std::env::consts::ARCH);
     match std::env::consts::OS {
         "linux" => {
             if std::env::consts::ARCH == "x86_64" {
@@ -536,6 +538,8 @@ fn get_solc_binary_name() -> Result<String, ArtifactError> {
         }
         "macos" => {
             if std::env::consts::ARCH == "x86_64" {
+                Ok("solc-macos".to_owned())
+            } else if std::env::consts::ARCH == "aarch64" {
                 Ok("solc-macos".to_owned())
             } else {
                 Err(ArtifactError::UnsupportedArch)
@@ -562,7 +566,9 @@ fn get_zksolc_binary_name() -> Result<String, ArtifactError> {
             // they are running ARM.
             if std::env::consts::ARCH == "x86_64" {
                 Ok("zksolc-macosx-arm64-".to_owned() + ZKSOLC_VERSION)
-            } else {
+            } else if std::env::consts::ARCH == "aarch64" {
+                Ok("zksolc-macosx-arm64-".to_owned() + ZKSOLC_VERSION)
+            }else {
                 Err(ArtifactError::UnsupportedArch)
             }
         }
