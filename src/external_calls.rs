@@ -79,8 +79,8 @@ pub fn run<
     geometry: GeometryConfig,
     storage: S,
     tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
-    mut circuit_callback: CB,
-    mut queue_simulator_callback: QSCB,
+    circuit_callback: CB,
+    queue_simulator_callback: QSCB,
 ) -> (
     SchedulerCircuitInstanceWitness<MainField, H, EXT>,
     BlockAuxilaryOutputWitness<MainField>,
@@ -231,7 +231,7 @@ pub fn run<
 
     // dbg!(tools.witness_tracer.vm_snapshots.len());
 
-    let (instance_oracles, artifacts) = create_artifacts_from_tracer(
+    let (basic_circuits, compact_form_witnesses) = create_artifacts_from_tracer(
         &mut out_of_circuit_vm.witness_tracer,
         &round_function,
         &geometry,
@@ -241,34 +241,8 @@ pub fn run<
         ),
         tree,
         num_non_deterministic_heap_queries,
-    );
-
-    assert!(artifacts.special_initial_decommittment_queries.len() == 1);
-
-    // use sync_vm::scheduler::queues::SpongeLikeQueueStateWitness;
-    // let memory_state_after_bootloader_heap_writes = if num_non_deterministic_heap_queries == 0 {
-    //     // empty
-    //     SpongeLikeQueueStateWitness::<Bn256, 3>::empty()
-    // } else {
-    //     let full_info = &artifacts.all_memory_queue_states[num_non_deterministic_heap_queries-1];
-    //     let sponge_state = full_info.tail;
-    //     let length = full_info.num_items;
-
-    //     SpongeLikeQueueStateWitness::<Bn256, 3> {
-    //         length,
-    //         sponge_state
-    //     }
-    // };
-
-    use crate::witness::postprocessing::create_leaf_level_circuits_and_scheduler_witness;
-
-    let (basic_circuits, compact_form_witnesses) = create_leaf_level_circuits_and_scheduler_witness(
         zk_porter_is_available,
         default_aa_code_hash,
-        instance_oracles,
-        artifacts,
-        geometry,
-        &round_function,
         circuit_callback,
         queue_simulator_callback,
     );
