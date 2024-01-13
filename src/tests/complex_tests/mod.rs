@@ -294,7 +294,7 @@ fn run_and_try_create_witness_inner(
         println!("Doing {}: {}", idx, descr);
 
         match &el {
-            ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {
+            ZkSyncBaseLayerCircuit::ECRecover(inner) => {
                 dbg!(&*inner.config);
                 // let witness = inner.clone_witness().unwrap();
                 // dbg!(&witness.closed_form_input);

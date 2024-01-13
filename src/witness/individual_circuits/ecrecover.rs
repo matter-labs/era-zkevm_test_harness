@@ -115,8 +115,6 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
     let mut memory_queries_it = memory_queries.into_iter();
 
     let mut memory_read_witnesses = vec![];
-
-    let mut request_ranges = vec![];
     let mut starting_request_idx = 0;
 
     let mut memory_queue_input_state =
@@ -150,6 +148,8 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
             assert!(read_query.rw_flag == false);
             memory_reads_per_request.push(read_query.value);
 
+            dbg!(read_query.value);
+
             artifacts.all_memory_queries_accumulated.push(read);
             let (_, intermediate_info) = artifacts
                 .memory_queue_simulator
@@ -166,6 +166,8 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
             let write_query = memory_queries_it.next().unwrap();
             assert!(write == write_query);
             assert!(write_query.rw_flag == true);
+
+            dbg!(write_query.value);
 
             artifacts.all_memory_queries_accumulated.push(write);
             let (_, intermediate_info) = artifacts
@@ -245,10 +247,7 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
             };
 
             // make non-inclusize
-            request_ranges.push(starting_request_idx..(request_idx + 1));
             starting_request_idx = request_idx + 1;
-
-            // dbg!(&witness);
 
             result.push(witness);
 
