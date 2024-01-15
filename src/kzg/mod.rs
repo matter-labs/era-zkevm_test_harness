@@ -8,7 +8,7 @@ use crate::boojum::pairing::bls12_381::{G1Affine, G1Compressed, G2Affine, G2Comp
 use crate::boojum::pairing::ff::{Field, PrimeField};
 use crate::boojum::pairing::Engine;
 use crate::boojum::pairing::{CurveAffine, CurveProjective, EncodedPoint};
-use crate::sha3::Keccak256;
+use crate::sha2::Sha256;
 use rayon::prelude::*;
 use serde::Serialize;
 
@@ -27,13 +27,13 @@ const FIELD_ELEMENTS_PER_BLOB: usize = 4096;
 const SETUP_JSON: &str = "src/kzg/trusted_setup.json";
 
 // reverse bit order of given number assuming an order of 4096
-fn bit_reverse_4096(n: usize) -> usize {
+fn bit_reverse_4096(n: u64) -> u64 {
     n.reverse_bits() >> 52
 }
 
 fn bit_reverse_array<T: Clone>(input: &mut [T]) {
     (0..input.len()).for_each(|i| {
-        let ri = bit_reverse_4096(i);
+        let ri = bit_reverse_4096(i as u64) as usize;
         if i < ri {
             input.swap(ri, i);
         }
@@ -148,13 +148,14 @@ lazy_static::lazy_static! {
 
 /// Computes a KZG commitment to a EIP4844 blob.
 pub fn compute_commitment(blob: &[Fr]) -> G1Affine {
-    debug_assert!(blob.len() <= FIELD_ELEMENTS_PER_BLOB);
+    assert!(blob.len() <= FIELD_ELEMENTS_PER_BLOB);
     multiscalar_mul(&LAGRANGE_SETUP_BRP.as_slice(), blob)
 }
 
 // XXX: this could be sped up but im not sure if its necessary due to always having 4096 elements
 /// Performs a naive MSM and compute a polynomial commitment.
 pub fn multiscalar_mul(points: &[G1Affine], scalars: &[Fr]) -> G1Affine {
+    assert!(points.len() <= scalars.len());
     scalars
         .par_iter()
         .zip(points)
@@ -272,6 +273,7 @@ fn compute_quotient_eval(z: &Fr, poly: &[Fr], y: &Fr) -> Fr {
 
 // barycentric eval
 fn eval_poly(blob: &[Fr], z: &Fr) -> Fr {
+    assert!(blob.len() <= FIELD_ELEMENTS_PER_BLOB);
     let inverse_width = Fr::from_repr(FrRepr([blob.len() as u64, 0, 0, 0]))
         .unwrap()
         .inverse()
@@ -284,9 +286,13 @@ fn eval_poly(blob: &[Fr], z: &Fr) -> Fr {
                 el.mul_assign(&root);
                 let mut z_1 = z.clone();
                 z_1.sub_assign(&root);
-                el.mul_assign(&z_1.inverse().unwrap());
-                acc.add_assign(&el);
-                acc
+                if z_1 != Fr::zero() {
+                    el.mul_assign(&z_1.inverse().unwrap());
+                    acc.add_assign(&el);
+                    acc
+                } else {
+                    acc
+                }
             });
 
     let mut z_1 = z.clone();
@@ -307,9 +313,8 @@ fn compute_challenge(blob: &[Fr], commitment: &G1Affine) -> Fr {
         bincode::serialize(&commitment).expect("should be able to serialize commitment");
     data.push_str(&format!("{:x?}", encoded_commitment));
 
-    // XXX: which hash function is canonical here?
     let mut result = [0u8; 32];
-    let digest = Keccak256::digest(data);
+    let digest = Sha256::digest(data);
     result.copy_from_slice(&digest);
 
     // reduce to fit within bls scalar field
@@ -350,23 +355,17 @@ fn repr_greater_than(repr: [u64; 4], modulus: [u64; 4]) -> std::cmp::Ordering {
 }
 
 fn reduce(repr: [u64; 4], modulus: [u64; 4]) -> [u64; 4] {
-    let sub_borrow = |a: u64, b: u64, borrow: u64| -> (u64, u64) {
-        let res = 1u128 << 64 + (a as u128) - (b as u128) - (borrow as u128);
-        let carry = (res >> 64 == 0) as u64;
-        (res as u64, carry)
-    };
-
     let mut res = [0u64; 4];
 
-    let (v, borrow) = sub_borrow(repr[0], modulus[0], 0);
+    let (v, borrow) = repr[0].borrowing_sub(modulus[0], false);
     res[0] = v;
-    let (v, borrow) = sub_borrow(repr[1], modulus[1], borrow);
-    res[0] = v;
-    let (v, borrow) = sub_borrow(repr[2], modulus[2], borrow);
-    res[0] = v;
+    let (v, borrow) = repr[1].borrowing_sub(modulus[1], borrow);
+    res[1] = v;
+    let (v, borrow) = repr[2].borrowing_sub(modulus[2], borrow);
+    res[2] = v;
     // we only call reduce if repr is greater than modulus so we dont need the last borrow value
-    let (v, _) = sub_borrow(repr[3], modulus[3], borrow);
-    res[0] = v;
+    let (v, _) = repr[3].borrowing_sub(modulus[3], borrow);
+    res[3] = v;
     res
 }
 
