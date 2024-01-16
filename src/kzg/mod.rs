@@ -155,7 +155,7 @@ pub fn compute_commitment(blob: &[Fr]) -> G1Affine {
 // XXX: this could be sped up but im not sure if its necessary due to always having 4096 elements
 /// Performs a naive MSM and compute a polynomial commitment.
 pub fn multiscalar_mul(points: &[G1Affine], scalars: &[Fr]) -> G1Affine {
-    assert!(points.len() <= scalars.len());
+    assert!(scalars.len() <= points.len());
     scalars
         .par_iter()
         .zip(points)
@@ -278,22 +278,23 @@ fn eval_poly(blob: &[Fr], z: &Fr) -> Fr {
         .unwrap()
         .inverse()
         .unwrap();
-    let mut res =
-        blob.iter()
-            .zip(ROOTS_OF_UNITY_BRP.iter())
-            .fold(Fr::zero(), |mut acc, (el, root)| {
-                let mut el = el.clone();
-                el.mul_assign(&root);
-                let mut z_1 = z.clone();
-                z_1.sub_assign(&root);
-                if z_1 != Fr::zero() {
+    let mut res = {
+        if let Some(idx) = ROOTS_OF_UNITY_BRP.iter().position(|r| r == z) {
+            blob[idx]
+        } else {
+            blob.iter()
+                .zip(ROOTS_OF_UNITY_BRP.iter())
+                .fold(Fr::zero(), |mut acc, (el, root)| {
+                    let mut el = el.clone();
+                    el.mul_assign(&root);
+                    let mut z_1 = z.clone();
+                    z_1.sub_assign(&root);
                     el.mul_assign(&z_1.inverse().unwrap());
                     acc.add_assign(&el);
                     acc
-                } else {
-                    acc
-                }
-            });
+                })
+        }
+    };
 
     let mut z_1 = z.clone();
     z_1 = z_1.pow([blob.len() as u64]);
