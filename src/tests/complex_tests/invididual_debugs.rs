@@ -8,21 +8,44 @@ mod test {
     use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
     use std::io::Read;
 
-    #[test]
-    fn read_and_run() {
-        let circuit_file_name = "prover_jobs_fri_38193_240_1_BasicCircuits_0_raw.bin";
+    type BaseLayerCircuit = ZkSyncBaseLayerCircuit<
+        GoldilocksField,
+        VmWitnessOracle<GoldilocksField>,
+        ZkSyncDefaultRoundFunction,
+    >;
 
-        let mut content = std::fs::File::open(circuit_file_name).unwrap();
+    #[derive(serde::Serialize, serde::Deserialize)]
+    pub enum CircuitWrapper {
+        Base(
+            ZkSyncBaseLayerCircuit<
+                GoldilocksField,
+                VmWitnessOracle<GoldilocksField>,
+                ZkSyncDefaultRoundFunction,
+            >,
+        ),
+        Recursive(ZkSyncRecursiveLayerCircuit),
+    }
+
+    fn read_basic_circuit(name: &str) -> BaseLayerCircuit {
+        let mut content = std::fs::File::open(name).unwrap();
         let mut buffer = vec![];
         content.read_to_end(&mut buffer).unwrap();
+        let circuit: CircuitWrapper = bincode::deserialize(&buffer).unwrap();
 
-        type BaseLayerCircuit = ZkSyncBaseLayerCircuit<
-            GoldilocksField,
-            VmWitnessOracle<GoldilocksField>,
-            ZkSyncDefaultRoundFunction,
-        >;
+        let CircuitWrapper::Base(circuit) = circuit else {
+            panic!("invalid circuit type")
+        };
 
-        let mut circuit: BaseLayerCircuit = bincode::deserialize(&buffer).unwrap();
+        circuit
+    }
+
+    #[test]
+    fn read_and_run() {
+        let circuit_file_name = "1_51_5_BasicCircuits_0.bin";
+        let mut circuit = read_basic_circuit(circuit_file_name);
+
+
+        // let mut circuit: BaseLayerCircuit = bincode::deserialize(&buffer).unwrap();
         // circuit.debug_witness();
 
         match &mut circuit {
@@ -87,6 +110,11 @@ mod test {
                         tmp = Some((query.code_hash, query.page, query.timestamp));
                     }
                 }
+            }
+            ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {
+                let witness = inner.clone_witness().unwrap();
+                let requests: Vec<_> = witness.requests_queue_witness.elements.iter().map(|el| el.0.clone()).collect();
+                dbg!(requests);
             }
             _ => {}
         }
