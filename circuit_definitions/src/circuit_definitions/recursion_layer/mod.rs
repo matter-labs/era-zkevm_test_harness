@@ -1,4 +1,5 @@
 use super::*;
+use crate::boojum::dag::CircuitResolverOpts;
 use crate::boojum::cs::implementations::proof::Proof;
 use crate::boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
 use crate::boojum::field::goldilocks::{GoldilocksExt2, GoldilocksField};
@@ -468,7 +469,7 @@ impl ZkSyncRecursiveLayerCircuit {
         );
         let cs_builder = new_builder::<_, F>(builder_impl);
         let builder = inner.configure_builder_proxy(cs_builder);
-        let mut cs = builder.build(());
+        let mut cs = builder.build(CircuitResolverOpts::new(num_vars.unwrap()));
         let round_function = ZkSyncDefaultRoundFunction::default();
         inner.add_tables(&mut cs);
         inner.clone().synthesize_into_cs(&mut cs, &round_function);
@@ -491,7 +492,7 @@ impl ZkSyncRecursiveLayerCircuit {
                 );
                 let cs_builder = new_builder::<_, F>(builder_impl);
                 let builder = inner.configure_builder_proxy(cs_builder);
-                let mut cs = builder.build(());
+                let mut cs = builder.build(CircuitResolverOpts::new(num_vars.unwrap()));
                 let round_function = ZkSyncDefaultRoundFunction::default();
                 inner.add_tables(&mut cs);
                 inner.clone().synthesize_into_cs(&mut cs, &round_function);
@@ -508,7 +509,7 @@ impl ZkSyncRecursiveLayerCircuit {
                 );
                 let cs_builder = new_builder::<_, F>(builder_impl);
                 let builder = inner.configure_builder_proxy(cs_builder);
-                let mut cs = builder.build(());
+                let mut cs = builder.build(CircuitResolverOpts::new(num_vars.unwrap()));
                 let round_function = ZkSyncDefaultRoundFunction::default();
                 inner.add_tables(&mut cs);
                 inner.clone().synthesize_into_cs(&mut cs, &round_function);

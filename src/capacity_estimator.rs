@@ -67,7 +67,7 @@ where
             let config = config;
 
             let builder = SF::configure_builder(builder);
-            let mut cs = builder.build(());
+            let mut cs = builder.build(1);
             SF::add_tables(&mut cs);
             let _ = SF::synthesize_into_cs_inner(&mut cs, witness, &round_function, config);
             let (max_trace_len, _) = cs.pad_and_shrink();

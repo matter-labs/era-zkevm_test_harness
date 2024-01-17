@@ -212,7 +212,7 @@ pub fn create_cs_for_witness_generation<
     let builder =
         SelectionGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
 
-    let mut cs = builder.build(());
+    let mut cs = builder.build(num_vars);
 
     use crate::boojum::cs::traits::cs::ConstraintSystem;
     use crate::boojum::gadgets::tables::*;

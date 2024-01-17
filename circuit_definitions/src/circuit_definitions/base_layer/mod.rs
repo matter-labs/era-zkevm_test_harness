@@ -1,4 +1,5 @@
 use crate::boojum::cs::gates::*;
+use crate::boojum::dag::CircuitResolverOpts;
 use crate::boojum::cs::implementations::proof::Proof;
 use crate::boojum::cs::implementations::setup::FinalizationHintsForProver;
 use crate::boojum::cs::traits::gate::GatePlacementStrategy;
@@ -299,7 +300,7 @@ where
         );
         let cs_builder = new_builder::<_, F>(builder_impl);
         let builder = inner.configure_builder_proxy(cs_builder);
-        let mut cs = builder.build(());
+        let mut cs = builder.build(CircuitResolverOpts::new(num_vars.unwrap()));
         inner.add_tables_proxy(&mut cs);
         inner.clone().synthesize_proxy(&mut cs);
         cs.pad_and_shrink_using_hint(hint);

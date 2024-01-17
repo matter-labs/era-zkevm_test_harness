@@ -4,6 +4,7 @@ pub mod compression;
 pub mod compression_modes;
 pub mod wrapper;
 
+use crate::boojum::dag::CircuitResolverOpts;
 use crate::boojum::config::ProvingCSConfig;
 use crate::boojum::field::traits::field_like::PrimeFieldLikeVectorized;
 use crate::circuit_definitions::aux_layer::compression::*;
@@ -153,7 +154,7 @@ impl ZkSyncCompressionLayerCircuit {
             );
         let cs_builder = new_builder::<_, GoldilocksField>(builder_impl);
         let builder = inner.configure_builder_proxy(cs_builder);
-        let mut cs = builder.build(());
+        let mut cs = builder.build(CircuitResolverOpts::new(num_vars.unwrap()));
         inner.add_tables(&mut cs);
         inner.clone().synthesize_into_cs(&mut cs);
         cs.pad_and_shrink_using_hint(hint);
@@ -464,7 +465,7 @@ impl ZkSyncCompressionForWrapperCircuit {
             );
         let cs_builder = new_builder::<_, GoldilocksField>(builder_impl);
         let builder = inner.configure_builder_proxy(cs_builder);
-        let mut cs = builder.build(());
+        let mut cs = builder.build(CircuitResolverOpts::new(num_vars.unwrap()));
         inner.add_tables(&mut cs);
         inner.clone().synthesize_into_cs(&mut cs);
         cs.pad_and_shrink_using_hint(hint);

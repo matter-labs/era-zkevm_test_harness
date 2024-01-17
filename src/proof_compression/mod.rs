@@ -61,7 +61,7 @@ mod test {
         );
         let builder = new_builder::<_, GoldilocksField>(builder_impl);
         let builder = circuit.configure_builder_proxy(builder);
-        let mut cs_owned = builder.build(());
+        let mut cs_owned = builder.build(num_vars.unwrap());
         circuit.synthesize_into_cs(&mut cs_owned);
 
         cs_owned.pad_and_shrink();
@@ -342,7 +342,7 @@ mod test {
         );
         let builder = new_builder::<_, GoldilocksField>(builder_impl);
         let builder = circuit.configure_builder_proxy(builder);
-        let mut cs_owned = builder.build(());
+        let mut cs_owned = builder.build(num_vars.unwrap());
         circuit.synthesize_into_cs(&mut cs_owned);
         let _num_gates = cs_owned.pad_and_shrink();
 
