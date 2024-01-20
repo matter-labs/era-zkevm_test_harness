@@ -385,10 +385,21 @@ pub fn keccak256_decompose_into_per_circuit_witness<
                 let read_precompile_call =
                     precompile_state == Keccak256PrecompileState::GetRequestFromQueue;
 
+                // NOTE: we need to set it for NEXT round
+                let next_round_is_padding = if needs_extra_padding_round {
+                    if num_rounds > 1 {
+                        round_idx == num_rounds - 2
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
+
                 let hidden_fsm_output_state = Keccak256RoundFunctionFSMWitness::<F> {
                     completed,
                     read_unaligned_words_for_round,
-                    padding_round: paddings_round,
+                    padding_round: next_round_is_padding,
                     keccak_internal_state,
                     read_precompile_call,
                     timestamp_to_use_for_read: request.timestamp.0,
@@ -406,6 +417,14 @@ pub fn keccak256_decompose_into_per_circuit_witness<
                         filled: input_buffer.filled as u8,
                     },
                 };
+
+                assert!(
+                    hidden_fsm_output_state.read_precompile_call as usize +
+                    hidden_fsm_output_state.read_unaligned_words_for_round as usize +
+                    hidden_fsm_output_state.padding_round as usize +
+                    hidden_fsm_output_state.completed as usize == 1,
+                    "only one state must be set, but have {:?}", hidden_fsm_output_state
+                );
 
                 let range = starting_request_idx_for_circuit..(request_idx + 1);
                 starting_request_idx_for_circuit = request_idx + 1;
