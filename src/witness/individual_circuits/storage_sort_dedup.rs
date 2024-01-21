@@ -519,9 +519,6 @@ pub fn compute_storage_dedup_and_sort<
                                     .push_and_output_intermediate_data(*next_query, round_function);
                             }
                         }
-                    } else {
-                        // circuit resets this_cell_has_explicit_read_and_rollback_depth_zero to false
-                        new_this_cell_has_explicit_read_and_rollback_depth_zero = false;
                     }
                 }
             }
@@ -651,6 +648,13 @@ pub fn compute_storage_dedup_and_sort<
                 .closed_form_input
                 .hidden_fsm_output
                 .previous_timestamp = 0u32;
+            instance_witness
+                .closed_form_input
+                .hidden_fsm_output
+                .this_cell_has_explicit_read_and_rollback_depth_zero = false;
+        } else {
+            // at the very end of the work circuit resets this_cell_has_explicit_read_and_rollback_depth_zero
+            // in any case
             instance_witness
                 .closed_form_input
                 .hidden_fsm_output
