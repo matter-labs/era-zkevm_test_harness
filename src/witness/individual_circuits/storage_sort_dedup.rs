@@ -653,12 +653,14 @@ pub fn compute_storage_dedup_and_sort<
                 .hidden_fsm_output
                 .this_cell_has_explicit_read_and_rollback_depth_zero = false;
         } else {
-            // at the very end of the work circuit resets this_cell_has_explicit_read_and_rollback_depth_zero
-            // in any case
-            instance_witness
-                .closed_form_input
-                .hidden_fsm_output
-                .this_cell_has_explicit_read_and_rollback_depth_zero = false;
+            if is_last {
+                // at the very end of the work circuit resets this_cell_has_explicit_read_and_rollback_depth_zero
+                // in any case
+                instance_witness
+                    .closed_form_input
+                    .hidden_fsm_output
+                    .this_cell_has_explicit_read_and_rollback_depth_zero = false;
+            }
         }
 
         current_lhs_product = accumulated_lhs;
