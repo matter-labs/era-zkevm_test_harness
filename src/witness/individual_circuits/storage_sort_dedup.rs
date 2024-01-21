@@ -521,9 +521,6 @@ pub fn compute_storage_dedup_and_sort<
                                     .push_and_output_intermediate_data(*next_query, round_function);
                             }
                         }
-                    } else {
-                        // circuit resets this_cell_has_explicit_read_and_rollback_depth_zero to false
-                        new_this_cell_has_explicit_read_and_rollback_depth_zero = false;
                     }
                 }
             }
