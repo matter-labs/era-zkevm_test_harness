@@ -1,5 +1,4 @@
 use crate::boojum::cs::gates::*;
-use crate::boojum::dag::CircuitResolverOpts;
 use crate::boojum::cs::implementations::proof::Proof;
 use crate::boojum::cs::implementations::setup::FinalizationHintsForProver;
 use crate::boojum::cs::traits::gate::GatePlacementStrategy;

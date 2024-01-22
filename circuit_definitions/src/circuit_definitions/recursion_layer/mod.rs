@@ -1,5 +1,4 @@
 use super::*;
-use crate::boojum::dag::CircuitResolverOpts;
 use crate::boojum::cs::implementations::proof::Proof;
 use crate::boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
 use crate::boojum::field::goldilocks::{GoldilocksExt2, GoldilocksField};
