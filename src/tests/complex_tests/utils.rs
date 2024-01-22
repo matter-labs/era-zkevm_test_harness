@@ -568,7 +568,7 @@ fn get_zksolc_binary_name() -> Result<String, ArtifactError> {
                 Ok("zksolc-macosx-arm64-".to_owned() + ZKSOLC_VERSION)
             } else if std::env::consts::ARCH == "aarch64" {
                 Ok("zksolc-macosx-arm64-".to_owned() + ZKSOLC_VERSION)
-            }else {
+            } else {
                 Err(ArtifactError::UnsupportedArch)
             }
         }

@@ -44,7 +44,6 @@ mod test {
         let circuit_file_name = "1_51_5_BasicCircuits_0.bin";
         let mut circuit = read_basic_circuit(circuit_file_name);
 
-
         // let mut circuit: BaseLayerCircuit = bincode::deserialize(&buffer).unwrap();
         // circuit.debug_witness();
 
@@ -113,7 +112,12 @@ mod test {
             }
             ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {
                 let witness = inner.clone_witness().unwrap();
-                let requests: Vec<_> = witness.requests_queue_witness.elements.iter().map(|el| el.0.clone()).collect();
+                let requests: Vec<_> = witness
+                    .requests_queue_witness
+                    .elements
+                    .iter()
+                    .map(|el| el.0.clone())
+                    .collect();
                 dbg!(requests);
             }
             _ => {}
