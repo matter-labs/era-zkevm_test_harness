@@ -70,7 +70,6 @@ pub fn create_base_layer_setup_data(
 
     let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, SetupCSConfig>::new(
         geometry,
-        num_vars.unwrap(),
         max_trace_len.unwrap(),
     );
 
@@ -229,7 +228,6 @@ pub fn prove_base_layer_circuit<POW: PoWRunner>(
 
     let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, ProvingCSConfig>::new(
         geometry,
-        num_vars.unwrap(),
         max_trace_len.unwrap(),
     );
     let arg = num_vars.unwrap();
@@ -420,7 +418,6 @@ pub fn create_recursive_layer_setup_data(
 
     let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, SetupCSConfig>::new(
         geometry,
-        num_vars.unwrap(),
         max_trace_len.unwrap(),
     );
     let arg = num_vars.unwrap();
@@ -502,7 +499,6 @@ pub fn prove_recursion_layer_circuit<POW: PoWRunner>(
 
     let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, ProvingCSConfig>::new(
         geometry,
-        num_vars.unwrap(),
         max_trace_len.unwrap(),
     );
     let arg = num_vars.unwrap();
@@ -613,7 +609,6 @@ pub fn create_compression_layer_setup_data(
         let builder_impl =
             CsReferenceImplementationBuilder::<GoldilocksField, P, SetupCSConfig>::new(
                 geometry,
-                num_vars.unwrap(),
                 max_trace_len.unwrap(),
             );
         let builder = new_builder::<_, GoldilocksField>(builder_impl);
@@ -674,7 +669,6 @@ pub fn prove_compression_layer_circuit<POW: PoWRunner>(
         let builder_impl =
             CsReferenceImplementationBuilder::<GoldilocksField, P, ProvingCSConfig>::new(
                 geometry,
-                num_vars.unwrap(),
                 max_trace_len.unwrap(),
             );
         let builder = new_builder::<_, GoldilocksField>(builder_impl);
@@ -752,7 +746,6 @@ pub fn create_eip4844_setup_data(
 
     let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, SetupCSConfig>::new(
         geometry,
-        num_vars.unwrap(),
         max_trace_len.unwrap(),
     );
     let builder = new_builder::<_, GoldilocksField>(builder_impl);
@@ -801,7 +794,6 @@ pub fn prove_eip4844_circuit<POW: PoWRunner>(
 
     let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, ProvingCSConfig>::new(
         geometry,
-        num_vars.unwrap(),
         max_trace_len.unwrap(),
     );
     let builder = new_builder::<_, GoldilocksField>(builder_impl);
@@ -876,7 +868,6 @@ pub fn create_compression_for_wrapper_setup_data(
         let builder_impl =
             CsReferenceImplementationBuilder::<GoldilocksField, P, SetupCSConfig>::new(
                 geometry,
-                num_vars.unwrap(),
                 max_trace_len.unwrap(),
             );
         let builder = new_builder::<_, GoldilocksField>(builder_impl);
@@ -947,7 +938,6 @@ pub fn prove_compression_for_wrapper_circuit<POW: PoWRunner>(
         let builder_impl =
             CsReferenceImplementationBuilder::<GoldilocksField, P, ProvingCSConfig>::new(
                 geometry,
-                num_vars.unwrap(),
                 max_trace_len.unwrap(),
             );
         let builder = new_builder::<_, GoldilocksField>(builder_impl);

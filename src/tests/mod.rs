@@ -113,7 +113,6 @@ pub(crate) fn eip4844_test_circuit(
 
     let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
         geometry,
-        num_vars.unwrap(),
         max_trace_len.unwrap(),
     );
     let builder = new_builder::<_, GoldilocksField>(builder_impl);
@@ -150,7 +149,6 @@ pub(crate) fn base_test_circuit(
 
     let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
         geometry,
-        num_vars.unwrap(),
         max_trace_len.unwrap(),
     );
     let arg = num_vars.unwrap();
@@ -282,7 +280,6 @@ pub(crate) fn test_recursive_circuit(circuit: ZkSyncRecursiveLayerCircuit) {
 
     let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
         geometry,
-        num_vars.unwrap(),
         max_trace_len.unwrap(),
     );
     let builder = new_builder::<_, GoldilocksField>(builder_impl);
@@ -353,13 +350,11 @@ pub(crate) fn test_compression_circuit(circuit: ZkSyncCompressionLayerCircuit) {
 
         let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
             geometry,
-            num_vars.unwrap(),
             max_trace_len.unwrap(),
         );
         let builder = new_builder::<_, GoldilocksField>(builder_impl);
         let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
             geometry,
-            num_vars.unwrap(),
             max_trace_len.unwrap(),
         );
         let builder = new_builder::<_, GoldilocksField>(builder_impl);
@@ -404,13 +399,11 @@ pub(crate) fn test_compression_for_wrapper_circuit(circuit: ZkSyncCompressionFor
 
         let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
             geometry,
-            num_vars.unwrap(),
             max_trace_len.unwrap(),
         );
         let builder = new_builder::<_, GoldilocksField>(builder_impl);
         let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
             geometry,
-            num_vars.unwrap(),
             max_trace_len.unwrap(),
         );
         let builder = new_builder::<_, GoldilocksField>(builder_impl);

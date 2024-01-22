@@ -180,7 +180,6 @@ pub fn create_cs_for_witness_generation<
 
     let builder_impl = CsReferenceImplementationBuilder::<F, F, ProvingCSConfig>::new(
         geometry,
-        num_vars,
         max_trace_len,
     );
     let builder = boojum::cs::cs_builder::new_builder::<_, F>(builder_impl);

@@ -464,7 +464,6 @@ impl ZkSyncRecursiveLayerCircuit {
         let (max_trace_len, num_vars) = inner.size_hint();
         let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig>::new(
             geometry,
-            num_vars.unwrap(),
             max_trace_len.unwrap(),
         );
         let cs_builder = new_builder::<_, F>(builder_impl);
@@ -487,7 +486,6 @@ impl ZkSyncRecursiveLayerCircuit {
                 let (max_trace_len, num_vars) = inner.size_hint();
                 let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig>::new(
                     geometry,
-                    num_vars.unwrap(),
                     max_trace_len.unwrap(),
                 );
                 let cs_builder = new_builder::<_, F>(builder_impl);
@@ -504,7 +502,6 @@ impl ZkSyncRecursiveLayerCircuit {
                 let (max_trace_len, num_vars) = inner.size_hint();
                 let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig>::new(
                     geometry,
-                    num_vars.unwrap(),
                     max_trace_len.unwrap(),
                 );
                 let cs_builder = new_builder::<_, F>(builder_impl);

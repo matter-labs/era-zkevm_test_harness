@@ -149,7 +149,6 @@ impl ZkSyncCompressionLayerCircuit {
         let builder_impl =
             CsReferenceImplementationBuilder::<GoldilocksField, P, ProvingCSConfig>::new(
                 geometry,
-                num_vars.unwrap(),
                 max_trace_len.unwrap(),
             );
         let cs_builder = new_builder::<_, GoldilocksField>(builder_impl);
@@ -460,7 +459,6 @@ impl ZkSyncCompressionForWrapperCircuit {
         let builder_impl =
             CsReferenceImplementationBuilder::<GoldilocksField, P, ProvingCSConfig>::new(
                 geometry,
-                num_vars.unwrap(),
                 max_trace_len.unwrap(),
             );
         let cs_builder = new_builder::<_, GoldilocksField>(builder_impl);

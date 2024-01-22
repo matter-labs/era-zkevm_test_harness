@@ -56,7 +56,6 @@ mod test {
 
         let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
             geometry,
-            num_vars.unwrap(),
             max_trace_len.unwrap(),
         );
         let builder = new_builder::<_, GoldilocksField>(builder_impl);
@@ -337,7 +336,6 @@ mod test {
 
         let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
             geometry,
-            num_vars.unwrap(),
             max_trace_len.unwrap(),
         );
         let builder = new_builder::<_, GoldilocksField>(builder_impl);
