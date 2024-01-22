@@ -299,7 +299,7 @@ where
         );
         let cs_builder = new_builder::<_, F>(builder_impl);
         let builder = inner.configure_builder_proxy(cs_builder);
-        let mut cs = builder.build(CircuitResolverOpts::new(num_vars.unwrap()));
+        let mut cs = builder.build(num_vars.unwrap());
         inner.add_tables_proxy(&mut cs);
         inner.clone().synthesize_proxy(&mut cs);
         cs.pad_and_shrink_using_hint(hint);
