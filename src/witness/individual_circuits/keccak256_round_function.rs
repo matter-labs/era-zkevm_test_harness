@@ -80,7 +80,12 @@ pub fn keccak256_decompose_into_per_circuit_witness<
         keccak_precompile_calls_queue_states.len()
     );
     assert_eq!(keccak_precompile_calls.len(), round_function_witness.len());
-    assert_eq!(artifacts.demuxed_keccak_precompile_queue_simulator.num_items as usize, round_function_witness.len());
+    assert_eq!(
+        artifacts
+            .demuxed_keccak_precompile_queue_simulator
+            .num_items as usize,
+        round_function_witness.len()
+    );
 
     if keccak_precompile_calls.len() == 0 {
         // we can not skip the circuit (at least for now), so we have to create a dummy on
@@ -208,8 +213,8 @@ pub fn keccak256_decompose_into_per_circuit_witness<
 
         // those are refreshed every cycle
         use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::KECCAK_PRECOMPILE_BUFFER_SIZE;
-        use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::MEMORY_READS_PER_CYCLE;
         use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::KECCAK_RATE_BYTES;
+        use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::MEMORY_READS_PER_CYCLE;
 
         let mut input_buffer = zk_evm::zk_evm_abstractions::precompiles::keccak256::ByteBuffer {
             bytes: [0u8; KECCAK_PRECOMPILE_BUFFER_SIZE],
@@ -245,14 +250,17 @@ pub fn keccak256_decompose_into_per_circuit_witness<
 
             // simulate absorb
             for (_query_index, read) in round.reads.into_iter().enumerate() {
-                let (memory_index, unalignment) = (*input_byte_offset / 32, *input_byte_offset % 32);
+                let (memory_index, unalignment) =
+                    (*input_byte_offset / 32, *input_byte_offset % 32);
                 let at_most_meaningful_bytes_in_query = 32 - unalignment;
-                let meaningful_bytes_in_query = if *bytes_left >= at_most_meaningful_bytes_in_query {
+                let meaningful_bytes_in_query = if *bytes_left >= at_most_meaningful_bytes_in_query
+                {
                     at_most_meaningful_bytes_in_query
                 } else {
                     *bytes_left
                 };
-                let enough_buffer_space = input_buffer.can_fill_bytes(meaningful_bytes_in_query as usize);
+                let enough_buffer_space =
+                    input_buffer.can_fill_bytes(meaningful_bytes_in_query as usize);
                 let nothing_to_read = meaningful_bytes_in_query == 0;
                 let should_read = nothing_to_read == false && enough_buffer_space;
                 if paddings_round {
@@ -288,11 +296,14 @@ pub fn keccak256_decompose_into_per_circuit_witness<
                     .memory_queue_simulator
                     .push_and_output_intermediate_data(read, round_function);
                 artifacts.all_memory_queue_states.push(intermediate_info);
-                current_memory_queue_state = take_sponge_like_queue_state_from_simulator(
-                    &artifacts.memory_queue_simulator,
-                );
+                current_memory_queue_state =
+                    take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
 
-                input_buffer.fill_with_bytes(&bytes32_buffer, unalignment as usize, bytes_to_fill as usize);
+                input_buffer.fill_with_bytes(
+                    &bytes32_buffer,
+                    unalignment as usize,
+                    bytes_to_fill as usize,
+                );
             }
 
             let mut input_block = input_buffer.consume::<KECCAK_RATE_BYTES>();
@@ -419,11 +430,13 @@ pub fn keccak256_decompose_into_per_circuit_witness<
                 };
 
                 assert!(
-                    hidden_fsm_output_state.read_precompile_call as usize +
-                    hidden_fsm_output_state.read_unaligned_words_for_round as usize +
-                    hidden_fsm_output_state.padding_round as usize +
-                    hidden_fsm_output_state.completed as usize == 1,
-                    "only one state must be set, but have {:?}", hidden_fsm_output_state
+                    hidden_fsm_output_state.read_precompile_call as usize
+                        + hidden_fsm_output_state.read_unaligned_words_for_round as usize
+                        + hidden_fsm_output_state.padding_round as usize
+                        + hidden_fsm_output_state.completed as usize
+                        == 1,
+                    "only one state must be set, but have {:?}",
+                    hidden_fsm_output_state
                 );
 
                 let range = starting_request_idx_for_circuit..(request_idx + 1);
@@ -447,7 +460,8 @@ pub fn keccak256_decompose_into_per_circuit_witness<
                     observable_output_data.final_memory_state = current_memory_queue_state.clone();
                 }
 
-                let memory_reads_witness = std::mem::replace(&mut memory_reads_per_circuit, VecDeque::new());
+                let memory_reads_witness =
+                    std::mem::replace(&mut memory_reads_per_circuit, VecDeque::new());
 
                 let witness = Keccak256RoundFunctionCircuitInstanceWitness::<F> {
                     closed_form_input: Keccak256RoundFunctionCircuitInputOutputWitness::<F> {
