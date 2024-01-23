@@ -212,7 +212,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
             main_vm_circuits.last = Some(instance.clone());
         }
 
-        let instance: ZkSyncBaseLayerCircuit<_, _, _> = instance.into();
+        let instance = ZkSyncBaseLayerCircuit::MainVM(instance);
 
         let recursive_request = RecursionRequest {
             circuit_type: GoldilocksField::from_u64_unchecked(
@@ -233,6 +233,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     );
 
     // Code decommitter sorter
+    let circuit_type = BaseLayerCircuitType::DecommitmentsFilter;
 
     let mut maker = CircuitMaker::new(
         geometry.cycles_code_decommitter_sorter,
@@ -242,7 +243,9 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     );
 
     for circuit_input in decommittments_deduplicator_circuits_data.into_iter() {
-        circuit_callback(maker.process(circuit_input));
+        circuit_callback(ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(
+            maker.process(circuit_input, circuit_type),
+        ));
     }
 
     let (
@@ -252,12 +255,13 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     ) = maker.into_results();
     all_compact_forms.extend(code_decommittments_sorter_circuits_compact_forms_witnesses.clone());
     queue_simulator_callback(
-        BaseLayerCircuitType::DecommitmentsFilter as u8,
+        circuit_type as u8,
         queue_simulator,
         code_decommittments_sorter_circuits_compact_forms_witnesses,
     );
 
     // Actual decommitter
+    let circuit_type = BaseLayerCircuitType::Decommiter;
 
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_code_decommitter,
@@ -267,7 +271,9 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     );
 
     for circuit_input in code_decommitter_circuits_data.into_iter() {
-        circuit_callback(maker.process(circuit_input));
+        circuit_callback(ZkSyncBaseLayerCircuit::CodeDecommitter(
+            maker.process(circuit_input, circuit_type),
+        ));
     }
 
     let (
@@ -277,12 +283,13 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     ) = maker.into_results();
     all_compact_forms.extend(code_decommitter_circuits_compact_forms_witnesses.clone());
     queue_simulator_callback(
-        BaseLayerCircuitType::Decommiter as u8,
+        circuit_type as u8,
         queue_simulator,
         code_decommitter_circuits_compact_forms_witnesses,
     );
 
     // log demux
+    let circuit_type = BaseLayerCircuitType::LogDemultiplexer;
 
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_log_demuxer,
@@ -292,19 +299,22 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     );
 
     for circuit_input in log_demuxer_circuit_data.into_iter() {
-        circuit_callback(maker.process(circuit_input));
+        circuit_callback(ZkSyncBaseLayerCircuit::LogDemuxer(
+            maker.process(circuit_input, circuit_type),
+        ));
     }
 
     let (log_demux_circuits, queue_simulator, log_demux_circuits_compact_forms_witnesses) =
         maker.into_results();
     all_compact_forms.extend(log_demux_circuits_compact_forms_witnesses.clone());
     queue_simulator_callback(
-        BaseLayerCircuitType::LogDemultiplexer as u8,
+        circuit_type as u8,
         queue_simulator,
         log_demux_circuits_compact_forms_witnesses,
     );
 
     // keccak precompiles
+    let circuit_type = BaseLayerCircuitType::KeccakPrecompile;
 
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_keccak256_circuit,
@@ -314,7 +324,9 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     );
 
     for circuit_input in keccak256_circuits_data.into_iter() {
-        circuit_callback(maker.process(circuit_input));
+        circuit_callback(ZkSyncBaseLayerCircuit::KeccakRoundFunction(
+            maker.process(circuit_input, circuit_type),
+        ));
     }
 
     let (
@@ -324,12 +336,13 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     ) = maker.into_results();
     all_compact_forms.extend(keccak_precompile_circuits_compact_forms_witnesses.clone());
     queue_simulator_callback(
-        BaseLayerCircuitType::KeccakPrecompile as u8,
+        circuit_type as u8,
         queue_simulator,
         keccak_precompile_circuits_compact_forms_witnesses,
     );
 
     // sha256 precompiles
+    let circuit_type = BaseLayerCircuitType::Sha256Precompile;
 
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_sha256_circuit,
@@ -339,7 +352,9 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     );
 
     for circuit_input in sha256_circuits_data.into_iter() {
-        circuit_callback(maker.process(circuit_input));
+        circuit_callback(ZkSyncBaseLayerCircuit::Sha256RoundFunction(
+            maker.process(circuit_input, circuit_type),
+        ));
     }
 
     let (
@@ -349,12 +364,13 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     ) = maker.into_results();
     all_compact_forms.extend(sha256_precompile_circuits_compact_forms_witnesses.clone());
     queue_simulator_callback(
-        BaseLayerCircuitType::Sha256Precompile as u8,
+        circuit_type as u8,
         queue_simulator,
         sha256_precompile_circuits_compact_forms_witnesses,
     );
 
     // ecrecover precompiles
+    let circuit_type = BaseLayerCircuitType::EcrecoverPrecompile;
 
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_ecrecover_circuit,
@@ -364,7 +380,9 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     );
 
     for circuit_input in ecrecover_circuits_data.into_iter() {
-        circuit_callback(maker.process(circuit_input));
+        circuit_callback(ZkSyncBaseLayerCircuit::ECRecover(
+            maker.process(circuit_input, circuit_type),
+        ));
     }
 
     let (
@@ -374,12 +392,13 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     ) = maker.into_results();
     all_compact_forms.extend(ecrecover_precompile_circuits_compact_forms_witnesses.clone());
     queue_simulator_callback(
-        BaseLayerCircuitType::EcrecoverPrecompile as u8,
+        circuit_type as u8,
         queue_simulator,
         ecrecover_precompile_circuits_compact_forms_witnesses,
     );
 
     // RAM permutation
+    let circuit_type = BaseLayerCircuitType::RamValidation;
 
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_ram_permutation,
@@ -389,7 +408,9 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     );
 
     for circuit_input in ram_permutation_circuits_data.into_iter() {
-        circuit_callback(maker.process(circuit_input));
+        circuit_callback(ZkSyncBaseLayerCircuit::RAMPermutation(
+            maker.process(circuit_input, circuit_type),
+        ));
     }
 
     let (
@@ -399,12 +420,13 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     ) = maker.into_results();
     all_compact_forms.extend(ram_permutation_circuits_compact_forms_witnesses.clone());
     queue_simulator_callback(
-        BaseLayerCircuitType::RamValidation as u8,
+        circuit_type as u8,
         queue_simulator,
         ram_permutation_circuits_compact_forms_witnesses,
     );
 
     // storage sorter
+    let circuit_type = BaseLayerCircuitType::StorageFilter;
 
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_storage_sorter,
@@ -414,19 +436,22 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     );
 
     for circuit_input in storage_deduplicator_circuit_data.into_iter() {
-        circuit_callback(maker.process(circuit_input));
+        circuit_callback(ZkSyncBaseLayerCircuit::StorageSorter(
+            maker.process(circuit_input, circuit_type),
+        ));
     }
 
     let (storage_sorter_circuits, queue_simulator, storage_sorter_circuit_compact_form_witnesses) =
         maker.into_results();
     all_compact_forms.extend(storage_sorter_circuit_compact_form_witnesses.clone());
     queue_simulator_callback(
-        BaseLayerCircuitType::StorageFilter as u8,
+        circuit_type as u8,
         queue_simulator,
         storage_sorter_circuit_compact_form_witnesses,
     );
 
     // storage application
+    let circuit_type = BaseLayerCircuitType::StorageApplicator;
 
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_storage_application,
@@ -436,7 +461,9 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     );
 
     for circuit_input in rollup_storage_application_circuit_data.into_iter() {
-        circuit_callback(maker.process(circuit_input));
+        circuit_callback(ZkSyncBaseLayerCircuit::StorageApplication(
+            maker.process(circuit_input, circuit_type),
+        ));
     }
 
     let (
@@ -446,12 +473,13 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     ) = maker.into_results();
     all_compact_forms.extend(storage_application_circuits_compact_forms_witnesses.clone());
     queue_simulator_callback(
-        BaseLayerCircuitType::StorageApplicator as u8,
+        circuit_type as u8,
         queue_simulator,
         storage_application_circuits_compact_forms_witnesses,
     );
 
     // events sorter
+    let circuit_type = BaseLayerCircuitType::EventsRevertsFilter;
 
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_events_or_l1_messages_sorter,
@@ -461,19 +489,22 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     );
 
     for circuit_input in events_deduplicator_circuit_data.into_iter() {
-        circuit_callback(maker.process(circuit_input));
+        circuit_callback(ZkSyncBaseLayerCircuit::EventsSorter(
+            maker.process(circuit_input, circuit_type),
+        ));
     }
 
     let (events_sorter_circuits, queue_simulator, events_sorter_circuits_compact_forms_witnesses) =
         maker.into_results();
     all_compact_forms.extend(events_sorter_circuits_compact_forms_witnesses.clone());
     queue_simulator_callback(
-        BaseLayerCircuitType::EventsRevertsFilter as u8,
+        circuit_type as u8,
         queue_simulator,
         events_sorter_circuits_compact_forms_witnesses,
     );
 
     // l1 messages sorter
+    let circuit_type = BaseLayerCircuitType::L1MessagesRevertsFilter;
 
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_events_or_l1_messages_sorter,
@@ -483,7 +514,9 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     );
 
     for circuit_input in l1_messages_deduplicator_circuit_data.into_iter() {
-        circuit_callback(maker.process(circuit_input));
+        circuit_callback(ZkSyncBaseLayerCircuit::L1MessagesSorter(
+            maker.process(circuit_input, circuit_type),
+        ));
     }
 
     let (
@@ -493,12 +526,13 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     ) = maker.into_results();
     all_compact_forms.extend(l1_messages_sorter_circuits_compact_forms_witnesses.clone());
     queue_simulator_callback(
-        BaseLayerCircuitType::L1MessagesRevertsFilter as u8,
+        circuit_type as u8,
         queue_simulator,
         l1_messages_sorter_circuits_compact_forms_witnesses,
     );
 
     // l1 messages pubdata hasher
+    let circuit_type = BaseLayerCircuitType::L1MessagesHasher;
 
     let mut maker = CircuitMaker::new(
         geometry.limit_for_l1_messages_pudata_hasher,
@@ -508,7 +542,9 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     );
 
     for circuit_input in l1_messages_linear_hash_data.into_iter() {
-        circuit_callback(maker.process(circuit_input));
+        circuit_callback(ZkSyncBaseLayerCircuit::L1MessagesHasher(
+            maker.process(circuit_input, circuit_type),
+        ));
     }
 
     let (
@@ -518,7 +554,7 @@ pub fn create_leaf_level_circuits_and_scheduler_witness<
     ) = maker.into_results();
     all_compact_forms.extend(l1_messages_hasher_circuits_compact_forms_witnesses.clone());
     queue_simulator_callback(
-        BaseLayerCircuitType::L1MessagesHasher as u8,
+        circuit_type as u8,
         queue_simulator,
         l1_messages_hasher_circuits_compact_forms_witnesses,
     );
@@ -790,8 +826,6 @@ where
         Witness = T,
         RoundFunction = Poseidon2Goldilocks,
     >,
-    ZkSyncBaseLayerCircuit<GoldilocksField, VmWitnessOracle<GoldilocksField>, Poseidon2Goldilocks>:
-        From<ZkSyncUniformCircuitInstance<GoldilocksField, S>>,
 {
     fn new(
         geometry: u32,
@@ -817,11 +851,8 @@ where
     fn process(
         &mut self,
         mut circuit_input: T,
-    ) -> ZkSyncBaseLayerCircuit<
-        GoldilocksField,
-        VmWitnessOracle<GoldilocksField>,
-        Poseidon2Goldilocks,
-    > {
+        circuit_type: BaseLayerCircuitType,
+    ) -> ZkSyncUniformCircuitInstance<GoldilocksField, S> {
         if self.observable_input.is_none() {
             self.observable_input =
                 Some(circuit_input.closed_form_input().observable_input.clone());
@@ -860,14 +891,8 @@ where
         }
         self.extremes.last = Some(circuit.clone());
 
-        let circuit: ZkSyncBaseLayerCircuit<
-            GoldilocksField,
-            VmWitnessOracle<GoldilocksField>,
-            Poseidon2Goldilocks,
-        > = circuit.into();
-
         let recursive_request = RecursionRequest {
-            circuit_type: GoldilocksField::from_u64_unchecked(circuit.numeric_circuit_type() as u64),
+            circuit_type: GoldilocksField::from_u64_unchecked(circuit_type as u64),
             public_input: proof_system_input,
         };
         let _ = self
