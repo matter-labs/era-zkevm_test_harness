@@ -11,6 +11,7 @@ use derivative::*;
 pub enum Keccak256PrecompileState {
     GetRequestFromQueue,
     RunRoundFunction,
+    RunPaddingRound,
     Finished,
 }
 
@@ -238,6 +239,9 @@ pub fn keccak256_decompose_into_per_circuit_witness<
         let is_last_request = request_idx == num_requests - 1;
 
         precompile_state = Keccak256PrecompileState::RunRoundFunction;
+        if *bytes_left == 0 && num_rounds == 1 {
+            precompile_state = Keccak256PrecompileState::RunPaddingRound;
+        }
 
         for (round_idx, round) in round_witness.into_iter().enumerate() {
             // we proceed the request as long as we can
@@ -265,6 +269,7 @@ pub fn keccak256_decompose_into_per_circuit_witness<
                 let should_read = nothing_to_read == false && enough_buffer_space;
                 if paddings_round {
                     assert!(should_read == false);
+                    assert_eq!(precompile_state, Keccak256PrecompileState::RunPaddingRound,)
                 }
 
                 if should_read {
@@ -322,6 +327,25 @@ pub fn keccak256_decompose_into_per_circuit_witness<
             }
             use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::Digest;
             internal_state.update(&input_block);
+
+            // NOTE: we need to set it for NEXT round
+            let next_round_is_padding = if needs_extra_padding_round {
+                if num_rounds > 1 {
+                    assert_eq!(precompile_state, Keccak256PrecompileState::RunRoundFunction);
+                    round_idx == num_rounds - 2
+                } else {
+                    assert_eq!(precompile_state, Keccak256PrecompileState::RunPaddingRound);
+                    false
+                }
+            } else {
+                false
+            };
+
+            if precompile_state == Keccak256PrecompileState::RunRoundFunction
+                && next_round_is_padding
+            {
+                precompile_state = Keccak256PrecompileState::RunPaddingRound;
+            }
 
             if is_last_round {
                 assert!(round.writes.is_some());
@@ -395,22 +419,12 @@ pub fn keccak256_decompose_into_per_circuit_witness<
                     precompile_state == Keccak256PrecompileState::RunRoundFunction;
                 let read_precompile_call =
                     precompile_state == Keccak256PrecompileState::GetRequestFromQueue;
-
-                // NOTE: we need to set it for NEXT round
-                let next_round_is_padding = if needs_extra_padding_round {
-                    if num_rounds > 1 {
-                        round_idx == num_rounds - 2
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                };
+                let padding_round = precompile_state == Keccak256PrecompileState::RunPaddingRound;
 
                 let hidden_fsm_output_state = Keccak256RoundFunctionFSMWitness::<F> {
                     completed,
                     read_unaligned_words_for_round,
-                    padding_round: next_round_is_padding,
+                    padding_round,
                     keccak_internal_state,
                     read_precompile_call,
                     timestamp_to_use_for_read: request.timestamp.0,
