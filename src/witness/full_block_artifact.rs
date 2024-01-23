@@ -90,8 +90,6 @@ pub struct FullBlockArtifacts<F: SmallField> {
     pub events_deduplicator_circuit_data: Vec<EventsDeduplicatorInstanceWitness<F>>,
     pub l1_messages_deduplicator_circuit_data: Vec<EventsDeduplicatorInstanceWitness<F>>,
     //
-    pub rollup_storage_application_circuit_data: Vec<StorageApplicationCircuitInstanceWitness<F>>,
-    //
     pub keccak256_circuits_data: Vec<Keccak256RoundFunctionCircuitInstanceWitness<F>>,
     //
     pub sha256_circuits_data: Vec<Sha256RoundFunctionCircuitInstanceWitness<F>>,

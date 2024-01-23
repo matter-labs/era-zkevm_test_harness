@@ -949,13 +949,15 @@ pub fn create_artifacts_from_tracer<
     // each history record contains an information on what was the stack state between points
     // when it potentially came into and out of scope
 
-    let mut all_compact_forms = vec![];
     let mut cs_for_witness_generation =
         create_cs_for_witness_generation::<GoldilocksField, Poseidon2Goldilocks>(
             TRACE_LEN_LOG_2_FOR_CALCULATION,
             MAX_VARS_LOG_2_FOR_CALCULATION,
         );
     let mut cycles_used: usize = 0;
+
+    let storage_application_circuits;
+    let storage_application_compact_forms;
 
     let artifacts = {
         let mut artifacts = FullBlockArtifacts::default();
@@ -1195,14 +1197,20 @@ pub fn create_artifacts_from_tracer<
         // and do the actual storage application
         use crate::witness::individual_circuits::storage_application::decompose_into_storage_application_witnesses;
 
-        let rollup_storage_application_circuit_data = decompose_into_storage_application_witnesses(
+        (
+            storage_application_circuits,
+            storage_application_compact_forms,
+        ) = decompose_into_storage_application_witnesses(
             this,
             tree,
             round_function,
             geometry.cycles_per_storage_application as usize,
+            geometry,
+            &mut cs_for_witness_generation,
+            &mut cycles_used,
+            &mut circuit_callback,
+            &mut recursion_queue_callback,
         );
-
-        this.rollup_storage_application_circuit_data = rollup_storage_application_circuit_data;
 
         artifacts
     };
@@ -1489,7 +1497,6 @@ pub fn create_artifacts_from_tracer<
             storage_deduplicator_circuit_data,
             events_deduplicator_circuit_data,
             l1_messages_deduplicator_circuit_data,
-            rollup_storage_application_circuit_data,
             keccak256_circuits_data,
             sha256_circuits_data,
             ecrecover_circuits_data,
@@ -1579,11 +1586,10 @@ pub fn create_artifacts_from_tracer<
             circuit_callback(instance);
             main_vm_circuits_compact_forms_witnesses.push(compact_form_witness);
         }
-        all_compact_forms.extend(main_vm_circuits_compact_forms_witnesses.clone());
         recursion_queue_callback(
             BaseLayerCircuitType::VM as u8,
             queue_simulator,
-            main_vm_circuits_compact_forms_witnesses,
+            main_vm_circuits_compact_forms_witnesses.clone(),
         );
 
         // Code decommitter sorter
@@ -1607,12 +1613,10 @@ pub fn create_artifacts_from_tracer<
             queue_simulator,
             code_decommittments_sorter_circuits_compact_forms_witnesses,
         ) = maker.into_results();
-        all_compact_forms
-            .extend(code_decommittments_sorter_circuits_compact_forms_witnesses.clone());
         recursion_queue_callback(
             circuit_type as u8,
             queue_simulator,
-            code_decommittments_sorter_circuits_compact_forms_witnesses,
+            code_decommittments_sorter_circuits_compact_forms_witnesses.clone(),
         );
 
         // Actual decommitter
@@ -1636,11 +1640,10 @@ pub fn create_artifacts_from_tracer<
             queue_simulator,
             code_decommitter_circuits_compact_forms_witnesses,
         ) = maker.into_results();
-        all_compact_forms.extend(code_decommitter_circuits_compact_forms_witnesses.clone());
         recursion_queue_callback(
             circuit_type as u8,
             queue_simulator,
-            code_decommitter_circuits_compact_forms_witnesses,
+            code_decommitter_circuits_compact_forms_witnesses.clone(),
         );
 
         // log demux
@@ -1661,11 +1664,10 @@ pub fn create_artifacts_from_tracer<
 
         let (log_demux_circuits, queue_simulator, log_demux_circuits_compact_forms_witnesses) =
             maker.into_results();
-        all_compact_forms.extend(log_demux_circuits_compact_forms_witnesses.clone());
         recursion_queue_callback(
             circuit_type as u8,
             queue_simulator,
-            log_demux_circuits_compact_forms_witnesses,
+            log_demux_circuits_compact_forms_witnesses.clone(),
         );
 
         // keccak precompiles
@@ -1689,11 +1691,10 @@ pub fn create_artifacts_from_tracer<
             queue_simulator,
             keccak_precompile_circuits_compact_forms_witnesses,
         ) = maker.into_results();
-        all_compact_forms.extend(keccak_precompile_circuits_compact_forms_witnesses.clone());
         recursion_queue_callback(
             circuit_type as u8,
             queue_simulator,
-            keccak_precompile_circuits_compact_forms_witnesses,
+            keccak_precompile_circuits_compact_forms_witnesses.clone(),
         );
 
         // sha256 precompiles
@@ -1717,11 +1718,10 @@ pub fn create_artifacts_from_tracer<
             queue_simulator,
             sha256_precompile_circuits_compact_forms_witnesses,
         ) = maker.into_results();
-        all_compact_forms.extend(sha256_precompile_circuits_compact_forms_witnesses.clone());
         recursion_queue_callback(
             circuit_type as u8,
             queue_simulator,
-            sha256_precompile_circuits_compact_forms_witnesses,
+            sha256_precompile_circuits_compact_forms_witnesses.clone(),
         );
 
         // ecrecover precompiles
@@ -1745,11 +1745,10 @@ pub fn create_artifacts_from_tracer<
             queue_simulator,
             ecrecover_precompile_circuits_compact_forms_witnesses,
         ) = maker.into_results();
-        all_compact_forms.extend(ecrecover_precompile_circuits_compact_forms_witnesses.clone());
         recursion_queue_callback(
             circuit_type as u8,
             queue_simulator,
-            ecrecover_precompile_circuits_compact_forms_witnesses,
+            ecrecover_precompile_circuits_compact_forms_witnesses.clone(),
         );
 
         // RAM permutation
@@ -1773,11 +1772,10 @@ pub fn create_artifacts_from_tracer<
             queue_simulator,
             ram_permutation_circuits_compact_forms_witnesses,
         ) = maker.into_results();
-        all_compact_forms.extend(ram_permutation_circuits_compact_forms_witnesses.clone());
         recursion_queue_callback(
             circuit_type as u8,
             queue_simulator,
-            ram_permutation_circuits_compact_forms_witnesses,
+            ram_permutation_circuits_compact_forms_witnesses.clone(),
         );
 
         // storage sorter
@@ -1801,39 +1799,10 @@ pub fn create_artifacts_from_tracer<
             queue_simulator,
             storage_sorter_circuit_compact_form_witnesses,
         ) = maker.into_results();
-        all_compact_forms.extend(storage_sorter_circuit_compact_form_witnesses.clone());
         recursion_queue_callback(
             circuit_type as u8,
             queue_simulator,
-            storage_sorter_circuit_compact_form_witnesses,
-        );
-
-        // storage application
-        let circuit_type = BaseLayerCircuitType::StorageApplicator;
-
-        let mut maker = CircuitMaker::new(
-            geometry.cycles_per_storage_application,
-            round_function.clone(),
-            &mut cs_for_witness_generation,
-            &mut cycles_used,
-        );
-
-        for circuit_input in rollup_storage_application_circuit_data.into_iter() {
-            circuit_callback(ZkSyncBaseLayerCircuit::StorageApplication(
-                maker.process(circuit_input, circuit_type),
-            ));
-        }
-
-        let (
-            storage_application_circuits,
-            queue_simulator,
-            storage_application_circuits_compact_forms_witnesses,
-        ) = maker.into_results();
-        all_compact_forms.extend(storage_application_circuits_compact_forms_witnesses.clone());
-        recursion_queue_callback(
-            circuit_type as u8,
-            queue_simulator,
-            storage_application_circuits_compact_forms_witnesses,
+            storage_sorter_circuit_compact_form_witnesses.clone(),
         );
 
         // events sorter
@@ -1857,11 +1826,10 @@ pub fn create_artifacts_from_tracer<
             queue_simulator,
             events_sorter_circuits_compact_forms_witnesses,
         ) = maker.into_results();
-        all_compact_forms.extend(events_sorter_circuits_compact_forms_witnesses.clone());
         recursion_queue_callback(
             circuit_type as u8,
             queue_simulator,
-            events_sorter_circuits_compact_forms_witnesses,
+            events_sorter_circuits_compact_forms_witnesses.clone(),
         );
 
         // l1 messages sorter
@@ -1885,11 +1853,10 @@ pub fn create_artifacts_from_tracer<
             queue_simulator,
             l1_messages_sorter_circuits_compact_forms_witnesses,
         ) = maker.into_results();
-        all_compact_forms.extend(l1_messages_sorter_circuits_compact_forms_witnesses.clone());
         recursion_queue_callback(
             circuit_type as u8,
             queue_simulator,
-            l1_messages_sorter_circuits_compact_forms_witnesses,
+            l1_messages_sorter_circuits_compact_forms_witnesses.clone(),
         );
 
         // l1 messages pubdata hasher
@@ -1913,11 +1880,10 @@ pub fn create_artifacts_from_tracer<
             queue_simulator,
             l1_messages_hasher_circuits_compact_forms_witnesses,
         ) = maker.into_results();
-        all_compact_forms.extend(l1_messages_hasher_circuits_compact_forms_witnesses.clone());
         recursion_queue_callback(
             circuit_type as u8,
             queue_simulator,
-            l1_messages_hasher_circuits_compact_forms_witnesses,
+            l1_messages_hasher_circuits_compact_forms_witnesses.clone(),
         );
 
         // done!
@@ -1937,6 +1903,22 @@ pub fn create_artifacts_from_tracer<
             l1_messages_sorter_circuits,
             l1_messages_hasher_circuits,
         };
+
+        let all_compact_forms = main_vm_circuits_compact_forms_witnesses
+            .into_iter()
+            .chain(code_decommittments_sorter_circuits_compact_forms_witnesses)
+            .chain(code_decommitter_circuits_compact_forms_witnesses)
+            .chain(log_demux_circuits_compact_forms_witnesses)
+            .chain(keccak_precompile_circuits_compact_forms_witnesses)
+            .chain(sha256_precompile_circuits_compact_forms_witnesses)
+            .chain(ecrecover_precompile_circuits_compact_forms_witnesses)
+            .chain(ram_permutation_circuits_compact_forms_witnesses)
+            .chain(storage_sorter_circuit_compact_form_witnesses)
+            .chain(storage_application_compact_forms)
+            .chain(events_sorter_circuits_compact_forms_witnesses)
+            .chain(l1_messages_sorter_circuits_compact_forms_witnesses)
+            .chain(l1_messages_hasher_circuits_compact_forms_witnesses)
+            .collect();
 
         (basic_circuits, all_compact_forms)
     }
