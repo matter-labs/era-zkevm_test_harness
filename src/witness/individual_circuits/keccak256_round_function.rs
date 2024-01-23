@@ -330,11 +330,10 @@ pub fn keccak256_decompose_into_per_circuit_witness<
 
             // NOTE: we need to set it for NEXT round
             let next_round_is_padding = if needs_extra_padding_round {
-                if num_rounds > 1 {
+                if round_idx + 2 == num_rounds {
                     assert_eq!(precompile_state, Keccak256PrecompileState::RunRoundFunction);
-                    round_idx == num_rounds - 2
+                    true
                 } else {
-                    assert_eq!(precompile_state, Keccak256PrecompileState::RunPaddingRound);
                     false
                 }
             } else {
