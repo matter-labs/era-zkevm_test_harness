@@ -48,7 +48,7 @@ fn hex_to_bytes(hex_string: &str) -> Vec<u8> {
 }
 
 lazy_static::lazy_static! {
-    static ref ROOTS_OF_UNITY: [Fr; FIELD_ELEMENTS_PER_BLOB] = {
+    static ref ROOTS_OF_UNITY: Vec<Fr> = {
         // 39033254847818212395286706435128746857159659164139250548781411570340225835782
         // 2^12 root of unity for BLS12-381
         let base_root = Fr::from_repr(FrRepr([
@@ -57,17 +57,19 @@ lazy_static::lazy_static! {
             0xfc3e8acfe0f8245f,
             0x564c0a11a0f704f4,
         ])).unwrap();
-        let mut roots = [Fr::one(); FIELD_ELEMENTS_PER_BLOB];
-        roots[1] = base_root;
+        let mut roots = Vec::with_capacity(FIELD_ELEMENTS_PER_BLOB);
+        roots.push(Fr::one());
+        roots.push(base_root);
         (2..4096).for_each(|i| {
             let prev_root = roots[i-1];
-            roots[i] = base_root;
-            roots[i].mul_assign(&prev_root);
+            let mut new_root = base_root.clone();
+            new_root.mul_assign(&prev_root);
+            roots.push(new_root);
         });
 
         roots
     };
-    static ref ROOTS_OF_UNITY_BRP: [Fr; FIELD_ELEMENTS_PER_BLOB] = {
+    static ref ROOTS_OF_UNITY_BRP: Vec<Fr> = {
         let mut reversed_roots = ROOTS_OF_UNITY.clone();
         bit_reverse_array(&mut reversed_roots);
         reversed_roots
@@ -81,7 +83,7 @@ lazy_static::lazy_static! {
         point.into_affine().unwrap().into_projective()
     };
     // Bit-reversed Lagrange bases of the eip4844 setup ceremony
-    static ref LAGRANGE_SETUP_BRP: [G1Affine; FIELD_ELEMENTS_PER_BLOB] = {
+    static ref LAGRANGE_SETUP_BRP: Vec<G1Affine> = {
         let setup: TrustedSetup = serde_json::from_slice(&std::fs::read(SETUP_JSON).unwrap()).unwrap();
         let mut base_setup: Vec<G1> = setup.g1_lagrange.iter().map(|hex| {
             let bytes = hex_to_bytes(&hex[2..]);
@@ -96,9 +98,9 @@ lazy_static::lazy_static! {
         // cooley-tukey algorithm. the roots need to be inverted, and all results need to be
         // divided by 2^12.
         let roots = ROOTS_OF_UNITY
-            .into_iter()
+            .iter()
             .take(FIELD_ELEMENTS_PER_BLOB / 2)
-            .map(|r| if r != Fr::one() { r.inverse().unwrap() } else { r })
+            .map(|r| if *r != Fr::one() { r.inverse().unwrap() } else { *r })
             .collect::<Vec<Fr>>();
 
         // we bit-reverse the powers to perform the IFFT in-place
@@ -140,9 +142,9 @@ lazy_static::lazy_static! {
 
         // we re-run the brp since the blobs are interpreted as evaluation form polys in brp
         bit_reverse_array(&mut lagrange_bases);
-        let mut lagrange_bases_arr = [G1Affine::zero(); FIELD_ELEMENTS_PER_BLOB];
-        lagrange_bases_arr.copy_from_slice(&lagrange_bases);
-        lagrange_bases_arr
+        let mut lagrange_bases_vec = Vec::with_capacity(FIELD_ELEMENTS_PER_BLOB);
+        lagrange_bases_vec.extend(&lagrange_bases);
+        lagrange_bases_vec
     };
 }
 
@@ -188,8 +190,9 @@ pub fn compute_proof(blob: &[Fr], z: &Fr) -> (G1Affine, Fr) {
         })
         .collect::<Vec<Fr>>();
     let denom_poly = ROOTS_OF_UNITY_BRP
-        .into_iter()
-        .map(|mut el| {
+        .iter()
+        .map(|el| {
+            let mut el = el.clone();
             el.sub_assign(&z);
             el
         })
