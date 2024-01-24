@@ -46,7 +46,6 @@ pub struct FullBlockArtifacts<F: SmallField> {
 
     // all the RAM (without accumulation into the queue)
     pub vm_memory_queries_accumulated: Vec<(u32, MemoryQuery)>,
-    pub vm_memory_queue_states: Vec<(u32, bool, MemoryQueueState<F>)>,
     //
     pub all_memory_queries_accumulated: Vec<MemoryQuery>,
     // all the RAM queue states

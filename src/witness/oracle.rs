@@ -958,6 +958,7 @@ pub fn create_artifacts_from_tracer<
 
     let storage_application_circuits;
     let storage_application_compact_forms;
+    let mut vm_memory_queue_states = vec![];
 
     let artifacts = {
         let mut artifacts = FullBlockArtifacts::default();
@@ -992,8 +993,7 @@ pub fn create_artifacts_from_tracer<
                 .memory_queue_simulator
                 .push_and_output_intermediate_data(*query, round_function);
 
-            this.vm_memory_queue_states
-                .push((*cycle, false, intermediate_info));
+            vm_memory_queue_states.push((*cycle, false, intermediate_info));
             this.all_memory_queue_states.push(intermediate_info);
         }
 
@@ -1252,8 +1252,7 @@ pub fn create_artifacts_from_tracer<
         // first find the memory witness by scanning all the known states
         // and finding the latest one with cycle index < current
 
-        let memory_queue_state_for_entry = artifacts
-            .vm_memory_queue_states
+        let memory_queue_state_for_entry = vm_memory_queue_states
             .iter()
             .take_while(|el| el.0 < initial_state.at_cycle)
             .last()
@@ -1437,8 +1436,7 @@ pub fn create_artifacts_from_tracer<
                 .clone(),
         );
 
-        let final_memory_queue_state = artifacts
-            .vm_memory_queue_states
+        let final_memory_queue_state = vm_memory_queue_states
             .last()
             .map(|el| transform_sponge_like_queue_state(el.2))
             .unwrap_or(QueueState::placeholder_witness());
