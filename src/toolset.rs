@@ -6,6 +6,10 @@ use crate::zk_evm::zk_evm_abstractions::precompiles::DefaultPrecompilesProcessor
 use crate::zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS;
 use std::hash::Hash;
 
+// This is temporary change to limit the diffs.
+// New code shoudl depend on the geometry_config crate directly.
+pub use geometry_config::GeometryConfig;
+
 /// Set should only differ due to another storage that would be sustituted from outside,
 /// and all other tools can be as simple as possible
 pub struct ProvingToolset<S: Storage> {
@@ -19,24 +23,6 @@ pub struct ProvingToolset<S: Storage> {
 }
 
 use derivative::Derivative;
-
-#[derive(Derivative, serde::Serialize, serde::Deserialize)]
-#[derivative(Clone, Copy, Debug, Default, Hash, PartialEq)]
-pub struct GeometryConfig {
-    pub cycles_per_vm_snapshot: u32,
-    pub cycles_per_log_demuxer: u32,
-    pub cycles_per_storage_sorter: u32,
-    pub cycles_per_events_or_l1_messages_sorter: u32,
-    pub cycles_per_ram_permutation: u32,
-    pub cycles_code_decommitter_sorter: u32,
-    pub cycles_per_code_decommitter: u32,
-    pub cycles_per_storage_application: u32,
-    pub cycles_per_keccak256_circuit: u32,
-    pub cycles_per_sha256_circuit: u32,
-    pub cycles_per_ecrecover_circuit: u32,
-
-    pub limit_for_l1_messages_pudata_hasher: u32,
-}
 
 pub fn create_tools<S: Storage>(storage: S, config: &GeometryConfig) -> ProvingToolset<S> {
     let memory = SimpleMemory::new_without_preallocations();

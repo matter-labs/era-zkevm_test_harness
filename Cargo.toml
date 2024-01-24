@@ -20,6 +20,7 @@ resolver = "2"
 
 [dependencies]
 circuit_definitions = {path = "./circuit_definitions"}
+geometry_config = {path = "./geometry_config"}
 
 snark_wrapper = {git = "https://github.com/matter-labs/snark-wrapper.git", branch = "main"}
 rescue_poseidon = {git = "https://github.com/matter-labs/rescue-poseidon.git", branch = "poseidon2"}
