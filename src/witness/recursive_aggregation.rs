@@ -70,7 +70,7 @@ pub(crate) fn compute_encodable_item_from_witness<
 /// Creates leaf witnesses: each leaf aggregates RECURSION_ARITY (32) basic circuits of a given type.
 pub fn create_leaf_witnesses(
     subset: (
-        u64, // circuit type
+        u8, // circuit type
         RecursionQueueSimulator<F>,
         Vec<ZkSyncBaseLayerClosedFormInput<F>>,
     ),
@@ -79,7 +79,7 @@ pub fn create_leaf_witnesses(
     leaf_params: (u8, RecursionLeafParametersWitness<F>), // (cirtuit_type, and ??)
 ) -> (
     Vec<(
-        u64,                         // type of the basic circuit
+        u8,                          // type of the basic circuit
         RecursionQueueSimulator<F>,  // chunk
         ZkSyncRecursiveLayerCircuit, // proof for that chunk
     )>,
@@ -89,7 +89,7 @@ pub fn create_leaf_witnesses(
 
     let (circuit_type, queue, closed_form_inputs) = subset;
     assert_eq!(queue.num_items as usize, proofs.len());
-    assert_eq!(circuit_type, vk.numeric_circuit_type() as u64);
+    assert_eq!(circuit_type, vk.numeric_circuit_type() as u8);
 
     let (t, params) = leaf_params;
     assert_eq!(t, circuit_type as u8);
@@ -269,7 +269,7 @@ pub fn compute_node_vk_commitment(
 /// Creates nodes witnesses, one witness is aggregating up to RECURSION_ARITY (32) leaves (or nodes) of a single circuit type.
 pub fn create_node_witnesses(
     chunks: Vec<(
-        u64,                         // circuit type
+        u8,                          // circuit type
         RecursionQueueSimulator<F>,  // chunk
         ZkSyncRecursiveLayerCircuit, // proof for that chunk
     )>,
@@ -278,7 +278,7 @@ pub fn create_node_witnesses(
     node_vk_commitment: [F; VK_COMMITMENT_LENGTH],
     leaf_layer_params: &Vec<(u8, RecursionLeafParametersWitness<F>)>,
 ) -> Vec<(
-    u64,
+    u8,
     RecursionQueueSimulator<F>,  // chunk
     ZkSyncRecursiveLayerCircuit, // proof for that chunk
 )> {

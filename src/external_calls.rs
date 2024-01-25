@@ -37,6 +37,8 @@ use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit
 use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
 use circuit_definitions::{Field as MainField, RoundFunction, ZkSyncDefaultRoundFunction};
+use snark_wrapper::boojum::field::goldilocks::GoldilocksExt2;
+use snark_wrapper::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
 
 pub const SCHEDULER_TIMESTAMP: u32 = 1;
 
@@ -57,8 +59,6 @@ use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 ///
 /// This function will setup the environment and will run out-of-circuit and then in-circuit
 pub fn run<
-    H: RecursiveTreeHasher<MainField, Num<MainField>>,
-    EXT: FieldExtension<2, BaseField = MainField>,
     S: Storage,
     CB: FnMut(ZkSyncBaseLayerCircuit<MainField, VmWitnessOracle<MainField>, RoundFunction>),
     QSCB: FnMut(
@@ -82,7 +82,7 @@ pub fn run<
     circuit_callback: CB,
     queue_simulator_callback: QSCB,
 ) -> (
-    SchedulerCircuitInstanceWitness<MainField, H, EXT>,
+    SchedulerCircuitInstanceWitness<MainField, CircuitGoldilocksPoseidon2Sponge, GoldilocksExt2>,
     BlockAuxilaryOutputWitness<MainField>,
 ) {
     let round_function = ZkSyncDefaultRoundFunction::default();

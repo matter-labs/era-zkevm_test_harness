@@ -9,7 +9,6 @@ use crate::boojum::cs::traits::cs::ConstraintSystem;
 use crate::boojum::cs::traits::gate::GatePlacementStrategy;
 use crate::boojum::field::traits::field_like::TrivialContext;
 use crate::ethereum_types::*;
-use crate::external_calls::run_with_fixed_params;
 use crate::toolset::create_tools;
 use crate::witness::oracle::create_artifacts_from_tracer;
 use crate::zk_evm::abstractions::*;
@@ -218,26 +217,27 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
 
     save_predeployed_contracts(&mut storage_impl, &mut tree, &known_contracts);
 
-    // let (basic_block_circuits, basic_block_circuits_inputs, scheduler_input) = run(
-    let (basic_block_circuits, basic_block_circuits_inputs, closed_form_inputs, _, _) =
-        run_with_fixed_params(
-            Address::zero(),
-            *BOOTLOADER_FORMAL_ADDRESS,
-            entry_point_bytecode,
-            vec![],
-            false,
-            U256::zero(),
-            used_bytecodes_and_hashes,
-            vec![],
-            cycle_limit,
-            geometry,
-            storage_impl,
-            &mut tree,
-        );
+    let mut basic_block_circuits = vec![];
+    run(
+        Address::zero(),
+        *BOOTLOADER_FORMAL_ADDRESS,
+        entry_point_bytecode,
+        vec![],
+        false,
+        U256::zero(),
+        used_bytecodes_and_hashes,
+        vec![],
+        cycle_limit,
+        geometry,
+        storage_impl,
+        &mut tree,
+        |circuit| basic_block_circuits.push(circuit),
+        |_, _, _| {},
+    );
 
     println!("Simulation and witness creation are completed");
 
-    for el in basic_block_circuits.into_flat_iterator() {
+    for el in basic_block_circuits {
         println!("Doing {} circuit", el.short_description());
         base_test_circuit(el);
     }

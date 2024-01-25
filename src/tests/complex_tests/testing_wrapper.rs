@@ -10,9 +10,6 @@ use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::proof::Pro
 use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::setup::VerificationKey as SnarkVK;
 use snark_wrapper::franklin_crypto::bellman::worker::Worker as BellmanWorker;
 
-pub type TreeHasherForWrapper = CircuitPoseidon2Sponge<Bn256, 2, 3, 3, true>;
-pub type TranscriptForWrapper = CircuitPoseidon2Transcript<Bn256, 2, 3, 3, true>;
-
 pub(crate) fn test_compression_for_compression_num(config: WrapperConfig) {
     let worker = Worker::new();
     let bellman_worker = BellmanWorker::new();
