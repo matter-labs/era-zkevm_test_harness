@@ -9,6 +9,7 @@ use crate::boojum::pairing::ff::{Field, PrimeField};
 use crate::boojum::pairing::Engine;
 use crate::boojum::pairing::{CurveAffine, CurveProjective, EncodedPoint};
 use crate::sha2::Sha256;
+use crate::zkevm_circuits::eip_4844::zksync_pubdata_into_ethereum_4844_data;
 use rayon::prelude::*;
 use serde::Serialize;
 
@@ -305,14 +306,22 @@ fn eval_poly(blob: &[Fr], z: &Fr) -> Fr {
 }
 
 fn compute_challenge(blob: &[Fr], commitment: &G1Affine) -> Fr {
-    let mut data = String::from("FSBLOBVERIFY_V1_");
-    let degree_separator: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0];
-    data.push_str(std::str::from_utf8(&degree_separator).unwrap());
-    let encoded_blob = bincode::serialize(&blob).expect("should be able to serialize blob");
-    data.push_str(&format!("{:x?}", encoded_blob));
-    let encoded_commitment =
-        bincode::serialize(&commitment).expect("should be able to serialize commitment");
-    data.push_str(&format!("{:x?}", encoded_commitment));
+    let mut data = String::from("FSBLOBVERIFY_V1_").into_bytes();
+    let degree_separator: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0];
+    data.extend(&degree_separator);
+    let blob_bytes = blob
+        .iter()
+        .flat_map(|el| {
+            el.into_repr()
+                .0
+                .iter()
+                .rev()
+                .flat_map(|v| v.to_be_bytes())
+                .collect::<Vec<u8>>()
+        })
+        .collect::<Vec<u8>>();
+    data.extend(&blob_bytes);
+    data.extend(commitment.into_compressed().as_ref());
 
     let mut result = [0u8; 32];
     let digest = Sha256::digest(data);
