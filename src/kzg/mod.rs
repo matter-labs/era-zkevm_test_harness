@@ -9,7 +9,6 @@ use crate::boojum::pairing::ff::{Field, PrimeField};
 use crate::boojum::pairing::Engine;
 use crate::boojum::pairing::{CurveAffine, CurveProjective, EncodedPoint};
 use crate::sha2::Sha256;
-use crate::zkevm_circuits::eip_4844::zksync_pubdata_into_ethereum_4844_data;
 use rayon::prelude::*;
 use serde::Serialize;
 
