@@ -337,15 +337,13 @@ fn compute_challenge(blob: &[Fr], commitment: &G1Affine) -> Fr {
 
 fn u8_repr_to_u64_repr(bytes: [u8; 32]) -> [u64; 4] {
     let mut ret = [0u64; 4];
-    for (i, el) in ret.iter_mut().enumerate() {
-        *el |= bytes[i * 8] as u64;
-        *el |= (bytes[1 + i * 8] as u64) << 8;
-        *el |= (bytes[2 + i * 8] as u64) << 16;
-        *el |= (bytes[3 + i * 8] as u64) << 24;
-        *el |= (bytes[4 + i * 8] as u64) << 32;
-        *el |= (bytes[5 + i * 8] as u64) << 40;
-        *el |= (bytes[6 + i * 8] as u64) << 48;
-        *el |= (bytes[7 + i * 8] as u64) << 56;
+    
+    for i in 0..ret.len() {
+        let mut repr = [0u8; 8];
+        let end = 32 - (8 * i);
+        let beg = 32 - (8 * (i + 1));
+        repr.copy_from_slice(&bytes[beg..end]);
+        ret[i] = u64::from_be_bytes(repr);
     }
 
     ret
