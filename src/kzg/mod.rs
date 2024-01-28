@@ -337,7 +337,6 @@ fn compute_challenge(blob: &[Fr], commitment: &G1Affine) -> Fr {
 
 fn u8_repr_to_u64_repr(bytes: [u8; 32]) -> [u64; 4] {
     let mut ret = [0u64; 4];
-    
     for i in 0..ret.len() {
         let mut repr = [0u8; 8];
         let end = 32 - (8 * i);
