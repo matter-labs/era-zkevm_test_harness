@@ -319,6 +319,7 @@ fn compute_challenge(blob: &[Fr], commitment: &G1Affine) -> Fr {
                 .collect::<Vec<u8>>()
         })
         .collect::<Vec<u8>>();
+    assert!(blob_bytes.len() == FIELD_ELEMENTS_PER_BLOB * 32);
     data.extend(&blob_bytes);
     data.extend(commitment.into_compressed().as_ref());
 
@@ -337,12 +338,10 @@ fn compute_challenge(blob: &[Fr], commitment: &G1Affine) -> Fr {
 
 fn u8_repr_to_u64_repr(bytes: [u8; 32]) -> [u64; 4] {
     let mut ret = [0u64; 4];
-    for i in 0..ret.len() {
+    for (i, chunk) in bytes.array_chunks::<8>().enumerate() {
         let mut repr = [0u8; 8];
-        let end = 32 - (8 * i);
-        let beg = 32 - (8 * (i + 1));
-        repr.copy_from_slice(&bytes[beg..end]);
-        ret[i] = u64::from_be_bytes(repr);
+        repr.copy_from_slice(chunk);
+        ret[3 - i] = u64::from_be_bytes(repr);
     }
 
     ret
