@@ -48,7 +48,7 @@ fn hex_to_bytes(hex_string: &str) -> Vec<u8> {
 }
 
 lazy_static::lazy_static! {
-    static ref ROOTS_OF_UNITY: Vec<Fr> = {
+    static ref ROOTS_OF_UNITY: Box<[Fr; FIELD_ELEMENTS_PER_BLOB]> = {
         // 39033254847818212395286706435128746857159659164139250548781411570340225835782
         // 2^12 root of unity for BLS12-381
         let base_root = Fr::from_repr(FrRepr([
@@ -57,21 +57,19 @@ lazy_static::lazy_static! {
             0xfc3e8acfe0f8245f,
             0x564c0a11a0f704f4,
         ])).unwrap();
-        let mut roots = Vec::with_capacity(FIELD_ELEMENTS_PER_BLOB);
-        roots.push(Fr::one());
-        roots.push(base_root);
+        let mut roots = [Fr::one(); FIELD_ELEMENTS_PER_BLOB];
+        roots[1] = base_root;
         (2..4096).for_each(|i| {
             let prev_root = roots[i-1];
-            let mut new_root = base_root.clone();
-            new_root.mul_assign(&prev_root);
-            roots.push(new_root);
+            roots[i] = base_root;
+            roots[i].mul_assign(&prev_root);
         });
 
-        roots
+        Box::new(roots)
     };
-    static ref ROOTS_OF_UNITY_BRP: Vec<Fr> = {
+    static ref ROOTS_OF_UNITY_BRP: Box<[Fr; FIELD_ELEMENTS_PER_BLOB]> = {
         let mut reversed_roots = ROOTS_OF_UNITY.clone();
-        bit_reverse_array(&mut reversed_roots);
+        bit_reverse_array(&mut (*reversed_roots));
         reversed_roots
     };
     static ref SETUP_G2_1: G2 = {
@@ -98,9 +96,8 @@ lazy_static::lazy_static! {
         // cooley-tukey algorithm. the roots need to be inverted, and all results need to be
         // divided by 2^12.
         let roots = ROOTS_OF_UNITY
-            .iter()
+            .into_iter()
             .take(FIELD_ELEMENTS_PER_BLOB / 2)
-            .map(|r| if *r != Fr::one() { r.inverse().unwrap() } else { *r })
             .collect::<Vec<Fr>>();
 
         // we bit-reverse the powers to perform the IFFT in-place
@@ -184,15 +181,15 @@ pub fn compute_proof(blob: &[Fr], z: &Fr) -> (G1Affine, Fr) {
     let shifted_poly = blob
         .into_iter()
         .map(|el| {
-            let mut el = el.clone();
+            let mut el = *el;
             el.sub_assign(&y);
             el
         })
         .collect::<Vec<Fr>>();
     let denom_poly = ROOTS_OF_UNITY_BRP
         .iter()
-        .map(|el| {
-            let mut el = el.clone();
+        .copied()
+        .map(|mut el| {
             el.sub_assign(&z);
             el
         })
