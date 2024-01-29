@@ -191,7 +191,7 @@ pub fn create_artifacts_from_tracer<
         >,
     ),
     QSCB: FnMut(
-        u8,
+        u64,
         RecursionQueueSimulator<GoldilocksField>,
         Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
     ),
@@ -1585,7 +1585,7 @@ pub fn create_artifacts_from_tracer<
             main_vm_circuits_compact_forms_witnesses.push(compact_form_witness);
         }
         recursion_queue_callback(
-            BaseLayerCircuitType::VM as u8,
+            BaseLayerCircuitType::VM as u64,
             queue_simulator,
             main_vm_circuits_compact_forms_witnesses.clone(),
         );
@@ -1612,7 +1612,7 @@ pub fn create_artifacts_from_tracer<
             code_decommittments_sorter_circuits_compact_forms_witnesses,
         ) = maker.into_results();
         recursion_queue_callback(
-            circuit_type as u8,
+            circuit_type as u64,
             queue_simulator,
             code_decommittments_sorter_circuits_compact_forms_witnesses.clone(),
         );
@@ -1639,7 +1639,7 @@ pub fn create_artifacts_from_tracer<
             code_decommitter_circuits_compact_forms_witnesses,
         ) = maker.into_results();
         recursion_queue_callback(
-            circuit_type as u8,
+            circuit_type as u64,
             queue_simulator,
             code_decommitter_circuits_compact_forms_witnesses.clone(),
         );
@@ -1663,7 +1663,7 @@ pub fn create_artifacts_from_tracer<
         let (log_demux_circuits, queue_simulator, log_demux_circuits_compact_forms_witnesses) =
             maker.into_results();
         recursion_queue_callback(
-            circuit_type as u8,
+            circuit_type as u64,
             queue_simulator,
             log_demux_circuits_compact_forms_witnesses.clone(),
         );
@@ -1690,7 +1690,7 @@ pub fn create_artifacts_from_tracer<
             keccak_precompile_circuits_compact_forms_witnesses,
         ) = maker.into_results();
         recursion_queue_callback(
-            circuit_type as u8,
+            circuit_type as u64,
             queue_simulator,
             keccak_precompile_circuits_compact_forms_witnesses.clone(),
         );
@@ -1717,7 +1717,7 @@ pub fn create_artifacts_from_tracer<
             sha256_precompile_circuits_compact_forms_witnesses,
         ) = maker.into_results();
         recursion_queue_callback(
-            circuit_type as u8,
+            circuit_type as u64,
             queue_simulator,
             sha256_precompile_circuits_compact_forms_witnesses.clone(),
         );
@@ -1744,7 +1744,7 @@ pub fn create_artifacts_from_tracer<
             ecrecover_precompile_circuits_compact_forms_witnesses,
         ) = maker.into_results();
         recursion_queue_callback(
-            circuit_type as u8,
+            circuit_type as u64,
             queue_simulator,
             ecrecover_precompile_circuits_compact_forms_witnesses.clone(),
         );
@@ -1771,7 +1771,7 @@ pub fn create_artifacts_from_tracer<
             ram_permutation_circuits_compact_forms_witnesses,
         ) = maker.into_results();
         recursion_queue_callback(
-            circuit_type as u8,
+            circuit_type as u64,
             queue_simulator,
             ram_permutation_circuits_compact_forms_witnesses.clone(),
         );
@@ -1798,7 +1798,7 @@ pub fn create_artifacts_from_tracer<
             storage_sorter_circuit_compact_form_witnesses,
         ) = maker.into_results();
         recursion_queue_callback(
-            circuit_type as u8,
+            circuit_type as u64,
             queue_simulator,
             storage_sorter_circuit_compact_form_witnesses.clone(),
         );
@@ -1825,7 +1825,7 @@ pub fn create_artifacts_from_tracer<
             events_sorter_circuits_compact_forms_witnesses,
         ) = maker.into_results();
         recursion_queue_callback(
-            circuit_type as u8,
+            circuit_type as u64,
             queue_simulator,
             events_sorter_circuits_compact_forms_witnesses.clone(),
         );
@@ -1852,7 +1852,7 @@ pub fn create_artifacts_from_tracer<
             l1_messages_sorter_circuits_compact_forms_witnesses,
         ) = maker.into_results();
         recursion_queue_callback(
-            circuit_type as u8,
+            circuit_type as u64,
             queue_simulator,
             l1_messages_sorter_circuits_compact_forms_witnesses.clone(),
         );
@@ -1879,7 +1879,7 @@ pub fn create_artifacts_from_tracer<
             l1_messages_hasher_circuits_compact_forms_witnesses,
         ) = maker.into_results();
         recursion_queue_callback(
-            circuit_type as u8,
+            circuit_type as u64,
             queue_simulator,
             l1_messages_hasher_circuits_compact_forms_witnesses.clone(),
         );

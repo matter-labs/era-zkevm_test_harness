@@ -37,7 +37,7 @@ pub fn decompose_into_storage_application_witnesses<
         >,
     ),
     QSCB: FnMut(
-        u8,
+        u64,
         RecursionQueueSimulator<GoldilocksField>,
         Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
     ),
@@ -129,7 +129,7 @@ pub fn decompose_into_storage_application_witnesses<
             storage_application_circuits_compact_forms_witnesses,
         ) = maker.into_results();
         recursion_queue_callback(
-            circuit_type as u8,
+            circuit_type as u64,
             queue_simulator,
             storage_application_circuits_compact_forms_witnesses.clone(),
         );
@@ -351,7 +351,7 @@ pub fn decompose_into_storage_application_witnesses<
         storage_application_circuits_compact_forms_witnesses,
     ) = maker.into_results();
     recursion_queue_callback(
-        circuit_type as u8,
+        circuit_type as u64,
         queue_simulator,
         storage_application_circuits_compact_forms_witnesses.clone(),
     );

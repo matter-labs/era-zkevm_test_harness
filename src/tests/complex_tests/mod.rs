@@ -141,7 +141,7 @@ pub(crate) fn generate_base_layer(
 ) -> (
     Vec<ZkSyncBaseLayerCircuit<Field, VmWitnessOracle<Field>, RoundFunction>>,
     Vec<(
-        u8,
+        u64,
         RecursionQueueSimulator<Field>,
         Vec<ZkSyncBaseLayerClosedFormInput<Field>>,
     )>,
@@ -250,7 +250,7 @@ pub(crate) fn generate_base_layer(
                 a,
                 b,
                 c.into_iter()
-                    .map(|x| ZkSyncBaseLayerStorage::from_inner(a, x))
+                    .map(|x| ZkSyncBaseLayerStorage::from_inner(a as u8, x))
                     .collect(),
             ))
         },

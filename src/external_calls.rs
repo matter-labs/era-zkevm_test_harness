@@ -62,7 +62,7 @@ pub fn run<
     S: Storage,
     CB: FnMut(ZkSyncBaseLayerCircuit<MainField, VmWitnessOracle<MainField>, RoundFunction>),
     QSCB: FnMut(
-        u8,
+        u64,
         RecursionQueueSimulator<MainField>,
         Vec<ClosedFormInputCompactFormWitness<MainField>>,
     ),
