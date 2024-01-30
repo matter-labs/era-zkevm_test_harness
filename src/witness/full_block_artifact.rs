@@ -76,8 +76,6 @@ pub struct FullBlockArtifacts<F: SmallField> {
     pub sha256_round_function_witnesses: Vec<(u32, LogQuery, Vec<Sha256RoundWitness>)>,
     pub ecrecover_witnesses: Vec<(u32, LogQuery, ECRecoverRoundWitness)>,
 
-    // processed RAM circuit information
-    pub ram_permutation_circuits_data: Vec<RamPermutationCircuitInstanceWitness<F>>,
     // processed code decommitter circuits, as well as sorting circuit
     pub code_decommitter_circuits_data: Vec<CodeDecommitterCircuitInstanceWitness<F>>,
     pub decommittments_deduplicator_circuits_data:

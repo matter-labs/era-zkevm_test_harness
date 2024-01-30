@@ -1,25 +1,45 @@
+use self::toolset::GeometryConfig;
+use self::witness::postprocessing::FirstAndLastCircuit;
+
 use super::*;
 use crate::boojum::gadgets::queue::full_state_queue::FullStateCircuitQueueRawWitness;
+use crate::witness::postprocessing::CircuitMaker;
 use crate::zk_evm::{abstractions::MemoryType, ethereum_types::U256};
 use crate::zkevm_circuits::{
     base_structures::memory_query::MEMORY_QUERY_PACKED_WIDTH, ram_permutation::input::*,
 };
+use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
+use circuit_definitions::circuit_definitions::base_layer::{
+    RAMPermutationInstanceSynthesisFunction, ZkSyncBaseLayerCircuit,
+};
 use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
-use circuit_definitions::encodings::*;
+use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
+use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
+use circuit_definitions::{encodings::*, Field, RoundFunction};
 use rayon::prelude::*;
+use snark_wrapper::boojum::field::Field as _;
 use std::cmp::Ordering;
+use std::sync::Arc;
 
 use crate::zk_evm::zkevm_opcode_defs::BOOTLOADER_HEAP_PAGE;
 
 pub fn compute_ram_circuit_snapshots<
-    F: SmallField,
-    R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+    CB: FnMut(ZkSyncBaseLayerCircuit<Field, VmWitnessOracle<Field>, Poseidon2Goldilocks>),
+    QSCB: FnMut(u64, RecursionQueueSimulator<Field>, Vec<ClosedFormInputCompactFormWitness<Field>>),
 >(
-    artifacts: &mut FullBlockArtifacts<F>,
-    round_function: &R,
+    artifacts: &mut FullBlockArtifacts<Field>,
+    round_function: &RoundFunction,
     num_non_deterministic_heap_queries: usize,
     per_circuit_capacity: usize,
-) -> Vec<RamPermutationCircuitInstanceWitness<F>> {
+    geometry: &GeometryConfig,
+    cs_for_witness_generation: &mut ConstraintSystemImpl<Field, Poseidon2Goldilocks>,
+    cycles_used: &mut usize,
+    mut circuit_callback: CB,
+    mut recursion_queue_callback: QSCB,
+) -> (
+    FirstAndLastCircuit<RAMPermutationInstanceSynthesisFunction<Field, RoundFunction>>,
+    Vec<ClosedFormInputCompactFormWitness<Field>>,
+) {
     assert!(
         artifacts.all_memory_queries_accumulated.len() > 0,
         "VM should have made some memory requests"
@@ -38,7 +58,7 @@ pub fn compute_ram_circuit_snapshots<
 
     // reconstruct sorted one in full
     let mut sorted_memory_queue_states = vec![];
-    let mut sorted_memory_queries_simulator = MemoryQueueSimulator::<F>::empty();
+    let mut sorted_memory_queries_simulator = MemoryQueueSimulator::<Field>::empty();
     for query in sorted_memory_queries_accumulated.iter() {
         let (_old_tail, intermediate_info) = sorted_memory_queries_simulator
             .push_and_output_intermediate_data(*query, round_function);
@@ -54,8 +74,8 @@ pub fn compute_ram_circuit_snapshots<
     // now we should chunk it by circuits but briefly simulating their logic
 
     let challenges = produce_fs_challenges::<
-        F,
-        R,
+        Field,
+        RoundFunction,
         FULL_SPONGE_QUEUE_STATE_WIDTH,
         { MEMORY_QUERY_PACKED_WIDTH + 1 },
         2,
@@ -94,11 +114,7 @@ pub fn compute_ram_circuit_snapshots<
 
     for idx in 0..DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS {
         let (lhs_grand_product_chain, rhs_grand_product_chain) =
-            compute_grand_product_chains::<
-                F,
-                MEMORY_QUERY_PACKED_WIDTH,
-                { MEMORY_QUERY_PACKED_WIDTH + 1 },
-            >(&lhs_contributions, &rhs_contributions, &challenges[idx]);
+            compute_grand_product_chains(&lhs_contributions, &rhs_contributions, &challenges[idx]);
 
         assert_eq!(
             lhs_grand_product_chain.len(),
@@ -216,10 +232,9 @@ pub fn compute_ram_circuit_snapshots<
     // and we are all good
 
     let num_circuits = it.len();
-    let mut results = vec![];
 
-    let mut current_lhs_product = [F::ONE; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS];
-    let mut current_rhs_product = [F::ONE; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS];
+    let mut current_lhs_product = [Field::ONE; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS];
+    let mut current_rhs_product = [Field::ONE; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS];
     let mut previous_sorting_key = [0u32; RAM_SORTING_KEY_LENGTH];
     let mut previous_comparison_key = [0u32; RAM_FULL_KEY_LENGTH];
     let mut previous_value = U256::zero();
@@ -234,6 +249,19 @@ pub fn compute_ram_circuit_snapshots<
     );
 
     let mut current_number_of_nondet_writes = 0u32;
+
+    use crate::boojum::gadgets::queue::QueueState;
+    let placeholder_witness =
+        QueueState::<Field, FULL_SPONGE_QUEUE_STATE_WIDTH>::placeholder_witness();
+    let mut last_queue_state = (placeholder_witness.clone(), placeholder_witness);
+
+    let circuit_type = BaseLayerCircuitType::RamValidation;
+    let mut maker = CircuitMaker::new(
+        geometry.cycles_per_ram_permutation,
+        Arc::new(*round_function),
+        cs_for_witness_generation,
+        cycles_used,
+    );
 
     for (
         idx,
@@ -260,12 +288,7 @@ pub fn compute_ram_circuit_snapshots<
 
         // we need witnesses to pop elements from the front of the queue
 
-        let unsorted_witness = FullStateCircuitQueueRawWitness::<
-            F,
-            zkevm_circuits::base_structures::memory_query::MemoryQuery<F>,
-            FULL_SPONGE_QUEUE_STATE_WIDTH,
-            MEMORY_QUERY_PACKED_WIDTH,
-        > {
+        let unsorted_witness = FullStateCircuitQueueRawWitness {
             elements: unsorted_states
                 .iter()
                 .map(|el| {
@@ -275,12 +298,7 @@ pub fn compute_ram_circuit_snapshots<
                 .collect(),
         };
 
-        let sorted_witness = FullStateCircuitQueueRawWitness::<
-            F,
-            zkevm_circuits::base_structures::memory_query::MemoryQuery<F>,
-            FULL_SPONGE_QUEUE_STATE_WIDTH,
-            MEMORY_QUERY_PACKED_WIDTH,
-        > {
+        let sorted_witness = FullStateCircuitQueueRawWitness {
             elements: sorted_states
                 .iter()
                 .map(|el| {
@@ -311,18 +329,20 @@ pub fn compute_ram_circuit_snapshots<
         let last_unsorted_state = unsorted_sponge_states.last().unwrap().clone();
         let last_sorted_state = sorted_sponge_states.last().unwrap().clone();
 
-        let accumulated_lhs: [F; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS] = lhs_grand_product
-            .iter()
-            .map(|el| *el.last().unwrap())
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-        let accumulated_rhs: [F; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS] = rhs_grand_product
-            .iter()
-            .map(|el| *el.last().unwrap())
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
+        let accumulated_lhs: [Field; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS] =
+            lhs_grand_product
+                .iter()
+                .map(|el| *el.last().unwrap())
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap();
+        let accumulated_rhs: [Field; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS] =
+            rhs_grand_product
+                .iter()
+                .map(|el| *el.last().unwrap())
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap();
 
         let last_sorted_query = sorted_states.last().unwrap().2;
         use circuit_definitions::encodings::memory_query::*;
@@ -331,21 +351,7 @@ pub fn compute_ram_circuit_snapshots<
         let is_ptr = last_sorted_query.value_is_pointer;
         let value = last_sorted_query.value;
 
-        use crate::boojum::gadgets::queue::QueueState;
-        let placeholder_witness =
-            QueueState::<F, FULL_SPONGE_QUEUE_STATE_WIDTH>::placeholder_witness();
-
-        let (current_unsorted_queue_state, current_sorted_queue_state) = results
-            .last()
-            .map(|el: &RamPermutationCircuitInstanceWitness<F>| {
-                let tmp = &el.closed_form_input.hidden_fsm_output;
-
-                (
-                    tmp.current_unsorted_queue_state.clone(),
-                    tmp.current_sorted_queue_state.clone(),
-                )
-            })
-            .unwrap_or((placeholder_witness.clone(), placeholder_witness));
+        let (current_unsorted_queue_state, current_sorted_queue_state) = last_queue_state;
 
         assert_eq!(
             current_unsorted_queue_state.tail.length,
@@ -442,10 +448,32 @@ pub fn compute_ram_circuit_snapshots<
 
         current_number_of_nondet_writes = new_num_nondet_writes;
 
-        results.push(instance_witness);
+        let tmp = &instance_witness.closed_form_input.hidden_fsm_output;
+        last_queue_state = (
+            tmp.current_unsorted_queue_state.clone(),
+            tmp.current_sorted_queue_state.clone(),
+        );
+
+        circuit_callback(ZkSyncBaseLayerCircuit::RAMPermutation(
+            maker.process(instance_witness, circuit_type),
+        ));
     }
 
-    results
+    let (
+        ram_permutation_circuits,
+        queue_simulator,
+        ram_permutation_circuits_compact_forms_witnesses,
+    ) = maker.into_results();
+    recursion_queue_callback(
+        circuit_type as u64,
+        queue_simulator,
+        ram_permutation_circuits_compact_forms_witnesses.clone(),
+    );
+
+    (
+        ram_permutation_circuits,
+        ram_permutation_circuits_compact_forms_witnesses,
+    )
 }
 
 // #[test]

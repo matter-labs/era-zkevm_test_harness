@@ -958,6 +958,8 @@ pub fn create_artifacts_from_tracer<
 
     let storage_application_circuits;
     let storage_application_compact_forms;
+    let ram_permutation_circuits;
+    let ram_permutation_circuits_compact_forms_witnesses;
     let mut vm_memory_queue_states = vec![];
 
     let artifacts = {
@@ -1122,14 +1124,20 @@ pub fn create_artifacts_from_tracer<
 
         tracing::debug!("Running RAM permutation simulation");
 
-        let ram_permutation_circuits_data = compute_ram_circuit_snapshots(
+        (
+            ram_permutation_circuits,
+            ram_permutation_circuits_compact_forms_witnesses,
+        ) = compute_ram_circuit_snapshots(
             this,
             round_function,
             num_non_deterministic_heap_queries,
             geometry.cycles_per_ram_permutation as usize,
+            geometry,
+            &mut cs_for_witness_generation,
+            &mut cycles_used,
+            &mut circuit_callback,
+            &mut recursion_queue_callback,
         );
-
-        this.ram_permutation_circuits_data = ram_permutation_circuits_data;
 
         // now completely parallel process to reconstruct the states, with internally parallelism in each round function
 
@@ -1488,7 +1496,6 @@ pub fn create_artifacts_from_tracer<
 
     {
         let FullBlockArtifacts {
-            ram_permutation_circuits_data,
             code_decommitter_circuits_data,
             log_demuxer_circuit_data,
             decommittments_deduplicator_circuits_data,
@@ -1747,33 +1754,6 @@ pub fn create_artifacts_from_tracer<
             circuit_type as u64,
             queue_simulator,
             ecrecover_precompile_circuits_compact_forms_witnesses.clone(),
-        );
-
-        // RAM permutation
-        let circuit_type = BaseLayerCircuitType::RamValidation;
-
-        let mut maker = CircuitMaker::new(
-            geometry.cycles_per_ram_permutation,
-            round_function.clone(),
-            &mut cs_for_witness_generation,
-            &mut cycles_used,
-        );
-
-        for circuit_input in ram_permutation_circuits_data.into_iter() {
-            circuit_callback(ZkSyncBaseLayerCircuit::RAMPermutation(
-                maker.process(circuit_input, circuit_type),
-            ));
-        }
-
-        let (
-            ram_permutation_circuits,
-            queue_simulator,
-            ram_permutation_circuits_compact_forms_witnesses,
-        ) = maker.into_results();
-        recursion_queue_callback(
-            circuit_type as u64,
-            queue_simulator,
-            ram_permutation_circuits_compact_forms_witnesses.clone(),
         );
 
         // storage sorter
