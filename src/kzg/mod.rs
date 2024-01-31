@@ -34,15 +34,16 @@ impl KzgSettings {
                 0x0ad1347b378fbf96,
                 0xfc3e8acfe0f8245f,
                 0x564c0a11a0f704f4,
-            ])).unwrap();
+            ]))
+            .unwrap();
             let mut roots = [Fr::one(); FIELD_ELEMENTS_PER_BLOB];
             roots[1] = base_root;
             (2..4096).for_each(|i| {
-                let prev_root = roots[i-1];
+                let prev_root = roots[i - 1];
                 roots[i] = base_root;
                 roots[i].mul_assign(&prev_root);
             });
-    
+
             Box::new(roots)
         };
 
@@ -61,17 +62,22 @@ impl KzgSettings {
             point.into_affine().unwrap().into_projective()
         };
 
-        let setup: TrustedSetup = serde_json::from_slice(&std::fs::read(settings_file).unwrap()).unwrap();
+        let setup: TrustedSetup =
+            serde_json::from_slice(&std::fs::read(settings_file).unwrap()).unwrap();
 
         let lagrange_setup_brp = {
-            let mut base_setup: Vec<G1> = setup.g1_lagrange.iter().map(|hex| {
-                let bytes = hex_to_bytes(&hex[2..]);
-                let mut point = G1Compressed::empty();
-                let v = point.as_mut();
-                v.copy_from_slice(bytes.as_slice());
-                point.into_affine().unwrap().into_projective()
-            }).collect::<Vec<G1>>();
-    
+            let mut base_setup: Vec<G1> = setup
+                .g1_lagrange
+                .iter()
+                .map(|hex| {
+                    let bytes = hex_to_bytes(&hex[2..]);
+                    let mut point = G1Compressed::empty();
+                    let v = point.as_mut();
+                    v.copy_from_slice(bytes.as_slice());
+                    point.into_affine().unwrap().into_projective()
+                })
+                .collect::<Vec<G1>>();
+
             // radix-2 ifft
             // we break up the powers into smallest chunks and then compose them together with the
             // cooley-tukey algorithm. the roots need to be inverted, and all results need to be
@@ -79,12 +85,18 @@ impl KzgSettings {
             let roots = roots_of_unity
                 .into_iter()
                 .take(FIELD_ELEMENTS_PER_BLOB / 2)
-                .map(|r| if r != Fr::one() { r.inverse().unwrap() } else { r })
+                .map(|r| {
+                    if r != Fr::one() {
+                        r.inverse().unwrap()
+                    } else {
+                        r
+                    }
+                })
                 .collect::<Vec<Fr>>();
-    
+
             // we bit-reverse the powers to perform the IFFT in-place
             bit_reverse_array(&mut base_setup);
-    
+
             // then, we chunk the powers in order to compute the DFTs and combine them
             let mut split = 1;
             while split < base_setup.len() {
@@ -101,11 +113,10 @@ impl KzgSettings {
                             *high = neg;
                         });
                 });
-    
+
                 split *= 2;
             }
-    
-    
+
             // lastly, we need to divide all the results by 2^12
             let domain_inv = Fr::from_repr(FrRepr([FIELD_ELEMENTS_PER_BLOB as u64, 0, 0, 0]))
                 .unwrap()
@@ -118,7 +129,7 @@ impl KzgSettings {
                     power.into_affine()
                 })
                 .collect::<Vec<G1Affine>>();
-    
+
             // we re-run the brp since the blobs are interpreted as evaluation form polys in brp
             bit_reverse_array(&mut lagrange_bases);
             let mut lagrange_setup_brp = Vec::with_capacity(FIELD_ELEMENTS_PER_BLOB);
@@ -129,7 +140,7 @@ impl KzgSettings {
         Self {
             roots_of_unity_brp,
             setup_g2_1,
-            lagrange_setup_brp
+            lagrange_setup_brp,
         }
     }
 }
@@ -205,7 +216,8 @@ pub fn compute_proof(settings: &KzgSettings, blob: &[Fr], z: &Fr) -> (G1Affine, 
             el
         })
         .collect::<Vec<Fr>>();
-    let denom_poly = settings.roots_of_unity_brp
+    let denom_poly = settings
+        .roots_of_unity_brp
         .iter()
         .copied()
         .map(|mut el| {
@@ -235,7 +247,13 @@ pub fn compute_proof(settings: &KzgSettings, blob: &[Fr], z: &Fr) -> (G1Affine, 
 }
 
 /// Verifies a KZG commitment and proof for a given evaluation point and evaluation result.
-pub fn verify_kzg_proof(settings: &KzgSettings, commitment: &G1Affine, z: &Fr, y: &Fr, proof: &G1Affine) -> bool {
+pub fn verify_kzg_proof(
+    settings: &KzgSettings,
+    commitment: &G1Affine,
+    z: &Fr,
+    y: &Fr,
+    proof: &G1Affine,
+) -> bool {
     let mut t = G2Affine::one().into_projective();
     t.mul_assign(*z);
     let mut x_minus_z = settings.setup_g2_1.clone();
@@ -262,14 +280,20 @@ pub fn compute_proof_poly(settings: &KzgSettings, blob: &[Fr], commitment: &G1Af
 
 /// Verifies a KZG commitment and opening proof for a given polynomial with a deterministic
 /// challenge point.
-pub fn verify_proof_poly(settings: &KzgSettings, blob: &[Fr], commitment: &G1Affine, proof: &G1Affine) -> bool {
+pub fn verify_proof_poly(
+    settings: &KzgSettings,
+    blob: &[Fr],
+    commitment: &G1Affine,
+    proof: &G1Affine,
+) -> bool {
     let challenge = compute_challenge(&blob, commitment);
     let y = eval_poly(settings, blob, &challenge);
     verify_kzg_proof(settings, commitment, &challenge, &y, proof)
 }
 
 fn compute_quotient_eval(settings: &KzgSettings, z: &Fr, poly: &[Fr], y: &Fr) -> Fr {
-    settings.roots_of_unity_brp
+    settings
+        .roots_of_unity_brp
         .iter()
         .zip(poly.iter())
         .fold(Fr::zero(), |mut acc, (root, p)| {
@@ -301,9 +325,9 @@ fn eval_poly(settings: &KzgSettings, blob: &[Fr], z: &Fr) -> Fr {
         if let Some(idx) = settings.roots_of_unity_brp.iter().position(|r| r == z) {
             blob[idx]
         } else {
-            blob.iter()
-                .zip(settings.roots_of_unity_brp.iter())
-                .fold(Fr::zero(), |mut acc, (el, root)| {
+            blob.iter().zip(settings.roots_of_unity_brp.iter()).fold(
+                Fr::zero(),
+                |mut acc, (el, root)| {
                     let mut el = el.clone();
                     el.mul_assign(&root);
                     let mut z_1 = z.clone();
@@ -311,7 +335,8 @@ fn eval_poly(settings: &KzgSettings, blob: &[Fr], z: &Fr) -> Fr {
                     el.mul_assign(&z_1.inverse().unwrap());
                     acc.add_assign(&el);
                     acc
-                })
+                },
+            )
         }
     };
 
