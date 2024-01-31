@@ -5,6 +5,7 @@ use crate::boojum::config::*;
 use crate::boojum::cs::implementations::setup::FinalizationHintsForProver;
 use crate::boojum::field::goldilocks::GoldilocksExt2;
 use crate::boojum::{algebraic_props::round_function, field::SmallField};
+use crate::kzg::KzgSettings;
 use crate::witness::tree::BinaryHasher;
 use crate::zk_evm::{address_to_u256, ethereum_types::*};
 use circuit_definitions::encodings::{BytesSerializable, QueueSimulator};
@@ -207,7 +208,10 @@ pub fn generate_eip4844_witness<F: SmallField>(
 
     use crate::kzg::compute_commitment;
     use circuit_definitions::boojum::pairing::CurveAffine;
-    let commitment = compute_commitment(&blob_fr);
+    let setup_json: &str = "src/kzg/trusted_setup.json";
+    let settings = KzgSettings::new(setup_json);
+
+    let commitment = compute_commitment(&settings, &blob_fr);
     let mut versioned_hash: [u8; 32] = Keccak256::digest(&commitment.into_compressed())
         .try_into()
         .expect("should be able to create an array from a keccak digest");
