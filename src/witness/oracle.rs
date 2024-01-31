@@ -964,7 +964,6 @@ pub fn create_artifacts_from_tracer<
 
     let artifacts = {
         let mut artifacts = FullBlockArtifacts::default();
-        artifacts.vm_memory_queries_accumulated = vm_memory_queries_accumulated.to_vec();
         artifacts.all_decommittment_queries = decommittment_queries.to_vec();
         artifacts.keccak_round_function_witnesses = keccak_round_function_witnesses.to_vec();
         artifacts.sha256_round_function_witnesses = sha256_round_function_witnesses.to_vec();
@@ -988,7 +987,7 @@ pub fn create_artifacts_from_tracer<
 
         tracing::debug!("Running memory queue simulation");
 
-        for (cycle, query) in this.vm_memory_queries_accumulated.iter() {
+        for (cycle, query) in vm_memory_queries_accumulated {
             this.all_memory_queries_accumulated.push(*query);
 
             let (_old_tail, intermediate_info) = this
@@ -1001,7 +1000,7 @@ pub fn create_artifacts_from_tracer<
 
         assert!(
             this.memory_queue_simulator.num_items as usize
-                == this.vm_memory_queries_accumulated.len()
+                == this.all_memory_queries_accumulated.len()
         );
 
         // ----------------------------

@@ -43,9 +43,6 @@ use tracing;
 pub struct FullBlockArtifacts<F: SmallField> {
     pub is_processed: bool,
     pub memory_queue_simulator: MemoryQueueSimulator<F>,
-
-    // all the RAM (without accumulation into the queue)
-    pub vm_memory_queries_accumulated: Vec<(u32, MemoryQuery)>,
     //
     pub all_memory_queries_accumulated: Vec<MemoryQuery>,
     // all the RAM queue states
