@@ -39,13 +39,13 @@ pub fn generate_base_layer_vks_and_proofs(
 ) -> crate::data_source::SourceResult<()> {
     let test_artifact = read_basic_test_artifact();
     let geometry = crate::geometry_config::get_geometry_config();
-    let (base_layer_circuit, _, _, _) = generate_base_layer(test_artifact, 20000, geometry);
+    let (base_layer_circuit, _, _) = generate_base_layer(test_artifact, 20000, geometry);
 
     let worker = Worker::new();
 
     let mut processed = HashSet::new();
 
-    for el in base_layer_circuit.into_flattened_set().into_iter() {
+    for el in base_layer_circuit.into_iter() {
         let name = el.short_description();
         if processed.contains(&name) {
             continue;

@@ -43,12 +43,14 @@ use circuit_definitions::circuit_definitions::base_layer::*;
 use circuit_definitions::circuit_definitions::recursion_layer::leaf_layer::ZkSyncLeafLayerRecursiveCircuit;
 use circuit_definitions::circuit_definitions::recursion_layer::scheduler::SchedulerCircuit;
 use circuit_definitions::circuit_definitions::recursion_layer::*;
-use circuit_definitions::eip4844_proof_config;
+use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
+use circuit_definitions::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
 use circuit_definitions::zkevm_circuits::scheduler::aux::NUM_CIRCUIT_TYPES_TO_SCHEDULE;
 use circuit_definitions::{
     base_layer_proof_config, recursion_layer_proof_config, BASE_LAYER_CAP_SIZE,
     BASE_LAYER_FRI_LDE_FACTOR, RECURSION_LAYER_CAP_SIZE, RECURSION_LAYER_FRI_LDE_FACTOR,
 };
+use circuit_definitions::{eip4844_proof_config, Field, RoundFunction};
 use utils::read_basic_test_artifact;
 
 use zkevm_assembly::Assembly;
@@ -137,9 +139,12 @@ pub(crate) fn generate_base_layer(
     cycle_limit: usize,
     geometry: GeometryConfig,
 ) -> (
-    BlockBasicCircuits<GoldilocksField, ZkSyncDefaultRoundFunction>,
-    BlockBasicCircuitsPublicInputs<GoldilocksField>,
-    BlockBasicCircuitsPublicCompactFormsWitnesses<GoldilocksField>,
+    Vec<ZkSyncBaseLayerCircuit<Field, VmWitnessOracle<Field>, RoundFunction>>,
+    Vec<(
+        u64,
+        RecursionQueueSimulator<Field>,
+        Vec<ZkSyncBaseLayerClosedFormInput<Field>>,
+    )>,
     SchedulerCircuitInstanceWitness<
         GoldilocksField,
         CircuitGoldilocksPoseidon2Sponge,
@@ -147,8 +152,6 @@ pub(crate) fn generate_base_layer(
     >,
 ) {
     use crate::zk_evm::zkevm_opcode_defs::system_params::BOOTLOADER_FORMAL_ADDRESS;
-
-    let round_function = ZkSyncDefaultRoundFunction::default();
 
     use crate::external_calls::run;
     use crate::toolset::GeometryConfig;
@@ -226,14 +229,9 @@ pub(crate) fn generate_base_layer(
 
     println!("Default AA code hash 0x{:x}", default_account_codehash);
 
-    // let (basic_block_circuits, basic_block_circuits_inputs, mut scheduler_partial_input) = run(
-    let (
-        basic_block_circuits,
-        basic_block_circuits_inputs,
-        closed_form_inputs,
-        scheduler_partial_input,
-        _aux_data,
-    ) = run(
+    let mut basic_block_circuits = vec![];
+    let mut recursion_queues = vec![];
+    let (scheduler_partial_input, _aux_data) = run(
         Address::zero(),
         test_artifact.entry_point_address,
         test_artifact.entry_point_code,
@@ -243,16 +241,24 @@ pub(crate) fn generate_base_layer(
         used_bytecodes,
         vec![],
         cycle_limit,
-        round_function.clone(),
         geometry,
         storage_impl,
         &mut tree,
+        |circuit| basic_block_circuits.push(circuit),
+        |a, b, c| {
+            recursion_queues.push((
+                a,
+                b,
+                c.into_iter()
+                    .map(|x| ZkSyncBaseLayerStorage::from_inner(a as u8, x))
+                    .collect(),
+            ))
+        },
     );
 
     (
         basic_block_circuits,
-        basic_block_circuits_inputs,
-        closed_form_inputs,
+        recursion_queues,
         scheduler_partial_input,
     )
 }
@@ -269,27 +275,10 @@ fn run_and_try_create_witness_inner(
     let geometry = crate::geometry_config::get_geometry_config();
 
     // let (basic_block_circuits, basic_block_circuits_inputs, mut scheduler_partial_input) = run(
-    let (
-        basic_block_circuits,
-        basic_block_circuits_inputs,
-        per_circuit_closed_form_inputs,
-        scheduler_partial_input,
-    ) = generate_base_layer(test_artifact, cycle_limit, geometry);
+    let (basic_block_circuits, recursion_queues, scheduler_partial_input) =
+        generate_base_layer(test_artifact, cycle_limit, geometry);
 
-    let _num_vm_circuits = basic_block_circuits.main_vm_circuits.len();
-
-    for (idx, (el, input_value)) in basic_block_circuits
-        .clone()
-        .into_flattened_set()
-        .into_iter()
-        .zip(
-            basic_block_circuits_inputs
-                .clone()
-                .into_flattened_set()
-                .into_iter(),
-        )
-        .enumerate()
-    {
+    for (idx, el) in basic_block_circuits.clone().into_iter().enumerate() {
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
 
@@ -322,12 +311,7 @@ fn run_and_try_create_witness_inner(
     LocalFileDataSource::create_folders_for_storing_data();
     use crate::data_source::*;
 
-    for (idx, el) in basic_block_circuits
-        .clone()
-        .into_flattened_set()
-        .into_iter()
-        .enumerate()
-    {
+    for (idx, el) in basic_block_circuits.clone().into_iter().enumerate() {
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
 
@@ -422,13 +406,6 @@ fn run_and_try_create_witness_inner(
 
         instance_idx += 1;
     }
-
-    let round_function = ZkSyncDefaultRoundFunction::default();
-
-    println!("Preparing recursion queues");
-
-    let recursion_queues = basic_block_circuits_inputs
-        .into_recursion_queues(per_circuit_closed_form_inputs, &round_function);
 
     println!("Assembling keys");
 
@@ -1205,11 +1182,7 @@ fn run_single() {
     use crate::data_source::*;
     use circuit_definitions::circuit_definitions::recursion_layer::verifier_builder::dyn_verifier_builder_for_recursive_circuit_type;
 
-    type P = GoldilocksField;
     type TR = GoldilocksPoisedon2Transcript;
-    type R = Poseidon2Goldilocks;
-    type CTR = CircuitAlgebraicSpongeBasedTranscript<GoldilocksField, 8, 12, 4, R>;
-    type EXT = GoldilocksExt2;
     type H = GoldilocksPoseidon2Sponge<AbsorptionModeOverwrite>;
 
     let f = std::fs::File::open("tmp.json").unwrap();

@@ -26,25 +26,24 @@ pub fn compute_ram_circuit_snapshots<
     );
 
     // sort by memory location, and then by timestamp
-    artifacts.sorted_memory_queries_accumulated = artifacts.all_memory_queries_accumulated.clone();
-    artifacts
-        .sorted_memory_queries_accumulated
-        .par_sort_by(|a, b| match a.location.cmp(&b.location) {
-            Ordering::Equal => a.timestamp.cmp(&b.timestamp),
-            a @ _ => a,
-        });
+    let mut sorted_memory_queries_accumulated = artifacts.all_memory_queries_accumulated.clone();
+    sorted_memory_queries_accumulated.par_sort_by(|a, b| match a.location.cmp(&b.location) {
+        Ordering::Equal => a.timestamp.cmp(&b.timestamp),
+        a @ _ => a,
+    });
 
     // those two thins are parallelizable, and can be internally parallelized too
 
     // now we can finish reconstruction of each sorted and unsorted memory queries
 
     // reconstruct sorted one in full
+    let mut sorted_memory_queue_states = vec![];
     let mut sorted_memory_queries_simulator = MemoryQueueSimulator::<F>::empty();
-    for query in artifacts.sorted_memory_queries_accumulated.iter() {
+    for query in sorted_memory_queries_accumulated.iter() {
         let (_old_tail, intermediate_info) = sorted_memory_queries_simulator
             .push_and_output_intermediate_data(*query, round_function);
 
-        artifacts.sorted_memory_queue_states.push(intermediate_info);
+        sorted_memory_queue_states.push(intermediate_info);
     }
 
     assert_eq!(
@@ -107,7 +106,7 @@ pub fn compute_ram_circuit_snapshots<
         );
         assert_eq!(
             rhs_grand_product_chain.len(),
-            artifacts.sorted_memory_queries_accumulated.len()
+            sorted_memory_queries_accumulated.len()
         );
         assert_eq!(
             lhs_grand_product_chain.len(),
@@ -147,8 +146,7 @@ pub fn compute_ram_circuit_snapshots<
             .all_memory_queue_states
             .chunks(per_circuit_capacity)
             .len(),
-        artifacts
-            .sorted_memory_queue_states
+        sorted_memory_queue_states
             .chunks(per_circuit_capacity)
             .len()
     );
@@ -195,11 +193,7 @@ pub fn compute_ram_circuit_snapshots<
     let it = artifacts
         .all_memory_queue_states
         .chunks(per_circuit_capacity)
-        .zip(
-            artifacts
-                .sorted_memory_queue_states
-                .chunks(per_circuit_capacity),
-        )
+        .zip(sorted_memory_queue_states.chunks(per_circuit_capacity))
         .zip(transposed_lhs_chains.into_iter())
         .zip(transposed_rhs_chains.into_iter())
         .zip(
@@ -232,7 +226,7 @@ pub fn compute_ram_circuit_snapshots<
     let mut previous_is_ptr = false;
 
     let unsorted_global_final_state = artifacts.all_memory_queue_states.last().unwrap().clone();
-    let sorted_global_final_state = artifacts.sorted_memory_queue_states.last().unwrap().clone();
+    let sorted_global_final_state = sorted_memory_queue_states.last().unwrap().clone();
 
     assert_eq!(
         unsorted_global_final_state.num_items,
