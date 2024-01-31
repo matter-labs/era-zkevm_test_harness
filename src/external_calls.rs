@@ -232,7 +232,7 @@ pub fn run<
     // dbg!(tools.witness_tracer.vm_snapshots.len());
 
     let (basic_circuits, compact_form_witnesses) = create_artifacts_from_tracer(
-        &mut out_of_circuit_vm.witness_tracer,
+        out_of_circuit_vm.witness_tracer,
         &round_function,
         &geometry,
         (

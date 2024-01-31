@@ -196,7 +196,7 @@ pub fn create_artifacts_from_tracer<
         Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
     ),
 >(
-    tracer: &mut WitnessTracer,
+    tracer: WitnessTracer,
     round_function: &Poseidon2Goldilocks,
     geometry: &GeometryConfig,
     entry_point_decommittment_query: (DecommittmentQuery, Vec<U256>),
@@ -964,10 +964,10 @@ pub fn create_artifacts_from_tracer<
 
     let artifacts = {
         let mut artifacts = FullBlockArtifacts::default();
-        artifacts.all_decommittment_queries = decommittment_queries.to_vec();
-        artifacts.keccak_round_function_witnesses = keccak_round_function_witnesses.to_vec();
-        artifacts.sha256_round_function_witnesses = sha256_round_function_witnesses.to_vec();
-        artifacts.ecrecover_witnesses = ecrecover_witnesses.to_vec();
+        artifacts.all_decommittment_queries = decommittment_queries;
+        artifacts.keccak_round_function_witnesses = keccak_round_function_witnesses;
+        artifacts.sha256_round_function_witnesses = sha256_round_function_witnesses;
+        artifacts.ecrecover_witnesses = ecrecover_witnesses;
         artifacts.original_log_queue_simulator =
             original_log_queue_simulator.unwrap_or(LogQueueSimulator::empty());
         artifacts.original_log_queue_states = original_log_queue_states;
@@ -988,13 +988,13 @@ pub fn create_artifacts_from_tracer<
         tracing::debug!("Running memory queue simulation");
 
         for (cycle, query) in vm_memory_queries_accumulated {
-            this.all_memory_queries_accumulated.push(*query);
+            this.all_memory_queries_accumulated.push(query.clone());
 
             let (_old_tail, intermediate_info) = this
                 .memory_queue_simulator
-                .push_and_output_intermediate_data(*query, round_function);
+                .push_and_output_intermediate_data(query, round_function);
 
-            vm_memory_queue_states.push((*cycle, false, intermediate_info));
+            vm_memory_queue_states.push((cycle, false, intermediate_info));
             this.all_memory_queue_states.push(intermediate_info);
         }
 
