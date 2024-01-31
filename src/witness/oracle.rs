@@ -1226,8 +1226,6 @@ pub fn create_artifacts_from_tracer<
     // NOTE: here we have all the queues processed in the `process` function (actual pushing is done), so we can
     // just read from the corresponding states
 
-    let mut all_instances_witnesses = vec![];
-
     let initial_cycle = vm_snapshots[0].at_cycle;
 
     // first decommittment query (for bootlaoder) must come before the beginning of time
@@ -1244,6 +1242,81 @@ pub fn create_artifacts_from_tracer<
         vm_snapshots.windows(2).len()
     );
 
+    let in_circuit_global_context = GlobalContextWitness {
+        zkporter_is_available: zk_porter_is_available,
+        default_aa_code_hash: default_aa_code_hash,
+    };
+    let round_function = Arc::new(*round_function);
+
+    let mut main_vm_circuits = FirstAndLastCircuit::default();
+    let mut main_vm_circuits_compact_forms_witnesses = vec![];
+    let mut queue_simulator = RecursionQueueSimulator::empty();
+    let mut observable_input = None;
+    let mut process_vm_witness = |vm_instance, is_last| {
+        use crate::witness::utils::vm_instance_witness_to_circuit_formal_input;
+        let is_first = observable_input.is_none();
+        let mut circuit_input = vm_instance_witness_to_circuit_formal_input(
+            vm_instance,
+            is_first,
+            is_last,
+            in_circuit_global_context.clone(),
+        );
+
+        if observable_input.is_none() {
+            assert!(is_first);
+            observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
+        } else {
+            circuit_input.closed_form_input.observable_input =
+                observable_input.as_ref().unwrap().clone();
+        }
+
+        let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
+            &mut cs_for_witness_generation,
+            circuit_input.closed_form_input.clone(),
+            &*round_function,
+        );
+
+        cycles_used += 1;
+        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            cs_for_witness_generation =
+                create_cs_for_witness_generation::<GoldilocksField, Poseidon2Goldilocks>(
+                    TRACE_LEN_LOG_2_FOR_CALCULATION,
+                    MAX_VARS_LOG_2_FOR_CALCULATION,
+                );
+            cycles_used = 0;
+        }
+
+        let instance = VMMainCircuit {
+            witness: AtomicCell::new(Some(circuit_input)),
+            config: Arc::new(geometry.cycles_per_vm_snapshot as usize),
+            round_function: round_function.clone(),
+            expected_public_input: Some(proof_system_input),
+        };
+
+        if is_first {
+            main_vm_circuits.first = Some(instance.clone());
+        }
+        if is_last {
+            main_vm_circuits.last = Some(instance.clone());
+        }
+
+        let instance = ZkSyncBaseLayerCircuit::MainVM(instance);
+
+        let recursive_request = RecursionRequest {
+            circuit_type: GoldilocksField::from_u64_unchecked(
+                instance.numeric_circuit_type() as u64
+            ),
+            public_input: proof_system_input,
+        };
+        let _ = queue_simulator.push(recursive_request, &*round_function);
+
+        circuit_callback(instance);
+        main_vm_circuits_compact_forms_witnesses.push(compact_form_witness);
+    };
+
+    let mut previous_instance_witness: Option<
+        VmInstanceWitness<GoldilocksField, VmWitnessOracle<GoldilocksField>>,
+    > = None;
     for (_circuit_idx, pair) in vm_snapshots.windows(2).enumerate() {
         let initial_state = &pair[0];
         let final_state = &pair[1];
@@ -1416,23 +1489,17 @@ pub fn create_artifacts_from_tracer<
             auxilary_final_parameters: VmInCircuitAuxilaryParameters::default(), // we will use next circuit's initial as final here!
         };
 
-        all_instances_witnesses.push(instance_witness);
-    }
-
-    // make final states of each instance to be an initial state of the next one (actually backwards)
-
-    for idx in 0..(all_instances_witnesses.len() - 1) {
-        let initial_aux_of_next = all_instances_witnesses[idx + 1]
-            .auxilary_initial_parameters
-            .clone();
-
-        all_instances_witnesses[idx].auxilary_final_parameters = initial_aux_of_next;
+        if let Some(mut prev) = previous_instance_witness {
+            prev.auxilary_final_parameters = instance_witness.auxilary_initial_parameters.clone();
+            process_vm_witness(prev, false);
+        }
+        previous_instance_witness = Some(instance_witness);
     }
 
     // special pass for the last one
     {
         let final_state = vm_snapshots.last().unwrap();
-        let last = all_instances_witnesses.last_mut().unwrap();
+        let mut last = previous_instance_witness.unwrap();
 
         // always an empty one
         last.auxilary_final_parameters.callstack_state = (
@@ -1480,19 +1547,15 @@ pub fn create_artifacts_from_tracer<
             .current_frame_rollback_queue_head = latest_log_queue_state.rollback_head;
         last.auxilary_final_parameters
             .current_frame_rollback_queue_segment_length = latest_log_queue_state.rollback_length;
+
+        process_vm_witness(last, true);
     }
 
-    // quick and dirty check that we properly transfer registers
-    for pair in all_instances_witnesses.windows(2) {
-        for (o, i) in pair[0]
-            .final_state
-            .registers
-            .iter()
-            .zip(pair[1].initial_state.registers.iter())
-        {
-            assert_eq!(o, i);
-        }
-    }
+    recursion_queue_callback(
+        BaseLayerCircuitType::VM as u64,
+        queue_simulator,
+        main_vm_circuits_compact_forms_witnesses.clone(),
+    );
 
     {
         let FullBlockArtifacts {
@@ -1508,94 +1571,6 @@ pub fn create_artifacts_from_tracer<
             l1_messages_linear_hash_data,
             ..
         } = artifacts;
-
-        let round_function = Arc::new(*round_function);
-
-        use crate::zkevm_circuits::base_structures::vm_state::GlobalContextWitness;
-
-        let in_circuit_global_context = GlobalContextWitness {
-            zkporter_is_available: zk_porter_is_available,
-            default_aa_code_hash: default_aa_code_hash,
-        };
-
-        use crate::witness::utils::create_cs_for_witness_generation;
-        use crate::witness::utils::simulate_public_input_value_from_witness;
-
-        // VM
-
-        let mut main_vm_circuits = FirstAndLastCircuit::default();
-        let mut main_vm_circuits_compact_forms_witnesses = vec![];
-        let mut queue_simulator = RecursionQueueSimulator::empty();
-        let num_instances = all_instances_witnesses.len();
-        let mut observable_input = None;
-        for (instance_idx, vm_instance) in all_instances_witnesses.into_iter().enumerate() {
-            use crate::witness::utils::vm_instance_witness_to_circuit_formal_input;
-            let is_first = instance_idx == 0;
-            let is_last = instance_idx == num_instances - 1;
-            let mut circuit_input = vm_instance_witness_to_circuit_formal_input(
-                vm_instance,
-                is_first,
-                is_last,
-                in_circuit_global_context.clone(),
-            );
-
-            if observable_input.is_none() {
-                assert!(is_first);
-                observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
-            } else {
-                circuit_input.closed_form_input.observable_input =
-                    observable_input.as_ref().unwrap().clone();
-            }
-
-            let (proof_system_input, compact_form_witness) =
-                simulate_public_input_value_from_witness(
-                    &mut cs_for_witness_generation,
-                    circuit_input.closed_form_input.clone(),
-                    &*round_function,
-                );
-
-            cycles_used += 1;
-            if cycles_used == CYCLES_PER_SCRATCH_SPACE {
-                cs_for_witness_generation =
-                    create_cs_for_witness_generation::<GoldilocksField, Poseidon2Goldilocks>(
-                        TRACE_LEN_LOG_2_FOR_CALCULATION,
-                        MAX_VARS_LOG_2_FOR_CALCULATION,
-                    );
-                cycles_used = 0;
-            }
-
-            let instance = VMMainCircuit {
-                witness: AtomicCell::new(Some(circuit_input)),
-                config: Arc::new(geometry.cycles_per_vm_snapshot as usize),
-                round_function: round_function.clone(),
-                expected_public_input: Some(proof_system_input),
-            };
-
-            if is_first {
-                main_vm_circuits.first = Some(instance.clone());
-            }
-            if is_last {
-                main_vm_circuits.last = Some(instance.clone());
-            }
-
-            let instance = ZkSyncBaseLayerCircuit::MainVM(instance);
-
-            let recursive_request = RecursionRequest {
-                circuit_type: GoldilocksField::from_u64_unchecked(
-                    instance.numeric_circuit_type() as u64
-                ),
-                public_input: proof_system_input,
-            };
-            let _ = queue_simulator.push(recursive_request, &*round_function);
-
-            circuit_callback(instance);
-            main_vm_circuits_compact_forms_witnesses.push(compact_form_witness);
-        }
-        recursion_queue_callback(
-            BaseLayerCircuitType::VM as u64,
-            queue_simulator,
-            main_vm_circuits_compact_forms_witnesses.clone(),
-        );
 
         // Code decommitter sorter
         let circuit_type = BaseLayerCircuitType::DecommitmentsFilter;
