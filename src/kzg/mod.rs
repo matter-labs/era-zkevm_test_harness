@@ -19,7 +19,7 @@ struct TrustedSetup {
 
 #[derive(Clone, Debug)]
 pub struct KzgSettings {
-    pub roots_of_unity_brp: Box<[Fr; FIELD_ELEMENTS_PER_BLOB]>,
+    pub roots_of_unity_brp: Vec<Fr>,
     pub setup_g2_1: G2,
     pub lagrange_setup_brp: Vec<G1Affine>,
 }
@@ -36,7 +36,7 @@ impl KzgSettings {
                 0x564c0a11a0f704f4,
             ]))
             .unwrap();
-            let mut roots = [Fr::one(); FIELD_ELEMENTS_PER_BLOB];
+            let mut roots = vec![Fr::one(); FIELD_ELEMENTS_PER_BLOB];
             roots[1] = base_root;
             (2..4096).for_each(|i| {
                 let prev_root = roots[i - 1];
@@ -44,7 +44,7 @@ impl KzgSettings {
                 roots[i].mul_assign(&prev_root);
             });
 
-            Box::new(roots)
+            roots
         };
 
         let roots_of_unity_brp = {
