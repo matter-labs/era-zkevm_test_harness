@@ -36,7 +36,7 @@ impl KzgSettings {
                 0x564c0a11a0f704f4,
             ]))
             .unwrap();
-            let mut roots = vec![Fr::one(); FIELD_ELEMENTS_PER_BLOB];
+            let mut roots = Box::new([Fr::one(); FIELD_ELEMENTS_PER_BLOB]);
             roots[1] = base_root;
             (2..4096).for_each(|i| {
                 let prev_root = roots[i - 1];
@@ -48,8 +48,7 @@ impl KzgSettings {
         };
 
         let roots_of_unity_brp = {
-            let mut reversed_roots = Box::new([Fr::one(); FIELD_ELEMENTS_PER_BLOB]);
-            reversed_roots.copy_from_slice(&roots_of_unity);
+            let mut reversed_roots = roots_of_unity.clone();
             bit_reverse_array(&mut (*reversed_roots));
             reversed_roots
         };
