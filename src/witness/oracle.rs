@@ -196,7 +196,7 @@ pub fn create_artifacts_from_tracer<
         Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
     ),
 >(
-    tracer: &mut WitnessTracer,
+    tracer: WitnessTracer,
     round_function: &Poseidon2Goldilocks,
     geometry: &GeometryConfig,
     entry_point_decommittment_query: (DecommittmentQuery, Vec<U256>),
@@ -958,15 +958,16 @@ pub fn create_artifacts_from_tracer<
 
     let storage_application_circuits;
     let storage_application_compact_forms;
-    let mut vm_memory_queue_states = vec![];
+    let ram_permutation_circuits;
+    let ram_permutation_circuits_compact_forms_witnesses;
+    let mut vm_memory_queue_cycles = vec![];
 
     let artifacts = {
         let mut artifacts = FullBlockArtifacts::default();
-        artifacts.vm_memory_queries_accumulated = vm_memory_queries_accumulated.to_vec();
-        artifacts.all_decommittment_queries = decommittment_queries.to_vec();
-        artifacts.keccak_round_function_witnesses = keccak_round_function_witnesses.to_vec();
-        artifacts.sha256_round_function_witnesses = sha256_round_function_witnesses.to_vec();
-        artifacts.ecrecover_witnesses = ecrecover_witnesses.to_vec();
+        artifacts.all_decommittment_queries = decommittment_queries;
+        artifacts.keccak_round_function_witnesses = keccak_round_function_witnesses;
+        artifacts.sha256_round_function_witnesses = sha256_round_function_witnesses;
+        artifacts.ecrecover_witnesses = ecrecover_witnesses;
         artifacts.original_log_queue_simulator =
             original_log_queue_simulator.unwrap_or(LogQueueSimulator::empty());
         artifacts.original_log_queue_states = original_log_queue_states;
@@ -986,20 +987,20 @@ pub fn create_artifacts_from_tracer<
 
         tracing::debug!("Running memory queue simulation");
 
-        for (cycle, query) in this.vm_memory_queries_accumulated.iter() {
-            this.all_memory_queries_accumulated.push(*query);
+        for (cycle, query) in vm_memory_queries_accumulated {
+            this.all_memory_queries_accumulated.push(query.clone());
 
             let (_old_tail, intermediate_info) = this
                 .memory_queue_simulator
-                .push_and_output_intermediate_data(*query, round_function);
+                .push_and_output_intermediate_data(query, round_function);
 
-            vm_memory_queue_states.push((*cycle, false, intermediate_info));
+            vm_memory_queue_cycles.push(cycle);
             this.all_memory_queue_states.push(intermediate_info);
         }
 
         assert!(
             this.memory_queue_simulator.num_items as usize
-                == this.vm_memory_queries_accumulated.len()
+                == this.all_memory_queries_accumulated.len()
         );
 
         // ----------------------------
@@ -1122,14 +1123,20 @@ pub fn create_artifacts_from_tracer<
 
         tracing::debug!("Running RAM permutation simulation");
 
-        let ram_permutation_circuits_data = compute_ram_circuit_snapshots(
+        (
+            ram_permutation_circuits,
+            ram_permutation_circuits_compact_forms_witnesses,
+        ) = compute_ram_circuit_snapshots(
             this,
             round_function,
             num_non_deterministic_heap_queries,
             geometry.cycles_per_ram_permutation as usize,
+            geometry,
+            &mut cs_for_witness_generation,
+            &mut cycles_used,
+            &mut circuit_callback,
+            &mut recursion_queue_callback,
         );
-
-        this.ram_permutation_circuits_data = ram_permutation_circuits_data;
 
         // now completely parallel process to reconstruct the states, with internally parallelism in each round function
 
@@ -1218,8 +1225,6 @@ pub fn create_artifacts_from_tracer<
     // NOTE: here we have all the queues processed in the `process` function (actual pushing is done), so we can
     // just read from the corresponding states
 
-    let mut all_instances_witnesses = vec![];
-
     let initial_cycle = vm_snapshots[0].at_cycle;
 
     // first decommittment query (for bootlaoder) must come before the beginning of time
@@ -1236,6 +1241,81 @@ pub fn create_artifacts_from_tracer<
         vm_snapshots.windows(2).len()
     );
 
+    let in_circuit_global_context = GlobalContextWitness {
+        zkporter_is_available: zk_porter_is_available,
+        default_aa_code_hash: default_aa_code_hash,
+    };
+    let round_function = Arc::new(*round_function);
+
+    let mut main_vm_circuits = FirstAndLastCircuit::default();
+    let mut main_vm_circuits_compact_forms_witnesses = vec![];
+    let mut queue_simulator = RecursionQueueSimulator::empty();
+    let mut observable_input = None;
+    let mut process_vm_witness = |vm_instance, is_last| {
+        use crate::witness::utils::vm_instance_witness_to_circuit_formal_input;
+        let is_first = observable_input.is_none();
+        let mut circuit_input = vm_instance_witness_to_circuit_formal_input(
+            vm_instance,
+            is_first,
+            is_last,
+            in_circuit_global_context.clone(),
+        );
+
+        if observable_input.is_none() {
+            assert!(is_first);
+            observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
+        } else {
+            circuit_input.closed_form_input.observable_input =
+                observable_input.as_ref().unwrap().clone();
+        }
+
+        let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
+            &mut cs_for_witness_generation,
+            circuit_input.closed_form_input.clone(),
+            &*round_function,
+        );
+
+        cycles_used += 1;
+        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            cs_for_witness_generation =
+                create_cs_for_witness_generation::<GoldilocksField, Poseidon2Goldilocks>(
+                    TRACE_LEN_LOG_2_FOR_CALCULATION,
+                    MAX_VARS_LOG_2_FOR_CALCULATION,
+                );
+            cycles_used = 0;
+        }
+
+        let instance = VMMainCircuit {
+            witness: AtomicCell::new(Some(circuit_input)),
+            config: Arc::new(geometry.cycles_per_vm_snapshot as usize),
+            round_function: round_function.clone(),
+            expected_public_input: Some(proof_system_input),
+        };
+
+        if is_first {
+            main_vm_circuits.first = Some(instance.clone());
+        }
+        if is_last {
+            main_vm_circuits.last = Some(instance.clone());
+        }
+
+        let instance = ZkSyncBaseLayerCircuit::MainVM(instance);
+
+        let recursive_request = RecursionRequest {
+            circuit_type: GoldilocksField::from_u64_unchecked(
+                instance.numeric_circuit_type() as u64
+            ),
+            public_input: proof_system_input,
+        };
+        let _ = queue_simulator.push(recursive_request, &*round_function);
+
+        circuit_callback(instance);
+        main_vm_circuits_compact_forms_witnesses.push(compact_form_witness);
+    };
+
+    let mut previous_instance_witness: Option<
+        VmInstanceWitness<GoldilocksField, VmWitnessOracle<GoldilocksField>>,
+    > = None;
     for (_circuit_idx, pair) in vm_snapshots.windows(2).enumerate() {
         let initial_state = &pair[0];
         let final_state = &pair[1];
@@ -1252,12 +1332,15 @@ pub fn create_artifacts_from_tracer<
         // first find the memory witness by scanning all the known states
         // and finding the latest one with cycle index < current
 
-        let memory_queue_state_for_entry = vm_memory_queue_states
+        let index_plus_one = vm_memory_queue_cycles
             .iter()
-            .take_while(|el| el.0 < initial_state.at_cycle)
-            .last()
-            .map(|el| transform_sponge_like_queue_state(el.2))
-            .unwrap_or(QueueState::placeholder_witness());
+            .take_while(|cycle| **cycle < initial_state.at_cycle)
+            .count();
+        let memory_queue_state_for_entry = if index_plus_one == 0 {
+            QueueState::placeholder_witness()
+        } else {
+            transform_sponge_like_queue_state(artifacts.all_memory_queue_states[index_plus_one - 1])
+        };
 
         let decommittment_queue_state_for_entry = artifacts
             .all_decommittment_queue_states
@@ -1408,23 +1491,17 @@ pub fn create_artifacts_from_tracer<
             auxilary_final_parameters: VmInCircuitAuxilaryParameters::default(), // we will use next circuit's initial as final here!
         };
 
-        all_instances_witnesses.push(instance_witness);
-    }
-
-    // make final states of each instance to be an initial state of the next one (actually backwards)
-
-    for idx in 0..(all_instances_witnesses.len() - 1) {
-        let initial_aux_of_next = all_instances_witnesses[idx + 1]
-            .auxilary_initial_parameters
-            .clone();
-
-        all_instances_witnesses[idx].auxilary_final_parameters = initial_aux_of_next;
+        if let Some(mut prev) = previous_instance_witness {
+            prev.auxilary_final_parameters = instance_witness.auxilary_initial_parameters.clone();
+            process_vm_witness(prev, false);
+        }
+        previous_instance_witness = Some(instance_witness);
     }
 
     // special pass for the last one
     {
         let final_state = vm_snapshots.last().unwrap();
-        let last = all_instances_witnesses.last_mut().unwrap();
+        let mut last = previous_instance_witness.unwrap();
 
         // always an empty one
         last.auxilary_final_parameters.callstack_state = (
@@ -1436,10 +1513,13 @@ pub fn create_artifacts_from_tracer<
                 .clone(),
         );
 
-        let final_memory_queue_state = vm_memory_queue_states
-            .last()
-            .map(|el| transform_sponge_like_queue_state(el.2))
-            .unwrap_or(QueueState::placeholder_witness());
+        let final_memory_queue_state = if vm_memory_queue_cycles.is_empty() {
+            QueueState::placeholder_witness()
+        } else {
+            transform_sponge_like_queue_state(
+                artifacts.all_memory_queue_states[vm_memory_queue_cycles.len() - 1],
+            )
+        };
 
         let final_decommittment_queue_state = artifacts
             .all_decommittment_queue_states
@@ -1472,23 +1552,18 @@ pub fn create_artifacts_from_tracer<
             .current_frame_rollback_queue_head = latest_log_queue_state.rollback_head;
         last.auxilary_final_parameters
             .current_frame_rollback_queue_segment_length = latest_log_queue_state.rollback_length;
+
+        process_vm_witness(last, true);
     }
 
-    // quick and dirty check that we properly transfer registers
-    for pair in all_instances_witnesses.windows(2) {
-        for (o, i) in pair[0]
-            .final_state
-            .registers
-            .iter()
-            .zip(pair[1].initial_state.registers.iter())
-        {
-            assert_eq!(o, i);
-        }
-    }
+    recursion_queue_callback(
+        BaseLayerCircuitType::VM as u64,
+        queue_simulator,
+        main_vm_circuits_compact_forms_witnesses.clone(),
+    );
 
     {
         let FullBlockArtifacts {
-            ram_permutation_circuits_data,
             code_decommitter_circuits_data,
             log_demuxer_circuit_data,
             decommittments_deduplicator_circuits_data,
@@ -1501,94 +1576,6 @@ pub fn create_artifacts_from_tracer<
             l1_messages_linear_hash_data,
             ..
         } = artifacts;
-
-        let round_function = Arc::new(*round_function);
-
-        use crate::zkevm_circuits::base_structures::vm_state::GlobalContextWitness;
-
-        let in_circuit_global_context = GlobalContextWitness {
-            zkporter_is_available: zk_porter_is_available,
-            default_aa_code_hash: default_aa_code_hash,
-        };
-
-        use crate::witness::utils::create_cs_for_witness_generation;
-        use crate::witness::utils::simulate_public_input_value_from_witness;
-
-        // VM
-
-        let mut main_vm_circuits = FirstAndLastCircuit::default();
-        let mut main_vm_circuits_compact_forms_witnesses = vec![];
-        let mut queue_simulator = RecursionQueueSimulator::empty();
-        let num_instances = all_instances_witnesses.len();
-        let mut observable_input = None;
-        for (instance_idx, vm_instance) in all_instances_witnesses.into_iter().enumerate() {
-            use crate::witness::utils::vm_instance_witness_to_circuit_formal_input;
-            let is_first = instance_idx == 0;
-            let is_last = instance_idx == num_instances - 1;
-            let mut circuit_input = vm_instance_witness_to_circuit_formal_input(
-                vm_instance,
-                is_first,
-                is_last,
-                in_circuit_global_context.clone(),
-            );
-
-            if observable_input.is_none() {
-                assert!(is_first);
-                observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
-            } else {
-                circuit_input.closed_form_input.observable_input =
-                    observable_input.as_ref().unwrap().clone();
-            }
-
-            let (proof_system_input, compact_form_witness) =
-                simulate_public_input_value_from_witness(
-                    &mut cs_for_witness_generation,
-                    circuit_input.closed_form_input.clone(),
-                    &*round_function,
-                );
-
-            cycles_used += 1;
-            if cycles_used == CYCLES_PER_SCRATCH_SPACE {
-                cs_for_witness_generation =
-                    create_cs_for_witness_generation::<GoldilocksField, Poseidon2Goldilocks>(
-                        TRACE_LEN_LOG_2_FOR_CALCULATION,
-                        MAX_VARS_LOG_2_FOR_CALCULATION,
-                    );
-                cycles_used = 0;
-            }
-
-            let instance = VMMainCircuit {
-                witness: AtomicCell::new(Some(circuit_input)),
-                config: Arc::new(geometry.cycles_per_vm_snapshot as usize),
-                round_function: round_function.clone(),
-                expected_public_input: Some(proof_system_input),
-            };
-
-            if is_first {
-                main_vm_circuits.first = Some(instance.clone());
-            }
-            if is_last {
-                main_vm_circuits.last = Some(instance.clone());
-            }
-
-            let instance = ZkSyncBaseLayerCircuit::MainVM(instance);
-
-            let recursive_request = RecursionRequest {
-                circuit_type: GoldilocksField::from_u64_unchecked(
-                    instance.numeric_circuit_type() as u64
-                ),
-                public_input: proof_system_input,
-            };
-            let _ = queue_simulator.push(recursive_request, &*round_function);
-
-            circuit_callback(instance);
-            main_vm_circuits_compact_forms_witnesses.push(compact_form_witness);
-        }
-        recursion_queue_callback(
-            BaseLayerCircuitType::VM as u64,
-            queue_simulator,
-            main_vm_circuits_compact_forms_witnesses.clone(),
-        );
 
         // Code decommitter sorter
         let circuit_type = BaseLayerCircuitType::DecommitmentsFilter;
@@ -1747,33 +1734,6 @@ pub fn create_artifacts_from_tracer<
             circuit_type as u64,
             queue_simulator,
             ecrecover_precompile_circuits_compact_forms_witnesses.clone(),
-        );
-
-        // RAM permutation
-        let circuit_type = BaseLayerCircuitType::RamValidation;
-
-        let mut maker = CircuitMaker::new(
-            geometry.cycles_per_ram_permutation,
-            round_function.clone(),
-            &mut cs_for_witness_generation,
-            &mut cycles_used,
-        );
-
-        for circuit_input in ram_permutation_circuits_data.into_iter() {
-            circuit_callback(ZkSyncBaseLayerCircuit::RAMPermutation(
-                maker.process(circuit_input, circuit_type),
-            ));
-        }
-
-        let (
-            ram_permutation_circuits,
-            queue_simulator,
-            ram_permutation_circuits_compact_forms_witnesses,
-        ) = maker.into_results();
-        recursion_queue_callback(
-            circuit_type as u64,
-            queue_simulator,
-            ram_permutation_circuits_compact_forms_witnesses.clone(),
         );
 
         // storage sorter
