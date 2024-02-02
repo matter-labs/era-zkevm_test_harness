@@ -92,7 +92,8 @@ impl KzgSettings {
                     } else {
                         r
                     }
-                });
+                })
+                .collect::<Vec<Fr>>();
 
             // we bit-reverse the powers to perform the IFFT in-place
             bit_reverse_array(&mut base_setup);
@@ -104,7 +105,7 @@ impl KzgSettings {
                     let (low, high) = chunk.split_at_mut(split);
                     low.iter_mut()
                         .zip(high)
-                        .zip(roots.step_by(FIELD_ELEMENTS_PER_BLOB / (split * 2)))
+                        .zip(roots.iter().step_by(FIELD_ELEMENTS_PER_BLOB / (split * 2)))
                         .for_each(|((low, high), root)| {
                             high.mul_assign(*root);
                             let mut neg = low.clone();
