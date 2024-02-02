@@ -960,7 +960,7 @@ pub fn create_artifacts_from_tracer<
     let storage_application_compact_forms;
     let ram_permutation_circuits;
     let ram_permutation_circuits_compact_forms_witnesses;
-    let mut vm_memory_queue_states = vec![];
+    let mut vm_memory_queue_cycles = vec![];
 
     let artifacts = {
         let mut artifacts = FullBlockArtifacts::default();
@@ -994,7 +994,7 @@ pub fn create_artifacts_from_tracer<
                 .memory_queue_simulator
                 .push_and_output_intermediate_data(query, round_function);
 
-            vm_memory_queue_states.push((cycle, false, intermediate_info));
+            vm_memory_queue_cycles.push(cycle);
             this.all_memory_queue_states.push(intermediate_info);
         }
 
@@ -1332,12 +1332,15 @@ pub fn create_artifacts_from_tracer<
         // first find the memory witness by scanning all the known states
         // and finding the latest one with cycle index < current
 
-        let memory_queue_state_for_entry = vm_memory_queue_states
+        let index_plus_one = vm_memory_queue_cycles
             .iter()
-            .take_while(|el| el.0 < initial_state.at_cycle)
-            .last()
-            .map(|el| transform_sponge_like_queue_state(el.2))
-            .unwrap_or(QueueState::placeholder_witness());
+            .take_while(|cycle| **cycle < initial_state.at_cycle)
+            .count();
+        let memory_queue_state_for_entry = if index_plus_one == 0 {
+            QueueState::placeholder_witness()
+        } else {
+            transform_sponge_like_queue_state(artifacts.all_memory_queue_states[index_plus_one - 1])
+        };
 
         let decommittment_queue_state_for_entry = artifacts
             .all_decommittment_queue_states
@@ -1510,10 +1513,13 @@ pub fn create_artifacts_from_tracer<
                 .clone(),
         );
 
-        let final_memory_queue_state = vm_memory_queue_states
-            .last()
-            .map(|el| transform_sponge_like_queue_state(el.2))
-            .unwrap_or(QueueState::placeholder_witness());
+        let final_memory_queue_state = if vm_memory_queue_cycles.is_empty() {
+            QueueState::placeholder_witness()
+        } else {
+            transform_sponge_like_queue_state(
+                artifacts.all_memory_queue_states[vm_memory_queue_cycles.len() - 1],
+            )
+        };
 
         let final_decommittment_queue_state = artifacts
             .all_decommittment_queue_states
