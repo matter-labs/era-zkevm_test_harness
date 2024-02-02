@@ -19,9 +19,9 @@ struct TrustedSetup {
 
 #[derive(Clone, Debug)]
 pub struct KzgSettings {
-    pub roots_of_unity_brp: Vec<Fr>,
+    pub roots_of_unity_brp: Box<[Fr; FIELD_ELEMENTS_PER_BLOB]>,
     pub setup_g2_1: G2,
-    pub lagrange_setup_brp: Vec<G1Affine>,
+    pub lagrange_setup_brp: Box<[G1Affine; FIELD_ELEMENTS_PER_BLOB]>,
 }
 
 impl KzgSettings {
@@ -48,7 +48,8 @@ impl KzgSettings {
         };
 
         let roots_of_unity_brp = {
-            let mut reversed_roots = roots_of_unity.clone();
+            let mut reversed_roots = Box::new([Fr::one(); FIELD_ELEMENTS_PER_BLOB]);
+            reversed_roots.copy_from_slice(&roots_of_unity);
             bit_reverse_array(&mut (*reversed_roots));
             reversed_roots
         };
@@ -132,9 +133,9 @@ impl KzgSettings {
 
             // we re-run the brp since the blobs are interpreted as evaluation form polys in brp
             bit_reverse_array(&mut lagrange_bases);
-            let mut lagrange_setup_brp = Vec::with_capacity(FIELD_ELEMENTS_PER_BLOB);
-            lagrange_setup_brp.extend(&lagrange_bases);
-            lagrange_setup_brp
+            let mut lagrange_setup_brp = [G1Affine::zero(); FIELD_ELEMENTS_PER_BLOB];
+            lagrange_setup_brp.copy_from_slice(&lagrange_bases);
+            Box::new(lagrange_setup_brp)
         };
 
         Self {
@@ -152,7 +153,6 @@ const BLS_MODULUS: [u64; 4] = [
     0x73eda753299d7d48,
 ];
 const FIELD_ELEMENTS_PER_BLOB: usize = 4096;
-const SETUP_JSON: &str = "src/kzg/trusted_setup.json";
 
 // reverse bit order of given number assuming an order of 4096
 fn bit_reverse_4096(n: u64) -> u64 {
@@ -418,6 +418,8 @@ fn reduce(repr: [u64; 4], modulus: [u64; 4]) -> [u64; 4] {
 mod tests {
     use super::*;
     use rand::Rand;
+
+    const SETUP_JSON: &str = "src/kzg/trusted_setup.json";
 
     #[test]
     fn test_commit_verify() {
