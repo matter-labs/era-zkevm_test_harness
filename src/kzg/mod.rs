@@ -5,7 +5,7 @@ use crate::boojum::pairing::bls12_381::fq12::Fq12;
 use crate::boojum::pairing::bls12_381::fr::{Fr, FrRepr};
 use crate::boojum::pairing::bls12_381::Bls12;
 use crate::boojum::pairing::bls12_381::{G1Affine, G1Compressed, G2Affine, G2Compressed, G1, G2};
-use crate::boojum::pairing::ff::{Field, PrimeField};
+use crate::boojum::pairing::ff::{Field, PrimeField, PrimeFieldRepr};
 use crate::boojum::pairing::Engine;
 use crate::boojum::pairing::{CurveAffine, CurveProjective, EncodedPoint};
 use crate::sha2::Sha256;
@@ -308,19 +308,12 @@ fn compute_challenge(blob: &[Fr], commitment: &G1Affine) -> Fr {
     let mut data = String::from("FSBLOBVERIFY_V1_").into_bytes();
     let degree_separator: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0];
     data.extend(&degree_separator);
-    let blob_bytes = blob
-        .iter()
-        .flat_map(|el| {
-            el.into_repr()
-                .0
-                .iter()
-                .rev()
-                .flat_map(|v| v.to_be_bytes())
-                .collect::<Vec<u8>>()
-        })
-        .collect::<Vec<u8>>();
-    assert!(blob_bytes.len() == FIELD_ELEMENTS_PER_BLOB * 32);
-    data.extend(&blob_bytes);
+    data.reserve(FIELD_ELEMENTS_PER_BLOB * 32);
+    blob.iter().for_each(|el| {
+        el.into_repr()
+            .write_be(&mut data)
+            .expect("should be able to write to data vector");
+    });
     data.extend(commitment.into_compressed().as_ref());
 
     let mut result = [0u8; 32];
@@ -328,7 +321,7 @@ fn compute_challenge(blob: &[Fr], commitment: &G1Affine) -> Fr {
     result.copy_from_slice(&digest);
 
     // reduce to fit within bls scalar field
-    let mut repr = u8_repr_to_u64_repr(result);
+    let mut repr = u8_repr_to_u64_repr_be(result);
     while repr_greater_than(repr, BLS_MODULUS) != std::cmp::Ordering::Less {
         repr = reduce(repr, BLS_MODULUS);
     }
@@ -336,15 +329,15 @@ fn compute_challenge(blob: &[Fr], commitment: &G1Affine) -> Fr {
     Fr::from_repr(FrRepr(repr)).unwrap()
 }
 
-fn u8_repr_to_u64_repr(bytes: [u8; 32]) -> [u64; 4] {
-    let mut ret = [0u64; 4];
-    for (i, chunk) in bytes.array_chunks::<8>().enumerate() {
-        let mut repr = [0u8; 8];
-        repr.copy_from_slice(chunk);
-        ret[3 - i] = u64::from_be_bytes(repr);
-    }
-
-    ret
+fn u8_repr_to_u64_repr_be(bytes: [u8; 32]) -> [u64; 4] {
+    bytes
+        .array_chunks::<8>()
+        .enumerate()
+        .map(|(i, chunk)| u64::from_be_bytes(*chunk))
+        .rev()
+        .collect::<Vec<u64>>()
+        .try_into()
+        .expect("should always produce a 4-element vector of u64")
 }
 
 fn repr_greater_than(repr: [u64; 4], modulus: [u64; 4]) -> std::cmp::Ordering {
