@@ -1,6 +1,6 @@
 use super::*;
 
-pub(crate) fn compute_compression_vks_and_write<DS: SetupDataSource + BlockDataSource>(
+pub fn compute_compression_vks_and_write<DS: SetupDataSource + BlockDataSource>(
     source: &mut DS,
     config: WrapperConfig,
     worker: &Worker,
@@ -37,7 +37,7 @@ pub(crate) fn compute_compression_vks_and_write<DS: SetupDataSource + BlockDataS
     }
 }
 
-pub(crate) fn compute_compression_circuits<DS: SetupDataSource + BlockDataSource>(
+pub fn compute_compression_circuits<DS: SetupDataSource + BlockDataSource>(
     source: &mut DS,
     config: WrapperConfig,
     worker: &Worker,

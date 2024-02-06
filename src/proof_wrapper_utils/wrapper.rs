@@ -1,6 +1,6 @@
 use super::*;
 
-pub(crate) const L1_VERIFIER_DOMAIN_SIZE_LOG: usize = 24;
+pub const L1_VERIFIER_DOMAIN_SIZE_LOG: usize = 24;
 
 pub fn get_wrapper_setup_and_vk_from_compression_vk(
     vk: ZkSyncCompressionForWrapperVerificationKey,
@@ -22,7 +22,7 @@ pub fn get_wrapper_setup_and_vk_from_compression_vk(
     )
 }
 
-pub(crate) fn compute_wrapper_proof_and_vk<DS: SetupDataSource + BlockDataSource>(
+pub fn compute_wrapper_proof_and_vk<DS: SetupDataSource + BlockDataSource>(
     source: &mut DS,
     config: WrapperConfig,
     worker: &BellmanWorker,

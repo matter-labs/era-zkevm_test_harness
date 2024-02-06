@@ -1,9 +1,9 @@
 use super::*;
 
-pub(crate) const CRS_FILE_ENV_VAR: &str = "CRS_FILE";
+pub const CRS_FILE_ENV_VAR: &str = "CRS_FILE";
 
 /// Just to check if the file and environment variable are not forgotten
-pub(crate) fn check_trusted_setup_file_existace() {
+pub fn check_trusted_setup_file_existace() {
     let crs_file_str = std::env::var(CRS_FILE_ENV_VAR).expect("crs file env var");
     let crs_file_path = std::path::Path::new(&crs_file_str);
     let _crs_file = std::fs::File::open(&crs_file_path).expect("crs file to open");
@@ -45,7 +45,7 @@ pub fn compress_stark_pi_to_snark_pi(
     result
 }
 
-pub(crate) fn get_proof_for_previous_circuit<DS: SetupDataSource + BlockDataSource>(
+pub fn get_proof_for_previous_circuit<DS: SetupDataSource + BlockDataSource>(
     source: &DS,
     circuit_type: u8,
 ) -> SourceResult<ZkSyncCompressionProof> {
@@ -57,7 +57,7 @@ pub(crate) fn get_proof_for_previous_circuit<DS: SetupDataSource + BlockDataSour
     }
 }
 
-pub(crate) fn get_vk_for_previous_circuit<DS: SetupDataSource + BlockDataSource>(
+pub fn get_vk_for_previous_circuit<DS: SetupDataSource + BlockDataSource>(
     source: &DS,
     circuit_type: u8,
 ) -> SourceResult<ZkSyncCompressionVerificationKey> {
