@@ -211,7 +211,7 @@ pub fn create_artifacts_from_tracer<
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
 ) {
     let WitnessTracer {
-        memory_queries,
+        memory_queries: vm_memory_queries_accumulated,
         storage_queries,
         refunds_logs,
         decommittment_queries,
@@ -234,29 +234,6 @@ pub fn create_artifacts_from_tracer<
     assert_eq!(w, &entry_point_decommittment_query.1);
 
     assert!(vm_snapshots.len() >= 2); // we need at least entry point and the last save (after exit)
-
-    // there can be multiple per cycle, so we need BTreeMap over vectors. For other witnesses it's easier
-    let mut memory_read_witness: BTreeMap<u32, SmallVec<[MemoryQuery; 4]>> = BTreeMap::new();
-    let mut memory_write_witness: BTreeMap<u32, SmallVec<[MemoryQuery; 4]>> = BTreeMap::new();
-    for el in memory_queries.iter() {
-        if el.1.rw_flag == false {
-            // read
-            if let Some(existing) = memory_read_witness.get_mut(&el.0) {
-                existing.push(el.1);
-            } else {
-                memory_read_witness.insert(el.0, smallvec::smallvec![el.1]);
-            }
-        } else {
-            // write
-            if let Some(existing) = memory_write_witness.get_mut(&el.0) {
-                existing.push(el.1);
-            } else {
-                memory_write_witness.insert(el.0, smallvec::smallvec![el.1]);
-            }
-        }
-    }
-
-    let vm_memory_queries_accumulated = memory_queries;
 
     // segmentation of the log queue
     // - split into independent queues
@@ -951,7 +928,7 @@ pub fn create_artifacts_from_tracer<
     let storage_application_compact_forms;
     let ram_permutation_circuits;
     let ram_permutation_circuits_compact_forms_witnesses;
-    let mut vm_memory_queue_cycles = vec![];
+    let mut vm_memory_query_cycles = vec![];
 
     let artifacts = {
         let mut artifacts = FullBlockArtifacts::default();
@@ -985,7 +962,7 @@ pub fn create_artifacts_from_tracer<
                 .memory_queue_simulator
                 .push_and_output_intermediate_data(query, round_function);
 
-            vm_memory_queue_cycles.push(cycle);
+            vm_memory_query_cycles.push(cycle);
             this.all_memory_queue_states.push(intermediate_info);
         }
 
@@ -1323,7 +1300,7 @@ pub fn create_artifacts_from_tracer<
         // first find the memory witness by scanning all the known states
         // and finding the latest one with cycle index < current
 
-        let index_plus_one = vm_memory_queue_cycles
+        let index_plus_one = vm_memory_query_cycles
             .iter()
             .take_while(|cycle| **cycle < initial_state.at_cycle)
             .count();
@@ -1358,14 +1335,17 @@ pub fn create_artifacts_from_tracer<
 
         let mut per_instance_memory_read_witnesses = Vec::with_capacity(1 << 16);
         let mut per_instance_memory_write_witnesses = Vec::with_capacity(1 << 16);
-        for (k, v) in memory_read_witness.range(initial_state.at_cycle..final_state.at_cycle) {
-            for el in v.iter().cloned() {
-                per_instance_memory_read_witnesses.push((*k, el));
-            }
-        }
-        for (k, v) in memory_write_witness.range(initial_state.at_cycle..final_state.at_cycle) {
-            for el in v.iter().cloned() {
-                per_instance_memory_write_witnesses.push((*k, el));
+
+        let start = vm_memory_query_cycles.partition_point(|x| *x < initial_state.at_cycle);
+        let end = vm_memory_query_cycles.partition_point(|x| *x < final_state.at_cycle);
+        for (&cycle, &query) in vm_memory_query_cycles[start..end]
+            .iter()
+            .zip(&artifacts.all_memory_queries_accumulated[start..end])
+        {
+            if query.rw_flag {
+                per_instance_memory_write_witnesses.push((cycle, query));
+            } else {
+                per_instance_memory_read_witnesses.push((cycle, query));
             }
         }
 
@@ -1504,11 +1484,11 @@ pub fn create_artifacts_from_tracer<
                 .clone(),
         );
 
-        let final_memory_queue_state = if vm_memory_queue_cycles.is_empty() {
+        let final_memory_queue_state = if vm_memory_query_cycles.is_empty() {
             QueueState::placeholder_witness()
         } else {
             transform_sponge_like_queue_state(
-                artifacts.all_memory_queue_states[vm_memory_queue_cycles.len() - 1],
+                artifacts.all_memory_queue_states[vm_memory_query_cycles.len() - 1],
             )
         };
 
