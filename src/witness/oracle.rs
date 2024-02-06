@@ -278,9 +278,6 @@ pub fn create_artifacts_from_tracer<
         query_id_into_cycle_index.insert(marker.query_id(), *cycle);
     }
 
-    let num_forwards = forward.len();
-    let num_rollbacks = rollbacks.len();
-
     let mut log_position_mapping = HashMap::new();
 
     let mut demuxed_rollup_storage_queries = vec![];
@@ -353,9 +350,6 @@ pub fn create_artifacts_from_tracer<
 
     // in practice we also split out precompile accesses
 
-    let mut unique_query_id_into_chain_positions: HashMap<u64, usize> =
-        HashMap::with_capacity(num_forwards + num_rollbacks);
-
     tracing::debug!("Running storage log simulation");
 
     for (extended_query, was_applied) in forward.iter().cloned().zip(std::iter::repeat(true)).chain(
@@ -412,9 +406,6 @@ pub fn create_artifacts_from_tracer<
 
         // add renumeration index
         marker_into_queue_position_renumeration_index.insert(query_marker, pointer);
-
-        let query_id = query_marker.query_id();
-        unique_query_id_into_chain_positions.insert(query_id, pointer);
 
         let key = query.timestamp.0;
         if query.rollback {
