@@ -22,6 +22,7 @@ use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit
 use circuit_definitions::circuit_definitions::eip4844::EIP4844Circuit;
 use circuit_definitions::circuit_definitions::recursion_layer::ZkSyncRecursiveLayerCircuit;
 use circuit_definitions::ZkSyncDefaultRoundFunction;
+use std::alloc::Global;
 use std::collections::HashMap;
 
 const ACCOUNT_CODE_STORAGE_ADDRESS: Address = H160([
@@ -122,7 +123,7 @@ pub(crate) fn eip4844_test_circuit(
     circuit.add_tables_proxy(&mut cs);
     circuit.synthesize_proxy(&mut cs);
     let _ = cs.pad_and_shrink();
-    let mut cs = cs.into_assembly();
+    let mut cs = cs.into_assembly::<Global>();
 
     let is_satisfied = cs.check_if_satisfied(&worker);
     assert!(is_satisfied);
@@ -161,7 +162,7 @@ pub(crate) fn base_test_circuit(
             inner.add_tables_proxy(&mut cs);
             inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
-            cs.into_assembly()
+            cs.into_assembly::<Global>()
         }
         ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {
             let builder = inner.configure_builder_proxy(builder);
@@ -292,7 +293,7 @@ pub(crate) fn test_recursive_circuit(circuit: ZkSyncRecursiveLayerCircuit) {
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs, &round_function);
             let _ = cs.pad_and_shrink();
-            cs.into_assembly()
+            cs.into_assembly::<Global>()
         }
         ZkSyncRecursiveLayerCircuit::NodeLayerCircuit(inner) => {
             let builder = inner.configure_builder_proxy(builder);

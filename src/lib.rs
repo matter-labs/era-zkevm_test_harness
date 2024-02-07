@@ -1,5 +1,6 @@
 #![recursion_limit = "32"]
 #![allow(dropping_references)]
+#![feature(allocator_api)]
 #![feature(array_chunks)]
 #![feature(stmt_expr_attributes)]
 #![feature(generic_const_exprs)]
