@@ -309,14 +309,6 @@ pub fn create_artifacts_from_tracer<
 
     let mut cycle_into_flat_sequence_index = BTreeMap::<u32, (usize, Option<usize>)>::new();
 
-    // we want to know for each of the cycles what is a state of the log queue
-    let mut log_actions_spans: std::collections::BTreeMap<u32, Vec<(QueryMarker, usize)>> =
-        std::collections::BTreeMap::new();
-    let mut log_declarations_spans: std::collections::BTreeMap<u32, Vec<(QueryMarker, usize)>> =
-        std::collections::BTreeMap::new();
-
-    // in practice we also split out precompile accesses
-
     tracing::debug!("Running storage log simulation");
 
     for (extended_query, was_applied) in forward.iter().cloned().zip(std::iter::repeat(true)).chain(
@@ -407,44 +399,9 @@ pub fn create_artifacts_from_tracer<
                     in_frame: _,
                     index: _,
                     cycle_of_declaration: c,
-                    cycle_of_applied_rollback,
                     ..
                 } => {
                     assert_eq!(cycle, c);
-                    if let Some(existing) = log_declarations_spans.get_mut(&cycle) {
-                        existing.push((query_marker, pointer));
-                    } else {
-                        log_declarations_spans.insert(cycle, vec![(query_marker, pointer)]);
-                    }
-
-                    match cycle_of_applied_rollback {
-                        None => {
-                            let cycle_of_applied_rollback = u32::MAX;
-                            if let Some(existing) =
-                                log_actions_spans.get_mut(&cycle_of_applied_rollback)
-                            {
-                                existing.push((query_marker, pointer));
-                            } else {
-                                log_actions_spans.insert(
-                                    cycle_of_applied_rollback,
-                                    vec![(query_marker, pointer)],
-                                );
-                            }
-                        }
-                        Some(cycle_of_applied_rollback) => {
-                            // even if we re-apply, then we are ok
-                            if let Some(existing) =
-                                log_actions_spans.get_mut(&cycle_of_applied_rollback)
-                            {
-                                existing.push((query_marker, pointer));
-                            } else {
-                                log_actions_spans.insert(
-                                    cycle_of_applied_rollback,
-                                    vec![(query_marker, pointer)],
-                                );
-                            }
-                        }
-                    }
                 }
                 a @ _ => {
                     unreachable!("encounteted {:?}", a)
@@ -478,12 +435,6 @@ pub fn create_artifacts_from_tracer<
                     ..
                 } => {
                     assert_eq!(cycle, c);
-                    if let Some(existing) = log_declarations_spans.get_mut(&cycle) {
-                        existing.push((query_marker, pointer));
-                    } else {
-                        log_declarations_spans.insert(cycle, vec![(query_marker, pointer)]);
-                    }
-                    log_actions_spans.insert(cycle, vec![(query_marker, pointer)]);
                 }
                 QueryMarker::ForwardNoRollback {
                     in_frame: _,
@@ -492,12 +443,6 @@ pub fn create_artifacts_from_tracer<
                     ..
                 } => {
                     assert_eq!(cycle, c);
-                    if let Some(existing) = log_declarations_spans.get_mut(&cycle) {
-                        existing.push((query_marker, pointer));
-                    } else {
-                        log_declarations_spans.insert(cycle, vec![(query_marker, pointer)]);
-                    }
-                    log_actions_spans.insert(cycle, vec![(query_marker, pointer)]);
                 }
                 a @ _ => {
                     unreachable!("encounteted {:?}", a)
