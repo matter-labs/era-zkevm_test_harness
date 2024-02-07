@@ -57,13 +57,17 @@ pub fn compute_ram_circuit_snapshots<
     // now we can finish reconstruction of each sorted and unsorted memory queries
 
     // reconstruct sorted one in full
-    let mut sorted_memory_queue_states = vec![];
+    let mut sorted_memory_queue_chunk_final_states = vec![];
     let mut sorted_memory_queries_simulator = MemoryQueueSimulator::<Field>::empty();
-    for query in sorted_memory_queries_accumulated.iter() {
+    for (i, query) in sorted_memory_queries_accumulated.into_iter().enumerate() {
         let (_old_tail, intermediate_info) = sorted_memory_queries_simulator
-            .push_and_output_intermediate_data(*query, round_function);
+            .push_and_output_intermediate_data(query, round_function);
 
-        sorted_memory_queue_states.push(intermediate_info);
+        if i % per_circuit_capacity == per_circuit_capacity - 1
+            || i == artifacts.all_memory_queries_accumulated.len() - 1
+        {
+            sorted_memory_queue_chunk_final_states.push(intermediate_info);
+        }
     }
 
     assert_eq!(
@@ -88,10 +92,6 @@ pub fn compute_ram_circuit_snapshots<
     // since encodings of the elements provide all the information necessary to perform soring argument,
     // we use them naively
 
-    assert_eq!(
-        artifacts.memory_queue_simulator.num_items,
-        sorted_memory_queries_simulator.num_items
-    );
     assert_eq!(
         artifacts.memory_queue_simulator.num_items as usize,
         artifacts.all_memory_queries_accumulated.len()
@@ -122,7 +122,7 @@ pub fn compute_ram_circuit_snapshots<
         );
         assert_eq!(
             rhs_grand_product_chain.len(),
-            sorted_memory_queries_accumulated.len()
+            artifacts.all_memory_queries_accumulated.len()
         );
         assert_eq!(
             lhs_grand_product_chain.len(),
@@ -156,16 +156,6 @@ pub fn compute_ram_circuit_snapshots<
         .as_slices()
         .1
         .is_empty());
-
-    assert_eq!(
-        artifacts
-            .all_memory_queue_states
-            .chunks(per_circuit_capacity)
-            .len(),
-        sorted_memory_queue_states
-            .chunks(per_circuit_capacity)
-            .len()
-    );
     assert_eq!(
         artifacts
             .all_memory_queue_states
@@ -206,10 +196,21 @@ pub fn compute_ram_circuit_snapshots<
             .len()
     );
 
+    let unsorted_global_final_state = artifacts.all_memory_queue_states.last().unwrap().clone();
+    let sorted_global_final_state = sorted_memory_queue_chunk_final_states
+        .last()
+        .unwrap()
+        .clone();
+
+    assert_eq!(
+        unsorted_global_final_state.num_items,
+        sorted_global_final_state.num_items
+    );
+
     let it = artifacts
         .all_memory_queue_states
         .chunks(per_circuit_capacity)
-        .zip(sorted_memory_queue_states.chunks(per_circuit_capacity))
+        .zip(sorted_memory_queue_chunk_final_states)
         .zip(transposed_lhs_chains.into_iter())
         .zip(transposed_rhs_chains.into_iter())
         .zip(
@@ -240,14 +241,6 @@ pub fn compute_ram_circuit_snapshots<
     let mut previous_value = U256::zero();
     let mut previous_is_ptr = false;
 
-    let unsorted_global_final_state = artifacts.all_memory_queue_states.last().unwrap().clone();
-    let sorted_global_final_state = sorted_memory_queue_states.last().unwrap().clone();
-
-    assert_eq!(
-        unsorted_global_final_state.num_items,
-        sorted_global_final_state.num_items
-    );
-
     let mut current_number_of_nondet_writes = 0u32;
 
     use crate::boojum::gadgets::queue::QueueState;
@@ -268,7 +261,7 @@ pub fn compute_ram_circuit_snapshots<
         (
             (
                 (
-                    ((unsorted_sponge_states, sorted_sponge_states), lhs_grand_product),
+                    ((unsorted_sponge_states, sorted_sponge_final_state), lhs_grand_product),
                     rhs_grand_product,
                 ),
                 unsorted_states,
@@ -327,7 +320,7 @@ pub fn compute_ram_circuit_snapshots<
             current_number_of_nondet_writes + (num_nondet_writes_in_chunk as u32);
 
         let last_unsorted_state = unsorted_sponge_states.last().unwrap().clone();
-        let last_sorted_state = sorted_sponge_states.last().unwrap().clone();
+        let last_sorted_state = sorted_sponge_final_state;
 
         let accumulated_lhs: [Field; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS] =
             lhs_grand_product
