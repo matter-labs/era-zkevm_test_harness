@@ -911,6 +911,11 @@ pub fn create_artifacts_from_tracer<
         }
     }
 
+    let CallstackWithAuxData {
+        flat_new_frames_history,
+        ..
+    } = callstack_with_aux_data;
+
     // we simulate a series of actions on the stack starting from the outermost frame
     // each history record contains an information on what was the stack state between points
     // when it potentially came into and out of scope
@@ -1399,8 +1404,7 @@ pub fn create_artifacts_from_tracer<
             .cloned()
             .collect();
 
-        let callstack_new_frames_witnesses = callstack_with_aux_data
-            .flat_new_frames_history
+        let callstack_new_frames_witnesses = flat_new_frames_history
             .iter()
             .skip_while(|el| el.0 < initial_state.at_cycle)
             .take_while(|el| el.0 < final_state.at_cycle)
