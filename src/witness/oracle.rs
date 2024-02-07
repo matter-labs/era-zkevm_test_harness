@@ -224,8 +224,6 @@ pub fn create_artifacts_from_tracer<
         ..
     } = tracer;
 
-    let callstack_with_aux_data = callstack_with_aux_data;
-
     // we should have an initial query somewhat before the time
     assert!(decommittment_queries.len() >= 1);
     let (ts, q, w) = &decommittment_queries[0];
@@ -928,6 +926,8 @@ pub fn create_artifacts_from_tracer<
     let storage_application_compact_forms;
     let ram_permutation_circuits;
     let ram_permutation_circuits_compact_forms_witnesses;
+    let log_demux_circuits;
+    let log_demux_circuits_compact_forms_witnesses;
     let mut vm_memory_query_cycles = vec![];
 
     let artifacts = {
@@ -1028,7 +1028,8 @@ pub fn create_artifacts_from_tracer<
         tracing::debug!("Running log demux simulation");
 
         let (
-            log_demuxer_witness,
+            log_demux_circuits_,
+            log_demux_circuits_compact_forms_witnesses_,
             demuxed_rollup_storage_queue,
             demuxed_event_queue,
             demuxed_to_l1_queue,
@@ -1039,9 +1040,14 @@ pub fn create_artifacts_from_tracer<
             this,
             geometry.cycles_per_log_demuxer as usize,
             round_function,
+            geometry,
+            &mut cs_for_witness_generation,
+            &mut cycles_used,
+            &mut circuit_callback,
+            &mut recursion_queue_callback,
         );
-
-        this.log_demuxer_circuit_data = log_demuxer_witness;
+        log_demux_circuits = log_demux_circuits_;
+        log_demux_circuits_compact_forms_witnesses = log_demux_circuits_compact_forms_witnesses_;
 
         // keccak precompile
 
@@ -1536,7 +1542,6 @@ pub fn create_artifacts_from_tracer<
     {
         let FullBlockArtifacts {
             code_decommitter_circuits_data,
-            log_demuxer_circuit_data,
             decommittments_deduplicator_circuits_data,
             storage_deduplicator_circuit_data,
             events_deduplicator_circuit_data,
@@ -1600,30 +1605,6 @@ pub fn create_artifacts_from_tracer<
             circuit_type as u64,
             queue_simulator,
             code_decommitter_circuits_compact_forms_witnesses.clone(),
-        );
-
-        // log demux
-        let circuit_type = BaseLayerCircuitType::LogDemultiplexer;
-
-        let mut maker = CircuitMaker::new(
-            geometry.cycles_per_log_demuxer,
-            round_function.clone(),
-            &mut cs_for_witness_generation,
-            &mut cycles_used,
-        );
-
-        for circuit_input in log_demuxer_circuit_data.into_iter() {
-            circuit_callback(ZkSyncBaseLayerCircuit::LogDemuxer(
-                maker.process(circuit_input, circuit_type),
-            ));
-        }
-
-        let (log_demux_circuits, queue_simulator, log_demux_circuits_compact_forms_witnesses) =
-            maker.into_results();
-        recursion_queue_callback(
-            circuit_type as u64,
-            queue_simulator,
-            log_demux_circuits_compact_forms_witnesses.clone(),
         );
 
         // keccak precompiles
