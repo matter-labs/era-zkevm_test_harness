@@ -275,9 +275,7 @@ pub fn create_artifacts_from_tracer<
     // from cycle into first two sponges (common), then tail-tail pair and 3rd sponge for forward, then head-head pair and 3rd sponge for rollback
     let mut sponges_data: HashMap<u32, LogAccessSpongesInfo<GoldilocksField>> = HashMap::new();
 
-    let mut callstack_frames_spans = std::collections::BTreeMap::new();
     let mut global_beginnings_of_frames: BTreeMap<usize, u32> = BTreeMap::new();
-    let mut global_ends_of_frames: BTreeMap<usize, u32> = BTreeMap::new();
     let mut actions_in_each_frame: BTreeMap<usize, Vec<(u32, QueryMarker, usize)>> =
         BTreeMap::new();
 
@@ -286,24 +284,18 @@ pub fn create_artifacts_from_tracer<
             CallstackAction::PushToStack => {
                 // not imporatant, we count by the next one
             }
-            CallstackAction::PopFromStack { panic: _ } => {
-                // mark
-                callstack_frames_spans.insert(el.beginning_cycle, el.frame_index);
-            }
+            CallstackAction::PopFromStack { panic: _ } => {}
             CallstackAction::OutOfScope(OutOfScopeReason::Fresh) => {
                 // fresh fram
-                callstack_frames_spans.insert(el.beginning_cycle, el.frame_index);
                 global_beginnings_of_frames.insert(el.frame_index, el.beginning_cycle);
             }
             CallstackAction::OutOfScope(OutOfScopeReason::Exited { panic: _ }) => {
-                // mark when this frame is completely out of scope
-                global_ends_of_frames.insert(el.frame_index, el.end_cycle.expect("frame must end"));
+                el.end_cycle.expect("frame must end");
             }
         }
     }
 
     global_beginnings_of_frames.insert(0, 0);
-    global_ends_of_frames.insert(0, u32::MAX);
 
     // now it's going to be fun. We simultaneously will do the following indexing:
     // - simulate the state of callstack as a sponge
