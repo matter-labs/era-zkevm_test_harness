@@ -211,7 +211,7 @@ pub fn create_artifacts_from_tracer<
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
 ) {
     let WitnessTracer {
-        memory_queries,
+        memory_queries: vm_memory_queries_accumulated,
         storage_queries,
         refunds_logs,
         decommittment_queries,
@@ -224,8 +224,6 @@ pub fn create_artifacts_from_tracer<
         ..
     } = tracer;
 
-    let callstack_with_aux_data = callstack_with_aux_data;
-
     // we should have an initial query somewhat before the time
     assert!(decommittment_queries.len() >= 1);
     let (ts, q, w) = &decommittment_queries[0];
@@ -234,29 +232,6 @@ pub fn create_artifacts_from_tracer<
     assert_eq!(w, &entry_point_decommittment_query.1);
 
     assert!(vm_snapshots.len() >= 2); // we need at least entry point and the last save (after exit)
-
-    // there can be multiple per cycle, so we need BTreeMap over vectors. For other witnesses it's easier
-    let mut memory_read_witness: BTreeMap<u32, SmallVec<[MemoryQuery; 4]>> = BTreeMap::new();
-    let mut memory_write_witness: BTreeMap<u32, SmallVec<[MemoryQuery; 4]>> = BTreeMap::new();
-    for el in memory_queries.iter() {
-        if el.1.rw_flag == false {
-            // read
-            if let Some(existing) = memory_read_witness.get_mut(&el.0) {
-                existing.push(el.1);
-            } else {
-                memory_read_witness.insert(el.0, smallvec::smallvec![el.1]);
-            }
-        } else {
-            // write
-            if let Some(existing) = memory_write_witness.get_mut(&el.0) {
-                existing.push(el.1);
-            } else {
-                memory_write_witness.insert(el.0, smallvec::smallvec![el.1]);
-            }
-        }
-    }
-
-    let vm_memory_queries_accumulated = memory_queries;
 
     // segmentation of the log queue
     // - split into independent queues
@@ -277,9 +252,6 @@ pub fn create_artifacts_from_tracer<
     for (cycle, marker) in callstack_with_aux_data.log_access_history.iter() {
         query_id_into_cycle_index.insert(marker.query_id(), *cycle);
     }
-
-    let num_forwards = forward.len();
-    let num_rollbacks = rollbacks.len();
 
     let mut log_position_mapping = HashMap::new();
 
@@ -303,9 +275,7 @@ pub fn create_artifacts_from_tracer<
     // from cycle into first two sponges (common), then tail-tail pair and 3rd sponge for forward, then head-head pair and 3rd sponge for rollback
     let mut sponges_data: HashMap<u32, LogAccessSpongesInfo<GoldilocksField>> = HashMap::new();
 
-    let mut callstack_frames_spans = std::collections::BTreeMap::new();
     let mut global_beginnings_of_frames: BTreeMap<usize, u32> = BTreeMap::new();
-    let mut global_ends_of_frames: BTreeMap<usize, u32> = BTreeMap::new();
     let mut actions_in_each_frame: BTreeMap<usize, Vec<(u32, QueryMarker, usize)>> =
         BTreeMap::new();
 
@@ -314,24 +284,18 @@ pub fn create_artifacts_from_tracer<
             CallstackAction::PushToStack => {
                 // not imporatant, we count by the next one
             }
-            CallstackAction::PopFromStack { panic: _ } => {
-                // mark
-                callstack_frames_spans.insert(el.beginning_cycle, el.frame_index);
-            }
+            CallstackAction::PopFromStack { panic: _ } => {}
             CallstackAction::OutOfScope(OutOfScopeReason::Fresh) => {
                 // fresh fram
-                callstack_frames_spans.insert(el.beginning_cycle, el.frame_index);
                 global_beginnings_of_frames.insert(el.frame_index, el.beginning_cycle);
             }
             CallstackAction::OutOfScope(OutOfScopeReason::Exited { panic: _ }) => {
-                // mark when this frame is completely out of scope
-                global_ends_of_frames.insert(el.frame_index, el.end_cycle.expect("frame must end"));
+                el.end_cycle.expect("frame must end");
             }
         }
     }
 
     global_beginnings_of_frames.insert(0, 0);
-    global_ends_of_frames.insert(0, u32::MAX);
 
     // now it's going to be fun. We simultaneously will do the following indexing:
     // - simulate the state of callstack as a sponge
@@ -344,17 +308,6 @@ pub fn create_artifacts_from_tracer<
     // If we encounter "read" that implies no reverts we use "None"
 
     let mut cycle_into_flat_sequence_index = BTreeMap::<u32, (usize, Option<usize>)>::new();
-
-    // we want to know for each of the cycles what is a state of the log queue
-    let mut log_actions_spans: std::collections::BTreeMap<u32, Vec<(QueryMarker, usize)>> =
-        std::collections::BTreeMap::new();
-    let mut log_declarations_spans: std::collections::BTreeMap<u32, Vec<(QueryMarker, usize)>> =
-        std::collections::BTreeMap::new();
-
-    // in practice we also split out precompile accesses
-
-    let mut unique_query_id_into_chain_positions: HashMap<u64, usize> =
-        HashMap::with_capacity(num_forwards + num_rollbacks);
 
     tracing::debug!("Running storage log simulation");
 
@@ -413,9 +366,6 @@ pub fn create_artifacts_from_tracer<
         // add renumeration index
         marker_into_queue_position_renumeration_index.insert(query_marker, pointer);
 
-        let query_id = query_marker.query_id();
-        unique_query_id_into_chain_positions.insert(query_id, pointer);
-
         let key = query.timestamp.0;
         if query.rollback {
             let entry = sponges_data
@@ -449,44 +399,9 @@ pub fn create_artifacts_from_tracer<
                     in_frame: _,
                     index: _,
                     cycle_of_declaration: c,
-                    cycle_of_applied_rollback,
                     ..
                 } => {
                     assert_eq!(cycle, c);
-                    if let Some(existing) = log_declarations_spans.get_mut(&cycle) {
-                        existing.push((query_marker, pointer));
-                    } else {
-                        log_declarations_spans.insert(cycle, vec![(query_marker, pointer)]);
-                    }
-
-                    match cycle_of_applied_rollback {
-                        None => {
-                            let cycle_of_applied_rollback = u32::MAX;
-                            if let Some(existing) =
-                                log_actions_spans.get_mut(&cycle_of_applied_rollback)
-                            {
-                                existing.push((query_marker, pointer));
-                            } else {
-                                log_actions_spans.insert(
-                                    cycle_of_applied_rollback,
-                                    vec![(query_marker, pointer)],
-                                );
-                            }
-                        }
-                        Some(cycle_of_applied_rollback) => {
-                            // even if we re-apply, then we are ok
-                            if let Some(existing) =
-                                log_actions_spans.get_mut(&cycle_of_applied_rollback)
-                            {
-                                existing.push((query_marker, pointer));
-                            } else {
-                                log_actions_spans.insert(
-                                    cycle_of_applied_rollback,
-                                    vec![(query_marker, pointer)],
-                                );
-                            }
-                        }
-                    }
                 }
                 a @ _ => {
                     unreachable!("encounteted {:?}", a)
@@ -520,12 +435,6 @@ pub fn create_artifacts_from_tracer<
                     ..
                 } => {
                     assert_eq!(cycle, c);
-                    if let Some(existing) = log_declarations_spans.get_mut(&cycle) {
-                        existing.push((query_marker, pointer));
-                    } else {
-                        log_declarations_spans.insert(cycle, vec![(query_marker, pointer)]);
-                    }
-                    log_actions_spans.insert(cycle, vec![(query_marker, pointer)]);
                 }
                 QueryMarker::ForwardNoRollback {
                     in_frame: _,
@@ -534,12 +443,6 @@ pub fn create_artifacts_from_tracer<
                     ..
                 } => {
                     assert_eq!(cycle, c);
-                    if let Some(existing) = log_declarations_spans.get_mut(&cycle) {
-                        existing.push((query_marker, pointer));
-                    } else {
-                        log_declarations_spans.insert(cycle, vec![(query_marker, pointer)]);
-                    }
-                    log_actions_spans.insert(cycle, vec![(query_marker, pointer)]);
                 }
                 a @ _ => {
                     unreachable!("encounteted {:?}", a)
@@ -945,6 +848,11 @@ pub fn create_artifacts_from_tracer<
         }
     }
 
+    let CallstackWithAuxData {
+        flat_new_frames_history,
+        ..
+    } = callstack_with_aux_data;
+
     // we simulate a series of actions on the stack starting from the outermost frame
     // each history record contains an information on what was the stack state between points
     // when it potentially came into and out of scope
@@ -960,7 +868,9 @@ pub fn create_artifacts_from_tracer<
     let storage_application_compact_forms;
     let ram_permutation_circuits;
     let ram_permutation_circuits_compact_forms_witnesses;
-    let mut vm_memory_queue_cycles = vec![];
+    let log_demux_circuits;
+    let log_demux_circuits_compact_forms_witnesses;
+    let mut vm_memory_query_cycles = vec![];
 
     let artifacts = {
         let mut artifacts = FullBlockArtifacts::default();
@@ -994,7 +904,7 @@ pub fn create_artifacts_from_tracer<
                 .memory_queue_simulator
                 .push_and_output_intermediate_data(query, round_function);
 
-            vm_memory_queue_cycles.push(cycle);
+            vm_memory_query_cycles.push(cycle);
             this.all_memory_queue_states.push(intermediate_info);
         }
 
@@ -1060,7 +970,8 @@ pub fn create_artifacts_from_tracer<
         tracing::debug!("Running log demux simulation");
 
         let (
-            log_demuxer_witness,
+            log_demux_circuits_,
+            log_demux_circuits_compact_forms_witnesses_,
             demuxed_rollup_storage_queue,
             demuxed_event_queue,
             demuxed_to_l1_queue,
@@ -1071,9 +982,14 @@ pub fn create_artifacts_from_tracer<
             this,
             geometry.cycles_per_log_demuxer as usize,
             round_function,
+            geometry,
+            &mut cs_for_witness_generation,
+            &mut cycles_used,
+            &mut circuit_callback,
+            &mut recursion_queue_callback,
         );
-
-        this.log_demuxer_circuit_data = log_demuxer_witness;
+        log_demux_circuits = log_demux_circuits_;
+        log_demux_circuits_compact_forms_witnesses = log_demux_circuits_compact_forms_witnesses_;
 
         // keccak precompile
 
@@ -1332,7 +1248,7 @@ pub fn create_artifacts_from_tracer<
         // first find the memory witness by scanning all the known states
         // and finding the latest one with cycle index < current
 
-        let index_plus_one = vm_memory_queue_cycles
+        let index_plus_one = vm_memory_query_cycles
             .iter()
             .take_while(|cycle| **cycle < initial_state.at_cycle)
             .count();
@@ -1367,14 +1283,17 @@ pub fn create_artifacts_from_tracer<
 
         let mut per_instance_memory_read_witnesses = Vec::with_capacity(1 << 16);
         let mut per_instance_memory_write_witnesses = Vec::with_capacity(1 << 16);
-        for (k, v) in memory_read_witness.range(initial_state.at_cycle..final_state.at_cycle) {
-            for el in v.iter().cloned() {
-                per_instance_memory_read_witnesses.push((*k, el));
-            }
-        }
-        for (k, v) in memory_write_witness.range(initial_state.at_cycle..final_state.at_cycle) {
-            for el in v.iter().cloned() {
-                per_instance_memory_write_witnesses.push((*k, el));
+
+        let start = vm_memory_query_cycles.partition_point(|x| *x < initial_state.at_cycle);
+        let end = vm_memory_query_cycles.partition_point(|x| *x < final_state.at_cycle);
+        for (&cycle, &query) in vm_memory_query_cycles[start..end]
+            .iter()
+            .zip(&artifacts.all_memory_queries_accumulated[start..end])
+        {
+            if query.rw_flag {
+                per_instance_memory_write_witnesses.push((cycle, query));
+            } else {
+                per_instance_memory_read_witnesses.push((cycle, query));
             }
         }
 
@@ -1422,8 +1341,7 @@ pub fn create_artifacts_from_tracer<
             .cloned()
             .collect();
 
-        let callstack_new_frames_witnesses = callstack_with_aux_data
-            .flat_new_frames_history
+        let callstack_new_frames_witnesses = flat_new_frames_history
             .iter()
             .skip_while(|el| el.0 < initial_state.at_cycle)
             .take_while(|el| el.0 < final_state.at_cycle)
@@ -1513,11 +1431,11 @@ pub fn create_artifacts_from_tracer<
                 .clone(),
         );
 
-        let final_memory_queue_state = if vm_memory_queue_cycles.is_empty() {
+        let final_memory_queue_state = if vm_memory_query_cycles.is_empty() {
             QueueState::placeholder_witness()
         } else {
             transform_sponge_like_queue_state(
-                artifacts.all_memory_queue_states[vm_memory_queue_cycles.len() - 1],
+                artifacts.all_memory_queue_states[vm_memory_query_cycles.len() - 1],
             )
         };
 
@@ -1565,7 +1483,6 @@ pub fn create_artifacts_from_tracer<
     {
         let FullBlockArtifacts {
             code_decommitter_circuits_data,
-            log_demuxer_circuit_data,
             decommittments_deduplicator_circuits_data,
             storage_deduplicator_circuit_data,
             events_deduplicator_circuit_data,
@@ -1629,30 +1546,6 @@ pub fn create_artifacts_from_tracer<
             circuit_type as u64,
             queue_simulator,
             code_decommitter_circuits_compact_forms_witnesses.clone(),
-        );
-
-        // log demux
-        let circuit_type = BaseLayerCircuitType::LogDemultiplexer;
-
-        let mut maker = CircuitMaker::new(
-            geometry.cycles_per_log_demuxer,
-            round_function.clone(),
-            &mut cs_for_witness_generation,
-            &mut cycles_used,
-        );
-
-        for circuit_input in log_demuxer_circuit_data.into_iter() {
-            circuit_callback(ZkSyncBaseLayerCircuit::LogDemuxer(
-                maker.process(circuit_input, circuit_type),
-            ));
-        }
-
-        let (log_demux_circuits, queue_simulator, log_demux_circuits_compact_forms_witnesses) =
-            maker.into_results();
-        recursion_queue_callback(
-            circuit_type as u64,
-            queue_simulator,
-            log_demux_circuits_compact_forms_witnesses.clone(),
         );
 
         // keccak precompiles
