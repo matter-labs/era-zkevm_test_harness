@@ -463,12 +463,11 @@ impl ZkSyncRecursiveLayerCircuit {
         let (max_trace_len, num_vars) = inner.size_hint();
         let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig>::new(
             geometry,
-            num_vars.unwrap(),
             max_trace_len.unwrap(),
         );
         let cs_builder = new_builder::<_, F>(builder_impl);
         let builder = inner.configure_builder_proxy(cs_builder);
-        let mut cs = builder.build(());
+        let mut cs = builder.build(num_vars.unwrap());
         let round_function = ZkSyncDefaultRoundFunction::default();
         inner.add_tables(&mut cs);
         inner.clone().synthesize_into_cs(&mut cs, &round_function);
@@ -486,12 +485,11 @@ impl ZkSyncRecursiveLayerCircuit {
                 let (max_trace_len, num_vars) = inner.size_hint();
                 let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig>::new(
                     geometry,
-                    num_vars.unwrap(),
                     max_trace_len.unwrap(),
                 );
                 let cs_builder = new_builder::<_, F>(builder_impl);
                 let builder = inner.configure_builder_proxy(cs_builder);
-                let mut cs = builder.build(());
+                let mut cs = builder.build(num_vars.unwrap());
                 let round_function = ZkSyncDefaultRoundFunction::default();
                 inner.add_tables(&mut cs);
                 inner.clone().synthesize_into_cs(&mut cs, &round_function);
@@ -503,12 +501,11 @@ impl ZkSyncRecursiveLayerCircuit {
                 let (max_trace_len, num_vars) = inner.size_hint();
                 let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig>::new(
                     geometry,
-                    num_vars.unwrap(),
                     max_trace_len.unwrap(),
                 );
                 let cs_builder = new_builder::<_, F>(builder_impl);
                 let builder = inner.configure_builder_proxy(cs_builder);
-                let mut cs = builder.build(());
+                let mut cs = builder.build(num_vars.unwrap());
                 let round_function = ZkSyncDefaultRoundFunction::default();
                 inner.add_tables(&mut cs);
                 inner.clone().synthesize_into_cs(&mut cs, &round_function);

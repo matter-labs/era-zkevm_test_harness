@@ -224,11 +224,8 @@ pub fn create_cs_for_witness_generation<
 
     use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
 
-    let builder_impl = CsReferenceImplementationBuilder::<F, F, ProvingCSConfig>::new(
-        geometry,
-        num_vars,
-        max_trace_len,
-    );
+    let builder_impl =
+        CsReferenceImplementationBuilder::<F, F, ProvingCSConfig>::new(geometry, max_trace_len);
     let builder = boojum::cs::cs_builder::new_builder::<_, F>(builder_impl);
     let builder = builder.allow_lookup(
         boojum::cs::LookupParameters::UseSpecializedColumnsWithTableIdAsConstant {
@@ -258,7 +255,7 @@ pub fn create_cs_for_witness_generation<
     let builder =
         SelectionGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
 
-    let mut cs = builder.build(());
+    let mut cs = builder.build(num_vars);
 
     use crate::boojum::cs::traits::cs::ConstraintSystem;
     use crate::boojum::gadgets::tables::*;

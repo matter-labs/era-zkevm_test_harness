@@ -20,6 +20,8 @@ type RH = CircuitGoldilocksPoseidon2Sponge;
 
 #[cfg(test)]
 mod test {
+    use std::alloc::Global;
+
     use circuit_definitions::boojum::cs::implementations::pow::NoPow;
     use circuit_definitions::boojum::cs::implementations::proof::Proof;
     use circuit_definitions::boojum::cs::implementations::verifier::VerificationKey;
@@ -56,16 +58,15 @@ mod test {
 
         let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
             geometry,
-            num_vars.unwrap(),
             max_trace_len.unwrap(),
         );
         let builder = new_builder::<_, GoldilocksField>(builder_impl);
         let builder = circuit.configure_builder_proxy(builder);
-        let mut cs_owned = builder.build(());
+        let mut cs_owned = builder.build(num_vars.unwrap());
         circuit.synthesize_into_cs(&mut cs_owned);
 
         cs_owned.pad_and_shrink();
-        let mut assembly = cs_owned.into_assembly();
+        let mut assembly = cs_owned.into_assembly::<Global>();
         assembly.print_gate_stats();
 
         assert!(assembly.check_if_satisfied(&worker));
@@ -337,16 +338,15 @@ mod test {
 
         let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
             geometry,
-            num_vars.unwrap(),
             max_trace_len.unwrap(),
         );
         let builder = new_builder::<_, GoldilocksField>(builder_impl);
         let builder = circuit.configure_builder_proxy(builder);
-        let mut cs_owned = builder.build(());
+        let mut cs_owned = builder.build(num_vars.unwrap());
         circuit.synthesize_into_cs(&mut cs_owned);
         let _num_gates = cs_owned.pad_and_shrink();
 
-        let mut assembly = cs_owned.into_assembly();
+        let mut assembly = cs_owned.into_assembly::<Global>();
         assembly.print_gate_stats();
 
         assert!(assembly.check_if_satisfied(&worker));
