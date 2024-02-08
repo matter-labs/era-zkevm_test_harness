@@ -5,11 +5,6 @@ use crate::aux_definitions::witness_oracle::VmWitnessOracle;
 use crate::boojum::cs::traits::circuit::CircuitBuilderProxy;
 use crate::circuit_definitions::base_layer::*;
 
-use crate::circuit_definitions::eip4844::EIP4844InstanceSynthesisFunction;
-
-pub type EIP4844VerifierBuilder<F, R> =
-    CircuitBuilderProxy<F, EIP4844InstanceSynthesisFunction<F, R>>;
-
 pub type VMMainCircuitVerifierBuilder<F, W, R> =
     CircuitBuilderProxy<F, VmMainInstanceSynthesisFunction<F, W, R>>;
 pub type CodeDecommittsSorterVerifierBuilder<F, R> =
@@ -36,6 +31,12 @@ pub type L1MessagesSorterVerifierBuilder<F, R> =
     CircuitBuilderProxy<F, EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction<F, R>>;
 pub type L1MessagesHaherVerifierBuilder<F, R> =
     CircuitBuilderProxy<F, LinearHasherInstanceSynthesisFunction<F, R>>;
+pub type TransientStorageSorterVerifierBuilder<F, R> =
+    CircuitBuilderProxy<F, TransientStorageSortAndDedupInstanceSynthesisFunction<F, R>>;
+pub type Secp256r1VerifyVerifierBuilder<F, R> =
+    CircuitBuilderProxy<F, Secp256r1VerifyFunctionInstanceSynthesisFunction<F, R>>;
+pub type EIP4844VerifierBuilder<F, R> =
+    CircuitBuilderProxy<F, EIP4844InstanceSynthesisFunction<F, R>>;
 
 pub fn dyn_verifier_builder_for_circuit_type<
     F: SmallField,
@@ -97,6 +98,15 @@ where
         }
         i if i == BaseLayerCircuitType::L1MessagesHasher as u8 => {
             L1MessagesHaherVerifierBuilder::<F, R>::dyn_verifier_builder()
+        }
+        i if i == BaseLayerCircuitType::TransientStorageChecker as u8 => {
+            TransientStorageSorterVerifierBuilder::<F, R>::dyn_verifier_builder()
+        }
+        i if i == BaseLayerCircuitType::Secp256r1Verify as u8 => {
+            Secp256r1VerifyVerifierBuilder::<F, R>::dyn_verifier_builder()
+        }
+        i if i == BaseLayerCircuitType::EIP4844Repack as u8 => {
+            EIP4844VerifierBuilder::<F, R>::dyn_verifier_builder()
         }
         _ => {
             panic!("unknown circuit type = {}", circuit_type);
@@ -166,6 +176,15 @@ where
         }
         i if i == BaseLayerCircuitType::L1MessagesHasher as u8 => {
             L1MessagesHaherVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
+        }
+        i if i == BaseLayerCircuitType::TransientStorageChecker as u8 => {
+            TransientStorageSorterVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
+        }
+        i if i == BaseLayerCircuitType::Secp256r1Verify as u8 => {
+            Secp256r1VerifyVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
+        }
+        i if i == BaseLayerCircuitType::EIP4844Repack as u8 => {
+            EIP4844VerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
         }
         _ => {
             panic!("unknown circuit type = {}", circuit_type);

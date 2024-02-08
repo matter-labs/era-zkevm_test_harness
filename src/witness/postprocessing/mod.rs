@@ -62,6 +62,7 @@ use circuit_definitions::zkevm_circuits::ram_permutation::input::RamPermutationC
 use circuit_definitions::zkevm_circuits::ram_permutation::input::RamPermutationFSMInputOutput;
 use circuit_definitions::zkevm_circuits::ram_permutation::input::RamPermutationInputData;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
+use circuit_definitions::zkevm_circuits::secp256r1_verify::Secp256r1VerifyCircuitInstanceWitness;
 use circuit_definitions::zkevm_circuits::sha256_round_function::input::Sha256RoundFunctionCircuitInstanceWitness;
 use circuit_definitions::zkevm_circuits::sha256_round_function::input::Sha256RoundFunctionFSMInputOutput;
 use circuit_definitions::zkevm_circuits::sort_decommittment_requests::input::CodeDecommittmentsDeduplicatorFSMInputOutput;
@@ -76,13 +77,17 @@ use circuit_definitions::zkevm_circuits::storage_validity_by_grand_product::inpu
 use circuit_definitions::zkevm_circuits::storage_validity_by_grand_product::input::StorageDeduplicatorInputData;
 use circuit_definitions::zkevm_circuits::storage_validity_by_grand_product::input::StorageDeduplicatorInstanceWitness;
 use circuit_definitions::zkevm_circuits::storage_validity_by_grand_product::input::StorageDeduplicatorOutputData;
+use circuit_definitions::zkevm_circuits::transient_storage_validity_by_grand_product::input::TransientStorageDeduplicatorInstanceWitness;
 use circuit_definitions::{Field, RoundFunction};
 use crossbeam::atomic::AtomicCell;
 use derivative::Derivative;
 use std::collections::HashMap;
+use std::default;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::Arc;
+use circuit_definitions::zkevm_circuits::secp256r1_verify::input::*;
+use circuit_definitions::zkevm_circuits::transient_storage_validity_by_grand_product::input::*;
 
 pub const L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH: bool = false;
 
@@ -121,6 +126,11 @@ pub struct BlockFirstAndLastBasicCircuits {
     >,
     pub l1_messages_hasher_circuits:
         FirstAndLastCircuit<LinearHasherInstanceSynthesisFunction<Field, RoundFunction>>,
+    pub transient_storage_sorter_circuits: FirstAndLastCircuit<
+        TransientStorageSortAndDedupInstanceSynthesisFunction<Field, RoundFunction>,
+    >,
+    pub secp256r1_verify_circuits:
+        FirstAndLastCircuit<Secp256r1VerifyFunctionInstanceSynthesisFunction<Field, RoundFunction>>,
 }
 
 pub struct FirstAndLastCircuit<S>
@@ -302,6 +312,30 @@ impl<F: SmallField> ClosedFormInputField<F> for EventsDeduplicatorInstanceWitnes
     }
 }
 
+impl<F: SmallField> ClosedFormInputField<F> for TransientStorageDeduplicatorInstanceWitness<F> {
+    type T = TransientStorageDeduplicatorFSMInputOutput<F>;
+    type IN = TransientStorageDeduplicatorInputData<F>;
+    type OUT = ();
+
+    fn closed_form_input(
+        &mut self,
+    ) -> &mut ClosedFormInputWitness<F, Self::T, Self::IN, Self::OUT> {
+        &mut self.closed_form_input
+    }
+}
+
+impl<F: SmallField> ClosedFormInputField<F> for Secp256r1VerifyCircuitInstanceWitness<F> {
+    type T = Secp256r1VerifyCircuitFSMInputOutput<F>;
+    type IN = PrecompileFunctionInputData<F>;
+    type OUT = PrecompileFunctionOutputData<F>;
+
+    fn closed_form_input(
+        &mut self,
+    ) -> &mut ClosedFormInputWitness<F, Self::T, Self::IN, Self::OUT> {
+        &mut self.closed_form_input
+    }
+}
+
 pub(crate) struct CircuitMaker<'a, T, S>
 where
     T: ClosedFormInputField<GoldilocksField>,
@@ -420,10 +454,28 @@ where
         RecursionQueueSimulator<GoldilocksField>,
         Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
     ) {
+        // if we have NO compact form inputs, we need to create a dummy value for scheduler
+        // as scheduler can only skip one type at the time, so we need some meaningless compact form witness
+        let compact_form_witnesses = if self.compact_form_witnesses.is_empty() {
+            use crate::zkevm_circuits::fsm_input_output::CLOSED_FORM_COMMITTMENT_LENGTH;
+            use crate::boojum::field::Field;
+
+            vec![ClosedFormInputCompactFormWitness::<GoldilocksField> {
+                start_flag: true,
+                completion_flag: true,
+                observable_input_committment: [GoldilocksField::ZERO; CLOSED_FORM_COMMITTMENT_LENGTH],
+                observable_output_committment: [GoldilocksField::ZERO; CLOSED_FORM_COMMITTMENT_LENGTH],
+                hidden_fsm_input_committment: [GoldilocksField::ZERO; CLOSED_FORM_COMMITTMENT_LENGTH],
+                hidden_fsm_output_committment: [GoldilocksField::ZERO; CLOSED_FORM_COMMITTMENT_LENGTH],
+            }]
+        } else {
+            self.compact_form_witnesses
+        };
+
         (
             self.extremes,
             self.queue_simulator,
-            self.compact_form_witnesses,
+            compact_form_witnesses,
         )
     }
 }

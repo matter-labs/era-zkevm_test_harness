@@ -1,5 +1,5 @@
 use super::*;
-use crate::tests::eip4844_test_circuit;
+use circuit_definitions::circuit_definitions::base_layer::EIP4844Circuit;
 use crate::zkevm_circuits::eip_4844::input::*;
 use crossbeam::atomic::AtomicCell;
 use rand::Rng;
@@ -42,5 +42,6 @@ fn test_eip4844() {
         round_function: ZkSyncDefaultRoundFunction::default().into(),
         expected_public_input: None,
     };
-    let circuit = eip4844_test_circuit(circuit);
+    let circuit = ZkSyncBaseLayerCircuit::EIP4844Repack(circuit);
+    base_test_circuit(circuit);
 }

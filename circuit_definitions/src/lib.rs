@@ -5,7 +5,6 @@
 #![feature(iter_array_chunks)]
 #![feature(iter_next_chunk)]
 #![feature(associated_type_defaults)]
-#![feature(return_position_impl_trait_in_trait)]
 
 pub type Field = GoldilocksField;
 pub type RoundFunction = Poseidon2Goldilocks;
@@ -38,16 +37,6 @@ pub fn recursion_layer_proof_config() -> ProofConfig {
     ProofConfig {
         fri_lde_factor: RECURSION_LAYER_FRI_LDE_FACTOR,
         merkle_tree_cap_size: RECURSION_LAYER_CAP_SIZE,
-        fri_folding_schedule: None,
-        security_level: SECURITY_BITS_TARGET,
-        pow_bits: 0,
-    }
-}
-
-pub fn eip4844_proof_config() -> ProofConfig {
-    ProofConfig {
-        fri_lde_factor: BASE_LAYER_FRI_LDE_FACTOR,
-        merkle_tree_cap_size: BASE_LAYER_CAP_SIZE,
         fri_folding_schedule: None,
         security_level: SECURITY_BITS_TARGET,
         pow_bits: 0,

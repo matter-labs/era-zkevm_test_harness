@@ -37,6 +37,7 @@ use circuit_definitions::encodings::recursion_request::{
     RecursionQueueSimulator, RecursionRequest,
 };
 use circuit_definitions::encodings::LogQueueSimulator;
+use circuit_definitions::zk_evm::zkevm_opcode_defs::system_params::{SECP256R1_VERIFY_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS, TRANSIENT_STORAGE_AUX_BYTE};
 use circuit_definitions::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use crossbeam::atomic::AtomicCell;
@@ -204,6 +205,7 @@ pub fn create_artifacts_from_tracer<
     num_non_deterministic_heap_queries: usize,
     zk_porter_is_available: bool,
     default_aa_code_hash: U256,
+    evm_simulator_code_hash: U256,
     mut circuit_callback: CB,
     mut recursion_queue_callback: QSCB,
 ) -> (
@@ -213,7 +215,8 @@ pub fn create_artifacts_from_tracer<
     let WitnessTracer {
         memory_queries,
         storage_queries,
-        refunds_logs,
+        cold_warm_refunds_logs,
+        pubdata_cost_logs,
         decommittment_queries,
         keccak_round_function_witnesses,
         sha256_round_function_witnesses,
@@ -223,6 +226,8 @@ pub fn create_artifacts_from_tracer<
         vm_snapshots,
         ..
     } = tracer;
+
+    println!("Start creating individual circuit artifacts");
 
     let callstack_with_aux_data = callstack_with_aux_data;
 
@@ -290,6 +295,8 @@ pub fn create_artifacts_from_tracer<
     let mut demuxed_keccak_precompile_queries = vec![];
     let mut demuxed_sha256_precompile_queries = vec![];
     let mut demuxed_ecrecover_queries = vec![];
+    let mut demuxed_secp256r1_verify_queries = vec![];
+    let mut demuxed_transient_storage_queries = vec![];
 
     let mut original_log_queue_states = vec![];
     let mut chain_of_states = vec![];
@@ -572,6 +579,9 @@ pub fn create_artifacts_from_tracer<
                         _ => unreachable!(),
                     }
                 }
+                TRANSIENT_STORAGE_AUX_BYTE => {
+                    demuxed_transient_storage_queries.push(query);
+                }
                 L1_MESSAGE_AUX_BYTE => {
                     demuxed_to_l1_queries.push(query);
                 }
@@ -590,6 +600,9 @@ pub fn create_artifacts_from_tracer<
                         }
                         a if a == *ECRECOVER_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
                             demuxed_ecrecover_queries.push(query);
+                        }
+                        a if a == *SECP256R1_VERIFY_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
+                            demuxed_secp256r1_verify_queries.push(query);
                         }
                         _ => {
                             // just burn ergs
@@ -978,6 +991,8 @@ pub fn create_artifacts_from_tracer<
         artifacts.demuxed_keccak_precompile_queries = demuxed_keccak_precompile_queries;
         artifacts.demuxed_sha256_precompile_queries = demuxed_sha256_precompile_queries;
         artifacts.demuxed_ecrecover_queries = demuxed_ecrecover_queries;
+        artifacts.demuxed_secp256r1_verify_queries = demuxed_secp256r1_verify_queries;
+        artifacts.demuxed_transient_storage_queries = demuxed_transient_storage_queries;
 
         tracing::debug!("Processing artifacts queue");
 
@@ -1059,15 +1074,7 @@ pub fn create_artifacts_from_tracer<
 
         tracing::debug!("Running log demux simulation");
 
-        let (
-            log_demuxer_witness,
-            demuxed_rollup_storage_queue,
-            demuxed_event_queue,
-            demuxed_to_l1_queue,
-            demuxed_keccak_precompile_queue,
-            demuxed_sha256_precompile_queue,
-            demuxed_ecrecover_queue,
-        ) = compute_logs_demux(
+        let (log_demuxer_witness, mut all_demuxed_queues) = compute_logs_demux(
             this,
             geometry.cycles_per_log_demuxer as usize,
             round_function,
@@ -1075,11 +1082,15 @@ pub fn create_artifacts_from_tracer<
 
         this.log_demuxer_circuit_data = log_demuxer_witness;
 
+        use crate::zkevm_circuits::demux_log_queue::DemuxOutput;
+
         // keccak precompile
 
         use crate::witness::individual_circuits::keccak256_round_function::keccak256_decompose_into_per_circuit_witness;
 
         tracing::debug!("Running keccak simulation");
+
+        let demuxed_keccak_precompile_queue = std::mem::replace(&mut all_demuxed_queues[DemuxOutput::Keccak as usize], Default::default());
 
         let keccak256_circuits_data = keccak256_decompose_into_per_circuit_witness(
             this,
@@ -1095,6 +1106,8 @@ pub fn create_artifacts_from_tracer<
 
         tracing::debug!("Running sha256 simulation");
 
+        let demuxed_sha256_precompile_queue = std::mem::replace(&mut all_demuxed_queues[DemuxOutput::Sha256 as usize], Default::default());
+
         let sha256_circuits_data = sha256_decompose_into_per_circuit_witness(
             this,
             demuxed_sha256_precompile_queue,
@@ -1109,6 +1122,8 @@ pub fn create_artifacts_from_tracer<
 
         tracing::debug!("Running ecrecover simulation");
 
+        let demuxed_ecrecover_queue = std::mem::replace(&mut all_demuxed_queues[DemuxOutput::ECRecover as usize], Default::default());
+
         let ecrecover_circuits_data = ecrecover_decompose_into_per_circuit_witness(
             this,
             demuxed_ecrecover_queue,
@@ -1116,6 +1131,20 @@ pub fn create_artifacts_from_tracer<
             round_function,
         );
         this.ecrecover_circuits_data = ecrecover_circuits_data;
+
+        use crate::witness::individual_circuits::secp256r1_verify::secp256r1_verify_decompose_into_per_circuit_witness;
+
+        tracing::debug!("Running secp256r1_simulation simulation");
+
+        let demuxed_secp256r1_verify_queue = std::mem::replace(&mut all_demuxed_queues[DemuxOutput::Secp256r1Verify as usize], Default::default());
+
+        let secp256r1_verify_circuits_data = secp256r1_verify_decompose_into_per_circuit_witness(
+            this,
+            demuxed_secp256r1_verify_queue,
+            geometry.cycles_per_secp256r1_verify_circuit as usize,
+            round_function,
+        );
+        this.secp256r1_verify_circuits_data = secp256r1_verify_circuits_data;
 
         // we are done with a memory and can do the processing and breaking of the logical arguments into individual circits
 
@@ -1144,6 +1173,8 @@ pub fn create_artifacts_from_tracer<
 
         tracing::debug!("Running storage deduplication simulation");
 
+        let demuxed_rollup_storage_queue = std::mem::replace(&mut all_demuxed_queues[DemuxOutput::RollupStorage as usize], Default::default());
+
         let storage_deduplicator_circuit_data = compute_storage_dedup_and_sort(
             this,
             demuxed_rollup_storage_queue,
@@ -1155,6 +1186,8 @@ pub fn create_artifacts_from_tracer<
         use crate::witness::individual_circuits::events_sort_dedup::compute_events_dedup_and_sort;
 
         tracing::debug!("Running events deduplication simulation");
+
+        let demuxed_event_queue = std::mem::replace(&mut all_demuxed_queues[DemuxOutput::Events as usize], Default::default());
 
         let events_deduplicator_circuit_data = compute_events_dedup_and_sort(
             &this.demuxed_event_queries,
@@ -1168,6 +1201,8 @@ pub fn create_artifacts_from_tracer<
 
         tracing::debug!("Running L1 messages deduplication simulation");
 
+        let demuxed_to_l1_queue = std::mem::replace(&mut all_demuxed_queues[DemuxOutput::L2ToL1Messages as usize], Default::default());
+
         let mut deduplicated_to_l1_queue_simulator = Default::default();
         let l1_messages_deduplicator_circuit_data = compute_events_dedup_and_sort(
             &this.demuxed_to_l1_queries,
@@ -1178,6 +1213,20 @@ pub fn create_artifacts_from_tracer<
         );
 
         this.l1_messages_deduplicator_circuit_data = l1_messages_deduplicator_circuit_data;
+
+        use crate::witness::individual_circuits::transient_storage_sorter::compute_transient_storage_dedup_and_sort;
+
+        tracing::debug!("Running transient storage sorting simulation");
+
+        let demuxed_transient_storage_queue = std::mem::replace(&mut all_demuxed_queues[DemuxOutput::TransientStorage as usize], Default::default());
+
+        let transient_storage_sorter_circuit_data = compute_transient_storage_dedup_and_sort(
+            this,
+            demuxed_transient_storage_queue,
+            geometry.cycles_per_transient_storage_sorter as usize,
+            round_function,
+        );
+        this.transient_storage_sorter_circuit_data = transient_storage_sorter_circuit_data;
 
         // compute flattened hash of all messages
 
@@ -1244,6 +1293,7 @@ pub fn create_artifacts_from_tracer<
     let in_circuit_global_context = GlobalContextWitness {
         zkporter_is_available: zk_porter_is_available,
         default_aa_code_hash: default_aa_code_hash,
+        evm_simulator_code_hash: evm_simulator_code_hash,
     };
     let round_function = Arc::new(*round_function);
 
@@ -1385,7 +1435,14 @@ pub fn create_artifacts_from_tracer<
             .cloned()
             .collect();
 
-        let per_instance_refund_logs: Vec<_> = refunds_logs
+        let per_instance_cold_warm_refund_logs: Vec<_> = cold_warm_refunds_logs
+            .iter()
+            .skip_while(|el| el.0 < initial_state.at_cycle)
+            .take_while(|el| el.0 < final_state.at_cycle)
+            .cloned()
+            .collect();
+
+        let per_instance_pubdata_cost_logs: Vec<_> = pubdata_cost_logs
             .iter()
             .skip_while(|el| el.0 < initial_state.at_cycle)
             .take_while(|el| el.0 < final_state.at_cycle)
@@ -1439,7 +1496,8 @@ pub fn create_artifacts_from_tracer<
             rollback_queue_initial_tails_for_new_frames:
                 rollback_queue_initial_tails_for_new_frames.into(),
             storage_queries: per_instance_storage_queries_witnesses.into(),
-            storage_refund_queries: per_instance_refund_logs.into(),
+            storage_access_cold_warm_refunds: per_instance_cold_warm_refund_logs.into(),
+            storage_pubdata_queries: per_instance_pubdata_cost_logs.into(),
             callstack_values_witnesses,
             callstack_new_frames_witnesses,
         };
@@ -1574,6 +1632,8 @@ pub fn create_artifacts_from_tracer<
             sha256_circuits_data,
             ecrecover_circuits_data,
             l1_messages_linear_hash_data,
+            transient_storage_sorter_circuit_data,
+            secp256r1_verify_circuits_data,
             ..
         } = artifacts;
 
@@ -1844,6 +1904,60 @@ pub fn create_artifacts_from_tracer<
             l1_messages_hasher_circuits_compact_forms_witnesses.clone(),
         );
 
+        // transient storage sorter
+        let circuit_type = BaseLayerCircuitType::TransientStorageChecker;
+
+        let mut maker = CircuitMaker::new(
+            geometry.cycles_per_transient_storage_sorter,
+            round_function.clone(),
+            &mut cs_for_witness_generation,
+            &mut cycles_used,
+        );
+
+        for circuit_input in transient_storage_sorter_circuit_data.into_iter() {
+            circuit_callback(ZkSyncBaseLayerCircuit::TransientStorageSorter(
+                maker.process(circuit_input, circuit_type),
+            ));
+        }
+
+        let (
+            transient_storage_sorter_circuits,
+            queue_simulator,
+            transient_storage_sorter_circuits_compact_forms_witnesses,
+        ) = maker.into_results();
+        recursion_queue_callback(
+            circuit_type as u64,
+            queue_simulator,
+            transient_storage_sorter_circuits_compact_forms_witnesses.clone(),
+        );
+
+        // secp256r1 verify
+        let circuit_type = BaseLayerCircuitType::Secp256r1Verify;
+
+        let mut maker = CircuitMaker::new(
+            geometry.cycles_per_secp256r1_verify_circuit,
+            round_function.clone(),
+            &mut cs_for_witness_generation,
+            &mut cycles_used,
+        );
+
+        for circuit_input in secp256r1_verify_circuits_data.into_iter() {
+            circuit_callback(ZkSyncBaseLayerCircuit::Secp256r1Verify(
+                maker.process(circuit_input, circuit_type),
+            ));
+        }
+
+        let (
+            secp256r1_verify_circuits,
+            queue_simulator,
+            secp256r1_verify_circuits_compact_forms_witnesses,
+        ) = maker.into_results();
+        recursion_queue_callback(
+            circuit_type as u64,
+            queue_simulator,
+            secp256r1_verify_circuits_compact_forms_witnesses.clone(),
+        );
+
         // done!
 
         let basic_circuits = BlockFirstAndLastBasicCircuits {
@@ -1860,7 +1974,11 @@ pub fn create_artifacts_from_tracer<
             events_sorter_circuits,
             l1_messages_sorter_circuits,
             l1_messages_hasher_circuits,
+            transient_storage_sorter_circuits,
+            secp256r1_verify_circuits,
         };
+        
+        // NOTE: this should follow in a sequence same as scheduler's work and `SEQUENCE_OF_CIRCUIT_TYPES`
 
         let all_compact_forms = main_vm_circuits_compact_forms_witnesses
             .into_iter()
@@ -1876,6 +1994,8 @@ pub fn create_artifacts_from_tracer<
             .chain(events_sorter_circuits_compact_forms_witnesses)
             .chain(l1_messages_sorter_circuits_compact_forms_witnesses)
             .chain(l1_messages_hasher_circuits_compact_forms_witnesses)
+            .chain(transient_storage_sorter_circuits_compact_forms_witnesses)
+            .chain(secp256r1_verify_circuits_compact_forms_witnesses)
             .collect();
 
         (basic_circuits, all_compact_forms)

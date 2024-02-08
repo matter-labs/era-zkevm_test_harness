@@ -9,11 +9,7 @@ use crate::boojum::gadgets::tables::And8Table;
 use crate::boojum::gadgets::tables::ByteSplitTable;
 use crate::boojum::gadgets::tables::Xor8Table;
 use crate::circuit_definitions::base_layer::TARGET_CIRCUIT_TRACE_LENGTH;
-use crate::circuit_definitions::gates::*;
 use crate::circuit_definitions::traits::gate::GatePlacementStrategy;
-
-pub type EIP4844Circuit<F, R> =
-    ZkSyncUniformCircuitInstance<F, EIP4844InstanceSynthesisFunction<F, R>>;
 
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone, Copy, Debug, Default(bound = ""))]

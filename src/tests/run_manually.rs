@@ -195,6 +195,8 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         cycles_per_keccak256_circuit: 1,
         cycles_per_sha256_circuit: 1,
         cycles_per_ecrecover_circuit: 1,
+        cycles_per_secp256r1_verify_circuit: 1,
+        cycles_per_transient_storage_sorter: 4,
 
         limit_for_l1_messages_pudata_hasher: 8,
     };
@@ -224,6 +226,7 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         entry_point_bytecode,
         vec![],
         false,
+        U256::zero(),
         U256::zero(),
         used_bytecodes_and_hashes,
         vec![],

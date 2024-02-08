@@ -34,6 +34,8 @@ pub fn initial_out_of_circuit_context(
         context_u128_value: 0,
         heap_bound: u32::MAX,     // so bootloader doesn't pay for resizes
         aux_heap_bound: u32::MAX, // so bootloader doesn't pay for resizes
+        total_pubdata_spent: PubdataCost(0i32),
+        stipend: 0,
     }
 }
 
@@ -42,9 +44,11 @@ use crate::zk_evm::block_properties::BlockProperties;
 pub fn create_out_of_circuit_global_context(
     zkporter_is_available: bool,
     default_aa_code_hash: U256,
+    evm_simulator_code_hash: U256,
 ) -> BlockProperties {
     BlockProperties {
         default_aa_code_hash,
         zkporter_is_available,
+        evm_simulator_code_hash,
     }
 }

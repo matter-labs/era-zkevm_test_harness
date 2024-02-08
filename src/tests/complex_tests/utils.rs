@@ -136,7 +136,12 @@ pub fn read_basic_test_artifact() -> TestArtifact {
         match result {
             Ok((bytecode, default_account_code, predeployed_contracts)) => {
                 let artifact =
-                    create_artifact(bytecode, default_account_code, predeployed_contracts);
+                    create_artifact(
+                        bytecode,
+                        default_account_code.clone(),
+                        default_account_code, // todo!()
+                        predeployed_contracts
+                    );
                 let artifact_string = serde_json::to_string(&artifact)
                     .expect("should be able to stringify test artifact");
                 fs::write(BASIC_TEST_JSON_LOCATION, artifact_string)
@@ -168,6 +173,7 @@ pub fn read_basic_test_artifact() -> TestArtifact {
 fn create_artifact(
     bytecode: Vec<u8>,
     default_account_code: Vec<u8>,
+    evm_simulator_code: Vec<u8>,
     predeployed_contracts: Vec<(String, Vec<u8>)>,
 ) -> TestArtifact {
     let segment_byte_vector = |bytes: Vec<u8>| -> Vec<[u8; 32]> {
@@ -183,6 +189,7 @@ fn create_artifact(
 
     let entry_point_code = segment_byte_vector(bytecode);
     let default_account_code = segment_byte_vector(default_account_code);
+    let evm_simulator_code = segment_byte_vector(evm_simulator_code);
     let predeployed_contracts = HashMap::from_iter(
         predeployed_contracts
             .iter()
@@ -199,6 +206,7 @@ fn create_artifact(
             .expect("should be able to decode from constant entry point address"),
         entry_point_code,
         default_account_code,
+        evm_simulator_code,
         predeployed_contracts,
     }
 }

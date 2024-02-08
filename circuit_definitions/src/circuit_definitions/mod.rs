@@ -20,7 +20,6 @@ use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogReco
 
 pub mod aux_layer;
 pub mod base_layer;
-pub mod eip4844;
 pub mod recursion_layer;
 pub mod verifier_builder;
 

@@ -76,7 +76,10 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
     let mut sorted_decommittment_requests_with_data = unsorted_decommittment_requests_with_data;
     sorted_decommittment_requests_with_data.par_sort_by(|a, b|
         // sort by hash first, and then by timestamp
-        match a.0.hash.cmp(&b.0.hash) {
+        match normalized_preimage_as_u256(&a.0.normalized_preimage)
+            .cmp(
+                &normalized_preimage_as_u256(&b.0.normalized_preimage)
+            ) {
             Ordering::Equal => a.0.timestamp.cmp(&b.0.timestamp),
             a @ _ => a,
         });
@@ -99,17 +102,19 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
     let mut tmp: Option<(U256, MemoryPage, Timestamp)> = None;
     for (query, _) in sorted_decommittment_requests_with_data.iter() {
         if let Some((hash, page, timestamp)) = tmp.as_mut() {
-            if *hash == query.hash {
+            if *hash == normalized_preimage_as_u256(&query.normalized_preimage) {
                 assert_eq!(*page, query.memory_page);
                 assert!(query.timestamp.0 > (*timestamp).0);
             } else {
-                assert!(query.hash >= *hash);
-                *hash = query.hash;
+                assert!(query.is_fresh);
+                let new_hash = normalized_preimage_as_u256(&query.normalized_preimage);
+                assert!(new_hash >= *hash);
+                *hash = new_hash;
                 *page = query.memory_page;
                 *timestamp = query.timestamp;
             }
         } else {
-            tmp = Some((query.hash, query.memory_page, query.timestamp));
+            tmp = Some((normalized_preimage_as_u256(&query.normalized_preimage), query.memory_page, query.timestamp));
         }
     }
 
@@ -157,7 +162,7 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
                 .witness
                 .pop_back()
                 .unwrap();
-            previous_packed_keys.push(concatenate_key(record.2.hash, record.2.timestamp.0));
+            previous_packed_keys.push(concatenate_key(normalized_preimage_as_u256(&record.2.normalized_preimage), record.2.timestamp.0));
 
             previous_records.push(record.2.reflect());
             first_encountered_timestamps.push(first_encountered_timestamp);
@@ -259,7 +264,7 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
             .unwrap();
 
         let wit = DecommitQueryWitness {
-            code_hash: element.hash,
+            code_hash: normalized_preimage_as_u256(&element.normalized_preimage),
             page: element.memory_page.0,
             is_first: element.is_fresh,
             timestamp: element.timestamp.0,
@@ -303,7 +308,7 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
             .front()
             .unwrap();
         let wit = DecommitQueryWitness {
-            code_hash: element.hash,
+            code_hash: normalized_preimage_as_u256(&element.normalized_preimage),
             page: element.memory_page.0,
             is_first: element.is_fresh,
             timestamp: element.timestamp.0,

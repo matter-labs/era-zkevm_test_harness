@@ -3,6 +3,7 @@ use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 use crate::encodings::callstack_entry::*;
 use crate::ethereum_types::U256;
 use derivative::*;
+use zk_evm::aux_structures::PubdataCost;
 use std::collections::VecDeque;
 use zk_evm::aux_structures::DecommittmentQuery;
 use zk_evm::aux_structures::LogQuery;
@@ -29,7 +30,8 @@ pub struct VmWitnessOracle<F: SmallField> {
     pub decommittment_requests_witness: VecDeque<(u32, DecommittmentQuery)>,
     pub rollback_queue_initial_tails_for_new_frames: VecDeque<(u32, [F; QUEUE_STATE_WIDTH])>,
     pub storage_queries: VecDeque<(u32, LogQuery)>, // cycle, query
-    pub storage_refund_queries: VecDeque<(u32, LogQuery, u32)>, // cycle, query, pubdata refund
+    pub storage_access_cold_warm_refunds: VecDeque<(u32, LogQuery, u32)>, // cycle, query, refund
+    pub storage_pubdata_queries: VecDeque<(u32, LogQuery, PubdataCost)>, // cycle, query, pubdata cost
     pub callstack_new_frames_witnesses: VecDeque<(u32, CallStackEntry)>,
     pub callstack_values_witnesses:
         VecDeque<(u32, (ExtendedCallstackEntry<F>, CallstackSimulatorState<F>))>,
@@ -198,15 +200,20 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
             U256::zero()
         }
     }
-    fn get_refunds(&mut self, query: &LogQueryWitness<F>, is_write: bool, execute: bool) -> u32 {
+    fn get_cold_warm_refund(
+        &mut self,
+        query: &LogQueryWitness<F>,
+        is_write: bool,
+        execute: bool,
+    ) -> u32 {
         if execute && is_write {
-            if self.storage_refund_queries.is_empty() {
+            if self.storage_access_cold_warm_refunds.is_empty() {
                 panic!(
-                    "should have a refund witness for storage write attempt at {:?}",
+                    "should have a cold/warm refund witness for storage write attempt at {:?}",
                     query,
                 );
             }
-            let (_cycle, query, refund) = self.storage_refund_queries.pop_front().unwrap();
+            let (_cycle, query, refund) = self.storage_access_cold_warm_refunds.pop_front().unwrap();
             let record = query;
             assert_eq!(record.aux_byte, query.aux_byte);
             assert_eq!(record.address, query.address);
@@ -221,6 +228,39 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
             assert_eq!(record.is_service, query.is_service);
 
             refund
+        } else {
+            0u32
+        }
+    }
+    fn get_pubdata_cost_for_query(
+        &mut self,
+        query: &LogQueryWitness<F>,
+        is_write: bool,
+        execute: bool,
+    ) -> u32 {
+        if execute && is_write {
+            if self.storage_pubdata_queries.is_empty() {
+                panic!(
+                    "should have a pubdata cost witness for storage write attempt at {:?}",
+                    query,
+                );
+            }
+            let (_cycle, query, cost) = self.storage_pubdata_queries.pop_front().unwrap();
+            let record = query;
+            assert_eq!(record.aux_byte, query.aux_byte);
+            assert_eq!(record.address, query.address);
+            assert_eq!(record.key, query.key);
+            assert_eq!(record.rw_flag, query.rw_flag);
+            assert!(record.rw_flag == true);
+            assert_eq!(record.written_value, query.written_value);
+            assert_eq!(record.rollback, false);
+            assert_eq!(record.rollback, query.rollback);
+            assert_eq!(record.shard_id, query.shard_id);
+            // the rest are not filled in out-of-circuit implementations
+            assert_eq!(record.is_service, query.is_service);
+
+            // two-complement
+            cost.0 as u32
         } else {
             0u32
         }
@@ -336,6 +376,9 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
             assert_eq!(entry.caller_shard_id, witness.caller_shard_id);
             assert_eq!(entry.code_shard_id, witness.code_shard_id);
 
+            assert_eq!(entry.stipend, witness.stipend);
+            assert_eq!(entry.total_pubdata_spent.0 as u32, witness.total_pubdata_spent);
+
             let witness_composite = [
                 (witness.context_u128_value_composite[0] as u64)
                     + ((witness.context_u128_value_composite[1] as u64) << 32),
@@ -416,6 +459,8 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
                 heap_upper_bound: entry.heap_bound,
                 aux_heap_upper_bound: entry.aux_heap_bound,
                 is_local_call: entry.is_local_frame,
+                stipend: entry.stipend,
+                total_pubdata_spent: entry.total_pubdata_spent.0 as u32, // two-complement
             };
 
             (witness, new_state)
@@ -490,11 +535,14 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
                 });
 
             assert_eq!(request.timestamp, query.timestamp.0);
+            let mut normalized_hash_buffer = [0u8; 32];
+            normalized_hash_buffer[4..].copy_from_slice(&query.normalized_preimage.0[..]);
+            let query_hash = U256::from_big_endian(&normalized_hash_buffer);
             assert!(
-                request.code_hash == query.hash,
+                request.code_hash == query_hash,
                 "circuit expected hash 0x{:064x}, while witness had 0x{:064x}",
                 request.code_hash,
-                query.hash
+                query_hash,
             );
 
             query.memory_page.0
@@ -526,10 +574,17 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
             );
         }
 
-        if self.storage_refund_queries.is_empty() == false {
+        if self.storage_access_cold_warm_refunds.is_empty() == false {
             panic!(
                 "Too many storage queries for refunds in witness: have left\n{:?}",
-                self.storage_refund_queries
+                self.storage_access_cold_warm_refunds
+            );
+        }
+
+        if self.storage_pubdata_queries.is_empty() == false {
+            panic!(
+                "Too many storage queries for pubdata in witness: have left\n{:?}",
+                self.storage_pubdata_queries
             );
         }
 

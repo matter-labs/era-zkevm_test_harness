@@ -9,12 +9,14 @@ use crate::zk_evm::vm_state::CallStackEntry;
 use crate::zk_evm::zk_evm_abstractions::precompiles::ecrecover::ECRecoverRoundWitness;
 use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::Keccak256RoundWitness;
 use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Sha256RoundWitness;
+use crate::zk_evm::zk_evm_abstractions::precompiles::secp256r1_verify::Secp256r1VerifyRoundWitness;
 
 use crate::zk_evm::zkevm_opcode_defs::decoding::EncodingModeProduction;
-use crate::zk_evm::zkevm_opcode_defs::system_params::NUM_SPONGES;
 use crate::zk_evm::zkevm_opcode_defs::system_params::STORAGE_AUX_BYTE;
 use crate::zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS;
 use crate::zk_evm::zkevm_opcode_defs::system_params::VM_MAX_STACK_DEPTH;
+use circuit_definitions::zk_evm::zkevm_opcode_defs::system_params::TRANSIENT_STORAGE_AUX_BYTE;
+use crate::zk_evm::abstractions::StorageAccessRefund;
 use tracing;
 
 // cycle indicators below are not timestamps!
@@ -73,15 +75,16 @@ pub struct WitnessTracer {
     pub cycle_counter_of_last_snapshot: u32,
     pub memory_queries: Vec<(u32, MemoryQuery)>, // flattened memory queries, with cycle indicators
     pub storage_queries: Vec<(u32, LogQuery)>,   // storage read queries with cycle indicators
-    pub refunds_logs: Vec<(u32, LogQuery, u32)>,
+    pub cold_warm_refunds_logs: Vec<(u32, LogQuery, u32)>,
+    pub pubdata_cost_logs: Vec<(u32, LogQuery, PubdataCost)>,
     pub decommittment_queries: Vec<(u32, DecommittmentQuery, Vec<U256>)>,
     pub keccak_round_function_witnesses: Vec<(u32, LogQuery, Vec<Keccak256RoundWitness>)>,
     pub sha256_round_function_witnesses: Vec<(u32, LogQuery, Vec<Sha256RoundWitness>)>,
     pub ecrecover_witnesses: Vec<(u32, LogQuery, ECRecoverRoundWitness)>,
+    pub secp256r1_verify_witnesses: Vec<(u32, LogQuery, Secp256r1VerifyRoundWitness)>,
     pub monotonic_query_counter: usize,
     // pub log_frames_stack: Vec<ApplicationData<((usize, usize), (QueryMarker, u32, LogQuery))>>, // keep the unique frame index
     pub callstack_with_aux_data: CallstackWithAuxData,
-    pub sponge_busy_range: HashSet<usize>,
     pub vm_snapshots: Vec<VmSnapshot>,
     // we need to properly preserve the information about logs. Not just flattening them into something,
     // but also keep the markers on when new frame has started and has finished, and the final frame execution
@@ -133,15 +136,16 @@ impl WitnessTracer {
             cycle_counter_of_last_snapshot: 0,
             memory_queries: vec![],
             storage_queries: vec![],
-            refunds_logs: vec![],
+            cold_warm_refunds_logs: vec![],
+            pubdata_cost_logs: vec![],
             decommittment_queries: vec![],
             keccak_round_function_witnesses: vec![],
             sha256_round_function_witnesses: vec![],
             ecrecover_witnesses: vec![],
+            secp256r1_verify_witnesses: vec![],
             monotonic_query_counter: 0,
             // log_frames_stack: vec![ApplicationData::empty()],
             callstack_with_aux_data: CallstackWithAuxData::empty(),
-            sponge_busy_range: HashSet::with_capacity(8),
             vm_snapshots: vec![],
         }
     }
@@ -267,15 +271,6 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
     }
 
     fn end_execution_cycle(&mut self, _current_state: &VmLocalState) {
-        // dbg!(&self.sponge_busy_range);
-        if !self.sponge_busy_range.is_empty() {
-            for i in 0..NUM_SPONGES {
-                self.sponge_busy_range.remove(&i);
-                if self.sponge_busy_range.remove(&(i + NUM_SPONGES)) {
-                    self.sponge_busy_range.insert(i);
-                }
-            }
-        }
         // println!("Cycle ends");
     }
 
@@ -288,16 +283,27 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
         &mut self,
         monotonic_cycle_counter: u32,
         log_query: LogQuery,
-        refund: crate::zk_evm::abstractions::RefundType,
+        refund: StorageAccessRefund,
     ) {
         assert!(log_query.aux_byte == STORAGE_AUX_BYTE);
-        self.refunds_logs
-            .push((monotonic_cycle_counter, log_query, refund.pubdata_refund()));
+        self.cold_warm_refunds_logs
+            .push((monotonic_cycle_counter, log_query, refund.refund()));
+    }
+
+    fn record_pubdata_cost_for_query(
+        &mut self,
+        monotonic_cycle_counter: u32,
+        log_query: LogQuery,
+        pubdata_cost: PubdataCost,
+    ) {
+        assert!(log_query.aux_byte == STORAGE_AUX_BYTE);
+        self.pubdata_cost_logs
+            .push((monotonic_cycle_counter, log_query, pubdata_cost));
     }
 
     fn add_log_query(&mut self, monotonic_cycle_counter: u32, log_query: LogQuery) {
         // log both reads and writes
-        if log_query.aux_byte == STORAGE_AUX_BYTE {
+        if log_query.aux_byte == STORAGE_AUX_BYTE || log_query.aux_byte == TRANSIENT_STORAGE_AUX_BYTE {
             self.storage_queries
                 .push((monotonic_cycle_counter, log_query));
         }
@@ -349,7 +355,15 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
                 self.ecrecover_witnesses.push((
                     monotonic_cycle_counter,
                     call_params,
-                    wit.drain(0..1).next().unwrap(),
+                    wit.drain(..).next().unwrap(),
+                ));
+            }
+            PrecompileCyclesWitness::Secp256r1Verify(mut wit) => {
+                assert_eq!(wit.len(), 1);
+                self.secp256r1_verify_witnesses.push((
+                    monotonic_cycle_counter,
+                    call_params,
+                    wit.drain(..).next().unwrap(),
                 ));
             }
         }

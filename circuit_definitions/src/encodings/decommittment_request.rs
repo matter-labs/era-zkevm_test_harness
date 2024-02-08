@@ -1,7 +1,15 @@
 use super::*;
-use zk_evm::aux_structures::DecommittmentQuery;
+use zk_evm::{aux_structures::DecommittmentQuery, zkevm_opcode_defs::VersionedHashNormalizedPreimage};
+use crate::ethereum_types::U256;
 
 use zkevm_circuits::base_structures::decommit_query::DECOMMIT_QUERY_PACKED_WIDTH;
+
+pub fn normalized_preimage_as_u256(normalized_preimage: &VersionedHashNormalizedPreimage) -> U256 {
+    let mut buffer = [0u8; 32];
+    buffer[4..].copy_from_slice(&normalized_preimage.0[..]);
+
+    U256::from_big_endian(&buffer)
+}
 
 impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, DECOMMIT_QUERY_PACKED_WIDTH>
     for DecommittmentQuery
@@ -9,7 +17,8 @@ impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, DECOMMIT_QUERY_PACKED_WI
     fn encoding_witness(&self) -> [F; DECOMMIT_QUERY_PACKED_WIDTH] {
         debug_assert!(F::CAPACITY_BITS >= 56);
 
-        let code_hash = decompose_u256_as_u32x8(self.hash);
+        let hash = normalized_preimage_as_u256(&self.normalized_preimage);
+        let code_hash = decompose_u256_as_u32x8(hash);
 
         // we assume that page bytes are known, so it'll be nop anyway
         let page_bytes = self.memory_page.0.to_le_bytes();
@@ -88,9 +97,11 @@ impl<F: SmallField> CircuitEquivalentReflection<F> for DecommittmentQuery {
     fn reflect(&self) -> <Self::Destination as CSAllocatable<F>>::Witness {
         use zkevm_circuits::base_structures::decommit_query::DecommitQueryWitness;
 
+        let hash = normalized_preimage_as_u256(&self.normalized_preimage);
+
         DecommitQueryWitness {
             timestamp: self.timestamp.0,
-            code_hash: self.hash,
+            code_hash: hash,
             is_first: self.is_fresh,
             page: self.memory_page.0,
         }

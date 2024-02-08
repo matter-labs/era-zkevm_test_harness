@@ -50,7 +50,7 @@ use circuit_definitions::{
     base_layer_proof_config, recursion_layer_proof_config, BASE_LAYER_CAP_SIZE,
     BASE_LAYER_FRI_LDE_FACTOR, RECURSION_LAYER_CAP_SIZE, RECURSION_LAYER_FRI_LDE_FACTOR,
 };
-use circuit_definitions::{eip4844_proof_config, Field, RoundFunction};
+use circuit_definitions::{Field, RoundFunction};
 use utils::read_basic_test_artifact;
 
 use zkevm_assembly::Assembly;
@@ -129,6 +129,8 @@ fn get_testing_geometry_config() -> GeometryConfig {
         cycles_per_log_demuxer: 16,
         cycles_per_storage_sorter: 16,
         cycles_per_events_or_l1_messages_sorter: 4,
+        cycles_per_secp256r1_verify_circuit: 2,
+        cycles_per_transient_storage_sorter: 16,
 
         limit_for_l1_messages_pudata_hasher: 32,
     }
@@ -227,7 +229,12 @@ pub(crate) fn generate_base_layer(
         bytecode_to_code_hash(&test_artifact.default_account_code).unwrap();
     let default_account_codehash = U256::from_big_endian(&default_account_codehash);
 
+    let evm_simulator_code_hash =
+        bytecode_to_code_hash(&test_artifact.evm_simulator_code).unwrap();
+    let evm_simulator_code_hash = U256::from_big_endian(&evm_simulator_code_hash);
+
     println!("Default AA code hash 0x{:x}", default_account_codehash);
+    println!("EVM simulator code hash 0x{:x}", evm_simulator_code_hash);
 
     let mut basic_block_circuits = vec![];
     let mut recursion_queues = vec![];
@@ -238,6 +245,7 @@ pub(crate) fn generate_base_layer(
         vec![],
         false,
         default_account_codehash,
+        evm_simulator_code_hash,
         used_bytecodes,
         vec![],
         cycle_limit,
@@ -266,7 +274,7 @@ pub(crate) fn generate_base_layer(
 fn run_and_try_create_witness_inner(
     test_artifact: TestArtifact,
     cycle_limit: usize,
-    blobs: Option<[Vec<u8>; 2]>,
+    blobs: Option<[Vec<u8>; MAX_4844_BLOBS_PER_BLOCK]>,
 ) {
     use crate::external_calls::run;
     use crate::toolset::GeometryConfig;
@@ -1028,90 +1036,89 @@ fn run_and_try_create_witness_inner(
         witness: scheduler_witness.clone(),
         config,
         transcript_params: (),
-        eip4844_proof_config: None,
-        eip4844_vk_fixed_parameters: None,
-        eip4844_vk: None,
         _marker: std::marker::PhantomData,
     };
 
-    if let Some(blobs) = blobs {
-        let mut eip4844_proofs = vec![];
-        scheduler_circuit.eip4844_proof_config = Some(eip4844_proof_config());
-        let mut eip4844_vk = None;
-        for blob in blobs {
-            let (blob_arr, linear_hash, versioned_hash, output_hash) =
-                generate_eip4844_witness::<GoldilocksField>(blob);
-            use crate::zkevm_circuits::eip_4844::input::BlobChunkWitness;
-            use crate::zkevm_circuits::eip_4844::input::EIP4844CircuitInstanceWitness;
-            use crate::zkevm_circuits::eip_4844::input::EIP4844InputOutputWitness;
-            use crate::zkevm_circuits::eip_4844::input::EIP4844OutputDataWitness;
-            use circuit_definitions::circuit_definitions::eip4844::EIP4844Circuit;
-            use crossbeam::atomic::AtomicCell;
-            use std::collections::VecDeque;
-            use std::sync::Arc;
+    todo!();
 
-            let eip4844_proof_config = eip4844_proof_config();
-            let blob = blob_arr
-                .iter()
-                .map(|el| BlobChunkWitness { inner: *el })
-                .collect::<Vec<BlobChunkWitness<GoldilocksField>>>();
-            let witness = EIP4844CircuitInstanceWitness {
-                closed_form_input: EIP4844InputOutputWitness {
-                    start_flag: true,
-                    completion_flag: true,
-                    hidden_fsm_input: (),
-                    hidden_fsm_output: (),
-                    observable_input: (),
-                    observable_output: EIP4844OutputDataWitness {
-                        linear_hash,
-                        output_hash,
-                    },
-                },
-                data_chunks: VecDeque::from(blob),
-                linear_hash_output: linear_hash,
-                versioned_hash,
-            };
-            let circuit = EIP4844Circuit {
-                witness: AtomicCell::new(Some(witness)),
-                config: Arc::new(EIP4844_CYCLE_LIMIT),
-                round_function: ZkSyncDefaultRoundFunction::default().into(),
-                expected_public_input: None,
-            };
-            let (setup_base, setup, vk, setup_tree, vars_hint, wits_hint, finalization_hint) =
-                create_eip4844_setup_data(
-                    circuit.clone(),
-                    &worker,
-                    eip4844_proof_config.fri_lde_factor,
-                    eip4844_proof_config.merkle_tree_cap_size,
-                );
+    // if let Some(blobs) = blobs {
+    //     let mut eip4844_proofs = vec![];
+    //     scheduler_circuit.eip4844_proof_config = Some(eip4844_proof_config());
+    //     let mut eip4844_vk = None;
+    //     for blob in blobs {
+    //         let (blob_arr, linear_hash, versioned_hash, output_hash) =
+    //             generate_eip4844_witness::<GoldilocksField>(blob);
+    //         use crate::zkevm_circuits::eip_4844::input::BlobChunkWitness;
+    //         use crate::zkevm_circuits::eip_4844::input::EIP4844CircuitInstanceWitness;
+    //         use crate::zkevm_circuits::eip_4844::input::EIP4844InputOutputWitness;
+    //         use crate::zkevm_circuits::eip_4844::input::EIP4844OutputDataWitness;
+    //         use circuit_definitions::circuit_definitions::eip4844::EIP4844Circuit;
+    //         use crossbeam::atomic::AtomicCell;
+    //         use std::collections::VecDeque;
+    //         use std::sync::Arc;
 
-            if eip4844_vk.is_none() {
-                eip4844_vk = Some(vk.clone());
-            }
+    //         let eip4844_proof_config = eip4844_proof_config();
+    //         let blob = blob_arr
+    //             .iter()
+    //             .map(|el| BlobChunkWitness { inner: *el })
+    //             .collect::<Vec<BlobChunkWitness<GoldilocksField>>>();
+    //         let witness = EIP4844CircuitInstanceWitness {
+    //             closed_form_input: EIP4844InputOutputWitness {
+    //                 start_flag: true,
+    //                 completion_flag: true,
+    //                 hidden_fsm_input: (),
+    //                 hidden_fsm_output: (),
+    //                 observable_input: (),
+    //                 observable_output: EIP4844OutputDataWitness {
+    //                     linear_hash,
+    //                     output_hash,
+    //                 },
+    //             },
+    //             data_chunks: VecDeque::from(blob),
+    //             linear_hash_output: linear_hash,
+    //             versioned_hash,
+    //         };
+    //         let circuit = EIP4844Circuit {
+    //             witness: AtomicCell::new(Some(witness)),
+    //             config: Arc::new(EIP4844_CYCLE_LIMIT),
+    //             round_function: ZkSyncDefaultRoundFunction::default().into(),
+    //             expected_public_input: None,
+    //         };
+    //         let (setup_base, setup, vk, setup_tree, vars_hint, wits_hint, finalization_hint) =
+    //             create_eip4844_setup_data(
+    //                 circuit.clone(),
+    //                 &worker,
+    //                 eip4844_proof_config.fri_lde_factor,
+    //                 eip4844_proof_config.merkle_tree_cap_size,
+    //             );
 
-            let proof = prove_eip4844_circuit::<NoPow>(
-                circuit.clone(),
-                &worker,
-                eip4844_proof_config,
-                &setup_base,
-                &setup,
-                &setup_tree,
-                &vk,
-                &vars_hint,
-                &wits_hint,
-                &finalization_hint,
-            );
+    //         if eip4844_vk.is_none() {
+    //             eip4844_vk = Some(vk.clone());
+    //         }
 
-            let is_valid = verify_eip4844_proof::<NoPow>(&circuit, &proof, &vk);
-            assert!(is_valid);
+    //         let proof = prove_eip4844_circuit::<NoPow>(
+    //             circuit.clone(),
+    //             &worker,
+    //             eip4844_proof_config,
+    //             &setup_base,
+    //             &setup,
+    //             &setup_tree,
+    //             &vk,
+    //             &vars_hint,
+    //             &wits_hint,
+    //             &finalization_hint,
+    //         );
 
-            eip4844_proofs.push(proof);
-        }
+    //         let is_valid = verify_eip4844_proof::<NoPow>(&circuit, &proof, &vk);
+    //         assert!(is_valid);
 
-        scheduler_circuit.eip4844_vk = eip4844_vk.clone();
-        scheduler_circuit.eip4844_vk_fixed_parameters = Some(eip4844_vk.unwrap().fixed_parameters);
-        scheduler_circuit.witness.eip4844_proofs = eip4844_proofs.into();
-    }
+    //         eip4844_proofs.push(proof);
+    //     }
+
+    //     scheduler_circuit.eip4844_vk = eip4844_vk.clone();
+    //     scheduler_circuit.eip4844_vk_fixed_parameters = Some(eip4844_vk.unwrap().fixed_parameters);
+    //     scheduler_circuit.witness.eip4844_proofs = eip4844_proofs.into();
+    // }
 
     println!("Computing scheduler proof");
 

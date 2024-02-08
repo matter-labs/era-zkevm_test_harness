@@ -12,6 +12,7 @@ use crate::zkevm_circuits::code_unpacker_sha256::*;
 use circuit_definitions::encodings::decommittment_request::DecommittmentQueueSimulator;
 use circuit_definitions::encodings::decommittment_request::DecommittmentQueueState;
 use circuit_definitions::zk_evm::aux_structures::DecommittmentQuery;
+use circuit_definitions::encodings::decommittment_request::normalized_preimage_as_u256;
 use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::collections::VecDeque;
@@ -43,6 +44,11 @@ pub fn compute_decommitter_circuit_snapshots<
         take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
 
     // now we should start chunking the requests into separate decommittment circuits by running a micro-simulator
+
+    assert!(
+        deduplicated_decommit_requests_with_data.len() > 0,
+        "we must have some decommitment requests"
+    );
 
     for (query, writes) in deduplicated_decommit_requests_with_data.iter() {
         assert!(query.is_fresh);
@@ -90,7 +96,7 @@ pub fn compute_decommitter_circuit_snapshots<
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     enum DecommitterState {
         BeginNew,
-        DecommmitMore(usize),
+        DecommmitMore,
         Done,
     }
 
@@ -125,7 +131,7 @@ pub fn compute_decommitter_circuit_snapshots<
         .peekable();
 
     let mut fsm_state = DecommitterState::BeginNew;
-    let mut current_memory_data = vec![];
+    let mut current_memory_data_it = vec![].into_iter();
     let mut start = true;
     let mut memory_queue_state_offset = 0;
 
@@ -138,6 +144,8 @@ pub fn compute_decommitter_circuit_snapshots<
 
     use crate::boojum::gadgets::queue::QueueState;
     let placeholder_witness = QueueState::<F, FULL_SPONGE_QUEUE_STATE_WIDTH>::placeholder_witness();
+
+    let mut num_bits_in_current_decommitment = 0u32;
 
     'outer: loop {
         let mut current_circuit_witness = CodeDecommitterCircuitInstanceWitness {
@@ -225,29 +233,29 @@ pub fn compute_decommitter_circuit_snapshots<
                 debug_assert_eq!(_query, _el);
 
                 assert!(memory_data.len() > 0);
-                current_memory_data = memory_data;
+                current_memory_data_it = memory_data.into_iter();
 
                 // fill the witness
                 use crate::zk_evm::aux_structures::DecommittmentQuery;
 
                 let DecommittmentQuery {
-                    hash,
+                    header,
+                    normalized_preimage,
                     timestamp,
                     memory_page,
                     decommitted_length: _,
                     is_fresh,
                 } = wit.2;
 
-                let num_words = (hash.0[3] >> 32) as u16;
+                let num_words = u16::from_be_bytes([header.0[2], header.0[3]]);
                 assert!(num_words & 1 == 1); // should be odd
                 let num_words = num_words as u64;
                 let num_rounds = (num_words + 1) / 2;
 
-                let mut hash_as_be = [0u8; 32];
-                hash.to_big_endian(&mut hash_as_be);
+                let hash_as_u256 = normalized_preimage_as_u256(&normalized_preimage);
 
                 let as_circuit_data = DecommitQueryWitness {
-                    code_hash: hash,
+                    code_hash: hash_as_u256,
                     page: memory_page.0,
                     is_first: is_fresh,
                     timestamp: timestamp.0,
@@ -262,32 +270,27 @@ pub fn compute_decommitter_circuit_snapshots<
 
                 fsm_internals.state_get_from_queue = false;
                 fsm_internals.state_decommit = true;
-                fsm_internals.num_rounds_left = num_rounds as u16;
                 fsm_internals.sha256_inner_state = boojum::gadgets::sha256::INITIAL_STATE;
                 fsm_internals.current_index = 0;
                 fsm_internals.current_page = memory_page.0;
                 fsm_internals.timestamp = timestamp.0;
-                fsm_internals.length_in_bits = (num_words * 32 * 8) as u32;
+                fsm_internals.hash_to_compare_against = hash_as_u256;
 
-                let mut tmp_hash = hash_as_be;
-                tmp_hash[0] = 0;
-                tmp_hash[1] = 0;
-                tmp_hash[2] = 0;
-                tmp_hash[3] = 0;
-                fsm_internals.hash_to_compare_against = U256::from_big_endian(&tmp_hash);
-
-                fsm_state = DecommitterState::DecommmitMore(num_rounds as usize);
+                fsm_state = DecommitterState::DecommmitMore;
                 current_circuit_witness.code_words.push(vec![]);
+
+                num_bits_in_current_decommitment = if num_rounds == 1 {
+                    256u32
+                } else {
+                    512u32 * ((num_rounds - 1) as u32) + 256u32
+                };
             }
 
             // do the actual round
-            match &mut fsm_state {
-                DecommitterState::DecommmitMore(num_rounds_left) => {
+            match fsm_state {
+                DecommitterState::DecommmitMore => {
                     let mut block = [0u8; 64];
-
-                    fsm_internals.num_rounds_left -= 1;
-                    *num_rounds_left -= 1;
-                    let word0 = current_memory_data.drain(0..1).next().unwrap();
+                    let word0 = current_memory_data_it.next().unwrap();
                     word0.to_big_endian(&mut block[0..32]);
 
                     current_circuit_witness
@@ -298,8 +301,8 @@ pub fn compute_decommitter_circuit_snapshots<
                     memory_queue_state_offset += 1;
                     fsm_internals.current_index += 1;
 
-                    if *num_rounds_left != 0 {
-                        let word1 = current_memory_data.drain(0..1).next().unwrap();
+                    let mut finished = false;
+                    if let Some(word1) = current_memory_data_it.next() {
                         current_circuit_witness
                             .code_words
                             .last_mut()
@@ -310,16 +313,18 @@ pub fn compute_decommitter_circuit_snapshots<
                         memory_queue_state_offset += 1;
                         fsm_internals.current_index += 1;
                     } else {
+                        // we decommitted everythin
                         // pad and do not increment index
                         block[32] = 0x80;
-                        let length_in_bits_be = fsm_internals.length_in_bits.to_be_bytes();
+                        let length_in_bits_be = num_bits_in_current_decommitment.to_be_bytes();
                         block[60..64].copy_from_slice(&length_in_bits_be);
+                        finished = true;
                     }
 
                     // absorb
                     internal_state.update(&block);
 
-                    if *num_rounds_left == 0 {
+                    if finished {
                         let mut raw_state = transmute_state(internal_state.clone());
                         raw_state[0] = 0;
                         let mut buffer = [0u8; 32];

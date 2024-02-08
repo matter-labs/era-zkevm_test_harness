@@ -25,8 +25,11 @@ pub mod sort_code_decommits;
 pub mod storage_apply;
 pub mod storage_sort_dedup;
 pub mod vm_main;
+pub mod secp256r1_verify;
+pub mod transient_storage_sort;
 // pub mod l1_messages_sort_dedup; // equal to one above
 pub mod linear_hasher;
+pub mod eip4844;
 
 pub use self::code_decommitter::CodeDecommitterInstanceSynthesisFunction;
 pub use self::ecrecover::ECRecoverFunctionInstanceSynthesisFunction;
@@ -40,6 +43,9 @@ pub use self::sort_code_decommits::CodeDecommittmentsSorterSynthesisFunction;
 pub use self::storage_apply::StorageApplicationInstanceSynthesisFunction;
 pub use self::storage_sort_dedup::StorageSortAndDedupInstanceSynthesisFunction;
 pub use self::vm_main::VmMainInstanceSynthesisFunction;
+pub use self::secp256r1_verify::Secp256r1VerifyFunctionInstanceSynthesisFunction;
+pub use self::transient_storage_sort::TransientStorageSortAndDedupInstanceSynthesisFunction;
+pub use self::eip4844::EIP4844InstanceSynthesisFunction;
 
 // Type definitions for circuits, so one can easily form circuits with witness, and their definition
 // will take care of particular synthesis function. There is already an implementation of Circuit<F> for ZkSyncUniformCircuitInstance,
@@ -70,6 +76,12 @@ pub type L1MessagesSorterCircuit<F, R> =
     ZkSyncUniformCircuitInstance<F, EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction<F, R>>;
 pub type L1MessagesHasherCircuit<F, R> =
     ZkSyncUniformCircuitInstance<F, LinearHasherInstanceSynthesisFunction<F, R>>;
+pub type TransientStorageSorterCircuit<F, R> =
+    ZkSyncUniformCircuitInstance<F, TransientStorageSortAndDedupInstanceSynthesisFunction<F, R>>;
+pub type Secp256r1VerifyCircuit<F, R> =
+    ZkSyncUniformCircuitInstance<F, Secp256r1VerifyFunctionInstanceSynthesisFunction<F, R>>;
+pub type EIP4844Circuit<F, R> =
+    ZkSyncUniformCircuitInstance<F, EIP4844InstanceSynthesisFunction<F, R>>;
 
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone(bound = ""), Debug)]
@@ -90,6 +102,9 @@ pub enum ZkSyncBaseLayerStorage<
     EventsSorter(T),
     L1MessagesSorter(T),
     L1MessagesHasher(T),
+    TransientStorageSorter(T),
+    Secp256r1Verify(T),
+    EIP4844Repack(T),
 }
 
 impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned>
@@ -110,6 +125,9 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             ZkSyncBaseLayerStorage::EventsSorter(..) => "Events sorter",
             ZkSyncBaseLayerStorage::L1MessagesSorter(..) => "L1 messages sorter",
             ZkSyncBaseLayerStorage::L1MessagesHasher(..) => "L1 messages rehasher",
+            ZkSyncBaseLayerStorage::TransientStorageSorter(..) => "Transient storage sorter",
+            ZkSyncBaseLayerStorage::Secp256r1Verify(..) => "Secp256r1 signature verifier",
+            ZkSyncBaseLayerStorage::EIP4844Repack(..) => "EIP4844 repacker",
         }
     }
 
@@ -146,6 +164,15 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             ZkSyncBaseLayerStorage::L1MessagesHasher(..) => {
                 BaseLayerCircuitType::L1MessagesHasher as u8
             }
+            ZkSyncBaseLayerStorage::TransientStorageSorter(..) => {
+                BaseLayerCircuitType::TransientStorageChecker as u8
+            }
+            ZkSyncBaseLayerStorage::Secp256r1Verify(..) => {
+                BaseLayerCircuitType::Secp256r1Verify as u8
+            }
+            ZkSyncBaseLayerStorage::EIP4844Repack(..) => {
+                BaseLayerCircuitType::EIP4844Repack as u8
+            }
         }
     }
 
@@ -164,6 +191,9 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             ZkSyncBaseLayerStorage::EventsSorter(inner) => inner,
             ZkSyncBaseLayerStorage::L1MessagesSorter(inner) => inner,
             ZkSyncBaseLayerStorage::L1MessagesHasher(inner) => inner,
+            ZkSyncBaseLayerStorage::TransientStorageSorter(inner) => inner,
+            ZkSyncBaseLayerStorage::Secp256r1Verify(inner) => inner,
+            ZkSyncBaseLayerStorage::EIP4844Repack(inner) => inner,
         }
     }
 
@@ -194,6 +224,9 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
                 Self::L1MessagesSorter(inner)
             }
             a if a == BaseLayerCircuitType::L1MessagesHasher as u8 => Self::L1MessagesHasher(inner),
+            a if a == BaseLayerCircuitType::TransientStorageChecker as u8 => Self::TransientStorageSorter(inner),
+            a if a == BaseLayerCircuitType::Secp256r1Verify as u8 => Self::Secp256r1Verify(inner),
+            a if a == BaseLayerCircuitType::EIP4844Repack as u8 => Self::EIP4844Repack(inner),
             a @ _ => panic!("unknown numeric type {}", a),
         }
     }
@@ -231,6 +264,9 @@ pub enum ZkSyncBaseLayerCircuit<
     EventsSorter(EventsSorterCircuit<F, R>),
     L1MessagesSorter(L1MessagesSorterCircuit<F, R>),
     L1MessagesHasher(L1MessagesHasherCircuit<F, R>),
+    TransientStorageSorter(TransientStorageSorterCircuit<F, R>),
+    Secp256r1Verify(Secp256r1VerifyCircuit<F, R>),
+    EIP4844Repack(EIP4844Circuit<F, R>),
 }
 
 impl<
@@ -265,6 +301,9 @@ where
             ZkSyncBaseLayerCircuit::EventsSorter(..) => "Events sorter",
             ZkSyncBaseLayerCircuit::L1MessagesSorter(..) => "L1 messages sorter",
             ZkSyncBaseLayerCircuit::L1MessagesHasher(..) => "L1 messages rehasher",
+            ZkSyncBaseLayerCircuit::TransientStorageSorter(..) => "Transient storage sorter",
+            ZkSyncBaseLayerCircuit::Secp256r1Verify(..) => "Secp256r1 verify",
+            ZkSyncBaseLayerCircuit::EIP4844Repack(..) => "EIP4844 repacker",
         }
     }
 
@@ -283,6 +322,9 @@ where
             ZkSyncBaseLayerCircuit::EventsSorter(inner) => inner.size_hint(),
             ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => inner.size_hint(),
             ZkSyncBaseLayerCircuit::L1MessagesHasher(inner) => inner.size_hint(),
+            ZkSyncBaseLayerCircuit::TransientStorageSorter(inner) => inner.size_hint(),
+            ZkSyncBaseLayerCircuit::Secp256r1Verify(inner) => inner.size_hint(),
+            ZkSyncBaseLayerCircuit::EIP4844Repack(inner) => inner.size_hint(),
         }
     }
 
@@ -330,6 +372,9 @@ where
             ZkSyncBaseLayerCircuit::EventsSorter(inner) => Self::synthesis_inner(inner, hint),
             ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => Self::synthesis_inner(inner, hint),
             ZkSyncBaseLayerCircuit::L1MessagesHasher(inner) => Self::synthesis_inner(inner, hint),
+            ZkSyncBaseLayerCircuit::TransientStorageSorter(inner) => Self::synthesis_inner(inner, hint),
+            ZkSyncBaseLayerCircuit::Secp256r1Verify(inner) => Self::synthesis_inner(inner, hint),
+            ZkSyncBaseLayerCircuit::EIP4844Repack(inner) => Self::synthesis_inner(inner, hint),
         }
     }
 
@@ -348,6 +393,9 @@ where
             ZkSyncBaseLayerCircuit::EventsSorter(inner) => inner.geometry_proxy(),
             ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => inner.geometry_proxy(),
             ZkSyncBaseLayerCircuit::L1MessagesHasher(inner) => inner.geometry_proxy(),
+            ZkSyncBaseLayerCircuit::TransientStorageSorter(inner) => inner.geometry_proxy(),
+            ZkSyncBaseLayerCircuit::Secp256r1Verify(inner) => inner.geometry_proxy(),
+            ZkSyncBaseLayerCircuit::EIP4844Repack(inner) => inner.geometry_proxy(),
         }
     }
 
@@ -392,6 +440,15 @@ where
             ZkSyncBaseLayerCircuit::L1MessagesHasher(inner) => {
                 inner.debug_witness();
             }
+            ZkSyncBaseLayerCircuit::TransientStorageSorter(inner) => {
+                inner.debug_witness();
+            }
+            ZkSyncBaseLayerCircuit::Secp256r1Verify(inner) => {
+                inner.debug_witness();
+            }
+            ZkSyncBaseLayerCircuit::EIP4844Repack(inner) => {
+                inner.debug_witness();
+            }
         };
 
         ()
@@ -430,32 +487,17 @@ where
             ZkSyncBaseLayerCircuit::L1MessagesHasher(..) => {
                 BaseLayerCircuitType::L1MessagesHasher as u8
             }
+            ZkSyncBaseLayerCircuit::TransientStorageSorter(..) => {
+                BaseLayerCircuitType::TransientStorageChecker as u8
+            }
+            ZkSyncBaseLayerCircuit::Secp256r1Verify(..) => {
+                BaseLayerCircuitType::Secp256r1Verify as u8
+            }
+            ZkSyncBaseLayerCircuit::EIP4844Repack(..) => {
+                BaseLayerCircuitType::EIP4844Repack as u8
+            }
         }
     }
-
-    // pub fn erase_witness(&self) {
-    //     match &self {
-    //         ZkSyncCircuit::Scheduler(inner) => {inner.erase_witness();},
-    //         ZkSyncCircuit::LeafAggregation(inner) => {inner.erase_witness();},
-    //         ZkSyncCircuit::NodeAggregation(inner) => {inner.erase_witness();},
-    //         ZkSyncCircuit::MainVM(inner) => {inner.erase_witness();},
-    //         ZkSyncCircuit::CodeDecommittmentsSorter(inner) => {inner.erase_witness();},
-    //         ZkSyncCircuit::CodeDecommitter(inner) => {inner.erase_witness();},
-    //         ZkSyncCircuit::LogDemuxer(inner) => {inner.erase_witness();},
-    //         ZkSyncCircuit::KeccakRoundFunction(inner) => {inner.erase_witness();},
-    //         ZkSyncCircuit::Sha256RoundFunction(inner) => {inner.erase_witness();},
-    //         ZkSyncCircuit::ECRecover(inner) => {inner.erase_witness();},
-    //         ZkSyncCircuit::RAMPermutation(inner) => {inner.erase_witness();},
-    //         ZkSyncCircuit::StorageSorter(inner) => {inner.erase_witness();},
-    //         ZkSyncCircuit::StorageApplication(inner) => {inner.erase_witness();},
-    //         ZkSyncCircuit::EventsSorter(inner) => {inner.erase_witness();},
-    //         ZkSyncCircuit::L1MessagesSorter(inner) => {inner.erase_witness();},
-    //         ZkSyncCircuit::L1MessagesMerklier(inner) => {inner.erase_witness();},
-    //         ZkSyncCircuit::InitialWritesPubdataHasher(inner) => {inner.erase_witness();},
-    //         ZkSyncCircuit::RepeatedWritesPubdataHasher(inner) => {inner.erase_witness();},
-    //         ZkSyncCircuit::L1MessagesPubdataHasher(inner) => {inner.erase_witness();},
-    //     };
-    // }
 }
 
 pub type ZkSyncBaseLayerCircuitInput<F> =

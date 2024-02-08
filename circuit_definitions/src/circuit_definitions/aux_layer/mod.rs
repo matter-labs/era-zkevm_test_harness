@@ -12,7 +12,6 @@ use crate::circuit_definitions::cs_builder_reference::CsReferenceImplementationB
 use crate::circuit_definitions::implementations::reference_cs::CSReferenceAssembly;
 
 use crate::recursion_layer_proof_config;
-use snark_wrapper::franklin_crypto::plonk::circuit;
 use zkevm_circuits::recursion::compression::CompressionRecursionConfig;
 
 use crate::ProofConfig;
@@ -261,9 +260,6 @@ impl ZkSyncCompressionLayerCircuit {
         Self::from_witness_and_vk(None, vk, circuit_type)
     }
 }
-
-use crate::circuit_definitions::recursion_layer::scheduler::ConcreteSchedulerCircuitBuilder;
-use zkevm_circuits::scheduler::auxiliary::BaseLayerCircuitType;
 
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone(bound = ""), Debug)]

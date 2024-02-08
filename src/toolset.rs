@@ -18,6 +18,7 @@ pub struct ProvingToolset<S: Storage> {
     pub config: GeometryConfig,
 }
 
+use circuit_definitions::zk_evm::aux_structures::PubdataCost;
 use derivative::Derivative;
 
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
@@ -34,6 +35,8 @@ pub struct GeometryConfig {
     pub cycles_per_keccak256_circuit: u32,
     pub cycles_per_sha256_circuit: u32,
     pub cycles_per_ecrecover_circuit: u32,
+    pub cycles_per_secp256r1_verify_circuit: u32,
+    pub cycles_per_transient_storage_sorter: u32,
 
     pub limit_for_l1_messages_pudata_hasher: u32,
 }
@@ -97,7 +100,8 @@ pub fn create_out_of_circuit_vm<S: Storage>(
 
     vm.push_bootloader_context(crate::INITIAL_MONOTONIC_CYCLE_COUNTER - 1, initial_context);
 
-    vm.local_state.current_ergs_per_pubdata_byte = 0; // uninitialized yet, but we do not care
+    vm.local_state.pubdata_revert_counter = PubdataCost(0i32);
+
     vm.local_state.timestamp = STARTING_TIMESTAMP;
     vm.local_state.memory_page_counter = STARTING_BASE_PAGE;
     vm.local_state.monotonic_cycle_counter = crate::INITIAL_MONOTONIC_CYCLE_COUNTER;

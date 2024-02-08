@@ -80,73 +80,7 @@ pub fn sha256_decompose_into_per_circuit_witness<
     assert!(precompile_calls.len() == round_function_witness.len());
 
     if precompile_calls.len() == 0 {
-        // we can not skip the circuit (at least for now), so we have to create a dummy on
-        let log_queue_input_state =
-            take_queue_state_from_simulator(&demuxed_sha256_precompile_queue.simulator);
-        let memory_queue_input_state =
-            take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
-        let current_memory_queue_state = memory_queue_input_state.clone();
-
-        let mut observable_input_data = PrecompileFunctionInputData::placeholder_witness();
-        observable_input_data.initial_memory_queue_state = memory_queue_input_state.clone();
-        observable_input_data.initial_log_queue_state = log_queue_input_state.clone();
-
-        let mut observable_output_data = PrecompileFunctionOutputData::placeholder_witness();
-        observable_output_data.final_memory_state = current_memory_queue_state.clone();
-
-        let mut hidden_fsm_input_state = Sha256RoundFunctionFSM::<F>::placeholder_witness();
-        hidden_fsm_input_state.read_precompile_call = true;
-
-        let mut hidden_fsm_output_state = Sha256RoundFunctionFSM::<F>::placeholder_witness();
-        hidden_fsm_output_state.completed = true;
-
-        use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Sha256;
-        // internal state is a bit more tricky, it'll be a round over empty input
-        let mut internal_state_over_empty_buffer = Sha256::default();
-        let empty_block = [0u8; 64];
-        use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Digest;
-        internal_state_over_empty_buffer.update(&empty_block);
-        let sha256_internal_state_over_empty_buffer =
-            zk_evm::zk_evm_abstractions::precompiles::sha256::transmute_state(
-                internal_state_over_empty_buffer.clone(),
-            );
-
-        let circuit_hash_internal_state = sha256_internal_state_over_empty_buffer;
-
-        hidden_fsm_output_state.sha256_inner_state = circuit_hash_internal_state;
-
-        let witness = Sha256RoundFunctionCircuitInstanceWitness::<F> {
-            closed_form_input: Sha256RoundFunctionCircuitInputOutputWitness::<F> {
-                start_flag: true,
-                completion_flag: true,
-                observable_input: observable_input_data,
-                observable_output: observable_output_data,
-                hidden_fsm_input: Sha256RoundFunctionFSMInputOutputWitness::<F> {
-                    internal_fsm: hidden_fsm_input_state,
-                    log_queue_state: log_queue_input_state.clone(),
-                    memory_queue_state: memory_queue_input_state,
-                },
-                hidden_fsm_output: Sha256RoundFunctionFSMInputOutputWitness::<F> {
-                    internal_fsm: hidden_fsm_output_state,
-                    log_queue_state: take_queue_state_from_simulator(
-                        &demuxed_sha256_precompile_queue.simulator,
-                    ),
-                    memory_queue_state: current_memory_queue_state.clone(),
-                },
-            },
-            requests_queue_witness: CircuitQueueRawWitness::<
-                F,
-                LogQuery<F>,
-                4,
-                LOG_QUERY_PACKED_WIDTH,
-            > {
-                elements: VecDeque::new(),
-            },
-            memory_reads_witness: VecDeque::new(),
-        };
-        result.push(witness);
-
-        return result;
+        return vec![];
     }
 
     let mut round_counter = 0;

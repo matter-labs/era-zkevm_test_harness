@@ -4,40 +4,36 @@ use crate::zkevm_circuits::base_structures::log_query::{
     LOG_QUERY_ABSORBTION_ROUNDS, LOG_QUERY_PACKED_WIDTH,
 };
 use crate::zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
-use crate::zkevm_circuits::storage_validity_by_grand_product::input::*;
+use crate::zkevm_circuits::transient_storage_validity_by_grand_product::input::*;
 use crate::zkevm_circuits::storage_validity_by_grand_product::TIMESTAMPED_STORAGE_LOG_ENCODING_LEN;
 use crate::zkevm_circuits::DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS;
 use circuit_definitions::encodings::*;
 use std::cmp::Ordering;
 
-pub fn compute_storage_dedup_and_sort<
+pub fn compute_transient_storage_dedup_and_sort<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     artifacts: &mut FullBlockArtifacts<F>,
-    demuxed_rollup_storage_queue: LogQueue<F>,
+    mut demuxed_transient_storage_queue: LogQueue<F>,
     per_circuit_capacity: usize,
     round_function: &R,
-) -> Vec<StorageDeduplicatorInstanceWitness<F>> {
+) -> Vec<TransientStorageDeduplicatorInstanceWitness<F>> {
     // trivial case if nothing to process
 
-    const SHARD_ID_TO_PROCEED: u8 = 0; // rollup shard ID
-
-    if artifacts.demuxed_rollup_storage_queries.is_empty() {
+    if artifacts.demuxed_transient_storage_queries.is_empty() {
         return vec![];
     }
 
     // first we sort the storage log (only storage now) by composite key
 
-    use crate::witness::sort_storage_access::sort_storage_access_queries;
+    use crate::witness::sort_storage_access::sort_transient_storage_access_queries;
 
-    let (sorted_storage_queries_with_extra_timestamp, deduplicated_rollup_storage_queries) =
-        sort_storage_access_queries(&artifacts.demuxed_rollup_storage_queries);
+    let sorted_storage_queries_with_extra_timestamp =
+    sort_transient_storage_access_queries(&artifacts.demuxed_transient_storage_queries);
 
     // dbg!(&sorted_storage_queries_with_extra_timestamp);
     // dbg!(&deduplicated_rollup_storage_queries);
-
-    artifacts.deduplicated_rollup_storage_queries = deduplicated_rollup_storage_queries;
 
     let mut intermediate_sorted_log_simulator =
         LogWithExtendedEnumerationQueueSimulator::<F>::empty();
@@ -50,14 +46,12 @@ pub fn compute_storage_dedup_and_sort<
     }
 
     let unsorted_simulator_final_state =
-        take_queue_state_from_simulator(&demuxed_rollup_storage_queue.simulator);
+        take_queue_state_from_simulator(&demuxed_transient_storage_queue.simulator);
 
     let intermediate_sorted_log_simulator_final_state =
         take_queue_state_from_simulator(&intermediate_sorted_log_simulator);
 
-    // now just implement the logic to sort and deduplicate
-
-    let mut result_queue_simulator = LogQueueSimulator::<F>::empty();
+    // we do NOT produce any output, but just check validity
 
     // compute sequence of states for grand product accumulation
 
@@ -86,7 +80,7 @@ pub fn compute_storage_dedup_and_sort<
     );
 
     let lhs_contributions: Vec<_> = artifacts
-        .demuxed_rollup_storage_queries
+        .demuxed_transient_storage_queries
         .iter()
         .enumerate()
         .map(|(idx, el)| {
@@ -129,7 +123,7 @@ pub fn compute_storage_dedup_and_sort<
 
         assert_eq!(
             lhs_grand_product_chain.len(),
-            demuxed_rollup_storage_queue.simulator.witness.len()
+            demuxed_transient_storage_queue.simulator.witness.len()
         );
         assert_eq!(
             rhs_grand_product_chain.len(),
@@ -153,7 +147,16 @@ pub fn compute_storage_dedup_and_sort<
     // as usual we simulate logic of the circuit and chunk. It's a little less convenient here than in RAM since we
     // have to chunk based on 2 queues, but also guess the result of the 3rd queue, but managable
 
-    assert!(demuxed_rollup_storage_queue
+    demuxed_transient_storage_queue
+        .simulator
+        .witness
+        .make_contiguous();
+
+    intermediate_sorted_log_simulator
+        .witness
+        .make_contiguous();
+
+    assert!(demuxed_transient_storage_queue
         .simulator
         .witness
         .as_slices()
@@ -165,14 +168,14 @@ pub fn compute_storage_dedup_and_sort<
         .1
         .is_empty());
 
-    let it = demuxed_rollup_storage_queue
+    let it = demuxed_transient_storage_queue
         .states
         .chunks(per_circuit_capacity)
         .zip(intermediate_sorted_log_simulator_states.chunks(per_circuit_capacity))
         .zip(transposed_lhs_chains.into_iter())
         .zip(transposed_rhs_chains.into_iter())
         .zip(
-            demuxed_rollup_storage_queue
+            demuxed_transient_storage_queue
                 .simulator
                 .witness
                 .as_slices()
@@ -195,24 +198,21 @@ pub fn compute_storage_dedup_and_sort<
 
     let mut current_lhs_product = [F::ONE; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS];
     let mut current_rhs_product = [F::ONE; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS];
-    let mut previous_comparison_key = [0u32; STORAGE_VALIDITY_CHECK_PACKED_KEY_LENGTH];
+    let mut previous_comparison_key = [0u32; TRANSIENT_STORAGE_VALIDITY_CHECK_PACKED_KEY_LENGTH];
     let mut previous_key = U256::zero();
     let mut previous_timestamp = 0u32;
+    let mut previous_tx_number = 0u32;
+    let mut previous_shard_id = 0u8;
     let mut cycle_idx = 0u32;
     use crate::ethereum_types::Address;
     let mut previous_address = Address::default();
 
     use crate::ethereum_types::U256;
 
-    let mut this_cell_has_explicit_read_and_rollback_depth_zero = false;
-    let mut this_cell_base_value = U256::zero();
-    let mut this_cell_current_value = U256::zero();
+    let mut this_cell_tx_number = 0u32;
+    let mut this_cell_shard_id = 0u8;
     let mut this_cell_current_depth = 0u32;
-
-    let mut deduplicated_queries_it = artifacts.deduplicated_rollup_storage_queries.iter();
-
-    let mut current_final_sorted_queue_state =
-        take_queue_state_from_simulator(&result_queue_simulator);
+    let mut this_cell_current_value = U256::zero();
 
     for (
         idx,
@@ -289,24 +289,20 @@ pub fn compute_storage_dedup_and_sort<
             .unwrap();
 
         let last_sorted_query = &sorted_states.last().unwrap().2;
-        use circuit_definitions::encodings::log_query::comparison_key;
-        let last_comparison_key = comparison_key(&last_sorted_query.raw_query);
-        let last_key = last_sorted_query.raw_query.key;
-        let last_address = last_sorted_query.raw_query.address;
+        use circuit_definitions::encodings::log_query::transient_storage_comparison_key;
+        let last_comparison_key = transient_storage_comparison_key(&last_sorted_query.raw_query);
         let last_timestamp = last_sorted_query.extended_timestamp;
 
         // simulate the logic
         let (
-            new_this_cell_has_explicit_read_and_rollback_depth_zero,
-            new_this_cell_base_value,
             new_this_cell_current_value,
             new_this_cell_current_depth,
         ) = {
             let mut current_address = previous_address;
             let mut current_key = previous_key;
-            let mut new_this_cell_has_explicit_read_and_rollback_depth_zero =
-                this_cell_has_explicit_read_and_rollback_depth_zero;
-            let mut new_this_cell_base_value = this_cell_base_value;
+            let mut current_tx_number = previous_tx_number;
+            let mut current_shard_id = previous_shard_id;
+
             let mut new_this_cell_current_value = this_cell_current_value;
             let mut new_this_cell_current_depth = this_cell_current_depth;
 
@@ -323,13 +319,10 @@ pub fn compute_storage_dedup_and_sort<
                     if item.raw_query.rw_flag == true {
                         assert!(item.raw_query.rollback == false);
                         new_this_cell_current_depth = 1;
-                        new_this_cell_has_explicit_read_and_rollback_depth_zero = false;
                     } else {
                         new_this_cell_current_depth = 0;
-                        new_this_cell_has_explicit_read_and_rollback_depth_zero = true;
                     }
 
-                    new_this_cell_base_value = item.raw_query.read_value;
                     if item.raw_query.rw_flag == true {
                         new_this_cell_current_value = item.raw_query.written_value;
                     } else {
@@ -338,7 +331,9 @@ pub fn compute_storage_dedup_and_sort<
                 } else {
                     // main cycle
 
-                    let same_cell = current_address == item.raw_query.address
+                    let same_cell = current_tx_number == item.raw_query.tx_number_in_block as u32
+                        && current_shard_id == item.raw_query.shard_id
+                        && current_address == item.raw_query.address
                         && current_key == item.raw_query.key;
 
                     if same_cell {
@@ -355,139 +350,39 @@ pub fn compute_storage_dedup_and_sort<
                         } else {
                             // read
                             if new_this_cell_current_depth == 0 {
-                                new_this_cell_has_explicit_read_and_rollback_depth_zero =
-                                    true || new_this_cell_has_explicit_read_and_rollback_depth_zero;
+                                assert_eq!(item.raw_query.read_value, U256::zero());
                             }
                             new_this_cell_current_value = item.raw_query.read_value;
                         }
                     } else {
-                        // finish with previous one and start a new one
-                        if new_this_cell_current_depth > 0 {
-                            // net write
-                            if let Some(next_query) = deduplicated_queries_it.next() {
-                                if new_this_cell_current_value == new_this_cell_base_value {
-                                    // protective read, to ensure that if we follow
-                                    // the claim of initial value and do not overwrite,
-                                    // then we are consistent
-                                    assert!(next_query.rw_flag == false);
-                                    assert!(next_query.shard_id == SHARD_ID_TO_PROCEED);
-                                    assert!(next_query.address == current_address);
-                                    assert!(next_query.key == current_key);
-                                    assert!(next_query.read_value == new_this_cell_current_value);
-                                    assert!(
-                                        next_query.written_value == new_this_cell_current_value
-                                    );
-                                } else {
-                                    // plain write
-                                    assert!(next_query.rw_flag == true);
-                                    assert!(next_query.shard_id == SHARD_ID_TO_PROCEED);
-                                    assert!(next_query.address == current_address);
-                                    assert!(next_query.key == current_key);
-                                    assert!(next_query.read_value == new_this_cell_base_value);
-                                    assert!(
-                                        next_query.written_value == new_this_cell_current_value
-                                    );
-                                }
-
-                                let _ = result_queue_simulator
-                                    .push_and_output_intermediate_data(*next_query, round_function);
-                            } else {
-                                // empty cycles
-                                assert!(is_last);
-                                assert!(exhausted == false);
-                                exhausted = true;
-                            }
-                        } else {
-                            if new_this_cell_has_explicit_read_and_rollback_depth_zero == true {
-                                // protective read
-                                if let Some(next_query) = deduplicated_queries_it.next() {
-                                    assert!(next_query.rw_flag == false);
-                                    assert!(next_query.shard_id == SHARD_ID_TO_PROCEED);
-                                    assert!(next_query.address == current_address);
-                                    assert!(next_query.key == current_key);
-                                    assert!(next_query.read_value == new_this_cell_base_value);
-                                    assert!(next_query.written_value == new_this_cell_base_value);
-                                    let _ = result_queue_simulator
-                                        .push_and_output_intermediate_data(
-                                            *next_query,
-                                            round_function,
-                                        );
-                                } else {
-                                    assert!(is_last);
-                                    assert!(exhausted == false);
-                                    exhausted = true;
-                                }
-                            }
-                        }
-
                         // start for new one
                         if item.raw_query.rw_flag == true {
                             assert!(item.raw_query.rollback == false);
                             new_this_cell_current_depth = 1;
-                            new_this_cell_has_explicit_read_and_rollback_depth_zero = false;
                         } else {
                             new_this_cell_current_depth = 0;
-                            new_this_cell_has_explicit_read_and_rollback_depth_zero = true;
                         }
 
-                        new_this_cell_base_value = item.raw_query.read_value;
                         if item.raw_query.rw_flag == true {
                             new_this_cell_current_value = item.raw_query.written_value;
                         } else {
+                            assert_eq!(item.raw_query.read_value, U256::zero());
                             new_this_cell_current_value = item.raw_query.read_value;
                         }
                     }
                 }
 
                 // always update keys
+                current_shard_id = item.raw_query.shard_id;
+                current_tx_number = item.raw_query.tx_number_in_block as u32;
                 current_address = item.raw_query.address;
                 current_key = item.raw_query.key;
 
                 if is_last_ever {
-                    if exhausted == false {
-                        if new_this_cell_current_depth > 0 {
-                            // net write
-                            let next_query = deduplicated_queries_it.next().unwrap();
-                            if new_this_cell_current_value == new_this_cell_base_value {
-                                // protective read
-                                assert!(next_query.rw_flag == false);
-                                assert!(next_query.shard_id == SHARD_ID_TO_PROCEED);
-                                assert!(next_query.address == current_address);
-                                assert!(next_query.key == current_key);
-                                assert!(next_query.read_value == new_this_cell_current_value);
-                                assert!(next_query.written_value == new_this_cell_current_value);
-                            } else {
-                                assert!(next_query.rw_flag == true);
-                                assert!(next_query.shard_id == SHARD_ID_TO_PROCEED);
-                                assert!(next_query.address == current_address);
-                                assert!(next_query.key == current_key);
-                                assert!(next_query.read_value == new_this_cell_base_value);
-                                assert!(next_query.written_value == new_this_cell_current_value);
-                            }
-
-                            let _ = result_queue_simulator
-                                .push_and_output_intermediate_data(*next_query, round_function);
-                        } else {
-                            if new_this_cell_has_explicit_read_and_rollback_depth_zero == true {
-                                // protective read
-                                let next_query = deduplicated_queries_it.next().unwrap();
-                                assert!(next_query.rw_flag == false);
-                                assert!(next_query.shard_id == SHARD_ID_TO_PROCEED);
-                                assert!(next_query.address == current_address);
-                                assert!(next_query.key == current_key);
-                                assert!(next_query.read_value == new_this_cell_base_value);
-                                assert!(next_query.written_value == new_this_cell_base_value);
-                                let _ = result_queue_simulator
-                                    .push_and_output_intermediate_data(*next_query, round_function);
-                            }
-                        }
-                    }
                 }
             }
 
             (
-                new_this_cell_has_explicit_read_and_rollback_depth_zero,
-                new_this_cell_base_value,
                 new_this_cell_current_value,
                 new_this_cell_current_depth,
             )
@@ -498,7 +393,7 @@ pub fn compute_storage_dedup_and_sort<
 
         let (current_unsorted_queue_state, current_intermediate_sorted_queue_state) = results
             .last()
-            .map(|el: &StorageDeduplicatorInstanceWitness<F>| {
+            .map(|el: &TransientStorageDeduplicatorInstanceWitness<F>| {
                 let tmp = &el.closed_form_input.hidden_fsm_output;
 
                 (
@@ -531,50 +426,35 @@ pub fn compute_storage_dedup_and_sort<
 
         let final_cycle_idx = cycle_idx + per_circuit_capacity as u32;
 
-        let last_final_sorted_queue_state =
-            take_queue_state_from_simulator(&result_queue_simulator);
-
-        let mut instance_witness = StorageDeduplicatorInstanceWitness {
+        let mut instance_witness = TransientStorageDeduplicatorInstanceWitness {
             closed_form_input: ClosedFormInputWitness {
                 start_flag: is_first,
                 completion_flag: is_last,
-                observable_input: StorageDeduplicatorInputDataWitness {
-                    shard_id_to_process: SHARD_ID_TO_PROCEED,
+                observable_input: TransientStorageDeduplicatorInputDataWitness {
                     unsorted_log_queue_state: unsorted_simulator_final_state.clone(),
                     intermediate_sorted_queue_state: intermediate_sorted_log_simulator_final_state
                         .clone(),
                 },
-                observable_output: StorageDeduplicatorOutputData::placeholder_witness(),
-                hidden_fsm_input: StorageDeduplicatorFSMInputOutputWitness {
+                observable_output: (),
+                hidden_fsm_input: TransientStorageDeduplicatorFSMInputOutputWitness {
                     lhs_accumulator: current_lhs_product,
                     rhs_accumulator: current_rhs_product,
                     current_unsorted_queue_state,
                     current_intermediate_sorted_queue_state,
-                    current_final_sorted_queue_state: current_final_sorted_queue_state.clone(),
                     cycle_idx: cycle_idx,
-                    previous_key: previous_key,
-                    previous_address: previous_address,
                     previous_timestamp,
                     previous_packed_key: previous_comparison_key,
-                    this_cell_has_explicit_read_and_rollback_depth_zero,
-                    this_cell_base_value: this_cell_base_value,
                     this_cell_current_value: this_cell_current_value,
                     this_cell_current_depth,
                 },
-                hidden_fsm_output: StorageDeduplicatorFSMInputOutputWitness {
+                hidden_fsm_output: TransientStorageDeduplicatorFSMInputOutputWitness {
                     lhs_accumulator: accumulated_lhs,
                     rhs_accumulator: accumulated_rhs,
                     current_unsorted_queue_state: final_unsorted_state,
                     current_intermediate_sorted_queue_state: final_intermediate_sorted_state,
-                    current_final_sorted_queue_state: last_final_sorted_queue_state.clone(),
                     cycle_idx: final_cycle_idx,
                     previous_packed_key: last_comparison_key.0,
-                    previous_key: last_key,
-                    previous_address: last_address,
                     previous_timestamp: last_timestamp,
-                    this_cell_has_explicit_read_and_rollback_depth_zero:
-                        new_this_cell_has_explicit_read_and_rollback_depth_zero,
-                    this_cell_base_value: new_this_cell_base_value,
                     this_cell_current_value: new_this_cell_current_value,
                     this_cell_current_depth: new_this_cell_current_depth,
                 },
@@ -597,31 +477,14 @@ pub fn compute_storage_dedup_and_sort<
             instance_witness
                 .closed_form_input
                 .hidden_fsm_output
-                .previous_packed_key = [0u32; STORAGE_VALIDITY_CHECK_PACKED_KEY_LENGTH];
-            instance_witness
-                .closed_form_input
-                .hidden_fsm_output
-                .previous_key = U256::zero();
-            instance_witness
-                .closed_form_input
-                .hidden_fsm_output
-                .previous_address = Address::default();
+                .previous_packed_key = [0u32; TRANSIENT_STORAGE_VALIDITY_CHECK_PACKED_KEY_LENGTH];
             instance_witness
                 .closed_form_input
                 .hidden_fsm_output
                 .previous_timestamp = 0u32;
-            instance_witness
-                .closed_form_input
-                .hidden_fsm_output
-                .this_cell_has_explicit_read_and_rollback_depth_zero = false;
         } else {
             if is_last {
-                // at the very end of the work circuit resets this_cell_has_explicit_read_and_rollback_depth_zero
-                // in any case
-                instance_witness
-                    .closed_form_input
-                    .hidden_fsm_output
-                    .this_cell_has_explicit_read_and_rollback_depth_zero = false;
+
             }
         }
 
@@ -629,35 +492,15 @@ pub fn compute_storage_dedup_and_sort<
         current_rhs_product = accumulated_rhs;
 
         previous_comparison_key = last_comparison_key.0;
-        previous_key = last_key;
         previous_timestamp = last_timestamp;
-        previous_address = last_address;
 
-        this_cell_has_explicit_read_and_rollback_depth_zero =
-            new_this_cell_has_explicit_read_and_rollback_depth_zero;
-        this_cell_base_value = new_this_cell_base_value;
         this_cell_current_value = new_this_cell_current_value;
         this_cell_current_depth = new_this_cell_current_depth;
-
-        current_final_sorted_queue_state = last_final_sorted_queue_state;
 
         cycle_idx = final_cycle_idx;
 
         results.push(instance_witness);
     }
-
-    assert!(deduplicated_queries_it.next().is_none());
-
-    let final_sorted_queue_state = take_queue_state_from_simulator(&result_queue_simulator);
-
-    results
-        .last_mut()
-        .unwrap()
-        .closed_form_input
-        .observable_output
-        .final_sorted_queue_state = final_sorted_queue_state.clone();
-
-    artifacts.deduplicated_rollup_storage_queue_simulator = result_queue_simulator;
 
     results
 }

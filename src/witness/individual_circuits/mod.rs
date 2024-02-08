@@ -27,5 +27,5 @@ pub mod sha256_round_function;
 pub mod sort_decommit_requests;
 pub mod storage_application;
 pub mod storage_sort_dedup;
-
-// use std::collections::VecDeque;
+pub mod transient_storage_sorter;
+pub mod secp256r1_verify;

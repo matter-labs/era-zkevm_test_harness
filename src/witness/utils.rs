@@ -410,7 +410,7 @@ pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
     hidden_fsm.tx_number_in_block = vm_state.tx_number_in_block as u32;
     hidden_fsm.previous_code_page = vm_state.previous_code_memory_page.0;
     hidden_fsm.previous_super_pc = vm_state.previous_super_pc;
-    hidden_fsm.ergs_per_pubdata_byte = vm_state.current_ergs_per_pubdata_byte;
+    hidden_fsm.pubdata_revert_counter = vm_state.pubdata_revert_counter.0 as u32; // two-complement
     hidden_fsm.pending_exception = vm_state.pending_exception;
 
     hidden_fsm.context_composite_u128 = u128_as_u32_le(vm_state.context_u128_register);

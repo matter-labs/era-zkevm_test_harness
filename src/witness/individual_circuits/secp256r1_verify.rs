@@ -2,22 +2,22 @@ use super::*;
 use crate::witness::full_block_artifact::LogQueue;
 use crate::zk_evm::zkevm_opcode_defs::ethereum_types::U256;
 use crate::zkevm_circuits::base_structures::log_query::*;
-use crate::zkevm_circuits::ecrecover::*;
+use crate::zkevm_circuits::secp256r1_verify::*;
 use circuit_definitions::encodings::*;
 
 // we want to simulate splitting of data into many separate instances of the same circuit.
 // So we basically need to reconstruct the FSM state on input/output, and passthrough data.
 // In practice the only difficulty is buffer state, everything else is provided by out-of-circuit VM
 
-pub fn ecrecover_decompose_into_per_circuit_witness<
+pub fn secp256r1_verify_decompose_into_per_circuit_witness<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     artifacts: &mut FullBlockArtifacts<F>,
-    mut demuxed_ecrecover_queue: LogQueue<F>,
+    mut demuxed_secp256r1_verify_queue: LogQueue<F>,
     num_rounds_per_circuit: usize,
     round_function: &R,
-) -> Vec<EcrecoverCircuitInstanceWitness<F>> {
+) -> Vec<Secp256r1VerifyCircuitInstanceWitness<F>> {
     assert_eq!(
         artifacts.all_memory_queries_accumulated.len(),
         artifacts.all_memory_queue_states.len()
@@ -29,31 +29,29 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
 
     // split into aux witness, don't mix with the memory
 
-    use crate::zk_evm::zk_evm_abstractions::precompiles::ecrecover::ECRecoverRoundWitness;
-    let mut ecrecover_memory_queries = vec![];
+    use crate::zk_evm::zk_evm_abstractions::precompiles::secp256r1_verify::Secp256r1VerifyRoundWitness;
+    let mut memory_queries = vec![];
 
-    for (_cycle, _query, witness) in artifacts.ecrecover_witnesses.iter() {
-        let ECRecoverRoundWitness {
+    for (_cycle, _query, witness) in artifacts.secp256r1_verify_witnesses.iter() {
+        let Secp256r1VerifyRoundWitness {
             new_request: _,
             reads,
             writes,
         } = witness;
 
         // we read, then write
-        ecrecover_memory_queries.extend_from_slice(reads);
+        memory_queries.extend_from_slice(reads);
 
-        ecrecover_memory_queries.extend_from_slice(writes);
+        memory_queries.extend_from_slice(writes);
     }
 
     let mut result = vec![];
 
-    let precompile_calls = std::mem::replace(&mut artifacts.demuxed_ecrecover_queries, vec![]);
+    let precompile_calls = std::mem::replace(&mut artifacts.demuxed_secp256r1_verify_queries, vec![]);
     let precompile_calls_queue_states =
-        std::mem::replace(&mut demuxed_ecrecover_queue.states, vec![]);
-    let simulator_witness: Vec<_> = demuxed_ecrecover_queue.simulator.witness.clone().into();
-    let round_function_witness = std::mem::replace(&mut artifacts.ecrecover_witnesses, vec![]);
-
-    let memory_queries = ecrecover_memory_queries;
+        std::mem::replace(&mut demuxed_secp256r1_verify_queue.states, vec![]);
+    let simulator_witness: Vec<_> = demuxed_secp256r1_verify_queue.simulator.witness.clone().into();
+    let round_function_witness = std::mem::replace(&mut artifacts.secp256r1_verify_witnesses, vec![]);
 
     // check basic consistency
     assert!(precompile_calls.len() == precompile_calls_queue_states.len());
@@ -68,7 +66,7 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
 
     // convension
     let mut log_queue_input_state =
-        take_queue_state_from_simulator(&demuxed_ecrecover_queue.simulator);
+        take_queue_state_from_simulator(&demuxed_secp256r1_verify_queue.simulator);
     let mut memory_queries_it = memory_queries.into_iter();
 
     let mut memory_read_witnesses = vec![];
@@ -84,7 +82,7 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
         .zip(round_function_witness.into_iter())
         .enumerate()
     {
-        let _ = demuxed_ecrecover_queue
+        let _ = demuxed_secp256r1_verify_queue
             .simulator
             .pop_and_output_intermediate_data(round_function);
         let initial_memory_len = artifacts.memory_queue_simulator.num_items;
@@ -98,7 +96,7 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
         let mut precompile_request = precompile_abi_in_log(request);
         let is_last_request = request_idx == num_requests - 1;
 
-        // we have 4 reads
+        // we have reads
         for (_query_index, read) in round_witness.reads.into_iter().enumerate() {
             let read_query = memory_queries_it.next().unwrap();
             assert!(read == read_query);
@@ -116,7 +114,7 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
             precompile_request.input_memory_offset += 1;
         }
 
-        // and 2 writes
+        // and writes
         for (_query_index, write) in round_witness.writes.into_iter().enumerate() {
             let write_query = memory_queries_it.next().unwrap();
             assert!(write == write_query);
@@ -135,7 +133,7 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
 
         assert_eq!(
             artifacts.memory_queue_simulator.num_items - initial_memory_len,
-            6
+            7
         );
         round_counter += 1;
 
@@ -168,19 +166,19 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
                 observable_output_data.final_memory_state = current_memory_queue_state.clone();
             }
 
-            let witness = EcrecoverCircuitInstanceWitness::<F> {
-                closed_form_input: EcrecoverCircuitInputOutputWitness::<F> {
+            let witness = Secp256r1VerifyCircuitInstanceWitness::<F> {
+                closed_form_input: Secp256r1VerifyCircuitInputOutputWitness::<F> {
                     start_flag: result.len() == 0,
                     completion_flag: finished,
                     observable_input: observable_input_data,
                     observable_output: observable_output_data,
-                    hidden_fsm_input: EcrecoverCircuitFSMInputOutputWitness::<F> {
+                    hidden_fsm_input: Secp256r1VerifyCircuitFSMInputOutputWitness::<F> {
                         log_queue_state: log_queue_input_state.clone(),
                         memory_queue_state: memory_queue_input_state,
                     },
-                    hidden_fsm_output: EcrecoverCircuitFSMInputOutputWitness::<F> {
+                    hidden_fsm_output: Secp256r1VerifyCircuitFSMInputOutputWitness::<F> {
                         log_queue_state: take_queue_state_from_simulator(
-                            &demuxed_ecrecover_queue.simulator,
+                            &demuxed_secp256r1_verify_queue.simulator,
                         ),
                         memory_queue_state: current_memory_queue_state.clone(),
                     },
@@ -205,7 +203,7 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
             result.push(witness);
 
             log_queue_input_state =
-                take_queue_state_from_simulator(&demuxed_ecrecover_queue.simulator);
+                take_queue_state_from_simulator(&demuxed_secp256r1_verify_queue.simulator);
             memory_queue_input_state = current_memory_queue_state.clone();
         }
 

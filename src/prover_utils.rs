@@ -17,8 +17,6 @@ use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use circuit_definitions::boojum::cs::implementations::reference_cs::CSReferenceAssembly;
 use circuit_definitions::circuit_definitions::aux_layer::{compression::*, *};
 use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit;
-use circuit_definitions::circuit_definitions::eip4844::EIP4844Circuit;
-use circuit_definitions::circuit_definitions::eip4844::EIP4844InstanceSynthesisFunction;
 use circuit_definitions::circuit_definitions::recursion_layer::verifier_builder::dyn_verifier_builder_for_recursive_circuit_type;
 use circuit_definitions::circuit_definitions::recursion_layer::*;
 use circuit_definitions::circuit_definitions::verifier_builder::dyn_verifier_builder_for_circuit_type;
@@ -173,6 +171,30 @@ pub fn create_base_layer_setup_data(
             (cs.into_assembly(), finalization_hint)
         }
         ZkSyncBaseLayerCircuit::L1MessagesHasher(inner) => {
+            let builder = inner.configure_builder_proxy(builder);
+            let mut cs = builder.build(());
+            inner.add_tables_proxy(&mut cs);
+            inner.synthesize_proxy(&mut cs);
+            let (_, finalization_hint) = cs.pad_and_shrink();
+            (cs.into_assembly(), finalization_hint)
+        }
+        ZkSyncBaseLayerCircuit::TransientStorageSorter(inner) => {
+            let builder = inner.configure_builder_proxy(builder);
+            let mut cs = builder.build(());
+            inner.add_tables_proxy(&mut cs);
+            inner.synthesize_proxy(&mut cs);
+            let (_, finalization_hint) = cs.pad_and_shrink();
+            (cs.into_assembly(), finalization_hint)
+        }
+        ZkSyncBaseLayerCircuit::Secp256r1Verify(inner) => {
+            let builder = inner.configure_builder_proxy(builder);
+            let mut cs = builder.build(());
+            inner.add_tables_proxy(&mut cs);
+            inner.synthesize_proxy(&mut cs);
+            let (_, finalization_hint) = cs.pad_and_shrink();
+            (cs.into_assembly(), finalization_hint)
+        }
+        ZkSyncBaseLayerCircuit::EIP4844Repack(inner) => {
             let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
             inner.add_tables_proxy(&mut cs);
@@ -337,6 +359,30 @@ pub fn prove_base_layer_circuit<POW: PoWRunner>(
             cs.pad_and_shrink_using_hint(finalization_hint);
             cs.into_assembly()
         }
+        ZkSyncBaseLayerCircuit::TransientStorageSorter(inner) => {
+            let builder = inner.configure_builder_proxy(builder);
+            let mut cs = builder.build(());
+            inner.add_tables_proxy(&mut cs);
+            inner.synthesize_proxy(&mut cs);
+            cs.pad_and_shrink_using_hint(finalization_hint);
+            cs.into_assembly()
+        }
+        ZkSyncBaseLayerCircuit::Secp256r1Verify(inner) => {
+            let builder = inner.configure_builder_proxy(builder);
+            let mut cs = builder.build(());
+            inner.add_tables_proxy(&mut cs);
+            inner.synthesize_proxy(&mut cs);
+            cs.pad_and_shrink_using_hint(finalization_hint);
+            cs.into_assembly()
+        }
+        ZkSyncBaseLayerCircuit::EIP4844Repack(inner) => {
+            let builder = inner.configure_builder_proxy(builder);
+            let mut cs = builder.build(());
+            inner.add_tables_proxy(&mut cs);
+            inner.synthesize_proxy(&mut cs);
+            cs.pad_and_shrink_using_hint(finalization_hint);
+            cs.into_assembly()
+        }
     };
 
     cs.prove_from_precomputations::<EXT, TR, H, POW>(
@@ -451,7 +497,18 @@ pub fn create_recursive_layer_setup_data(
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForStorageApplication(inner)
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForEventsSorter(inner)
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForL1MessagesSorter(inner)
-        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForL1MessagesHasher(inner) => {
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForL1MessagesHasher(inner)
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForTransientStorageSorter(inner)
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForSecp256r1Verify(inner)
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForEIP4844Repack(inner) => {
+            let builder = inner.configure_builder_proxy(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs, &round_function);
+            let (_, finalization_hint) = cs.pad_and_shrink();
+            (cs.into_assembly(), finalization_hint)
+        }
+        ZkSyncRecursiveLayerCircuit::RecursionTipCircuit(inner) => {
             let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
             inner.add_tables(&mut cs);
@@ -532,7 +589,18 @@ pub fn prove_recursion_layer_circuit<POW: PoWRunner>(
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForStorageApplication(inner)
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForEventsSorter(inner)
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForL1MessagesSorter(inner)
-        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForL1MessagesHasher(inner) => {
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForL1MessagesHasher(inner)
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForTransientStorageSorter(inner)
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForSecp256r1Verify(inner)
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForEIP4844Repack(inner) => {
+            let builder = inner.configure_builder_proxy(builder);
+            let mut cs = builder.build(());
+            inner.add_tables(&mut cs);
+            inner.synthesize_into_cs(&mut cs, &round_function);
+            cs.pad_and_shrink_using_hint(finalization_hint);
+            cs.into_assembly()
+        }
+        ZkSyncRecursiveLayerCircuit::RecursionTipCircuit(inner) => {
             let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(());
             inner.add_tables(&mut cs);
@@ -720,118 +788,6 @@ pub fn verify_compression_layer_proof<POW: PoWRunner>(
 ) -> bool {
     let verifier_builder = circuit.into_dyn_verifier_builder();
     let verifier = verifier_builder.create_verifier();
-    verifier.verify::<H, TR, POW>((), vk, proof)
-}
-
-pub fn create_eip4844_setup_data(
-    circuit: EIP4844Circuit<GoldilocksField, ZkSyncDefaultRoundFunction>,
-    worker: &Worker,
-    fri_lde_factor: usize,
-    merkle_tree_cap_size: usize,
-) -> (
-    SetupBaseStorage<F, P>,
-    SetupStorage<F, P>,
-    VerificationKey<F, H>,
-    MerkleTreeWithCap<F, H>,
-    DenseVariablesCopyHint,
-    DenseWitnessCopyHint,
-    FinalizationHintsForProver,
-) {
-    use crate::boojum::config::DevCSConfig;
-    use crate::boojum::cs::cs_builder::new_builder;
-    use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
-    use crate::boojum::cs::traits::circuit::Circuit;
-
-    let geometry = circuit.geometry_proxy();
-    let (max_trace_len, num_vars) = circuit.size_hint();
-
-    let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, SetupCSConfig>::new(
-        geometry,
-        num_vars.unwrap(),
-        max_trace_len.unwrap(),
-    );
-    let builder = new_builder::<_, GoldilocksField>(builder_impl);
-
-    let (cs, finalization_hint) = {
-        let builder = circuit.configure_builder_proxy(builder);
-        let mut cs = builder.build(());
-        circuit.add_tables_proxy(&mut cs);
-        circuit.synthesize_proxy(&mut cs);
-        let (_, finalization_hint) = cs.pad_and_shrink();
-        (cs.into_assembly(), finalization_hint)
-    };
-
-    let (setup_base, setup, vk, setup_tree, vars_hint, witness_hints) =
-        cs.get_full_setup(worker, fri_lde_factor, merkle_tree_cap_size);
-
-    (
-        setup_base,
-        setup,
-        vk,
-        setup_tree,
-        vars_hint,
-        witness_hints,
-        finalization_hint,
-    )
-}
-
-pub fn prove_eip4844_circuit<POW: PoWRunner>(
-    circuit: EIP4844Circuit<GoldilocksField, ZkSyncDefaultRoundFunction>,
-    worker: &Worker,
-    proof_config: ProofConfig,
-    setup_base: &SetupBaseStorage<F, P>,
-    setup: &SetupStorage<F, P>,
-    setup_tree: &MerkleTreeWithCap<F, H>,
-    vk: &VerificationKey<F, H>,
-    vars_hint: &DenseVariablesCopyHint,
-    wits_hint: &DenseWitnessCopyHint,
-    finalization_hint: &FinalizationHintsForProver,
-) -> Proof<F, H, EXT> {
-    use crate::boojum::cs::cs_builder::new_builder;
-    use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
-    use crate::boojum::cs::traits::circuit::Circuit;
-
-    let geometry = circuit.geometry_proxy();
-    let (max_trace_len, num_vars) = circuit.size_hint();
-
-    let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, ProvingCSConfig>::new(
-        geometry,
-        num_vars.unwrap(),
-        max_trace_len.unwrap(),
-    );
-    let builder = new_builder::<_, GoldilocksField>(builder_impl);
-
-    let cs = {
-        let builder = circuit.configure_builder_proxy(builder);
-        let mut cs = builder.build(());
-        circuit.add_tables_proxy(&mut cs);
-        circuit.synthesize_proxy(&mut cs);
-        cs.pad_and_shrink_using_hint(finalization_hint);
-        cs.into_assembly()
-    };
-
-    cs.prove_from_precomputations::<EXT, TR, H, POW>(
-        proof_config,
-        setup_base,
-        setup,
-        setup_tree,
-        vk,
-        vars_hint,
-        wits_hint,
-        (),
-        worker,
-    )
-}
-
-pub fn verify_eip4844_proof<POW: PoWRunner>(
-    circuit: &EIP4844Circuit<GoldilocksField, ZkSyncDefaultRoundFunction>,
-    proof: &Proof<F, H, EXT>,
-    vk: &VerificationKey<F, H>,
-) -> bool {
-    let verifier_builder =
-        EIP4844VerifierBuilder::<F, ZkSyncDefaultRoundFunction>::dyn_verifier_builder();
-    let verifier = verifier_builder.create_verifier();
-    // let verifier = verifier_builder.create_dyn_verifier();
     verifier.verify::<H, TR, POW>((), vk, proof)
 }
 

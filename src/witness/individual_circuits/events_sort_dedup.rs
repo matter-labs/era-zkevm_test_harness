@@ -26,50 +26,7 @@ pub fn compute_events_dedup_and_sort<
     // trivial case if nothing to process
 
     if unsorted_queries.is_empty() {
-        // return singe dummy witness
-        use crate::boojum::gadgets::queue::QueueState;
-
-        let mut initial_fsm_state = EventsDeduplicatorFSMInputOutput::<F>::placeholder_witness();
-
-        assert_eq!(
-            take_queue_state_from_simulator(&unsorted_queue.simulator),
-            QueueState::placeholder_witness()
-        );
-
-        let mut passthrough_input = EventsDeduplicatorInputData::placeholder_witness();
-        passthrough_input.initial_log_queue_state =
-            take_queue_state_from_simulator(&unsorted_queue.simulator);
-        passthrough_input.intermediate_sorted_queue_state = QueueState::placeholder_witness();
-
-        let mut final_fsm_state = EventsDeduplicatorFSMInputOutput::<F>::placeholder_witness();
-        // NOTE: little hack to make the trivial case work. we should really however remove the
-        // requirement to have trivial events sorter circuits in the scheduler.
-        initial_fsm_state.lhs_accumulator = [F::ONE; 2];
-        initial_fsm_state.rhs_accumulator = [F::ONE; 2];
-        final_fsm_state.lhs_accumulator = [F::ONE; 2];
-        final_fsm_state.rhs_accumulator = [F::ONE; 2];
-
-        let mut passthrough_output = EventsDeduplicatorOutputData::placeholder_witness();
-        passthrough_output.final_queue_state = QueueState::placeholder_witness();
-
-        let wit = EventsDeduplicatorInstanceWitness {
-            closed_form_input: EventsDeduplicatorInputOutputWitness {
-                start_flag: true,
-                completion_flag: true,
-                observable_input: passthrough_input,
-                observable_output: passthrough_output,
-                hidden_fsm_input: initial_fsm_state.clone(),
-                hidden_fsm_output: final_fsm_state.clone(),
-            },
-            initial_queue_witness: CircuitQueueRawWitness {
-                elements: VecDeque::new(),
-            },
-            intermediate_sorted_queue_witness: CircuitQueueRawWitness {
-                elements: VecDeque::new(),
-            },
-        };
-
-        return vec![wit];
+        return vec![];
     }
 
     // parallelizable between events and L2 to L1 messages

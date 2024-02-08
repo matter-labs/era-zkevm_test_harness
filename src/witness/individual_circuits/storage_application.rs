@@ -71,68 +71,11 @@ pub fn decompose_into_storage_application_witnesses<
     );
 
     if artifacts.deduplicated_rollup_storage_queries.is_empty() {
-        // return singe dummy witness
-
-        let initial_fsm_state = StorageApplicationFSMInputOutput::placeholder_witness();
-
-        let mut passthrough_input = StorageApplicationInputData::placeholder_witness();
-        passthrough_input.initial_next_enumeration_counter =
-            u64_as_u32_le(tree.next_enumeration_index());
-        passthrough_input.initial_root_hash = tree.root();
-        passthrough_input.shard = SHARD_ID_TO_PROCEED;
-        passthrough_input.storage_application_log_state =
-            take_queue_state_from_simulator(&artifacts.deduplicated_rollup_storage_queue_simulator);
-
-        let hasher = <Keccak256 as Digest>::new();
-        let mut accumulator = [0u8; 32];
-        accumulator.copy_from_slice(hasher.clone().finalize().as_slice());
-
-        let state = transmute_state(hasher);
-
-        let mut final_fsm_state = StorageApplicationFSMInputOutput::placeholder_witness();
-        final_fsm_state.next_enumeration_counter = u64_as_u32_le(tree.next_enumeration_index());
-        final_fsm_state.current_root_hash = tree.root();
-        final_fsm_state.current_storage_application_log_state = take_queue_state_from_simulator(
-            &&artifacts.deduplicated_rollup_storage_queue_simulator,
-        );
-        final_fsm_state.current_diffs_keccak_accumulator_state = encode_kecca256_inner_state(state);
-
-        let mut passthrough_output = StorageApplicationOutputData::placeholder_witness();
-        passthrough_output.new_next_enumeration_counter =
-            u64_as_u32_le(tree.next_enumeration_index());
-        passthrough_output.new_root_hash = tree.root();
-        passthrough_output.state_diffs_keccak256_hash = accumulator;
-
-        let wit = StorageApplicationCircuitInstanceWitness {
-            closed_form_input: StorageApplicationInputOutputWitness {
-                start_flag: true,
-                completion_flag: true,
-                observable_input: passthrough_input,
-                observable_output: passthrough_output,
-                hidden_fsm_input: initial_fsm_state.clone(),
-                hidden_fsm_output: final_fsm_state.clone(),
-            },
-            storage_queue_witness: CircuitQueueRawWitness {
-                elements: VecDeque::new(),
-            },
-            merkle_paths: VecDeque::new(),
-            leaf_indexes_for_reads: VecDeque::new(),
-        };
-
-        circuit_callback(ZkSyncBaseLayerCircuit::StorageApplication(
-            maker.process(wit, circuit_type),
-        ));
-
         let (
             storage_application_circuits,
             queue_simulator,
             storage_application_circuits_compact_forms_witnesses,
         ) = maker.into_results();
-        recursion_queue_callback(
-            circuit_type as u64,
-            queue_simulator,
-            storage_application_circuits_compact_forms_witnesses.clone(),
-        );
 
         return (
             storage_application_circuits,

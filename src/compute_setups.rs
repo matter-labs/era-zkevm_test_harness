@@ -308,9 +308,6 @@ pub fn generate_recursive_layer_vks_and_proofs(
             witness: scheduler_witness,
             config,
             transcript_params: (),
-            eip4844_proof_config: None,
-            eip4844_vk_fixed_parameters: None,
-            eip4844_vk: None,
             _marker: std::marker::PhantomData,
         };
 
