@@ -93,6 +93,10 @@ where
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,
         );
+        let builder = UIntXAddGate::<16>::configure_builder(
+            builder,
+            GatePlacementStrategy::UseGeneralPurposeColumns,
+        );
         let builder = ZeroCheckGate::configure_builder(
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,

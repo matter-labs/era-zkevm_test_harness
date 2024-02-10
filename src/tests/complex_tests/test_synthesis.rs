@@ -4,6 +4,7 @@ use crate::prover_utils::create_base_layer_setup_data;
 use crate::tests::complex_tests::generate_base_layer;
 use crate::tests::complex_tests::utils::read_basic_test_artifact;
 use circuit_definitions::boojum::field::goldilocks::GoldilocksField;
+use circuit_definitions::zkevm_circuits::eip_4844::input::ENCODABLE_BYTES_PER_BLOB;
 use circuit_definitions::{BASE_LAYER_CAP_SIZE, BASE_LAYER_FRI_LDE_FACTOR};
 use std::time::Instant;
 
@@ -11,7 +12,14 @@ use std::time::Instant;
 fn test_base_layer_circuit_synthesis() {
     let test_artifact = read_basic_test_artifact();
     let geometry = crate::geometry_config::get_geometry_config();
-    let (base_layer_circuit, _, _) = generate_base_layer(test_artifact, 20000, geometry);
+    let blobs = std::array::from_fn(|i| {
+        if i == 0 {
+            Some(vec![0xff; ENCODABLE_BYTES_PER_BLOB])
+        } else {
+            None
+        }
+    });
+    let (base_layer_circuit, _, _) = generate_base_layer(test_artifact, 20000, geometry, blobs);
     let circuit = base_layer_circuit
         .into_iter()
         .next()

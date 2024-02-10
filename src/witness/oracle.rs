@@ -47,6 +47,8 @@ use smallvec::SmallVec;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::ops::RangeInclusive;
 use std::sync::Arc;
+use crate::zkevm_circuits::eip_4844::input::ENCODABLE_BYTES_PER_BLOB;
+use crate::zkevm_circuits::scheduler::block_header::MAX_4844_BLOBS_PER_BLOCK;
 
 use crate::zk_evm::zkevm_opcode_defs::system_params::{
     ECRECOVER_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
@@ -206,6 +208,7 @@ pub fn create_artifacts_from_tracer<
     zk_porter_is_available: bool,
     default_aa_code_hash: U256,
     evm_simulator_code_hash: U256,
+    eip_4844_repack_inputs: [Option<Vec<u8>>; MAX_4844_BLOBS_PER_BLOCK],
     mut circuit_callback: CB,
     mut recursion_queue_callback: QSCB,
 ) -> (
@@ -771,7 +774,6 @@ pub fn create_artifacts_from_tracer<
                 storage_logs_states_stack.push(current_storage_log_state);
 
                 // push the item to the stack
-
                 let intermediate_info = callstack_argebraic_simulator
                     .push_and_output_intermediate_data(entry, round_function);
 
@@ -1489,6 +1491,8 @@ pub fn create_artifacts_from_tracer<
 
         // construct an oracle
         let witness_oracle = VmWitnessOracle {
+            initial_cycle: initial_state.at_cycle,
+            final_cycle_inclusive: final_state.at_cycle - 1,
             memory_read_witness: per_instance_memory_read_witnesses.into(),
             memory_write_witness: Some(per_instance_memory_write_witnesses.into()),
             rollback_queue_head_segments,

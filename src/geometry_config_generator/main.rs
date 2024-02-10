@@ -5,10 +5,7 @@ use codegen::Scope;
 use rayon::prelude::*;
 
 use zkevm_test_harness::capacity_estimator::{
-    code_decommitter_capacity, code_decommittments_sorter_capacity, ecrecover_capacity,
-    event_sorter_capacity, keccak256_rf_capacity, l1_messages_hasher_capacity,
-    log_demuxer_capacity, main_vm_capacity, ram_permutation_capacity, sha256_rf_capacity,
-    storage_application_capacity, storage_sorter_capacity,
+    code_decommitter_capacity, code_decommittments_sorter_capacity, ecrecover_capacity, event_sorter_capacity, keccak256_rf_capacity, l1_messages_hasher_capacity, log_demuxer_capacity, main_vm_capacity, ram_permutation_capacity, secp256r1_verify_capacity, sha256_rf_capacity, storage_application_capacity, storage_sorter_capacity, transient_storage_sorter_capacity
 };
 use zkevm_test_harness::toolset::GeometryConfig;
 
@@ -34,6 +31,8 @@ fn all_runners() -> Vec<Box<dyn Fn() -> usize + Send>> {
         Box::new(storage_sorter_capacity),
         Box::new(storage_application_capacity),
         Box::new(l1_messages_hasher_capacity),
+        Box::new(transient_storage_sorter_capacity),
+        Box::new(secp256r1_verify_capacity),
     ]
 }
 
@@ -59,6 +58,8 @@ pub fn compute_config() -> GeometryConfig {
     let cycles_per_storage_sorter = sizes.pop().unwrap();
     let cycles_per_storage_application = sizes.pop().unwrap();
     let limit_for_l1_messages_pudata_hasher = sizes.pop().unwrap();
+    let cycles_per_transient_storage_sorter = sizes.pop().unwrap();
+    let cycles_per_secp256r1_verify_circuit = sizes.pop().unwrap();
 
     assert!(sizes.is_empty());
 
@@ -74,6 +75,8 @@ pub fn compute_config() -> GeometryConfig {
         cycles_per_keccak256_circuit,
         cycles_per_sha256_circuit,
         cycles_per_ecrecover_circuit,
+        cycles_per_secp256r1_verify_circuit,
+        cycles_per_transient_storage_sorter,
         limit_for_l1_messages_pudata_hasher,
     };
     config
@@ -134,6 +137,14 @@ fn main() {
     function.line(format!(
         "    limit_for_l1_messages_pudata_hasher: {},",
         computed_config.limit_for_l1_messages_pudata_hasher
+    ));
+    function.line(format!(
+        "    cycles_per_transient_storage_sorter: {},",
+        computed_config.cycles_per_transient_storage_sorter
+    ));
+    function.line(format!(
+        "    cycles_per_secp256r1_verify_circuit: {},",
+        computed_config.cycles_per_secp256r1_verify_circuit
     ));
     function.line("}");
     println!("Generated config:\n {}", scope.to_string());

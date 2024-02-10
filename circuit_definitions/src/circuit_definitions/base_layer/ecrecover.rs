@@ -157,12 +157,6 @@ where
         let table = create_and8_table();
         cs.add_lookup_table::<And8Table, 3>(table);
 
-        // let table = create_naf_abs_div2_table();
-        // cs.add_lookup_table::<NafAbsDiv2Table, 3>(table);
-
-        // let table = create_wnaf_decomp_table();
-        // cs.add_lookup_table::<WnafDecompTable, 3>(table);
-
         seq_macro::seq!(C in 0..32 {
             let table = create_fixed_base_mul_table::<F, 0, C>();
             cs.add_lookup_table::<FixedBaseMulTable<0, C>, 3>(table);

@@ -225,7 +225,6 @@ use super::vm_snapshot::VmSnapshot;
 impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
     fn start_new_execution_cycle(&mut self, current_state: &VmLocalState) {
         // println!("Cycle starts");
-        // dbg!(&self.sponge_busy_range);
         if self.current_cycle_counter == 0 {
             if self.current_cycle_counter != current_state.monotonic_cycle_counter {
                 // adjust
@@ -388,10 +387,6 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
             *previous_context,
             *new_context,
         );
-
-        // // log part
-        // let new = ApplicationData::empty();
-        // self.log_frames_stack.push(new);
     }
 
     fn finish_execution_context(&mut self, monotonic_cycle_counter: u32, panicked: bool) {

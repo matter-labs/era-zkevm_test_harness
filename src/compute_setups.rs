@@ -8,8 +8,7 @@ use circuit_definitions::{
     circuit_definitions::base_layer::{
         ZkSyncBaseLayerCircuit, ZkSyncBaseLayerFinalizationHint, ZkSyncBaseLayerProof,
         ZkSyncBaseLayerVerificationKey,
-    },
-    recursion_layer_proof_config, RECURSION_LAYER_CAP_SIZE, RECURSION_LAYER_FRI_LDE_FACTOR,
+    }, recursion_layer_proof_config, zkevm_circuits::eip_4844::input::ENCODABLE_BYTES_PER_BLOB, RECURSION_LAYER_CAP_SIZE, RECURSION_LAYER_FRI_LDE_FACTOR
 };
 
 use super::*;
@@ -39,7 +38,14 @@ pub fn generate_base_layer_vks_and_proofs(
 ) -> crate::data_source::SourceResult<()> {
     let test_artifact = read_basic_test_artifact();
     let geometry = crate::geometry_config::get_geometry_config();
-    let (base_layer_circuit, _, _) = generate_base_layer(test_artifact, 20000, geometry);
+    let blobs = std::array::from_fn(|i| {
+        if i == 0 {
+            Some(vec![0xff; ENCODABLE_BYTES_PER_BLOB])
+        } else {
+            None
+        }
+    });
+    let (base_layer_circuit, _, _) = generate_base_layer(test_artifact, 20000, geometry, blobs);
 
     let worker = Worker::new();
 

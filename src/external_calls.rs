@@ -82,6 +82,7 @@ pub fn run<
     geometry: GeometryConfig,
     storage: S,
     tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
+    eip_4844_repack_inputs: [Option<Vec<u8>>; MAX_4844_BLOBS_PER_BLOCK],
     circuit_callback: CB,
     queue_simulator_callback: QSCB,
 ) -> (
@@ -233,6 +234,7 @@ pub fn run<
         zk_porter_is_available,
         default_aa_code_hash,
         evm_simulator_code_hash,
+        eip_4844_repack_inputs.clone(),
         circuit_callback,
         queue_simulator_callback,
     );
@@ -314,7 +316,7 @@ pub fn run<
                     .observable_output
                     .state_diffs_keccak256_hash
             })
-            .expect("at least 1 storage application");
+            .unwrap_or([0u8; 32]);
 
         let l1_messages_linear_hash = basic_circuits
             .l1_messages_hasher_circuits
@@ -324,7 +326,7 @@ pub fn run<
                 let wit = el.clone_witness().unwrap();
                 wit.closed_form_input.observable_output.keccak256_hash
             })
-            .expect("at least 1 L2 to L1 message");
+            .unwrap_or([0u8; 32]);
 
         // aux
         let aux_data = BlockAuxilaryOutputWitness::<MainField> {
@@ -642,7 +644,6 @@ pub fn run<
             empty_log_queue_state.clone().tail
         };
         
-
         let scheduler_circuit_witness = SchedulerCircuitInstanceWitness {
             prev_block_data: previous_block_passthrough,
             block_meta_parameters,
@@ -708,7 +709,18 @@ pub fn run<
             previous_block_meta_hash: [0u8; 32],
             previous_block_aux_hash: [0u8; 32],
 
-            eip4844_witnesses: None,
+            eip4844_witnesses: eip_4844_repack_inputs.map(|el| {
+                el.map(|el| {
+                    use crate::generate_eip4844_witness;
+                    let (_, linear_hash, _, output_hash) = generate_eip4844_witness::<GoldilocksField>(
+                        &el[..]
+                    );
+                    EIP4844OutputDataWitness {
+                        linear_hash,
+                        output_hash,
+                    }
+                })
+            }),
 
             node_layer_vk_witness: VerificationKey::default(),
             leaf_layer_parameters: std::array::from_fn(|_| {

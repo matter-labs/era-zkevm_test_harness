@@ -184,6 +184,15 @@ where
 
         let uma_ptr_read_cleanup_table = create_uma_ptr_read_bitmask_table::<F>();
         cs.add_lookup_table::<UMAPtrReadCleanupTable, 3>(uma_ptr_read_cleanup_table);
+
+        let test_bit_table = create_test_bit_table::<F>();
+        cs.add_lookup_table::<TestBitTable, 3>(test_bit_table);
+
+        let stipends_table = create_call_costs_and_stipends_table::<F>();
+        cs.add_lookup_table::<CallCostsAndStipendsTable, 3>(stipends_table);
+
+        let pubdata_cost_validity_table = create_pubdata_cost_validity_table::<F>();
+        cs.add_lookup_table::<PubdataCostValidityTable, 3>(pubdata_cost_validity_table);
     }
 
     fn synthesize_into_cs_inner<CS: ConstraintSystem<F>>(

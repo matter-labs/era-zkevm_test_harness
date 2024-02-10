@@ -24,6 +24,8 @@ pub fn u128_as_u32_le(value: u128) -> [u32; 4] {
 #[derivative(Default(bound = ""), Clone(bound = ""))]
 #[serde(bound = "")]
 pub struct VmWitnessOracle<F: SmallField> {
+    pub initial_cycle: u32,
+    pub final_cycle_inclusive: u32,
     pub memory_read_witness: VecDeque<(u32, MemoryQuery)>,
     pub memory_write_witness: Option<VecDeque<(u32, MemoryQuery)>>,
     pub rollback_queue_head_segments: VecDeque<(u32, [F; QUEUE_STATE_WIDTH])>,
@@ -206,7 +208,7 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
         is_write: bool,
         execute: bool,
     ) -> u32 {
-        if execute && is_write {
+        if execute {
             if self.storage_access_cold_warm_refunds.is_empty() {
                 panic!(
                     "should have a cold/warm refund witness for storage write attempt at {:?}",
@@ -219,7 +221,7 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
             assert_eq!(record.address, query.address);
             assert_eq!(record.key, query.key);
             assert_eq!(record.rw_flag, query.rw_flag);
-            assert!(record.rw_flag == true);
+            assert_eq!(record.rw_flag, is_write);
             assert_eq!(record.written_value, query.written_value);
             assert_eq!(record.rollback, false);
             assert_eq!(record.rollback, query.rollback);
@@ -238,7 +240,7 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
         is_write: bool,
         execute: bool,
     ) -> u32 {
-        if execute && is_write {
+        if execute {
             if self.storage_pubdata_queries.is_empty() {
                 panic!(
                     "should have a pubdata cost witness for storage write attempt at {:?}",
@@ -251,7 +253,7 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
             assert_eq!(record.address, query.address);
             assert_eq!(record.key, query.key);
             assert_eq!(record.rw_flag, query.rw_flag);
-            assert!(record.rw_flag == true);
+            assert_eq!(record.rw_flag, is_write);
             assert_eq!(record.written_value, query.written_value);
             assert_eq!(record.rollback, false);
             assert_eq!(record.rollback, query.rollback);
@@ -259,8 +261,13 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
             // the rest are not filled in out-of-circuit implementations
             assert_eq!(record.is_service, query.is_service);
 
-            // two-complement
-            cost.0 as u32
+            let cost_two_complement = cost.0 as u32; // two-complement
+
+            if is_write == false {
+                assert_eq!(cost_two_complement, 0);
+            }
+
+            cost_two_complement
         } else {
             0u32
         }
@@ -553,7 +560,9 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
     fn at_completion(self) {
         if self.memory_read_witness.is_empty() == false {
             panic!(
-                "Too many memory queries in witness: have left\n{:?}",
+                "Too many memory queries in witness over cycles range {}..={}: have left\n{:?}",
+                self.initial_cycle,
+                self.final_cycle_inclusive,
                 self.memory_read_witness
             );
         }
@@ -561,7 +570,9 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
         if let Some(memory_write_witness) = self.memory_write_witness {
             if memory_write_witness.is_empty() == false {
                 panic!(
-                    "Too many memory write queries in witness: have left\n{:?}",
+                    "Too many memory write queries in witness over cycles range {}..={}: have left\n{:?}",
+                    self.initial_cycle,
+                    self.final_cycle_inclusive,
                     memory_write_witness
                 );
             }
@@ -569,49 +580,63 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
 
         if self.storage_queries.is_empty() == false {
             panic!(
-                "Too many storage queries in witness: have left\n{:?}",
+                "Too many storage queries in witness over cycles range {}..={}: have left\n{:?}",
+                self.initial_cycle,
+                self.final_cycle_inclusive,
                 self.storage_queries
             );
         }
 
         if self.storage_access_cold_warm_refunds.is_empty() == false {
             panic!(
-                "Too many storage queries for refunds in witness: have left\n{:?}",
+                "Too many storage queries for refunds in witness over cycles range {}..={}: have left\n{:?}",
+                self.initial_cycle,
+                self.final_cycle_inclusive,
                 self.storage_access_cold_warm_refunds
             );
         }
 
         if self.storage_pubdata_queries.is_empty() == false {
             panic!(
-                "Too many storage queries for pubdata in witness: have left\n{:?}",
+                "Too many storage queries for pubdata in witness over cycles range {}..={}: have left\n{:?}",
+                self.initial_cycle,
+                self.final_cycle_inclusive,
                 self.storage_pubdata_queries
             );
         }
 
         if self.callstack_values_witnesses.is_empty() == false {
             panic!(
-                "Too many callstack sponge witnesses: have left\n{:?}",
+                "Too many callstack sponge witnesses over cycles range {}..={}: have left\n{:?}",
+                self.initial_cycle,
+                self.final_cycle_inclusive,
                 self.callstack_values_witnesses
             );
         }
 
         if self.decommittment_requests_witness.is_empty() == false {
             panic!(
-                "Too many decommittment request witnesses: have left\n{:?}",
+                "Too many decommittment request witnesses over cycles range {}..={}: have left\n{:?}",
+                self.initial_cycle,
+                self.final_cycle_inclusive,
                 self.decommittment_requests_witness
             );
         }
 
         if self.rollback_queue_head_segments.is_empty() == false {
             panic!(
-                "Too many rollback queue heads in witnesses: have left\n{:?}",
+                "Too many rollback queue heads in witnesses over cycles range {}..={}: have left\n{:?}",
+                self.initial_cycle,
+                self.final_cycle_inclusive,
                 self.rollback_queue_head_segments
             );
         }
 
         if self.rollback_queue_initial_tails_for_new_frames.is_empty() == false {
             panic!(
-                "Too many rollback queue heads new stack frames in witnesses: have left\n{:?}",
+                "Too many rollback queue heads new stack frames in witnesses over cycles range {}..={}: have left\n{:?}",
+                self.initial_cycle,
+                self.final_cycle_inclusive,
                 self.rollback_queue_initial_tails_for_new_frames
             );
         }

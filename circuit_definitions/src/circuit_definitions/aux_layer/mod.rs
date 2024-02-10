@@ -147,12 +147,11 @@ impl ZkSyncCompressionLayerCircuit {
         let builder_impl =
             CsReferenceImplementationBuilder::<GoldilocksField, P, ProvingCSConfig>::new(
                 geometry,
-                num_vars.unwrap(),
                 max_trace_len.unwrap(),
             );
         let cs_builder = new_builder::<_, GoldilocksField>(builder_impl);
         let builder = inner.configure_builder_proxy(cs_builder);
-        let mut cs = builder.build(());
+        let mut cs = builder.build(num_vars.unwrap());
         inner.add_tables(&mut cs);
         inner.clone().synthesize_into_cs(&mut cs);
         cs.pad_and_shrink_using_hint(hint);
@@ -455,12 +454,11 @@ impl ZkSyncCompressionForWrapperCircuit {
         let builder_impl =
             CsReferenceImplementationBuilder::<GoldilocksField, P, ProvingCSConfig>::new(
                 geometry,
-                num_vars.unwrap(),
                 max_trace_len.unwrap(),
             );
         let cs_builder = new_builder::<_, GoldilocksField>(builder_impl);
         let builder = inner.configure_builder_proxy(cs_builder);
-        let mut cs = builder.build(());
+        let mut cs = builder.build(num_vars.unwrap());
         inner.add_tables(&mut cs);
         inner.clone().synthesize_into_cs(&mut cs);
         cs.pad_and_shrink_using_hint(hint);

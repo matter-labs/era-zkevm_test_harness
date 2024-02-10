@@ -169,7 +169,7 @@ use snark_wrapper::franklin_crypto::bellman::Field;
 use snark_wrapper::franklin_crypto::bellman::PrimeField;
 
 pub fn generate_eip4844_witness<F: SmallField>(
-    blob: Vec<u8>,
+    blob: &[u8],
 ) -> (
     [[u8; 31]; ELEMENTS_PER_4844_BLOCK],
     [u8; 32],

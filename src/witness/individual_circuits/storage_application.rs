@@ -73,7 +73,7 @@ pub fn decompose_into_storage_application_witnesses<
     if artifacts.deduplicated_rollup_storage_queries.is_empty() {
         let (
             storage_application_circuits,
-            queue_simulator,
+            _queue_simulator,
             storage_application_circuits_compact_forms_witnesses,
         ) = maker.into_results();
 

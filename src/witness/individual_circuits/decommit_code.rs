@@ -145,8 +145,6 @@ pub fn compute_decommitter_circuit_snapshots<
     use crate::boojum::gadgets::queue::QueueState;
     let placeholder_witness = QueueState::<F, FULL_SPONGE_QUEUE_STATE_WIDTH>::placeholder_witness();
 
-    let mut num_bits_in_current_decommitment = 0u32;
-
     'outer: loop {
         let mut current_circuit_witness = CodeDecommitterCircuitInstanceWitness {
             closed_form_input: ClosedFormInputWitness {
@@ -249,8 +247,6 @@ pub fn compute_decommitter_circuit_snapshots<
 
                 let num_words = u16::from_be_bytes([header.0[2], header.0[3]]);
                 assert!(num_words & 1 == 1); // should be odd
-                let num_words = num_words as u64;
-                let num_rounds = (num_words + 1) / 2;
 
                 let hash_as_u256 = normalized_preimage_as_u256(&normalized_preimage);
 
@@ -275,15 +271,10 @@ pub fn compute_decommitter_circuit_snapshots<
                 fsm_internals.current_page = memory_page.0;
                 fsm_internals.timestamp = timestamp.0;
                 fsm_internals.hash_to_compare_against = hash_as_u256;
+                fsm_internals.num_byte32_words_processed = 0u16;
 
                 fsm_state = DecommitterState::DecommmitMore;
                 current_circuit_witness.code_words.push(vec![]);
-
-                num_bits_in_current_decommitment = if num_rounds == 1 {
-                    256u32
-                } else {
-                    512u32 * ((num_rounds - 1) as u32) + 256u32
-                };
             }
 
             // do the actual round
@@ -300,6 +291,7 @@ pub fn compute_decommitter_circuit_snapshots<
                         .push(word0);
                     memory_queue_state_offset += 1;
                     fsm_internals.current_index += 1;
+                    fsm_internals.num_byte32_words_processed += 1;
 
                     let mut finished = false;
                     if let Some(word1) = current_memory_data_it.next() {
@@ -312,11 +304,13 @@ pub fn compute_decommitter_circuit_snapshots<
 
                         memory_queue_state_offset += 1;
                         fsm_internals.current_index += 1;
+                        fsm_internals.num_byte32_words_processed += 1;
                     } else {
                         // we decommitted everythin
                         // pad and do not increment index
                         block[32] = 0x80;
-                        let length_in_bits_be = num_bits_in_current_decommitment.to_be_bytes();
+                        let num_bits = (fsm_internals.num_byte32_words_processed as u32) * 32 * 8;
+                        let length_in_bits_be = num_bits.to_be_bytes();
                         block[60..64].copy_from_slice(&length_in_bits_be);
                         finished = true;
                     }

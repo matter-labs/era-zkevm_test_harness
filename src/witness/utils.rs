@@ -226,7 +226,6 @@ pub fn create_cs_for_witness_generation<
 
     let builder_impl = CsReferenceImplementationBuilder::<F, F, ProvingCSConfig>::new(
         geometry,
-        num_vars,
         max_trace_len,
     );
     let builder = boojum::cs::cs_builder::new_builder::<_, F>(builder_impl);
@@ -258,7 +257,7 @@ pub fn create_cs_for_witness_generation<
     let builder =
         SelectionGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
 
-    let mut cs = builder.build(());
+    let mut cs = builder.build(num_vars);
 
     use crate::boojum::cs::traits::cs::ConstraintSystem;
     use crate::boojum::gadgets::tables::*;
@@ -351,6 +350,8 @@ pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
     ctx.saved_context.sp = out_of_circuit_context.sp;
     ctx.saved_context.exception_handler_loc = out_of_circuit_context.exception_handler_location;
     ctx.saved_context.ergs_remaining = out_of_circuit_context.ergs_remaining;
+    ctx.saved_context.stipend = out_of_circuit_context.stipend;
+    ctx.saved_context.total_pubdata_spent = out_of_circuit_context.total_pubdata_spent.0 as u32; // two-complement
 
     // addresses
     ctx.saved_context.code_address = out_of_circuit_context.code_address;

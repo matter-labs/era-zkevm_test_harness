@@ -57,7 +57,6 @@ where
             let builder_impl =
                 CsReferenceImplementationBuilder::<GoldilocksField, P, SetupCSConfig>::new(
                     geometry,
-                    1, // resolver is inactive in this mode
                     1 << max_trace_len_log_2,
                 );
             let builder = new_builder::<_, GoldilocksField>(builder_impl);
@@ -67,11 +66,11 @@ where
             let config = config;
 
             let builder = SF::configure_builder(builder);
-            let mut cs = builder.build(());
+            let mut cs = builder.build(1); // formal resolver
             SF::add_tables(&mut cs);
             let _ = SF::synthesize_into_cs_inner(&mut cs, witness, &round_function, config);
             let (max_trace_len, _) = cs.pad_and_shrink();
-            let cs = cs.into_assembly();
+            let cs = cs.into_assembly::<std::alloc::Global>();
 
             cs.print_gate_stats();
 
@@ -143,7 +142,7 @@ pub fn main_vm_capacity() -> usize {
         ZkSyncDefaultRoundFunction,
     >;
 
-    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(5500), |x: usize| x)
+    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(5000), |x: usize| x)
 }
 
 pub fn code_decommittments_sorter_capacity() -> usize {
@@ -223,11 +222,23 @@ pub fn l1_messages_hasher_capacity() -> usize {
     compute_size_inner::<SF, _>(SF::geometry(), 20, Some(512), |x: usize| x)
 }
 
+pub fn transient_storage_sorter_capacity() -> usize {
+    type SF = TransientStorageSortAndDedupInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+
+    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(22000), |x: usize| x)
+}
+
+pub fn secp256r1_verify_capacity() -> usize {
+    type SF = Secp256r1VerifyFunctionInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+
+    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(2), |x: usize| x)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_size_estimation() {
         println!("Size of main_vm_capacity: {}", main_vm_capacity());
         println!(
@@ -258,6 +269,14 @@ mod test {
         println!(
             "Size of l1_messages_hasher_capacity: {}",
             l1_messages_hasher_capacity()
+        );
+        println!(
+            "Size of transient_storage_sorter_capacity: {}",
+            transient_storage_sorter_capacity()
+        );
+        println!(
+            "Size of secp256r1_verify_capacity: {}",
+            secp256r1_verify_capacity()
         );
     }
 }

@@ -60,7 +60,14 @@ const EIP4844_CYCLE_LIMIT: usize = 4096;
 #[test]
 fn basic_test() {
     let test_artifact = read_basic_test_artifact();
-    run_and_try_create_witness_inner(test_artifact, 20000, None);
+    let blobs = std::array::from_fn(|i| {
+        if i == 0 {
+            Some(vec![0xff; ENCODABLE_BYTES_PER_BLOB])
+        } else {
+            None
+        }
+    });
+    run_and_try_create_witness_inner(test_artifact, 20000, blobs);
     // run_and_try_create_witness_inner(test_artifact, 16);
 }
 
@@ -117,7 +124,7 @@ use crate::witness::full_block_artifact::*;
 fn get_testing_geometry_config() -> GeometryConfig {
     GeometryConfig {
         // cycles_per_vm_snapshot: 1,
-        cycles_per_vm_snapshot: 1024,
+        cycles_per_vm_snapshot: 16,
         cycles_per_ram_permutation: 1024,
         cycles_per_code_decommitter: 256,
         cycles_per_storage_application: 4,
@@ -140,6 +147,7 @@ pub(crate) fn generate_base_layer(
     mut test_artifact: TestArtifact,
     cycle_limit: usize,
     geometry: GeometryConfig,
+    blobs: [Option<Vec<u8>>; MAX_4844_BLOBS_PER_BLOCK],
 ) -> (
     Vec<ZkSyncBaseLayerCircuit<Field, VmWitnessOracle<Field>, RoundFunction>>,
     Vec<(
@@ -252,6 +260,7 @@ pub(crate) fn generate_base_layer(
         geometry,
         storage_impl,
         &mut tree,
+        blobs,
         |circuit| basic_block_circuits.push(circuit),
         |a, b, c| {
             recursion_queues.push((
@@ -274,37 +283,43 @@ pub(crate) fn generate_base_layer(
 fn run_and_try_create_witness_inner(
     test_artifact: TestArtifact,
     cycle_limit: usize,
-    blobs: Option<[Vec<u8>; MAX_4844_BLOBS_PER_BLOCK]>,
+    blobs: [Option<Vec<u8>>; MAX_4844_BLOBS_PER_BLOCK],
 ) {
     use crate::external_calls::run;
     use crate::toolset::GeometryConfig;
 
-    // let geometry = get_testing_geometry_config();
-    let geometry = crate::geometry_config::get_geometry_config();
+    let geometry = get_testing_geometry_config();
+    // let geometry = crate::geometry_config::get_geometry_config();
 
     // let (basic_block_circuits, basic_block_circuits_inputs, mut scheduler_partial_input) = run(
     let (basic_block_circuits, recursion_queues, scheduler_partial_input) =
-        generate_base_layer(test_artifact, cycle_limit, geometry);
+        generate_base_layer(test_artifact, cycle_limit, geometry, blobs);
 
     for (idx, el) in basic_block_circuits.clone().into_iter().enumerate() {
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
 
-        match &el {
-            ZkSyncBaseLayerCircuit::ECRecover(inner) => {
-                dbg!(&*inner.config);
-                // let witness = inner.clone_witness().unwrap();
-                // dbg!(&witness.closed_form_input);
-                // dbg!(witness.closed_form_input.start_flag);
-                // dbg!(witness.closed_form_input.completion_flag);
-            }
-            _ => {
-                continue;
-            }
-        }
+        // if idx < 398  {
+        //     continue;
+        // }
+
+        // match &el {
+        //     ZkSyncBaseLayerCircuit::MainVM(inner) => {
+        //         dbg!(&*inner.config);
+        //         // let witness = inner.clone_witness().unwrap();
+        //         // dbg!(&witness.closed_form_input);
+        //         // dbg!(witness.closed_form_input.start_flag);
+        //         // dbg!(witness.closed_form_input.completion_flag);
+        //     }
+        //     _ => {
+        //         continue;
+        //     }
+        // }
 
         base_test_circuit(el);
     }
+
+    return;
 
     let worker = Worker::new_with_num_threads(8);
 
