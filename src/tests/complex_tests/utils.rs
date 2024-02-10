@@ -27,6 +27,7 @@ const TEST_CONTRACT_FILE_NAMES: [&str; 4] = [
     "Main.sol",
 ];
 const SYSTEM_CONTRACTS_BRANCH: &str = "v1-4-1-integration";
+// TODO: This is not a correct location anymore, as we migrated the system contracts into era-contracts.
 const SYSTEM_CONTRACTS_URL: &str = "https://github.com/matter-labs/era-system-contracts/";
 const SYSTEM_CONTRACTS_COMMITS_URL: &str =
     "https://api.github.com/repos/matter-labs/era-system-contracts/commits/";
@@ -98,6 +99,16 @@ struct CompilerMetadata {
     zksolc_compiler_version: String,
 }
 
+/// Reads the basic test artifacts that was created during compilation.
+pub fn read_basic_test_artifacts_cached() -> TestArtifact {
+    let basic_test_bytes = include_bytes!("test_artifacts/basic_test.json");
+    let text = std::str::from_utf8(basic_test_bytes)
+        .expect("basic test json should be utf8 encoded string");
+    serde_json::from_str(text).unwrap()
+}
+
+/// Reads & updates the basic test artifacts (test contracts, system contracts etc).
+/// WARNING: If running this, make sure to run within test_harness directory.
 pub fn read_basic_test_artifact() -> TestArtifact {
     let current_compiler_metadata = CompilerMetadata {
         solc_compiler_version: SOLC_VERSION.to_owned(),
