@@ -460,14 +460,16 @@ impl ZkSyncRecursiveLayerCircuit {
     fn synthesis_inner<P, CR>(
         inner: &ZkSyncLeafLayerRecursiveCircuit,
         hint: &FinalizationHintsForProver,
-    ) -> CSReferenceAssembly<F, P, ProvingCSConfig> 
-    where 
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig>
+    where
         P: PrimeFieldLikeVectorized<Base = F>,
         CR: CircuitResolver<
             F,
             zkevm_circuits::boojum::config::Resolver<
-                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts>>,
-        usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>
+                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts,
+            >,
+        >,
+        usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>,
     {
         let geometry = ZkSyncLeafLayerRecursiveCircuit::geometry();
         let (max_trace_len, num_vars) = inner.size_hint();
@@ -485,8 +487,7 @@ impl ZkSyncRecursiveLayerCircuit {
         cs.into_assembly()
     }
 
-    pub fn synthesis<P: PrimeFieldLikeVectorized<Base = F>>
-    (
+    pub fn synthesis<P: PrimeFieldLikeVectorized<Base = F>>(
         &self,
         hint: &FinalizationHintsForProver,
     ) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
@@ -499,14 +500,16 @@ impl ZkSyncRecursiveLayerCircuit {
     pub fn synthesis_wrapped<P, CR>(
         &self,
         hint: &FinalizationHintsForProver,
-    ) -> CSReferenceAssembly<F, P, ProvingCSConfig> 
-    where 
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig>
+    where
         P: PrimeFieldLikeVectorized<Base = F>,
         CR: CircuitResolver<
             F,
             zkevm_circuits::boojum::config::Resolver<
-                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts>>,
-        usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>
+                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts,
+            >,
+        >,
+        usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>,
     {
         match &self {
             Self::SchedulerCircuit(inner) => {

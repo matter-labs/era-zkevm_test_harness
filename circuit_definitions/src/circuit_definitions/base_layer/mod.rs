@@ -289,17 +289,19 @@ where
         }
     }
 
-    fn synthesis_inner<P, CR> (
+    fn synthesis_inner<P, CR>(
         inner: &ZkSyncUniformCircuitInstance<F, impl ZkSyncUniformSynthesisFunction<F>>,
         hint: &FinalizationHintsForProver,
-    ) -> CSReferenceAssembly<F, P, ProvingCSConfig> 
-    where 
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig>
+    where
         P: PrimeFieldLikeVectorized<Base = F>,
         CR: CircuitResolver<
             F,
             zkevm_circuits::boojum::config::Resolver<
-                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts>>,
-        usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>
+                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts,
+            >,
+        >,
+        usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>,
     {
         let geometry = inner.geometry_proxy();
         let (max_trace_len, num_vars) = inner.size_hint();
@@ -316,8 +318,7 @@ where
         cs.into_assembly()
     }
 
-    pub fn synthesis<P: PrimeFieldLikeVectorized<Base = F>>
-    (
+    pub fn synthesis<P: PrimeFieldLikeVectorized<Base = F>>(
         &self,
         hint: &FinalizationHintsForProver,
     ) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
@@ -327,26 +328,31 @@ where
         >(hint)
     }
 
-    pub fn synthesis_wrapped<P, CR> (
+    pub fn synthesis_wrapped<P, CR>(
         &self,
         hint: &FinalizationHintsForProver,
-    ) -> CSReferenceAssembly<F, P, ProvingCSConfig> 
-    where 
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig>
+    where
         P: PrimeFieldLikeVectorized<Base = F>,
-        CR: CircuitResolver< 
+        CR: CircuitResolver<
             F,
             zkevm_circuits::boojum::config::Resolver<
-                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts>>,
-        usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>
-
-         {
+                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts,
+            >,
+        >,
+        usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>,
+    {
         match &self {
             ZkSyncBaseLayerCircuit::MainVM(inner) => Self::synthesis_inner::<_, CR>(inner, hint),
             ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {
                 Self::synthesis_inner::<_, CR>(inner, hint)
             }
-            ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => Self::synthesis_inner::<_, CR>(inner, hint),
-            ZkSyncBaseLayerCircuit::LogDemuxer(inner) => Self::synthesis_inner::<_, CR>(inner, hint),
+            ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {
+                Self::synthesis_inner::<_, CR>(inner, hint)
+            }
+            ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {
+                Self::synthesis_inner::<_, CR>(inner, hint)
+            }
             ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {
                 Self::synthesis_inner::<_, CR>(inner, hint)
             }
@@ -354,15 +360,26 @@ where
                 Self::synthesis_inner::<_, CR>(inner, hint)
             }
             ZkSyncBaseLayerCircuit::ECRecover(inner) => Self::synthesis_inner::<_, CR>(inner, hint),
-            ZkSyncBaseLayerCircuit::RAMPermutation(inner) => Self::synthesis_inner::<_, CR>(inner, hint),
-            ZkSyncBaseLayerCircuit::StorageSorter(inner) => Self::synthesis_inner::<_, CR>(inner, hint),
-            ZkSyncBaseLayerCircuit::StorageApplication(inner) => Self::synthesis_inner::<_, CR>(inner, hint),
-            ZkSyncBaseLayerCircuit::EventsSorter(inner) => Self::synthesis_inner::<_, CR>(inner, hint),
-            ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => Self::synthesis_inner::<_, CR>(inner, hint),
-            ZkSyncBaseLayerCircuit::L1MessagesHasher(inner) => Self::synthesis_inner::<_, CR>(inner, hint),
+            ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {
+                Self::synthesis_inner::<_, CR>(inner, hint)
+            }
+            ZkSyncBaseLayerCircuit::StorageSorter(inner) => {
+                Self::synthesis_inner::<_, CR>(inner, hint)
+            }
+            ZkSyncBaseLayerCircuit::StorageApplication(inner) => {
+                Self::synthesis_inner::<_, CR>(inner, hint)
+            }
+            ZkSyncBaseLayerCircuit::EventsSorter(inner) => {
+                Self::synthesis_inner::<_, CR>(inner, hint)
+            }
+            ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {
+                Self::synthesis_inner::<_, CR>(inner, hint)
+            }
+            ZkSyncBaseLayerCircuit::L1MessagesHasher(inner) => {
+                Self::synthesis_inner::<_, CR>(inner, hint)
+            }
         }
     }
-
 
     pub fn geometry(&self) -> CSGeometry {
         match &self {

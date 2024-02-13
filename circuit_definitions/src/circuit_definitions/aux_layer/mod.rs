@@ -144,15 +144,17 @@ impl ZkSyncCompressionLayerCircuit {
     fn synthesis_inner<P, CF, CR>(
         inner: &CompressionLayerCircuit<CF>,
         hint: &FinalizationHintsForProver,
-    ) -> CSReferenceAssembly<GoldilocksField, P, ProvingCSConfig> 
-    where 
+    ) -> CSReferenceAssembly<GoldilocksField, P, ProvingCSConfig>
+    where
         P: PrimeFieldLikeVectorized<Base = GoldilocksField>,
         CF: ProofCompressionFunction,
         CR: CircuitResolver<
             F,
             zkevm_circuits::boojum::config::Resolver<
-                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts>>,
-        usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>
+                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts,
+            >,
+        >,
+        usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>,
     {
         let geometry = inner.geometry();
         let (max_trace_len, num_vars) = inner.size_hint();
@@ -170,8 +172,7 @@ impl ZkSyncCompressionLayerCircuit {
         cs.into_assembly()
     }
 
-    pub fn synthesis<P: PrimeFieldLikeVectorized<Base = F>>
-    (
+    pub fn synthesis<P: PrimeFieldLikeVectorized<Base = F>>(
         &self,
         hint: &FinalizationHintsForProver,
     ) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
@@ -184,14 +185,16 @@ impl ZkSyncCompressionLayerCircuit {
     pub fn synthesis_wrapped<P, CR>(
         &self,
         hint: &FinalizationHintsForProver,
-    ) -> CSReferenceAssembly<F, P, ProvingCSConfig> 
-    where 
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig>
+    where
         P: PrimeFieldLikeVectorized<Base = F>,
-        CR: CircuitResolver< 
+        CR: CircuitResolver<
             F,
             zkevm_circuits::boojum::config::Resolver<
-                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts>>,
-        usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>
+                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts,
+            >,
+        >,
+        usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>,
     {
         match &self {
             Self::CompressionMode1Circuit(inner) => Self::synthesis_inner::<_, _, CR>(inner, hint),
