@@ -50,7 +50,6 @@ impl LocalFileDataSource {
         std::fs::write(&filepath, serde_json::to_string_pretty(&proof).unwrap())
             .map_err(|el| Box::new(el) as Box<dyn Error>)?;
         Ok(())
-        //
     }
 }
 
