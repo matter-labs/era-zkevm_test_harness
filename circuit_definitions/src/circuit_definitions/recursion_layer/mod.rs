@@ -4,6 +4,8 @@ use crate::boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcrip
 use crate::boojum::field::goldilocks::{GoldilocksExt2, GoldilocksField};
 use crate::boojum::gadgets::recursion::recursive_transcript::CircuitAlgebraicSpongeBasedTranscript;
 use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
+use snark_wrapper::boojum::config::CSConfig;
+use snark_wrapper::boojum::dag::CircuitResolver;
 use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
 use zkevm_circuits::boojum::cs::traits::circuit::CircuitBuilder;
 use zkevm_circuits::recursion::leaf_layer::input::RecursionLeafParametersWitness;
@@ -455,13 +457,21 @@ impl ZkSyncRecursiveLayerCircuit {
         }
     }
 
-    fn synthesis_inner<P: PrimeFieldLikeVectorized<Base = F>>(
+    fn synthesis_inner<P, CR>(
         inner: &ZkSyncLeafLayerRecursiveCircuit,
         hint: &FinalizationHintsForProver,
-    ) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig> 
+    where 
+        P: PrimeFieldLikeVectorized<Base = F>,
+        CR: CircuitResolver<
+            F,
+            zkevm_circuits::boojum::config::Resolver<
+                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts>>,
+        usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>
+    {
         let geometry = ZkSyncLeafLayerRecursiveCircuit::geometry();
         let (max_trace_len, num_vars) = inner.size_hint();
-        let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig>::new(
+        let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig, CR>::new(
             geometry,
             max_trace_len.unwrap(),
         );
@@ -475,10 +485,18 @@ impl ZkSyncRecursiveLayerCircuit {
         cs.into_assembly()
     }
 
-    pub fn synthesis<P: PrimeFieldLikeVectorized<Base = F>>(
+    pub fn synthesis_wrapped<P, CR>(
         &self,
         hint: &FinalizationHintsForProver,
-    ) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig> 
+    where 
+        P: PrimeFieldLikeVectorized<Base = F>,
+        CR: CircuitResolver<
+            F,
+            zkevm_circuits::boojum::config::Resolver<
+                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts>>,
+        usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>
+    {
         match &self {
             Self::SchedulerCircuit(inner) => {
                 let geometry = ZkSyncSchedulerCircuit::geometry();
