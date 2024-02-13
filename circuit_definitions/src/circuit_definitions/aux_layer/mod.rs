@@ -16,6 +16,7 @@ use crate::recursion_layer_proof_config;
 use snark_wrapper::boojum::config::CSConfig;
 use snark_wrapper::boojum::dag::CircuitResolver;
 use snark_wrapper::boojum::dag::DefaultCircuitResolver;
+use snark_wrapper::boojum::dag::StCircuitResolver;
 use snark_wrapper::franklin_crypto::plonk::circuit;
 use zkevm_circuits::recursion::compression::CompressionRecursionConfig;
 
@@ -140,11 +141,7 @@ impl ZkSyncCompressionLayerCircuit {
         }
     }
 
-    fn synthesis_inner<
-        P,
-        CF,
-        CR,
-    >(
+    fn synthesis_inner<P, CF, CR>(
         inner: &CompressionLayerCircuit<CF>,
         hint: &FinalizationHintsForProver,
     ) -> CSReferenceAssembly<GoldilocksField, P, ProvingCSConfig> 
@@ -180,7 +177,7 @@ impl ZkSyncCompressionLayerCircuit {
     ) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
         self.synthesis_wrapped::<
             P,
-            DefaultCircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>
+            StCircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>
         >(hint)
     }
 

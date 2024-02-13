@@ -4,6 +4,7 @@ use crate::boojum::cs::implementations::setup::FinalizationHintsForProver;
 use crate::boojum::cs::traits::gate::GatePlacementStrategy;
 use crate::boojum::field::goldilocks::{GoldilocksExt2, GoldilocksField};
 use crate::boojum::gadgets::tables::*;
+use snark_wrapper::boojum::dag::StCircuitResolver;
 use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
 use zkevm_circuits::boojum::config::CSConfig;
 use zkevm_circuits::boojum::dag::{CircuitResolver, DefaultCircuitResolver};
@@ -288,7 +289,7 @@ where
         }
     }
 
-    fn synthesis_inner<P, CR, > (
+    fn synthesis_inner<P, CR> (
         inner: &ZkSyncUniformCircuitInstance<F, impl ZkSyncUniformSynthesisFunction<F>>,
         hint: &FinalizationHintsForProver,
     ) -> CSReferenceAssembly<F, P, ProvingCSConfig> 
@@ -322,7 +323,7 @@ where
     ) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
         self.synthesis_wrapped::<
             P,
-            DefaultCircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>
+            StCircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>
         >(hint)
     }
 

@@ -5,7 +5,7 @@ use crate::boojum::field::goldilocks::{GoldilocksExt2, GoldilocksField};
 use crate::boojum::gadgets::recursion::recursive_transcript::CircuitAlgebraicSpongeBasedTranscript;
 use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
 use snark_wrapper::boojum::config::CSConfig;
-use snark_wrapper::boojum::dag::CircuitResolver;
+use snark_wrapper::boojum::dag::{CircuitResolver, StCircuitResolver};
 use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
 use zkevm_circuits::boojum::cs::traits::circuit::CircuitBuilder;
 use zkevm_circuits::recursion::leaf_layer::input::RecursionLeafParametersWitness;
@@ -485,6 +485,17 @@ impl ZkSyncRecursiveLayerCircuit {
         cs.into_assembly()
     }
 
+    pub fn synthesis<P: PrimeFieldLikeVectorized<Base = F>>
+    (
+        &self,
+        hint: &FinalizationHintsForProver,
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
+        self.synthesis_wrapped::<
+            P,
+            StCircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>
+        >(hint)
+    }
+
     pub fn synthesis_wrapped<P, CR>(
         &self,
         hint: &FinalizationHintsForProver,
@@ -543,7 +554,7 @@ impl ZkSyncRecursiveLayerCircuit {
             | Self::LeafLayerCircuitForEventsSorter(inner)
             | Self::LeafLayerCircuitForL1MessagesSorter(inner)
             | Self::LeafLayerCircuitForL1MessagesHasher(inner) => {
-                Self::synthesis_inner(inner, hint)
+                Self::synthesis_inner::<_, CR>(inner, hint)
             }
         }
     }
