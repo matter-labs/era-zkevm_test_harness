@@ -288,19 +288,16 @@ where
         }
     }
 
-    fn synthesis_inner<
-        P,
-        CR,
-    > (
+    fn synthesis_inner<P, CR, > (
         inner: &ZkSyncUniformCircuitInstance<F, impl ZkSyncUniformSynthesisFunction<F>>,
         hint: &FinalizationHintsForProver,
-    ) -> CSReferenceAssembly<F, P, ProvingCSConfig> where 
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig> 
+    where 
         P: PrimeFieldLikeVectorized<Base = F>,
         CR: CircuitResolver<
             F,
             zkevm_circuits::boojum::config::Resolver<
                 zkevm_circuits::boojum::config::DontPerformRuntimeAsserts>>,
-        // CR: CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>,
         usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>
     {
         let geometry = inner.geometry_proxy();
