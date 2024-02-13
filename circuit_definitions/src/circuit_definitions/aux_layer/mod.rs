@@ -13,6 +13,10 @@ use crate::circuit_definitions::cs_builder_reference::CsReferenceImplementationB
 use crate::circuit_definitions::implementations::reference_cs::CSReferenceAssembly;
 
 use crate::recursion_layer_proof_config;
+use snark_wrapper::boojum::config::CSConfig;
+use snark_wrapper::boojum::dag::CircuitResolver;
+use snark_wrapper::boojum::dag::DefaultCircuitResolver;
+use snark_wrapper::boojum::dag::StCircuitResolver;
 use snark_wrapper::franklin_crypto::plonk::circuit;
 use zkevm_circuits::recursion::compression::CompressionRecursionConfig;
 
@@ -137,17 +141,25 @@ impl ZkSyncCompressionLayerCircuit {
         }
     }
 
-    fn synthesis_inner<
-        P: PrimeFieldLikeVectorized<Base = GoldilocksField>,
-        CF: ProofCompressionFunction,
-    >(
+    fn synthesis_inner<P, CF, CR>(
         inner: &CompressionLayerCircuit<CF>,
         hint: &FinalizationHintsForProver,
-    ) -> CSReferenceAssembly<GoldilocksField, P, ProvingCSConfig> {
+    ) -> CSReferenceAssembly<GoldilocksField, P, ProvingCSConfig>
+    where
+        P: PrimeFieldLikeVectorized<Base = GoldilocksField>,
+        CF: ProofCompressionFunction,
+        CR: CircuitResolver<
+            F,
+            zkevm_circuits::boojum::config::Resolver<
+                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts,
+            >,
+        >,
+        usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>,
+    {
         let geometry = inner.geometry();
         let (max_trace_len, num_vars) = inner.size_hint();
         let builder_impl =
-            CsReferenceImplementationBuilder::<GoldilocksField, P, ProvingCSConfig>::new(
+            CsReferenceImplementationBuilder::<GoldilocksField, P, ProvingCSConfig, CR>::new(
                 geometry,
                 max_trace_len.unwrap(),
             );
@@ -164,12 +176,32 @@ impl ZkSyncCompressionLayerCircuit {
         &self,
         hint: &FinalizationHintsForProver,
     ) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
+        self.synthesis_wrapped::<
+            P,
+            StCircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>
+        >(hint)
+    }
+
+    pub fn synthesis_wrapped<P, CR>(
+        &self,
+        hint: &FinalizationHintsForProver,
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig>
+    where
+        P: PrimeFieldLikeVectorized<Base = F>,
+        CR: CircuitResolver<
+            F,
+            zkevm_circuits::boojum::config::Resolver<
+                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts,
+            >,
+        >,
+        usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>,
+    {
         match &self {
-            Self::CompressionMode1Circuit(inner) => Self::synthesis_inner(inner, hint),
-            Self::CompressionMode2Circuit(inner) => Self::synthesis_inner(inner, hint),
-            Self::CompressionMode3Circuit(inner) => Self::synthesis_inner(inner, hint),
-            Self::CompressionMode4Circuit(inner) => Self::synthesis_inner(inner, hint),
-            Self::CompressionMode5Circuit(inner) => Self::synthesis_inner(inner, hint),
+            Self::CompressionMode1Circuit(inner) => Self::synthesis_inner::<_, _, CR>(inner, hint),
+            Self::CompressionMode2Circuit(inner) => Self::synthesis_inner::<_, _, CR>(inner, hint),
+            Self::CompressionMode3Circuit(inner) => Self::synthesis_inner::<_, _, CR>(inner, hint),
+            Self::CompressionMode4Circuit(inner) => Self::synthesis_inner::<_, _, CR>(inner, hint),
+            Self::CompressionMode5Circuit(inner) => Self::synthesis_inner::<_, _, CR>(inner, hint),
         }
     }
 

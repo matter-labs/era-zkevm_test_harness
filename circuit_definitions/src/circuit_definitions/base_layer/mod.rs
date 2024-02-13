@@ -4,7 +4,10 @@ use crate::boojum::cs::implementations::setup::FinalizationHintsForProver;
 use crate::boojum::cs::traits::gate::GatePlacementStrategy;
 use crate::boojum::field::goldilocks::{GoldilocksExt2, GoldilocksField};
 use crate::boojum::gadgets::tables::*;
+use snark_wrapper::boojum::dag::StCircuitResolver;
 use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
+use zkevm_circuits::boojum::config::CSConfig;
+use zkevm_circuits::boojum::dag::{CircuitResolver, DefaultCircuitResolver};
 use zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
 use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord;
 use zkevm_circuits::tables::*;
@@ -286,13 +289,23 @@ where
         }
     }
 
-    fn synthesis_inner<P: PrimeFieldLikeVectorized<Base = F>>(
+    fn synthesis_inner<P, CR>(
         inner: &ZkSyncUniformCircuitInstance<F, impl ZkSyncUniformSynthesisFunction<F>>,
         hint: &FinalizationHintsForProver,
-    ) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig>
+    where
+        P: PrimeFieldLikeVectorized<Base = F>,
+        CR: CircuitResolver<
+            F,
+            zkevm_circuits::boojum::config::Resolver<
+                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts,
+            >,
+        >,
+        usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>,
+    {
         let geometry = inner.geometry_proxy();
         let (max_trace_len, num_vars) = inner.size_hint();
-        let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig>::new(
+        let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig, CR>::new(
             geometry,
             max_trace_len.unwrap(),
         );
@@ -309,26 +322,62 @@ where
         &self,
         hint: &FinalizationHintsForProver,
     ) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
+        self.synthesis_wrapped::<
+            P,
+            StCircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>
+        >(hint)
+    }
+
+    pub fn synthesis_wrapped<P, CR>(
+        &self,
+        hint: &FinalizationHintsForProver,
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig>
+    where
+        P: PrimeFieldLikeVectorized<Base = F>,
+        CR: CircuitResolver<
+            F,
+            zkevm_circuits::boojum::config::Resolver<
+                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts,
+            >,
+        >,
+        usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>,
+    {
         match &self {
-            ZkSyncBaseLayerCircuit::MainVM(inner) => Self::synthesis_inner(inner, hint),
+            ZkSyncBaseLayerCircuit::MainVM(inner) => Self::synthesis_inner::<_, CR>(inner, hint),
             ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {
-                Self::synthesis_inner(inner, hint)
+                Self::synthesis_inner::<_, CR>(inner, hint)
             }
-            ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => Self::synthesis_inner(inner, hint),
-            ZkSyncBaseLayerCircuit::LogDemuxer(inner) => Self::synthesis_inner(inner, hint),
+            ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {
+                Self::synthesis_inner::<_, CR>(inner, hint)
+            }
+            ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {
+                Self::synthesis_inner::<_, CR>(inner, hint)
+            }
             ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {
-                Self::synthesis_inner(inner, hint)
+                Self::synthesis_inner::<_, CR>(inner, hint)
             }
             ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {
-                Self::synthesis_inner(inner, hint)
+                Self::synthesis_inner::<_, CR>(inner, hint)
             }
-            ZkSyncBaseLayerCircuit::ECRecover(inner) => Self::synthesis_inner(inner, hint),
-            ZkSyncBaseLayerCircuit::RAMPermutation(inner) => Self::synthesis_inner(inner, hint),
-            ZkSyncBaseLayerCircuit::StorageSorter(inner) => Self::synthesis_inner(inner, hint),
-            ZkSyncBaseLayerCircuit::StorageApplication(inner) => Self::synthesis_inner(inner, hint),
-            ZkSyncBaseLayerCircuit::EventsSorter(inner) => Self::synthesis_inner(inner, hint),
-            ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => Self::synthesis_inner(inner, hint),
-            ZkSyncBaseLayerCircuit::L1MessagesHasher(inner) => Self::synthesis_inner(inner, hint),
+            ZkSyncBaseLayerCircuit::ECRecover(inner) => Self::synthesis_inner::<_, CR>(inner, hint),
+            ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {
+                Self::synthesis_inner::<_, CR>(inner, hint)
+            }
+            ZkSyncBaseLayerCircuit::StorageSorter(inner) => {
+                Self::synthesis_inner::<_, CR>(inner, hint)
+            }
+            ZkSyncBaseLayerCircuit::StorageApplication(inner) => {
+                Self::synthesis_inner::<_, CR>(inner, hint)
+            }
+            ZkSyncBaseLayerCircuit::EventsSorter(inner) => {
+                Self::synthesis_inner::<_, CR>(inner, hint)
+            }
+            ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {
+                Self::synthesis_inner::<_, CR>(inner, hint)
+            }
+            ZkSyncBaseLayerCircuit::L1MessagesHasher(inner) => {
+                Self::synthesis_inner::<_, CR>(inner, hint)
+            }
         }
     }
 
