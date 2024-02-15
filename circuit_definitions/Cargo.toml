@@ -13,7 +13,7 @@ license = "MIT OR Apache-2.0"
 snark_wrapper = {git = "https://github.com/matter-labs/snark-wrapper.git", branch = "main"}
 # snark_wrapper = {path = "../../snark_wrapper"}
 
-zkevm_circuits = {git = "https://github.com/matter-labs/era-zkevm_circuits.git", branch = "v1.4.1"}
+zkevm_circuits = {git = "https://github.com/koloz193/era-zkevm_circuits.git", branch = "v1.4.1"}
 zk_evm = {git = "https://github.com/matter-labs/era-zk_evm.git", branch = "v1.4.1"}
 
 derivative = "*"
