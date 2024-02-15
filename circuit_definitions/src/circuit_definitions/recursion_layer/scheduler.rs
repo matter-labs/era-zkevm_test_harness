@@ -232,10 +232,10 @@ pub type ZkSyncSchedulerCircuit = SchedulerCircuit<
     // GoldilocksPoisedon2Transcript,
     // CircuitAlgebraicSpongeBasedTranscript<GoldilocksField, 8, 12, 4, ZkSyncDefaultRoundFunction>,
     NoPow,
-    false,
+    true,
 >;
 
 use crate::boojum::cs::traits::circuit::CircuitBuilderProxy;
 
-pub type SchedulerCircuitBuilder<POW> = CircuitBuilderProxy<F, SchedulerCircuit<POW, false>>;
+pub type SchedulerCircuitBuilder<POW> = CircuitBuilderProxy<F, SchedulerCircuit<POW, true>>;
 pub type ConcreteSchedulerCircuitBuilder = SchedulerCircuitBuilder<NoPow>;
