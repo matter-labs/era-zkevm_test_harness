@@ -4,7 +4,6 @@ use std::{
     sync::Arc,
 };
 
-use crate::boojum::worker::Worker;
 use circuit_definitions::boojum::gadgets::traits::allocatable::CSAllocatable;
 use circuit_definitions::{
     aux_definitions::witness_oracle::VmWitnessOracle,
@@ -27,16 +26,21 @@ use crossbeam::atomic::AtomicCell;
 use self::toolset::GeometryConfig;
 
 use super::*;
-use crate::boojum::algebraic_props::round_function::AbsorptionModeOverwrite;
-use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
-use crate::boojum::cs::implementations::hints::DenseVariablesCopyHint;
-use crate::boojum::cs::implementations::hints::DenseWitnessCopyHint;
-use crate::boojum::cs::implementations::polynomial_storage::{SetupBaseStorage, SetupStorage};
-use crate::boojum::cs::implementations::pow::NoPow;
-use crate::boojum::cs::implementations::prover::ProofConfig;
-use crate::boojum::cs::implementations::setup::FinalizationHintsForProver;
-use crate::boojum::cs::implementations::verifier::VerificationKey;
-use crate::boojum::cs::oracle::merkle_tree::MerkleTreeWithCap;
+use crate::boojum::{
+    algebraic_props::{round_function::AbsorptionModeOverwrite, sponge::GoldilocksPoseidon2Sponge},
+    cs::{
+        implementations::{
+            hints::{DenseVariablesCopyHint, DenseWitnessCopyHint},
+            polynomial_storage::{SetupBaseStorage, SetupStorage},
+            pow::NoPow,
+            prover::ProofConfig,
+            setup::FinalizationHintsForProver,
+            verifier::VerificationKey,
+        },
+        oracle::merkle_tree::MerkleTreeWithCap,
+    },
+    worker::Worker,
+};
 
 use crate::data_source::SetupDataSource;
 use crate::tests::complex_tests::generate_base_layer;
