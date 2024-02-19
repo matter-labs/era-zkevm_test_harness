@@ -12,9 +12,12 @@ use circuit_definitions::{
             ZkSyncBaseLayerCircuit, ZkSyncBaseLayerFinalizationHint, ZkSyncBaseLayerProof,
             ZkSyncBaseLayerVerificationKey,
         },
+        eip4844::EIP4844Circuit,
         ZkSyncUniformCircuitInstance,
     },
-    recursion_layer_proof_config, RECURSION_LAYER_CAP_SIZE, RECURSION_LAYER_FRI_LDE_FACTOR,
+    eip4844_proof_config, recursion_layer_proof_config,
+    zkevm_circuits::eip_4844::input::EIP4844OutputDataWitness,
+    EIP4844_CYCLE_LIMIT, RECURSION_LAYER_CAP_SIZE, RECURSION_LAYER_FRI_LDE_FACTOR,
 };
 use crossbeam::atomic::AtomicCell;
 
@@ -400,6 +403,28 @@ pub fn generate_recursive_layer_vks_and_proofs(
     Ok(())
 }
 
+pub fn generate_eip4844_vks(
+    source: &mut dyn SetupDataSource,
+) -> crate::data_source::SourceResult<()> {
+    let eip4844_proof_config = eip4844_proof_config();
+
+    let worker = Worker::new();
+
+    let circuit = EIP4844Circuit {
+        witness: AtomicCell::new(None),
+        config: Arc::new(EIP4844_CYCLE_LIMIT),
+        round_function: Arc::new(Poseidon2Goldilocks),
+        expected_public_input: None,
+    };
+    let (_, _, vk, s_, _, _, finalization_hint) = create_eip4844_setup_data(
+        circuit.clone(),
+        &worker,
+        eip4844_proof_config.fri_lde_factor,
+        eip4844_proof_config.merkle_tree_cap_size,
+    );
+    source.set_eip4844_vk(vk)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -409,6 +434,13 @@ mod test {
         LocalFileDataSource::create_folders_for_storing_data();
         let mut source = LocalFileDataSource;
         generate_base_layer_vks(&mut source).expect("must compute setup");
+    }
+
+    #[test]
+    fn test_run_create_eip4844_vks_and_proofs() {
+        LocalFileDataSource::create_folders_for_storing_data();
+        let mut source = LocalFileDataSource;
+        generate_eip4844_vks(&mut source).expect("must compute setup");
     }
 
     #[test]

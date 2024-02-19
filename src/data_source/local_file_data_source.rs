@@ -1,9 +1,10 @@
 use super::{BlockDataSource, SetupDataSource, SourceResult};
 use circuit_definitions::circuit_definitions::aux_layer::{
-    ZkSyncCompressionForWrapperFinalizationHint, ZkSyncCompressionForWrapperProof,
-    ZkSyncCompressionForWrapperVerificationKey, ZkSyncCompressionLayerFinalizationHint,
-    ZkSyncCompressionLayerProof, ZkSyncCompressionLayerVerificationKey, ZkSyncSnarkWrapperProof,
-    ZkSyncSnarkWrapperSetup, ZkSyncSnarkWrapperVK,
+    EIP4844VerificationKey, ZkSyncCompressionForWrapperFinalizationHint,
+    ZkSyncCompressionForWrapperProof, ZkSyncCompressionForWrapperVerificationKey,
+    ZkSyncCompressionLayerFinalizationHint, ZkSyncCompressionLayerProof,
+    ZkSyncCompressionLayerVerificationKey, ZkSyncSnarkWrapperProof, ZkSyncSnarkWrapperSetup,
+    ZkSyncSnarkWrapperVK,
 };
 use circuit_definitions::circuit_definitions::base_layer::{
     ZkSyncBaseLayerFinalizationHint, ZkSyncBaseLayerProof, ZkSyncBaseLayerVerificationKey,
@@ -482,6 +483,24 @@ impl SetupDataSource for LocalFileDataSource {
             .map_err(|el| Box::new(el) as Box<dyn Error>)?;
 
         Ok(())
+    }
+
+    fn get_eip4844_vk(&self) -> SourceResult<EIP4844VerificationKey> {
+        let file = File::open(format!(
+            "{}/aux_layer/eip4844_vk.json",
+            Self::SETUP_DATA_LOCATION,
+        ))
+        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
+        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
+
+        Ok(result)
+    }
+
+    fn set_eip4844_vk(&mut self, vk: EIP4844VerificationKey) -> SourceResult<()> {
+        LocalFileDataSource::write_pretty(
+            format!("{}/aux_layer/eip4844_vk.json", Self::SETUP_DATA_LOCATION,),
+            vk,
+        )
     }
 }
 
