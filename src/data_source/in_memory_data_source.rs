@@ -1,9 +1,10 @@
 use super::{BlockDataSource, SetupDataSource, SourceResult};
 use circuit_definitions::circuit_definitions::aux_layer::{
-    ZkSyncCompressionForWrapperFinalizationHint, ZkSyncCompressionForWrapperProof,
-    ZkSyncCompressionForWrapperVerificationKey, ZkSyncCompressionLayerFinalizationHint,
-    ZkSyncCompressionLayerProof, ZkSyncCompressionLayerVerificationKey, ZkSyncSnarkWrapperProof,
-    ZkSyncSnarkWrapperSetup, ZkSyncSnarkWrapperVK,
+    EIP4844VerificationKey, ZkSyncCompressionForWrapperFinalizationHint,
+    ZkSyncCompressionForWrapperProof, ZkSyncCompressionForWrapperVerificationKey,
+    ZkSyncCompressionLayerFinalizationHint, ZkSyncCompressionLayerProof,
+    ZkSyncCompressionLayerVerificationKey, ZkSyncSnarkWrapperProof, ZkSyncSnarkWrapperSetup,
+    ZkSyncSnarkWrapperVK,
 };
 use circuit_definitions::circuit_definitions::base_layer::{
     ZkSyncBaseLayerFinalizationHint, ZkSyncBaseLayerProof, ZkSyncBaseLayerVerificationKey,
@@ -33,6 +34,7 @@ pub struct InMemoryDataSource {
     compression_for_wrapper_hint: HashMap<u8, ZkSyncCompressionForWrapperFinalizationHint>,
     wrapper_setup: HashMap<u8, ZkSyncSnarkWrapperSetup>,
     wrapper_vk: HashMap<u8, ZkSyncSnarkWrapperVK>,
+    eip_4844_vk: Option<EIP4844VerificationKey>,
 
     ///data structures required for holding [`BlockDataSource`] result
     base_layer_proofs: HashMap<(u8, usize), ZkSyncBaseLayerProof>,
@@ -63,6 +65,7 @@ impl InMemoryDataSource {
             compression_for_wrapper_hint: HashMap::new(),
             wrapper_setup: HashMap::new(),
             wrapper_vk: HashMap::new(),
+            eip_4844_vk: None,
             base_layer_proofs: HashMap::new(),
             leaf_layer_proofs: HashMap::new(),
             node_layer_proofs: HashMap::new(),
@@ -379,6 +382,17 @@ impl SetupDataSource for InMemoryDataSource {
 
     fn set_wrapper_vk(&mut self, vk: ZkSyncSnarkWrapperVK) -> SourceResult<()> {
         self.wrapper_vk.insert(vk.numeric_circuit_type(), vk);
+        Ok(())
+    }
+
+    fn get_eip4844_vk(&self) -> SourceResult<EIP4844VerificationKey> {
+        self.eip_4844_vk
+            .clone()
+            .ok_or(Box::new(Error::new(ErrorKind::Other, "No VK for 4844")))
+    }
+
+    fn set_eip4844_vk(&mut self, vk: EIP4844VerificationKey) -> SourceResult<()> {
+        self.eip_4844_vk = Some(vk);
         Ok(())
     }
 }

@@ -19,6 +19,8 @@ pub const RECURSION_LAYER_CAP_SIZE: usize = 16;
 
 pub const L1_SECURITY_BITS: usize = 80;
 
+pub const EIP4844_CYCLE_LIMIT: usize = 4096;
+
 pub use snark_wrapper;
 use snark_wrapper::boojum::field::goldilocks::GoldilocksField;
 
