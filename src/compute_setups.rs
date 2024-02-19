@@ -416,7 +416,7 @@ pub fn generate_eip4844_vks(
         round_function: Arc::new(Poseidon2Goldilocks),
         expected_public_input: None,
     };
-    let (_, _, vk, s_, _, _, finalization_hint) = create_eip4844_setup_data(
+    let (_, _, vk, _, _, _, _) = create_eip4844_setup_data(
         circuit.clone(),
         &worker,
         eip4844_proof_config.fri_lde_factor,
