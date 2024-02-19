@@ -5,7 +5,6 @@ pub mod compression_modes;
 pub mod wrapper;
 
 use crate::boojum::config::ProvingCSConfig;
-use crate::boojum::dag::CircuitResolverOpts;
 use crate::boojum::field::traits::field_like::PrimeFieldLikeVectorized;
 use crate::circuit_definitions::aux_layer::compression::*;
 use crate::circuit_definitions::aux_layer::compression_modes::*;
@@ -15,9 +14,7 @@ use crate::circuit_definitions::implementations::reference_cs::CSReferenceAssemb
 use crate::recursion_layer_proof_config;
 use snark_wrapper::boojum::config::CSConfig;
 use snark_wrapper::boojum::dag::CircuitResolver;
-use snark_wrapper::boojum::dag::DefaultCircuitResolver;
 use snark_wrapper::boojum::dag::StCircuitResolver;
-use snark_wrapper::franklin_crypto::plonk::circuit;
 use zkevm_circuits::recursion::compression::CompressionRecursionConfig;
 
 use crate::ProofConfig;
@@ -293,9 +290,6 @@ impl ZkSyncCompressionLayerCircuit {
         Self::from_witness_and_vk(None, vk, circuit_type)
     }
 }
-
-use crate::circuit_definitions::recursion_layer::scheduler::ConcreteSchedulerCircuitBuilder;
-use zkevm_circuits::scheduler::auxiliary::BaseLayerCircuitType;
 
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone(bound = ""), Debug)]
@@ -674,3 +668,6 @@ pub type ZkSyncSnarkWrapperSetup =
     ZkSyncCompressionLayerStorage<Arc<SnarkSetup<Bn256, ZkSyncSnarkWrapperCircuit>>>;
 pub type ZkSyncSnarkWrapperVK =
     ZkSyncCompressionLayerStorage<SnarkVK<Bn256, ZkSyncSnarkWrapperCircuit>>;
+
+pub type EIP4844VerificationKey =
+    VerificationKey<GoldilocksField, GoldilocksPoseidon2Sponge<AbsorptionModeOverwrite>>;
