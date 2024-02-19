@@ -381,6 +381,20 @@ impl SetupDataSource for InMemoryDataSource {
         self.wrapper_vk.insert(vk.numeric_circuit_type(), vk);
         Ok(())
     }
+
+    fn get_eip4844_vk(
+        &self,
+    ) -> SourceResult<circuit_definitions::circuit_definitions::aux_layer::EIP4844VerificationKey>
+    {
+        todo!()
+    }
+
+    fn set_eip4844_vk(
+        &mut self,
+        vk: circuit_definitions::circuit_definitions::aux_layer::EIP4844VerificationKey,
+    ) -> SourceResult<()> {
+        todo!()
+    }
 }
 
 impl BlockDataSource for InMemoryDataSource {

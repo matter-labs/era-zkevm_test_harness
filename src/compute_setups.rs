@@ -12,9 +12,12 @@ use circuit_definitions::{
             ZkSyncBaseLayerCircuit, ZkSyncBaseLayerFinalizationHint, ZkSyncBaseLayerProof,
             ZkSyncBaseLayerVerificationKey,
         },
+        eip4844::EIP4844Circuit,
         ZkSyncUniformCircuitInstance,
     },
-    recursion_layer_proof_config, RECURSION_LAYER_CAP_SIZE, RECURSION_LAYER_FRI_LDE_FACTOR,
+    eip4844_proof_config, recursion_layer_proof_config,
+    zkevm_circuits::eip_4844::input::EIP4844OutputDataWitness,
+    EIP4844_CYCLE_LIMIT, RECURSION_LAYER_CAP_SIZE, RECURSION_LAYER_FRI_LDE_FACTOR,
 };
 use crossbeam::atomic::AtomicCell;
 
@@ -180,7 +183,7 @@ pub fn generate_recursive_layer_vks_and_proofs(
     let worker = Worker::new();
 
     println!("Computing leaf vks");
-
+    /*
     for base_circuit_type in
         (BaseLayerCircuitType::VM as u8)..=(BaseLayerCircuitType::L1MessagesHasher as u8)
     {
@@ -270,11 +273,11 @@ pub fn generate_recursive_layer_vks_and_proofs(
 
         let proof = ZkSyncRecursionLayerProof::from_inner(recursive_circuit_type as u8, proof);
         source.set_recursion_layer_leaf_padding_proof(proof)?;
-    }
+    }*/
 
     println!("Computing node vk");
 
-    {
+    if false {
         use crate::zkevm_circuits::recursion::node_layer::input::*;
         let input = RecursionNodeInput::placeholder_witness();
         let vk = source.get_recursion_layer_vk(
@@ -368,18 +371,24 @@ pub fn generate_recursive_layer_vks_and_proofs(
         let mut scheduler_witness = SchedulerCircuitInstanceWitness::placeholder();
         // the only thing we need to setup here is a VK
         scheduler_witness.node_layer_vk_witness = node_vk;
+        let foo = EIP4844OutputDataWitness {
+            linear_hash: [0u8; 32],
+            output_hash: [0u8; 32],
+        };
+        scheduler_witness.eip4844_witnesses = Some([foo.clone(), foo.clone()]);
 
         let scheduler_circuit = SchedulerCircuit {
             witness: scheduler_witness,
             config,
             transcript_params: (),
-            eip4844_proof_config: None,
-            eip4844_vk_fixed_parameters: None,
-            eip4844_vk: None,
+            eip4844_proof_config: Some(eip4844_proof_config()),
+            eip4844_vk_fixed_parameters: Some(source.get_eip4844_vk().unwrap().fixed_parameters),
+            eip4844_vk: Some(source.get_eip4844_vk().unwrap()),
             _marker: std::marker::PhantomData,
         };
 
         let scheduler_circuit = ZkSyncRecursiveLayerCircuit::SchedulerCircuit(scheduler_circuit);
+        println!("XXXX Size hint is: {:?}", scheduler_circuit.size_hint());
 
         let (_setup_base, _setup, vk, _setup_tree, _vars_hint, _wits_hint, finalization_hint) =
             create_recursive_layer_setup_data(
@@ -400,6 +409,28 @@ pub fn generate_recursive_layer_vks_and_proofs(
     Ok(())
 }
 
+pub fn generate_eip4844_vks(
+    source: &mut dyn SetupDataSource,
+) -> crate::data_source::SourceResult<()> {
+    let eip4844_proof_config = eip4844_proof_config();
+
+    let worker = Worker::new();
+
+    let circuit = EIP4844Circuit {
+        witness: AtomicCell::new(None),
+        config: Arc::new(EIP4844_CYCLE_LIMIT),
+        round_function: Arc::new(Poseidon2Goldilocks),
+        expected_public_input: None,
+    };
+    let (_, _, vk, s_, _, _, finalization_hint) = create_eip4844_setup_data(
+        circuit.clone(),
+        &worker,
+        eip4844_proof_config.fri_lde_factor,
+        eip4844_proof_config.merkle_tree_cap_size,
+    );
+    source.set_eip4844_vk(vk)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -409,6 +440,13 @@ mod test {
         LocalFileDataSource::create_folders_for_storing_data();
         let mut source = LocalFileDataSource;
         generate_base_layer_vks(&mut source).expect("must compute setup");
+    }
+
+    #[test]
+    fn test_run_create_eip4844_vks_and_proofs() {
+        LocalFileDataSource::create_folders_for_storing_data();
+        let mut source = LocalFileDataSource;
+        generate_eip4844_vks(&mut source).expect("must compute setup");
     }
 
     #[test]

@@ -674,3 +674,6 @@ pub type ZkSyncSnarkWrapperSetup =
     ZkSyncCompressionLayerStorage<Arc<SnarkSetup<Bn256, ZkSyncSnarkWrapperCircuit>>>;
 pub type ZkSyncSnarkWrapperVK =
     ZkSyncCompressionLayerStorage<SnarkVK<Bn256, ZkSyncSnarkWrapperCircuit>>;
+
+pub type EIP4844VerificationKey =
+    VerificationKey<GoldilocksField, GoldilocksPoseidon2Sponge<AbsorptionModeOverwrite>>;

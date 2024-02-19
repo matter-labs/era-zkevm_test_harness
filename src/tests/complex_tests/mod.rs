@@ -60,7 +60,9 @@ const EIP4844_CYCLE_LIMIT: usize = 4096;
 #[test]
 fn basic_test() {
     let test_artifact = read_basic_test_artifact();
-    run_and_try_create_witness_inner(test_artifact, 20000, None);
+    //run_and_try_create_witness_inner(test_artifact, 20000, None);
+    let blob = vec![3u8; 80000];
+    run_and_try_create_witness_inner(test_artifact, 20000, Some([blob.clone(), blob.clone()]));
     // run_and_try_create_witness_inner(test_artifact, 16);
 }
 
@@ -295,7 +297,7 @@ fn run_and_try_create_witness_inner(
             }
         }
 
-        base_test_circuit(el);
+        //base_test_circuit(el);
     }
 
     let worker = Worker::new_with_num_threads(8);
@@ -860,6 +862,8 @@ fn run_and_try_create_witness_inner(
 
                 proofs.push(proof);
             }
+            println!("About to create witnesses");
+
             next_aggregations = create_node_witnesses(
                 next_aggregations,
                 proofs,
@@ -867,6 +871,7 @@ fn run_and_try_create_witness_inner(
                 node_vk_commitment,
                 &leaf_vk_commits,
             );
+            println!("About to create witnesses - done.");
 
             for (idx, (_, _, el)) in next_aggregations.iter().enumerate() {
                 // test_recursive_circuit(el.clone());
@@ -882,6 +887,7 @@ fn run_and_try_create_witness_inner(
                     }
                     continue;
                 }
+                println!("Before setup data check");
 
                 if setup_data.is_none() {
                     let (
@@ -983,6 +989,8 @@ fn run_and_try_create_witness_inner(
         }
     }
 
+    println!("Collecting scheduler witnesses");
+
     // collect for scheduler. We know that is this test depth is 0
     let mut scheduler_proofs = vec![];
     for recursive_circuit_type in (ZkSyncRecursionLayerStorageType::LeafLayerCircuitForMainVM as u8)
@@ -1034,10 +1042,14 @@ fn run_and_try_create_witness_inner(
         _marker: std::marker::PhantomData,
     };
 
+    println!("Computing blob proof");
+
     if let Some(blobs) = blobs {
         let mut eip4844_proofs = vec![];
         scheduler_circuit.eip4844_proof_config = Some(eip4844_proof_config());
         let mut eip4844_vk = None;
+        let mut witnesses = vec![];
+
         for blob in blobs {
             let (blob_arr, linear_hash, versioned_hash, output_hash) =
                 generate_eip4844_witness::<GoldilocksField>(blob);
@@ -1071,6 +1083,7 @@ fn run_and_try_create_witness_inner(
                 linear_hash_output: linear_hash,
                 versioned_hash,
             };
+            witnesses.push(witness.closed_form_input.observable_output.clone());
             let circuit = EIP4844Circuit {
                 witness: AtomicCell::new(Some(witness)),
                 config: Arc::new(EIP4844_CYCLE_LIMIT),
@@ -1111,13 +1124,16 @@ fn run_and_try_create_witness_inner(
         scheduler_circuit.eip4844_vk = eip4844_vk.clone();
         scheduler_circuit.eip4844_vk_fixed_parameters = Some(eip4844_vk.unwrap().fixed_parameters);
         scheduler_circuit.witness.eip4844_proofs = eip4844_proofs.into();
+        scheduler_circuit.witness.eip4844_witnesses =
+            Some([witnesses[0].clone(), witnesses[1].clone()]);
     }
 
     println!("Computing scheduler proof");
 
     let scheduler_circuit = ZkSyncRecursiveLayerCircuit::SchedulerCircuit(scheduler_circuit);
 
-    if source.get_scheduler_proof().is_err() {
+    if true {
+        //source.get_scheduler_proof().is_err() {
         let f = std::fs::File::create("tmp.json").unwrap();
         serde_json::to_writer(f, &scheduler_circuit).unwrap();
 

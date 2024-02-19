@@ -1,9 +1,10 @@
 use super::{BlockDataSource, SetupDataSource, SourceResult};
 use circuit_definitions::circuit_definitions::aux_layer::{
-    ZkSyncCompressionForWrapperFinalizationHint, ZkSyncCompressionForWrapperProof,
-    ZkSyncCompressionForWrapperVerificationKey, ZkSyncCompressionLayerFinalizationHint,
-    ZkSyncCompressionLayerProof, ZkSyncCompressionLayerVerificationKey, ZkSyncSnarkWrapperProof,
-    ZkSyncSnarkWrapperSetup, ZkSyncSnarkWrapperVK,
+    EIP4844VerificationKey, ZkSyncCompressionForWrapperFinalizationHint,
+    ZkSyncCompressionForWrapperProof, ZkSyncCompressionForWrapperVerificationKey,
+    ZkSyncCompressionLayerFinalizationHint, ZkSyncCompressionLayerProof,
+    ZkSyncCompressionLayerVerificationKey, ZkSyncSnarkWrapperProof, ZkSyncSnarkWrapperSetup,
+    ZkSyncSnarkWrapperVK,
 };
 use circuit_definitions::circuit_definitions::base_layer::{
     ZkSyncBaseLayerFinalizationHint, ZkSyncBaseLayerProof, ZkSyncBaseLayerVerificationKey,
@@ -27,8 +28,8 @@ use std::{error::Error, fs::File};
 pub struct LocalFileDataSource;
 
 impl LocalFileDataSource {
-    pub const SETUP_DATA_LOCATION: &'static str = "./setup";
-    pub const BLOCK_DATA_LOCATION: &'static str = "./test_proofs";
+    pub const SETUP_DATA_LOCATION: &'static str = "./fresh/setup";
+    pub const BLOCK_DATA_LOCATION: &'static str = "./fresh/test_proofs";
 
     /// creates folders if missing
     pub fn create_folders_for_storing_data() {
@@ -482,6 +483,24 @@ impl SetupDataSource for LocalFileDataSource {
             .map_err(|el| Box::new(el) as Box<dyn Error>)?;
 
         Ok(())
+    }
+
+    fn get_eip4844_vk(&self) -> SourceResult<EIP4844VerificationKey> {
+        let file = File::open(format!(
+            "{}/aux_layer/eip4844_vk.json",
+            Self::SETUP_DATA_LOCATION,
+        ))
+        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
+        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
+
+        Ok(result)
+    }
+
+    fn set_eip4844_vk(&mut self, vk: EIP4844VerificationKey) -> SourceResult<()> {
+        LocalFileDataSource::write_pretty(
+            format!("{}/aux_layer/eip4844_vk.json", Self::SETUP_DATA_LOCATION,),
+            vk,
+        )
     }
 }
 
