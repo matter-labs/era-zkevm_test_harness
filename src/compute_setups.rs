@@ -365,6 +365,39 @@ pub fn generate_circuit_setup_data(
     })
 }
 
+/// Generate verification, and setup keys for a 4844 circuit.
+// In the current version (1.4.1), this circuit is still a special case.
+// In the upcoming version (1.5.0), it will be merged into the regular 'basic' circuits.
+pub fn generate_circuit_setup_data_4844() -> crate::data_source::SourceResult<CircuitSetupData> {
+    let eip4844_proof_config = eip4844_proof_config();
+
+    let worker = Worker::new();
+
+    let circuit = EIP4844Circuit {
+        witness: AtomicCell::new(None),
+        config: Arc::new(EIP4844_CYCLE_LIMIT),
+        round_function: Arc::new(Poseidon2Goldilocks),
+        expected_public_input: None,
+    };
+    let (setup_base, setup, vk, setup_tree, vars_hint, wits_hint, finalization_hint) =
+        create_eip4844_setup_data(
+            circuit.clone(),
+            &worker,
+            eip4844_proof_config.fri_lde_factor,
+            eip4844_proof_config.merkle_tree_cap_size,
+        );
+
+    Ok(CircuitSetupData {
+        setup_base,
+        setup,
+        vk,
+        setup_tree,
+        vars_hint,
+        wits_hint,
+        finalization_hint,
+    })
+}
+
 /// For backwards compatibility (as zksync-era uses this method).
 /// For new cases please use generate_base_layer_vks directly.
 pub fn generate_base_layer_vks_and_proofs(
