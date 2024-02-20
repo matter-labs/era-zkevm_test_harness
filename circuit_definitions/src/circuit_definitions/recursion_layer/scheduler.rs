@@ -153,7 +153,7 @@ where
 
     pub fn size_hint(&self) -> (Option<usize>, Option<usize>) {
         (
-            Some(TARGET_CIRCUIT_TRACE_LENGTH * 2),
+            Some(TARGET_CIRCUIT_TRACE_LENGTH),
             Some((1 << 26) + (1 << 25)),
         )
     }
