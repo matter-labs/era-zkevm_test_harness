@@ -84,6 +84,7 @@ pub fn run<
 ) -> (
     SchedulerCircuitInstanceWitness<MainField, CircuitGoldilocksPoseidon2Sponge, GoldilocksExt2>,
     BlockAuxilaryOutputWitness<MainField>,
+    S
 ) {
     let round_function = ZkSyncDefaultRoundFunction::default();
 
@@ -539,5 +540,5 @@ pub fn run<
         (scheduler_circuit_witness, aux_data)
     };
 
-    (scheduler_circuit_witness, aux_data)
+    (scheduler_circuit_witness, aux_data, out_of_circuit_vm.storage)
 }

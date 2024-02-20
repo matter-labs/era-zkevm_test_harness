@@ -135,7 +135,12 @@ fn get_testing_geometry_config() -> GeometryConfig {
 }
 
 pub(crate) fn generate_base_layer(
-    mut test_artifact: TestArtifact,
+    entry_point_code: Vec<[u8; 32]>,
+    default_account_code: Vec<[u8; 32]>,
+    _predeployed_contracts: HashMap<Address, Vec<[u8; 32]>>,
+    known_contracts: Vec<Vec<[u8; 32]>>,
+    storage: HashMap<Address, HashMap<U256, U256>>,
+    initial_heap_content: Vec<u8>,
     cycle_limit: usize,
     geometry: GeometryConfig,
 ) -> (
@@ -150,6 +155,7 @@ pub(crate) fn generate_base_layer(
         CircuitGoldilocksPoseidon2Sponge,
         GoldilocksExt2,
     >,
+    HashMap<Address, HashMap<U256, U256>>
 ) {
     use crate::zk_evm::zkevm_opcode_defs::system_params::BOOTLOADER_FORMAL_ADDRESS;
 
@@ -159,38 +165,35 @@ pub(crate) fn generate_base_layer(
     let mut storage_impl = InMemoryStorage::new();
     let mut tree = ZKSyncTestingTree::empty();
 
-    test_artifact.entry_point_address =
+    let entry_point_address =
         *zk_evm::zkevm_opcode_defs::system_params::BOOTLOADER_FORMAL_ADDRESS;
 
-    let predeployed_contracts = test_artifact
-        .predeployed_contracts
-        .clone()
-        .into_iter()
-        .chain(Some((
-            test_artifact.entry_point_address,
-            test_artifact.entry_point_code.clone(),
-        )))
-        .collect::<HashMap<_, _>>();
-    save_predeployed_contracts(&mut storage_impl, &mut tree, &predeployed_contracts);
+    // TODO: fill storage and tree
+    for(address, inner) in storage.iter() {
+        for(key, value) in inner.iter() {
+            let index = LogQuery::derive_final_address_for_params(&address, &key);
+
+            use crate::witness::tree::EnumeratedBinaryLeaf;
+            let mut leaf = ZkSyncStorageLeaf::empty();
+            let mut buffer = [0u8; 32];
+            value.to_big_endian(&mut buffer);
+            leaf.set_value(&buffer);
+    
+            tree.insert_leaf(&index, leaf);
+        }
+    }
+
+    storage_impl.inner[0] = storage;
 
     let used_bytecodes = HashMap::from_iter(
-        test_artifact
-            .predeployed_contracts
+        known_contracts
             .iter()
-            .map(|(_, bytecode)| {
+            .map(|bytecode| {
                 (
                     bytecode_to_code_hash(&bytecode).unwrap().into(),
                     bytecode.clone(),
                 )
             })
-            .chain(
-                Some(test_artifact.default_account_code.clone()).map(|bytecode| {
-                    (
-                        bytecode_to_code_hash(&bytecode).unwrap().into(),
-                        bytecode.clone(),
-                    )
-                }),
-            ),
     );
     for (k, _) in used_bytecodes.iter() {
         println!("Have bytecode hash 0x{:x}", k);
@@ -224,18 +227,18 @@ pub(crate) fn generate_base_layer(
     (&mut previous_content_hash[..]).copy_from_slice(&hasher.finalize().as_slice());
 
     let default_account_codehash =
-        bytecode_to_code_hash(&test_artifact.default_account_code).unwrap();
+        bytecode_to_code_hash(&default_account_code).unwrap();
     let default_account_codehash = U256::from_big_endian(&default_account_codehash);
 
     println!("Default AA code hash 0x{:x}", default_account_codehash);
 
     let mut basic_block_circuits = vec![];
     let mut recursion_queues = vec![];
-    let (scheduler_partial_input, _aux_data) = run(
+    let (scheduler_partial_input, _aux_data, storage) = run(
         Address::zero(),
-        test_artifact.entry_point_address,
-        test_artifact.entry_point_code,
-        vec![],
+        entry_point_address,
+        entry_point_code,
+        initial_heap_content,
         false,
         default_account_codehash,
         used_bytecodes,
@@ -260,14 +263,20 @@ pub(crate) fn generate_base_layer(
         basic_block_circuits,
         recursion_queues,
         scheduler_partial_input,
+        storage.inner[0].clone()
     )
 }
 
-fn run_and_try_create_witness_inner(
-    test_artifact: TestArtifact,
+pub fn run_and_try_create_witness_inner(
+    entry_point_code: Vec<[u8; 32]>,
+    default_account_code: Vec<[u8; 32]>,
+    predeployed_contracts: HashMap<Address, Vec<[u8; 32]>>,
+    known_contracts: Vec<Vec<[u8; 32]>>,
+    storage: HashMap<Address, HashMap<U256, U256>>,
+    initial_heap_content: Vec<u8>,
     cycle_limit: usize,
     blobs: Option<[Vec<u8>; 2]>,
-) {
+) -> HashMap<Address, HashMap<U256, U256>> {
     use crate::external_calls::run;
     use crate::toolset::GeometryConfig;
 
@@ -275,8 +284,8 @@ fn run_and_try_create_witness_inner(
     let geometry = crate::geometry_config::get_geometry_config();
 
     // let (basic_block_circuits, basic_block_circuits_inputs, mut scheduler_partial_input) = run(
-    let (basic_block_circuits, recursion_queues, scheduler_partial_input) =
-        generate_base_layer(test_artifact, cycle_limit, geometry);
+    let (basic_block_circuits, recursion_queues, scheduler_partial_input, storage) =
+        generate_base_layer(entry_point_code, default_account_code, predeployed_contracts, known_contracts, storage, initial_heap_content, cycle_limit, geometry);
 
     for (idx, el) in basic_block_circuits.clone().into_iter().enumerate() {
         let descr = el.short_description();
@@ -1173,6 +1182,7 @@ fn run_and_try_create_witness_inner(
     }
 
     println!("DONE");
+    storage
 }
 
 #[test]
