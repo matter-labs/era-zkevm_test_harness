@@ -459,9 +459,6 @@ pub fn generate_recursive_layer_vks_and_proofs(
         let is_valid = verify_recursion_layer_proof::<NoPow>(&circuit, &proof, &vk);
 
         assert!(is_valid);
-
-        let proof = ZkSyncRecursionLayerProof::from_inner(circuit.numeric_circuit_type(), proof);
-        source.set_recursion_layer_leaf_padding_proof(proof)?;
     }
 
     println!("Computing node vk");
@@ -504,9 +501,6 @@ pub fn generate_recursive_layer_vks_and_proofs(
         let is_valid = verify_recursion_layer_proof::<NoPow>(&circuit, &proof, &vk);
 
         assert!(is_valid);
-
-        let proof = ZkSyncRecursionLayerProof::NodeLayerCircuit(proof);
-        source.set_recursion_layer_node_padding_proof(proof)?;
     }
 
     println!("Computing scheduler vk");

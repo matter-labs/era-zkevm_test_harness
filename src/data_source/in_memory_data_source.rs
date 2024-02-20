@@ -133,19 +133,6 @@ impl SetupDataSource for InMemoryDataSource {
             )))
     }
 
-    fn get_recursion_layer_padding_proof(
-        &self,
-        circuit_type: u8,
-    ) -> SourceResult<ZkSyncRecursionLayerProof> {
-        self.recursion_layer_padding_proof
-            .get(&circuit_type)
-            .cloned()
-            .ok_or(Box::new(Error::new(
-                ErrorKind::Other,
-                format!("no data for circuit type {}", circuit_type),
-            )))
-    }
-
     fn get_recursion_layer_finalization_hint(
         &self,
         circuit_type: u8,
@@ -156,24 +143,6 @@ impl SetupDataSource for InMemoryDataSource {
             .ok_or(Box::new(Error::new(
                 ErrorKind::Other,
                 format!("no data for circuit type {}", circuit_type),
-            )))
-    }
-
-    fn get_recursion_layer_leaf_padding_proof(&self) -> SourceResult<ZkSyncRecursionLayerProof> {
-        self.recursion_layer_leaf_padding_proof
-            .clone()
-            .ok_or(Box::new(Error::new(
-                ErrorKind::Other,
-                format!("no data for recursion layer node vk"),
-            )))
-    }
-
-    fn get_recursion_layer_node_padding_proof(&self) -> SourceResult<ZkSyncRecursionLayerProof> {
-        self.recursion_layer_node_padding_proof
-            .clone()
-            .ok_or(Box::new(Error::new(
-                ErrorKind::Other,
-                format!("no data for recursion layer node vk"),
             )))
     }
 
@@ -297,37 +266,12 @@ impl SetupDataSource for InMemoryDataSource {
         Ok(())
     }
 
-    fn set_recursion_layer_padding_proof(
-        &mut self,
-        proof: ZkSyncRecursionLayerProof,
-    ) -> SourceResult<()> {
-        self.recursion_layer_padding_proof
-            .insert(proof.numeric_circuit_type(), proof);
-        Ok(())
-    }
-
     fn set_recursion_layer_finalization_hint(
         &mut self,
         hint: ZkSyncRecursionLayerFinalizationHint,
     ) -> SourceResult<()> {
         self.recursion_layer_finalization_hint
             .insert(hint.numeric_circuit_type(), hint);
-        Ok(())
-    }
-
-    fn set_recursion_layer_leaf_padding_proof(
-        &mut self,
-        proof: ZkSyncRecursionLayerProof,
-    ) -> SourceResult<()> {
-        self.recursion_layer_leaf_padding_proof = Some(proof);
-        Ok(())
-    }
-
-    fn set_recursion_layer_node_padding_proof(
-        &mut self,
-        proof: ZkSyncRecursionLayerProof,
-    ) -> SourceResult<()> {
-        self.recursion_layer_node_padding_proof = Some(proof);
         Ok(())
     }
 
