@@ -294,7 +294,6 @@ impl SetupDataSource for LocalFileDataSource {
         )
     }
 
-
     fn set_recursion_layer_finalization_hint(
         &mut self,
         hint: ZkSyncRecursionLayerFinalizationHint,
