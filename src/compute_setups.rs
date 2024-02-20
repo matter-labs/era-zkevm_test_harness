@@ -281,14 +281,20 @@ fn get_scheduler_circuit(
     let mut scheduler_witness = SchedulerCircuitInstanceWitness::placeholder();
     // the only thing we need to setup here is a VK
     scheduler_witness.node_layer_vk_witness = node_vk;
+    let eip_output_data_witness = EIP4844OutputDataWitness {
+        linear_hash: [0u8; 32],
+        output_hash: [0u8; 32],
+    };
+    scheduler_witness.eip4844_witnesses =
+        Some([eip_output_data_witness.clone(), eip_output_data_witness]);
 
     let scheduler_circuit = SchedulerCircuit {
         witness: scheduler_witness,
         config,
         transcript_params: (),
-        eip4844_proof_config: None,
-        eip4844_vk_fixed_parameters: None,
-        eip4844_vk: None,
+        eip4844_proof_config: Some(eip4844_proof_config()),
+        eip4844_vk_fixed_parameters: Some(source.get_eip4844_vk().unwrap().fixed_parameters),
+        eip4844_vk: Some(source.get_eip4844_vk().unwrap()),
         _marker: std::marker::PhantomData,
     };
 
@@ -446,7 +452,6 @@ pub fn generate_recursive_layer_vks_and_proofs(
     let worker = Worker::new();
 
     println!("Computing leaf vks");
-    /*
     for circuit in get_leaf_circuits(source)? {
         println!(
             "Computing leaf layer VK for type {:?}",
@@ -496,7 +501,7 @@ pub fn generate_recursive_layer_vks_and_proofs(
 
         let proof = ZkSyncRecursionLayerProof::from_inner(circuit.numeric_circuit_type(), proof);
         source.set_recursion_layer_leaf_padding_proof(proof)?;
-    }*/
+    }
 
     println!("Computing node vk");
 
@@ -546,45 +551,7 @@ pub fn generate_recursive_layer_vks_and_proofs(
     println!("Computing scheduler vk");
 
     {
-        /*
-           use crate::zkevm_circuits::scheduler::SchedulerConfig;
-           use circuit_definitions::circuit_definitions::recursion_layer::scheduler::SchedulerCircuit;
-
-           let node_vk = source.get_recursion_layer_node_vk()?.into_inner();
-
-           let config = SchedulerConfig {
-               proof_config: recursion_layer_proof_config(),
-               vk_fixed_parameters: node_vk.fixed_parameters.clone(),
-               capacity: SCHEDULER_CAPACITY,
-               _marker: std::marker::PhantomData,
-           };
-
-           use crate::zkevm_circuits::scheduler::input::SchedulerCircuitInstanceWitness;
-           let mut scheduler_witness = SchedulerCircuitInstanceWitness::placeholder();
-           // the only thing we need to setup here is a VK
-           scheduler_witness.node_layer_vk_witness = node_vk;
-           let foo = EIP4844OutputDataWitness {
-               linear_hash: [0u8; 32],
-               output_hash: [0u8; 32],
-           };
-           scheduler_witness.eip4844_witnesses = Some([foo.clone(), foo.clone()]);
-
-           let scheduler_circuit = SchedulerCircuit {
-               witness: scheduler_witness,
-               config,
-               transcript_params: (),
-               eip4844_proof_config: Some(eip4844_proof_config()),
-               eip4844_vk_fixed_parameters: Some(source.get_eip4844_vk().unwrap().fixed_parameters),
-               eip4844_vk: Some(source.get_eip4844_vk().unwrap()),
-               _marker: std::marker::PhantomData,
-           };
-
-           let scheduler_circuit = ZkSyncRecursiveLayerCircuit::SchedulerCircuit(scheduler_circuit);
-
-        */
-
         let scheduler_circuit = get_scheduler_circuit(source)?;
-        println!("XXXX Size hint is: {:?}", scheduler_circuit.size_hint());
 
         let (_setup_base, _setup, vk, _setup_tree, _vars_hint, _wits_hint, finalization_hint) =
             create_recursive_layer_setup_data(

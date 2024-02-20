@@ -297,7 +297,7 @@ fn run_and_try_create_witness_inner(
             }
         }
 
-        //base_test_circuit(el);
+        base_test_circuit(el);
     }
 
     let worker = Worker::new_with_num_threads(8);
@@ -1132,8 +1132,7 @@ fn run_and_try_create_witness_inner(
 
     let scheduler_circuit = ZkSyncRecursiveLayerCircuit::SchedulerCircuit(scheduler_circuit);
 
-    if true {
-        //source.get_scheduler_proof().is_err() {
+    if source.get_scheduler_proof().is_err() {
         let f = std::fs::File::create("tmp.json").unwrap();
         serde_json::to_writer(f, &scheduler_circuit).unwrap();
 

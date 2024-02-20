@@ -28,8 +28,8 @@ use std::{error::Error, fs::File};
 pub struct LocalFileDataSource;
 
 impl LocalFileDataSource {
-    pub const SETUP_DATA_LOCATION: &'static str = "./fresh/setup";
-    pub const BLOCK_DATA_LOCATION: &'static str = "./fresh/test_proofs";
+    pub const SETUP_DATA_LOCATION: &'static str = "./setup";
+    pub const BLOCK_DATA_LOCATION: &'static str = "./test_proofs";
 
     /// creates folders if missing
     pub fn create_folders_for_storing_data() {
