@@ -168,8 +168,13 @@ use crate::zkevm_circuits::scheduler::block_header::MAX_4844_BLOBS_PER_BLOCK;
 use snark_wrapper::franklin_crypto::bellman::Field;
 use snark_wrapper::franklin_crypto::bellman::PrimeField;
 
+/// Generates eip4844 witness for a given blob and using a trusted setup from a given json path.
+/// Returns blob array, linear hash, versioned hash and output hash.
+/// Blob must have exact lenght of 31 * 4096
+// Example trusted setup path is in "src/kzg/trusted_setup.json".
 pub fn generate_eip4844_witness<F: SmallField>(
     blob: Vec<u8>,
+    trusted_setup_path: &str,
 ) -> (
     [[u8; 31]; ELEMENTS_PER_4844_BLOCK],
     [u8; 32],
@@ -177,7 +182,8 @@ pub fn generate_eip4844_witness<F: SmallField>(
     [u8; 32],
 ) {
     // create blob array from vec
-    assert!(blob.len() <= 31 * 4096);
+    // Make sure that blob has a given fixed size.
+    assert_eq!(blob.len(), 31 * 4096);
     let mut blob_arr = [[0u8; 31]; ELEMENTS_PER_4844_BLOCK];
     blob.chunks(31).enumerate().for_each(|(i, chunk)| {
         if chunk.len() == 31 {
@@ -208,8 +214,8 @@ pub fn generate_eip4844_witness<F: SmallField>(
 
     use crate::kzg::compute_commitment;
     use circuit_definitions::boojum::pairing::CurveAffine;
-    let setup_json: &str = "src/kzg/trusted_setup.json";
-    let settings = KzgSettings::new(setup_json);
+
+    let settings = KzgSettings::new(trusted_setup_path);
 
     let commitment = compute_commitment(&settings, &blob_fr);
     let mut versioned_hash: [u8; 32] = Keccak256::digest(&commitment.into_compressed())

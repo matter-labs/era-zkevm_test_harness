@@ -1,3 +1,10 @@
+use crate::boojum::config::CSConfig;
+use crate::boojum::config::ProvingCSConfig;
+use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
+use crate::boojum::cs::implementations::reference_cs::CSReferenceAssembly;
+use crate::boojum::cs::implementations::setup::FinalizationHintsForProver;
+use crate::boojum::dag::CircuitResolver;
+use crate::boojum::field::traits::field_like::PrimeFieldLikeVectorized;
 use derivative::*;
 
 use super::*;
@@ -158,4 +165,40 @@ where
     ) -> [Num<F>; INPUT_OUTPUT_COMMITMENT_LENGTH] {
         eip_4844_entry_point(cs, witness, round_function, config)
     }
+}
+
+pub fn synthesis<F, P, R, CR>(
+    circuit: EIP4844Circuit<F, R>,
+    hint: &FinalizationHintsForProver,
+) -> CSReferenceAssembly<F, P, ProvingCSConfig>
+where
+    F: SmallField,
+    P: PrimeFieldLikeVectorized<Base = F>,
+    R: BuildableCircuitRoundFunction<F, 8, 12, 4>
+        + AlgebraicRoundFunction<F, 8, 12, 4>
+        + serde::Serialize
+        + serde::de::DeserializeOwned,
+    CR: CircuitResolver<
+        F,
+        zkevm_circuits::boojum::config::Resolver<
+            zkevm_circuits::boojum::config::DontPerformRuntimeAsserts,
+        >,
+    >,
+    usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>,
+
+    [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN + 1]:,
+{
+    let geometry = circuit.geometry_proxy();
+    let (max_trace_len, num_vars) = circuit.size_hint();
+    let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig, CR>::new(
+        geometry,
+        max_trace_len.unwrap(),
+    );
+    let cs_builder = new_builder::<_, F>(builder_impl);
+    let builder = circuit.configure_builder_proxy(cs_builder);
+    let mut cs = builder.build(num_vars.unwrap());
+    circuit.add_tables_proxy(&mut cs);
+    circuit.clone().synthesize_proxy(&mut cs);
+    cs.pad_and_shrink_using_hint(hint);
+    cs.into_assembly()
 }

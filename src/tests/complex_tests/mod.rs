@@ -1000,7 +1000,7 @@ fn run_and_try_create_witness_inner(
         let mut eip4844_vk = None;
         for blob in blobs {
             let (blob_arr, linear_hash, versioned_hash, output_hash) =
-                generate_eip4844_witness::<GoldilocksField>(blob);
+                generate_eip4844_witness::<GoldilocksField>(blob, "src/kzg/trusted_setup.json");
             use crate::zkevm_circuits::eip_4844::input::BlobChunkWitness;
             use crate::zkevm_circuits::eip_4844::input::EIP4844CircuitInstanceWitness;
             use crate::zkevm_circuits::eip_4844::input::EIP4844InputOutputWitness;
