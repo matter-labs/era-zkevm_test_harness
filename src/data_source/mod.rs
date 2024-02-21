@@ -1,6 +1,7 @@
 use super::*;
 use std::{error::Error, fs::File};
 
+use circuit_definitions::boojum::cs::implementations::setup::FinalizationHintsForProver;
 use circuit_definitions::circuit_definitions::aux_layer::*;
 use circuit_definitions::circuit_definitions::base_layer::*;
 use circuit_definitions::circuit_definitions::recursion_layer::*;
@@ -35,6 +36,9 @@ pub trait SetupDataSource {
     fn get_recursion_layer_node_finalization_hint(
         &self,
     ) -> SourceResult<ZkSyncRecursionLayerFinalizationHint>;
+
+    fn get_eip4844_finalization_hint(&self) -> SourceResult<FinalizationHintsForProver>;
+
     fn get_compression_vk(
         &self,
         circuit_type: u8,
@@ -96,6 +100,11 @@ pub trait SetupDataSource {
     fn set_wrapper_setup(&mut self, setup: ZkSyncSnarkWrapperSetup) -> SourceResult<()>;
     fn set_wrapper_vk(&mut self, vk: ZkSyncSnarkWrapperVK) -> SourceResult<()>;
     fn set_eip4844_vk(&mut self, vk: EIP4844VerificationKey) -> SourceResult<()>;
+
+    fn set_eip4844_finalization_hint(
+        &mut self,
+        hint: FinalizationHintsForProver,
+    ) -> SourceResult<()>;
 }
 
 // Object save trait to just get things for BLOCK

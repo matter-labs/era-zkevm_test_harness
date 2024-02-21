@@ -573,13 +573,14 @@ pub fn generate_eip4844_vks(
         round_function: Arc::new(Poseidon2Goldilocks),
         expected_public_input: None,
     };
-    let (_, _, vk, _, _, _, _) = create_eip4844_setup_data(
+    let (_, _, vk, _, _, _, finalization_hint) = create_eip4844_setup_data(
         circuit.clone(),
         &worker,
         eip4844_proof_config.fri_lde_factor,
         eip4844_proof_config.merkle_tree_cap_size,
     );
-    source.set_eip4844_vk(vk)
+    source.set_eip4844_vk(vk)?;
+    source.set_eip4844_finalization_hint(finalization_hint)
 }
 
 #[cfg(test)]
