@@ -1,4 +1,5 @@
 use super::{BlockDataSource, SetupDataSource, SourceResult};
+use circuit_definitions::boojum::cs::implementations::setup::FinalizationHintsForProver;
 use circuit_definitions::circuit_definitions::aux_layer::{
     EIP4844VerificationKey, ZkSyncCompressionForWrapperFinalizationHint,
     ZkSyncCompressionForWrapperProof, ZkSyncCompressionForWrapperVerificationKey,
@@ -23,10 +24,7 @@ pub struct InMemoryDataSource {
     base_layer_finalization_hint: HashMap<u8, ZkSyncBaseLayerFinalizationHint>,
     recursion_layer_vk: HashMap<u8, ZkSyncRecursionLayerVerificationKey>,
     recursion_layer_node_vk: Option<ZkSyncRecursionLayerVerificationKey>,
-    recursion_layer_padding_proof: HashMap<u8, ZkSyncRecursionLayerProof>,
     recursion_layer_finalization_hint: HashMap<u8, ZkSyncRecursionLayerFinalizationHint>,
-    recursion_layer_leaf_padding_proof: Option<ZkSyncRecursionLayerProof>,
-    recursion_layer_node_padding_proof: Option<ZkSyncRecursionLayerProof>,
     recursion_layer_node_finalization_hint: Option<ZkSyncRecursionLayerFinalizationHint>,
     compression_vk: HashMap<u8, ZkSyncCompressionLayerVerificationKey>,
     compression_hint: HashMap<u8, ZkSyncCompressionLayerFinalizationHint>,
@@ -35,6 +33,7 @@ pub struct InMemoryDataSource {
     wrapper_setup: HashMap<u8, ZkSyncSnarkWrapperSetup>,
     wrapper_vk: HashMap<u8, ZkSyncSnarkWrapperVK>,
     eip_4844_vk: Option<EIP4844VerificationKey>,
+    eip_4844_hint: Option<FinalizationHintsForProver>,
 
     ///data structures required for holding [`BlockDataSource`] result
     base_layer_proofs: HashMap<(u8, usize), ZkSyncBaseLayerProof>,
@@ -54,10 +53,7 @@ impl InMemoryDataSource {
             base_layer_finalization_hint: HashMap::new(),
             recursion_layer_vk: HashMap::new(),
             recursion_layer_node_vk: None,
-            recursion_layer_padding_proof: HashMap::new(),
             recursion_layer_finalization_hint: HashMap::new(),
-            recursion_layer_leaf_padding_proof: None,
-            recursion_layer_node_padding_proof: None,
             recursion_layer_node_finalization_hint: None,
             compression_vk: HashMap::new(),
             compression_hint: HashMap::new(),
@@ -66,6 +62,7 @@ impl InMemoryDataSource {
             wrapper_setup: HashMap::new(),
             wrapper_vk: HashMap::new(),
             eip_4844_vk: None,
+            eip_4844_hint: None,
             base_layer_proofs: HashMap::new(),
             leaf_layer_proofs: HashMap::new(),
             node_layer_proofs: HashMap::new(),
@@ -337,6 +334,21 @@ impl SetupDataSource for InMemoryDataSource {
 
     fn set_eip4844_vk(&mut self, vk: EIP4844VerificationKey) -> SourceResult<()> {
         self.eip_4844_vk = Some(vk);
+        Ok(())
+    }
+
+    fn get_eip4844_finalization_hint(&mut self) -> SourceResult<FinalizationHintsForProver> {
+        self.eip_4844_hint.clone().ok_or(Box::new(Error::new(
+            ErrorKind::Other,
+            "No finalization hint for 4844",
+        )))
+    }
+
+    fn set_eip4844_finalization_hint(
+        &mut self,
+        hint: FinalizationHintsForProver,
+    ) -> SourceResult<()> {
+        self.eip_4844_hint = Some(hint);
         Ok(())
     }
 }
