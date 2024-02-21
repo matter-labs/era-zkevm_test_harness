@@ -28,16 +28,10 @@ pub trait SetupDataSource {
         circuit_type: u8,
     ) -> SourceResult<ZkSyncRecursionLayerVerificationKey>;
     fn get_recursion_layer_node_vk(&self) -> SourceResult<ZkSyncRecursionLayerVerificationKey>;
-    fn get_recursion_layer_padding_proof(
-        &self,
-        circuit_type: u8,
-    ) -> SourceResult<ZkSyncRecursionLayerProof>;
     fn get_recursion_layer_finalization_hint(
         &self,
         circuit_type: u8,
     ) -> SourceResult<ZkSyncRecursionLayerFinalizationHint>;
-    fn get_recursion_layer_leaf_padding_proof(&self) -> SourceResult<ZkSyncRecursionLayerProof>;
-    fn get_recursion_layer_node_padding_proof(&self) -> SourceResult<ZkSyncRecursionLayerProof>;
     fn get_recursion_layer_node_finalization_hint(
         &self,
     ) -> SourceResult<ZkSyncRecursionLayerFinalizationHint>;
@@ -76,22 +70,11 @@ pub trait SetupDataSource {
         &mut self,
         vk: ZkSyncRecursionLayerVerificationKey,
     ) -> SourceResult<()>;
-    fn set_recursion_layer_padding_proof(
-        &mut self,
-        proof: ZkSyncRecursionLayerProof,
-    ) -> SourceResult<()>;
     fn set_recursion_layer_finalization_hint(
         &mut self,
         hint: ZkSyncRecursionLayerFinalizationHint,
     ) -> SourceResult<()>;
-    fn set_recursion_layer_leaf_padding_proof(
-        &mut self,
-        proof: ZkSyncRecursionLayerProof,
-    ) -> SourceResult<()>;
-    fn set_recursion_layer_node_padding_proof(
-        &mut self,
-        proof: ZkSyncRecursionLayerProof,
-    ) -> SourceResult<()>;
+
     fn set_recursion_layer_node_finalization_hint(
         &mut self,
         hint: ZkSyncRecursionLayerFinalizationHint,

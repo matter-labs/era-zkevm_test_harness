@@ -560,10 +560,6 @@ fn run_and_try_create_witness_inner(
 
             if let Ok(proof) = source.get_leaf_layer_proof(el.numeric_circuit_type(), instance_idx)
             {
-                if instance_idx == 0 {
-                    source.set_recursion_layer_padding_proof(proof).unwrap();
-                }
-
                 instance_idx += 1;
                 continue;
             }
@@ -643,29 +639,6 @@ fn run_and_try_create_witness_inner(
             let is_valid = verify_recursion_layer_proof::<NoPow>(&el, &proof, &vk);
 
             assert!(is_valid);
-
-            if instance_idx == 0 {
-                source
-                    .set_recursion_layer_padding_proof(ZkSyncRecursionLayerProof::from_inner(
-                        el.numeric_circuit_type(),
-                        proof.clone(),
-                    ))
-                    .unwrap();
-
-                // any circuit type would work
-                if el.numeric_circuit_type()
-                    == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForMainVM as u8
-                {
-                    source
-                        .set_recursion_layer_leaf_padding_proof(
-                            ZkSyncRecursionLayerProof::from_inner(
-                                el.numeric_circuit_type(),
-                                proof.clone(),
-                            ),
-                        )
-                        .unwrap();
-                }
-            }
 
             source
                 .set_leaf_layer_proof(
@@ -875,11 +848,6 @@ fn run_and_try_create_witness_inner(
                 if let Ok(proof) =
                     source.get_node_layer_proof(recursive_circuit_type as u8, depth, idx)
                 {
-                    if idx == 0 {
-                        source
-                            .set_recursion_layer_node_padding_proof(proof)
-                            .unwrap();
-                    }
                     continue;
                 }
 
@@ -950,14 +918,6 @@ fn run_and_try_create_witness_inner(
                 let is_valid = verify_recursion_layer_proof::<NoPow>(&el, &proof, &vk);
 
                 assert!(is_valid);
-
-                if idx == 0 && depth == 0 {
-                    source
-                        .set_recursion_layer_node_padding_proof(
-                            ZkSyncRecursionLayerProof::NodeLayerCircuit(proof.clone()),
-                        )
-                        .unwrap();
-                }
 
                 source
                     .set_node_layer_proof(
