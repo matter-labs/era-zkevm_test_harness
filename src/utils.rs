@@ -170,7 +170,7 @@ use snark_wrapper::franklin_crypto::bellman::PrimeField;
 
 /// Generates eip4844 witness for a given blob and using a trusted setup from a given json path.
 /// Returns blob array, linear hash, versioned hash and output hash.
-/// Blob must have exact lenght of 31 * 4096
+/// Blob must have exact length of 31 * 4096
 // Example trusted setup path is in "src/kzg/trusted_setup.json".
 pub fn generate_eip4844_witness<F: SmallField>(
     blob: Vec<u8>,
