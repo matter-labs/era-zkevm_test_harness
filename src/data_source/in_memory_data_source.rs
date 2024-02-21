@@ -337,7 +337,7 @@ impl SetupDataSource for InMemoryDataSource {
         Ok(())
     }
 
-    fn get_eip4844_finalization_hint(&mut self) -> SourceResult<FinalizationHintsForProver> {
+    fn get_eip4844_finalization_hint(&self) -> SourceResult<FinalizationHintsForProver> {
         self.eip_4844_hint.clone().ok_or(Box::new(Error::new(
             ErrorKind::Other,
             "No finalization hint for 4844",

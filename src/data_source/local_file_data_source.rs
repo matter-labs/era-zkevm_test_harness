@@ -432,7 +432,7 @@ impl SetupDataSource for LocalFileDataSource {
         )
     }
 
-    fn get_eip4844_finalization_hint(&mut self) -> SourceResult<FinalizationHintsForProver> {
+    fn get_eip4844_finalization_hint(&self) -> SourceResult<FinalizationHintsForProver> {
         let file = File::open(format!(
             "{}/recursion_layer/finalization_hint_node.json",
             Self::SETUP_DATA_LOCATION

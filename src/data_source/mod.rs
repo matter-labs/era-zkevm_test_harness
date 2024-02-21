@@ -37,7 +37,7 @@ pub trait SetupDataSource {
         &self,
     ) -> SourceResult<ZkSyncRecursionLayerFinalizationHint>;
 
-    fn get_eip4844_finalization_hint(&mut self) -> SourceResult<FinalizationHintsForProver>;
+    fn get_eip4844_finalization_hint(&self) -> SourceResult<FinalizationHintsForProver>;
 
     fn get_compression_vk(
         &self,
