@@ -61,7 +61,7 @@ const EIP4844_CYCLE_LIMIT: usize = 4096;
 fn basic_test() {
     let test_artifact = read_basic_test_artifact();
     //run_and_try_create_witness_inner(test_artifact, 20000, None);
-    let blob = vec![3u8; 80000];
+    let blob = vec![3u8; 31 * 4096];
     run_and_try_create_witness_inner(test_artifact, 20000, Some([blob.clone(), blob.clone()]));
     // run_and_try_create_witness_inner(test_artifact, 16);
 }
