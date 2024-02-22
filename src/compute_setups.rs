@@ -498,9 +498,6 @@ pub fn generate_recursive_layer_vks_and_proofs(
         let is_valid = verify_recursion_layer_proof::<NoPow>(&circuit, &proof, &vk);
 
         assert!(is_valid);
-
-        let proof = ZkSyncRecursionLayerProof::from_inner(circuit.numeric_circuit_type(), proof);
-        source.set_recursion_layer_leaf_padding_proof(proof)?;
     }
 
     println!("Computing node vk");
@@ -543,9 +540,6 @@ pub fn generate_recursive_layer_vks_and_proofs(
         let is_valid = verify_recursion_layer_proof::<NoPow>(&circuit, &proof, &vk);
 
         assert!(is_valid);
-
-        let proof = ZkSyncRecursionLayerProof::NodeLayerCircuit(proof);
-        source.set_recursion_layer_node_padding_proof(proof)?;
     }
 
     println!("Computing scheduler vk");
@@ -585,13 +579,14 @@ pub fn generate_eip4844_vks(
         round_function: Arc::new(Poseidon2Goldilocks),
         expected_public_input: None,
     };
-    let (_, _, vk, _, _, _, _) = create_eip4844_setup_data(
+    let (_, _, vk, _, _, _, finalization_hint) = create_eip4844_setup_data(
         circuit.clone(),
         &worker,
         eip4844_proof_config.fri_lde_factor,
         eip4844_proof_config.merkle_tree_cap_size,
     );
-    source.set_eip4844_vk(vk)
+    source.set_eip4844_vk(vk)?;
+    source.set_eip4844_finalization_hint(finalization_hint)
 }
 
 #[cfg(test)]
