@@ -303,12 +303,13 @@ pub fn generate_eip4844_witness<F: SmallField>(
 
 pub fn generate_eip4844_circuit_and_witness(
     blob: Vec<u8>,
+    trusted_setup_path: &str,
 ) -> (
     EIP4844Circuit<GoldilocksField, ZkSyncDefaultRoundFunction>,
     EIP4844CircuitInstanceWitness<GoldilocksField>,
 ) {
     let (blob_arr, linear_hash, versioned_hash, output_hash) =
-        generate_eip4844_witness::<GoldilocksField>(blob);
+        generate_eip4844_witness::<GoldilocksField>(blob, trusted_setup_path);
     let blob = blob_arr
         .iter()
         .map(|el| BlobChunkWitness { inner: *el })
