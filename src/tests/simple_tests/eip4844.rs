@@ -1,12 +1,11 @@
 use super::*;
 use crate::tests::eip4844_test_circuit;
 use crate::zkevm_circuits::eip_4844::input::*;
+use circuit_definitions::EIP4844_CYCLE_LIMIT;
 use crossbeam::atomic::AtomicCell;
 use rand::Rng;
 use std::collections::VecDeque;
 use std::sync::Arc;
-
-const EIP4844_CYCLE_LIMIT: usize = 4096;
 
 #[test]
 fn test_eip4844() {
@@ -15,7 +14,7 @@ fn test_eip4844() {
         .for_each(|byte| *byte = rand::thread_rng().gen());
 
     let (blob_arr, linear_hash, versioned_hash, output_hash) =
-        generate_eip4844_witness::<GoldilocksField>(blob);
+        generate_eip4844_witness::<GoldilocksField>(blob, "src/kzg/trusted_setup.json");
     let blob = blob_arr
         .iter()
         .map(|el| BlobChunkWitness { inner: *el })
