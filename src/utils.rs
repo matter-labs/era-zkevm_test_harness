@@ -1,4 +1,7 @@
+use crossbeam::atomic::AtomicCell;
+use std::collections::VecDeque;
 use std::ops::Add;
+use std::sync::Arc;
 
 use crate::boojum::algebraic_props::round_function::AbsorptionModeOverwrite;
 use crate::boojum::config::*;
@@ -8,7 +11,15 @@ use crate::boojum::{algebraic_props::round_function, field::SmallField};
 use crate::kzg::KzgSettings;
 use crate::witness::tree::BinaryHasher;
 use crate::zk_evm::{address_to_u256, ethereum_types::*};
-use circuit_definitions::encodings::{BytesSerializable, QueueSimulator};
+use crate::zkevm_circuits::eip_4844::input::BlobChunkWitness;
+use crate::zkevm_circuits::eip_4844::input::EIP4844CircuitInstanceWitness;
+use crate::zkevm_circuits::eip_4844::input::EIP4844InputOutputWitness;
+use crate::GoldilocksField;
+use circuit_definitions::{
+    circuit_definitions::eip4844::EIP4844Circuit,
+    encodings::{BytesSerializable, QueueSimulator},
+    ZkSyncDefaultRoundFunction, EIP4844_CYCLE_LIMIT,
+};
 
 pub fn u64_as_u32_le(value: u64) -> [u32; 2] {
     [value as u32, (value >> 32) as u32]
@@ -288,4 +299,42 @@ pub fn generate_eip4844_witness<F: SmallField>(
     .expect("should be able to convert genericarray to array");
 
     (blob_arr, linear_hash, versioned_hash, output_hash)
+}
+
+pub fn generate_eip4844_circuit_and_witness(
+    blob: Vec<u8>,
+) -> (
+    EIP4844Circuit<GoldilocksField, ZkSyncDefaultRoundFunction>,
+    EIP4844CircuitInstanceWitness<GoldilocksField>,
+) {
+    let (blob_arr, linear_hash, versioned_hash, output_hash) =
+        generate_eip4844_witness::<GoldilocksField>(blob);
+    let blob = blob_arr
+        .iter()
+        .map(|el| BlobChunkWitness { inner: *el })
+        .collect::<Vec<BlobChunkWitness<GoldilocksField>>>();
+    let witness = EIP4844CircuitInstanceWitness {
+        closed_form_input: EIP4844InputOutputWitness {
+            start_flag: true,
+            completion_flag: true,
+            hidden_fsm_input: (),
+            hidden_fsm_output: (),
+            observable_input: (),
+            observable_output: EIP4844OutputDataWitness {
+                linear_hash,
+                output_hash,
+            },
+        },
+        data_chunks: VecDeque::from(blob),
+        linear_hash_output: linear_hash,
+        versioned_hash,
+    };
+
+    let circuit = EIP4844Circuit {
+        witness: AtomicCell::new(Some(witness.clone())),
+        config: Arc::new(EIP4844_CYCLE_LIMIT),
+        round_function: ZkSyncDefaultRoundFunction::default().into(),
+        expected_public_input: None,
+    };
+    (circuit, witness)
 }
