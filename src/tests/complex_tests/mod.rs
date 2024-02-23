@@ -60,7 +60,9 @@ const EIP4844_CYCLE_LIMIT: usize = 4096;
 #[test]
 fn basic_test() {
     let test_artifact = read_basic_test_artifact();
-    run_and_try_create_witness_inner(test_artifact, 20000, None);
+    //run_and_try_create_witness_inner(test_artifact, 20000, None);
+    let blob = vec![3u8; 31 * 4096];
+    run_and_try_create_witness_inner(test_artifact, 20000, Some([blob.clone(), blob.clone()]));
     // run_and_try_create_witness_inner(test_artifact, 16);
 }
 
@@ -998,6 +1000,8 @@ fn run_and_try_create_witness_inner(
         let mut eip4844_proofs = vec![];
         scheduler_circuit.eip4844_proof_config = Some(eip4844_proof_config());
         let mut eip4844_vk = None;
+        let mut witnesses = vec![];
+
         for blob in blobs {
             let (blob_arr, linear_hash, versioned_hash, output_hash) =
                 generate_eip4844_witness::<GoldilocksField>(blob, "src/kzg/trusted_setup.json");
@@ -1031,6 +1035,7 @@ fn run_and_try_create_witness_inner(
                 linear_hash_output: linear_hash,
                 versioned_hash,
             };
+            witnesses.push(witness.closed_form_input.observable_output.clone());
             let circuit = EIP4844Circuit {
                 witness: AtomicCell::new(Some(witness)),
                 config: Arc::new(EIP4844_CYCLE_LIMIT),
@@ -1071,6 +1076,8 @@ fn run_and_try_create_witness_inner(
         scheduler_circuit.eip4844_vk = eip4844_vk.clone();
         scheduler_circuit.eip4844_vk_fixed_parameters = Some(eip4844_vk.unwrap().fixed_parameters);
         scheduler_circuit.witness.eip4844_proofs = eip4844_proofs.into();
+        scheduler_circuit.witness.eip4844_witnesses =
+            Some([witnesses[0].clone(), witnesses[1].clone()]);
     }
 
     println!("Computing scheduler proof");

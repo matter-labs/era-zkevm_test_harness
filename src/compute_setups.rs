@@ -281,14 +281,20 @@ fn get_scheduler_circuit(
     let mut scheduler_witness = SchedulerCircuitInstanceWitness::placeholder();
     // the only thing we need to setup here is a VK
     scheduler_witness.node_layer_vk_witness = node_vk;
+    let eip_output_data_witness = EIP4844OutputDataWitness {
+        linear_hash: [0u8; 32],
+        output_hash: [0u8; 32],
+    };
+    scheduler_witness.eip4844_witnesses =
+        Some([eip_output_data_witness.clone(), eip_output_data_witness]);
 
     let scheduler_circuit = SchedulerCircuit {
         witness: scheduler_witness,
         config,
         transcript_params: (),
-        eip4844_proof_config: None,
-        eip4844_vk_fixed_parameters: None,
-        eip4844_vk: None,
+        eip4844_proof_config: Some(eip4844_proof_config()),
+        eip4844_vk_fixed_parameters: Some(source.get_eip4844_vk().unwrap().fixed_parameters),
+        eip4844_vk: Some(source.get_eip4844_vk().unwrap()),
         _marker: std::marker::PhantomData,
     };
 
