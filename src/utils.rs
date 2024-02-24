@@ -172,7 +172,8 @@ pub fn finalized_queue_state_as_bytes<F: SmallField>(
 }
 
 use crate::boojum::pairing::bls12_381::fr::{Fr, FrRepr};
-use crate::sha3::{Digest, Keccak256};
+use crate::sha2::{Digest, Sha256};
+use crate::sha3::Keccak256;
 use crate::zkevm_circuits::eip_4844::input::EIP4844OutputDataWitness;
 use crate::zkevm_circuits::eip_4844::input::ELEMENTS_PER_4844_BLOCK;
 use crate::zkevm_circuits::scheduler::block_header::MAX_4844_BLOBS_PER_BLOCK;
@@ -205,31 +206,24 @@ pub fn generate_eip4844_witness<F: SmallField>(
     });
 
     // compute versioned hash
-    let blob_fr = blob_arr
-        .iter()
-        .map(|chunk| {
-            let repr = chunk
-                .chunks(8)
-                .map(|bytes| {
-                    let mut arr = [0u8; 8];
-                    for (i, b) in bytes.iter().enumerate() {
-                        arr[i] = *b;
-                    }
-                    u64::from_le_bytes(arr)
-                })
-                .collect::<Vec<u64>>();
-            Fr::from_repr(FrRepr([repr[0], repr[1], repr[2], repr[3]]))
-                .expect("31 bytes should create valid field element")
-        })
-        .collect::<Vec<Fr>>();
+
+    // There chunks are representation of the monomial form
+    let mut poly = crate::zkevm_circuits::eip_4844::zksync_pubdata_into_monomial_form_poly(
+        &blob
+    );
+    // so FFT then
+    crate::zkevm_circuits::eip_4844::fft(&mut poly);
+    // and bitreverse
+    crate::zkevm_circuits::eip_4844::bitreverse(&mut poly);
+    // now they can be an input to KZG commitment 
 
     use crate::kzg::compute_commitment;
     use circuit_definitions::boojum::pairing::CurveAffine;
 
     let settings = KzgSettings::new(trusted_setup_path);
 
-    let commitment = compute_commitment(&settings, &blob_fr);
-    let mut versioned_hash: [u8; 32] = Keccak256::digest(&commitment.into_compressed())
+    let commitment = compute_commitment(&settings, &poly);
+    let mut versioned_hash: [u8; 32] = Sha256::digest(&commitment.into_compressed())
         .try_into()
         .expect("should be able to create an array from a keccak digest");
     versioned_hash[0] = 1;
@@ -240,7 +234,8 @@ pub fn generate_eip4844_witness<F: SmallField>(
             .try_into()
             .expect("should be able to create an array from a keccak digest");
 
-    // compute output commitment
+    // follow circuit logic to produce FS challenge to later open poly
+    // at this point either from KZG in L1 or compute directly from monomial form in the circuit
     let evaluation_point = &Keccak256::digest(
         &linear_hash
             .iter()
