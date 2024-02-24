@@ -124,7 +124,7 @@ use crate::witness::full_block_artifact::*;
 fn get_testing_geometry_config() -> GeometryConfig {
     GeometryConfig {
         // cycles_per_vm_snapshot: 1,
-        cycles_per_vm_snapshot: 16,
+        cycles_per_vm_snapshot: 1024,
         cycles_per_ram_permutation: 1024,
         cycles_per_code_decommitter: 256,
         cycles_per_storage_application: 4,
@@ -304,7 +304,7 @@ fn run_and_try_create_witness_inner(
         // }
 
         // match &el {
-        //     ZkSyncBaseLayerCircuit::MainVM(inner) => {
+        //     ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {
         //         dbg!(&*inner.config);
         //         // let witness = inner.clone_witness().unwrap();
         //         // dbg!(&witness.closed_form_input);
