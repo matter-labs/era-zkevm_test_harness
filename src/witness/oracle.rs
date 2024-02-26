@@ -38,6 +38,7 @@ use circuit_definitions::encodings::recursion_request::{
 };
 use circuit_definitions::encodings::LogQueueSimulator;
 use circuit_definitions::zk_evm::zkevm_opcode_defs::system_params::{SECP256R1_VERIFY_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS, TRANSIENT_STORAGE_AUX_BYTE};
+use circuit_definitions::zkevm_circuits::eip_4844::input::EIP4844CircuitInstanceWitness;
 use circuit_definitions::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use crossbeam::atomic::AtomicCell;
@@ -214,6 +215,7 @@ pub fn create_artifacts_from_tracer<
 ) -> (
     BlockFirstAndLastBasicCircuits,
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
+    Vec<EIP4844CircuitInstanceWitness<GoldilocksField>>,
 ) {
     let WitnessTracer {
         memory_queries,
@@ -1962,6 +1964,64 @@ pub fn create_artifacts_from_tracer<
             secp256r1_verify_circuits_compact_forms_witnesses.clone(),
         );
 
+        // eip 4844 circuits are basic, but they do not need closed form input commitments
+        let circuit_type = BaseLayerCircuitType::EIP4844Repack;
+        let mut maker = CircuitMaker::new(
+            1,
+            round_function.clone(),
+            &mut cs_for_witness_generation,
+            &mut cycles_used,
+        );
+
+        let mut eip_4844_circuits = Vec::new();
+        for el in eip_4844_repack_inputs.into_iter() {
+            let Some(input_witness) = el else {
+                continue;
+            };
+            use crate::generate_eip4844_witness;
+            let (chunks, linear_hash, versioned_hash, output_hash) = generate_eip4844_witness::<GoldilocksField>(
+                &input_witness[..]
+            );
+            let data_chunks: VecDeque<_> = chunks.iter().map(|el| BlobChunkWitness {
+                inner: *el,
+            }).collect();
+            use crate::zkevm_circuits::eip_4844::input::*;
+            use crate::zkevm_circuits::fsm_input_output::ClosedFormInputWitness;
+            let output_data = EIP4844OutputDataWitness {
+                linear_hash,
+                output_hash,
+            };
+            let eip_4844_circuit_input = EIP4844CircuitInstanceWitness::<GoldilocksField> {
+                closed_form_input: ClosedFormInputWitness {
+                    start_flag: true,
+                    completion_flag: true,
+                    observable_input: (),
+                    observable_output: output_data,
+                    hidden_fsm_input: (),
+                    hidden_fsm_output: (),
+                },
+                versioned_hash,
+                linear_hash_output: linear_hash,
+                data_chunks,
+            };
+            eip_4844_circuits.push(eip_4844_circuit_input);
+        }
+        for circuit_input in eip_4844_circuits.iter().cloned() {
+            circuit_callback(ZkSyncBaseLayerCircuit::EIP4844Repack(
+                maker.process(circuit_input, circuit_type),
+            ));
+        }
+        let (
+            _eip_4844_circuits,
+            queue_simulator,
+            eip_4844_circuits_compact_forms_witnesses,
+        ) = maker.into_results();
+        recursion_queue_callback(
+            circuit_type as u64,
+            queue_simulator,
+            eip_4844_circuits_compact_forms_witnesses,
+        );
+
         // done!
 
         let basic_circuits = BlockFirstAndLastBasicCircuits {
@@ -2002,7 +2062,7 @@ pub fn create_artifacts_from_tracer<
             .chain(secp256r1_verify_circuits_compact_forms_witnesses)
             .collect();
 
-        (basic_circuits, all_compact_forms)
+        (basic_circuits, all_compact_forms, eip_4844_circuits)
     }
 }
 

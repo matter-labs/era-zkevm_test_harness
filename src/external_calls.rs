@@ -221,7 +221,7 @@ pub fn run<
 
     // dbg!(tools.witness_tracer.vm_snapshots.len());
 
-    let (basic_circuits, compact_form_witnesses) = create_artifacts_from_tracer(
+    let (basic_circuits, compact_form_witnesses, eip4844_circuits) = create_artifacts_from_tracer(
         out_of_circuit_vm.witness_tracer,
         &round_function,
         &geometry,
@@ -643,6 +643,13 @@ pub fn run<
         } else {
             empty_log_queue_state.clone().tail
         };
+
+        let mut eip4844_witnesses : [Option<EIP4844OutputDataWitness<GoldilocksField>>; MAX_4844_BLOBS_PER_BLOCK] = std::array::from_fn(|_| None);
+        for (eip4844_circuit, dst) in eip4844_circuits.into_iter().zip(eip4844_witnesses.iter_mut()) {
+            *dst = Some(
+                eip4844_circuit.closed_form_input.observable_output,
+            )
+        }
         
         let scheduler_circuit_witness = SchedulerCircuitInstanceWitness {
             prev_block_data: previous_block_passthrough,
@@ -709,18 +716,7 @@ pub fn run<
             previous_block_meta_hash: [0u8; 32],
             previous_block_aux_hash: [0u8; 32],
 
-            eip4844_witnesses: eip_4844_repack_inputs.map(|el| {
-                el.map(|el| {
-                    use crate::generate_eip4844_witness;
-                    let (_, linear_hash, _, output_hash) = generate_eip4844_witness::<GoldilocksField>(
-                        &el[..]
-                    );
-                    EIP4844OutputDataWitness {
-                        linear_hash,
-                        output_hash,
-                    }
-                })
-            }),
+            eip4844_witnesses,
 
             node_layer_vk_witness: VerificationKey::default(),
             leaf_layer_parameters: std::array::from_fn(|_| {

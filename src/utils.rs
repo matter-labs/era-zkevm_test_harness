@@ -177,7 +177,7 @@ pub fn generate_eip4844_witness<F: SmallField>(
     [u8; 32],
 ) {
     // create blob array from vec
-    assert!(blob.len() <= 31 * 4096);
+    assert!(blob.len() == 31 * 4096);
     let mut blob_arr = [[0u8; 31]; ELEMENTS_PER_4844_BLOCK];
     blob.chunks(31).enumerate().for_each(|(i, chunk)| {
         if chunk.len() == 31 {
@@ -187,32 +187,23 @@ pub fn generate_eip4844_witness<F: SmallField>(
         }
     });
 
-    // compute versioned hash
-    let blob_fr = blob_arr
-        .iter()
-        .map(|chunk| {
-            let repr = chunk
-                .chunks(8)
-                .map(|bytes| {
-                    let mut arr = [0u8; 8];
-                    for (i, b) in bytes.iter().enumerate() {
-                        arr[i] = *b;
-                    }
-                    u64::from_le_bytes(arr)
-                })
-                .collect::<Vec<u64>>();
-            Fr::from_repr(FrRepr([repr[0], repr[1], repr[2], repr[3]]))
-                .expect("31 bytes should create valid field element")
-        })
-        .collect::<Vec<Fr>>();
+    // There chunks are representation of the monomial form
+    let mut poly = crate::zkevm_circuits::eip_4844::zksync_pubdata_into_monomial_form_poly(
+        &blob
+    );
+    // so FFT then
+    crate::zkevm_circuits::eip_4844::fft(&mut poly);
+    // and bitreverse
+    crate::zkevm_circuits::eip_4844::bitreverse(&mut poly);
+    // now they can be an input to KZG commitment 
 
     use crate::kzg::compute_commitment;
     use circuit_definitions::boojum::pairing::CurveAffine;
     let setup_json: &str = "src/kzg/trusted_setup.json";
     let settings = KzgSettings::new(setup_json);
 
-    let commitment = compute_commitment(&settings, &blob_fr);
-    let mut versioned_hash: [u8; 32] = Keccak256::digest(&commitment.into_compressed())
+    let commitment = compute_commitment(&settings, &poly);
+    let mut versioned_hash: [u8; 32] = Sha256::digest(&commitment.into_compressed())
         .try_into()
         .expect("should be able to create an array from a keccak digest");
     versioned_hash[0] = 1;
