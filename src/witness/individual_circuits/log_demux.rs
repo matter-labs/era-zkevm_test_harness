@@ -1,36 +1,60 @@
 use super::*;
-use crate::bellman::Engine;
-use crate::encodings::decommittment_request::DecommittmentQueueSimulator;
-use crate::encodings::log_query::log_query_into_storage_record_witness;
-use crate::encodings::log_query::LogQueueSimulator;
-use crate::encodings::memory_query::MemoryQueueSimulator;
-use crate::ff::Field;
-use crate::utils::biguint_from_u256;
-use crate::witness::full_block_artifact::FullBlockArtifacts;
-use rayon::prelude::*;
-use std::cmp::Ordering;
-use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
-use sync_vm::franklin_crypto::plonk::circuit::utils::u128_to_fe;
-use sync_vm::glue::code_unpacker_sha256::input::*;
-use sync_vm::glue::code_unpacker_sha256::memory_query_updated::RawMemoryQuery;
-use sync_vm::glue::demux_log_queue::input::LogDemuxerCircuitInstanceWitness;
-use sync_vm::glue::optimizable_queue::FixedWidthEncodingGenericQueueWitness;
-use sync_vm::inputs::ClosedFormInputWitness;
-use sync_vm::scheduler::queues::DecommitQueryWitness;
-use sync_vm::utils::u64_to_fe;
-use zk_evm::aux_structures::MemoryIndex;
-use zk_evm::aux_structures::MemoryQuery;
-use zk_evm::aux_structures::*;
+use crate::zkevm_circuits::base_structures::log_query::*;
+use crate::zkevm_circuits::demux_log_queue::input::*;
+use circuit_definitions::encodings::*;
 
 /// Take a storage log, output logs separately for events, l1 messages, storage, etc
-pub fn compute_logs_demux<E: Engine, R: CircuitArithmeticRoundFunction<E, 2, 3>>(
-    artifacts: &mut FullBlockArtifacts<E>,
+pub fn compute_logs_demux<
+    F: SmallField,
+    R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+>(
+    artifacts: &mut FullBlockArtifacts<F>,
     per_circuit_capacity: usize,
     round_function: &R,
-) -> Vec<LogDemuxerCircuitInstanceWitness<E>> {
-    // parallelizable
+) -> Vec<LogDemuxerCircuitInstanceWitness<F>> {
+    // trivial empty case
+    if artifacts
+        .original_log_queue_simulator
+        .witness
+        .as_slices()
+        .0
+        .is_empty()
+    {
+        // return singe dummy witness
+        use crate::boojum::gadgets::queue::QueueState;
 
-    // have to manually unroll, otherwise borrow checker will complain
+        let initial_fsm_state = LogDemuxerFSMInputOutput::<F>::placeholder_witness();
+
+        assert_eq!(
+            take_queue_state_from_simulator(&artifacts.original_log_queue_simulator),
+            QueueState::placeholder_witness()
+        );
+
+        let mut passthrough_input = LogDemuxerInputData::placeholder_witness();
+        passthrough_input.initial_log_queue_state = QueueState::placeholder_witness();
+
+        let final_fsm_state = LogDemuxerFSMInputOutput::<F>::placeholder_witness();
+
+        let passthrough_output = LogDemuxerOutputData::placeholder_witness();
+
+        let wit = LogDemuxerCircuitInstanceWitness {
+            closed_form_input: LogDemuxerInputOutputWitness {
+                start_flag: true,
+                completion_flag: true,
+                observable_input: passthrough_input,
+                observable_output: passthrough_output,
+                hidden_fsm_input: initial_fsm_state.clone(),
+                hidden_fsm_output: final_fsm_state.clone(),
+            },
+            initial_queue_witness: CircuitQueueRawWitness {
+                elements: VecDeque::new(),
+            },
+        };
+
+        return vec![wit];
+    }
+
+    // parallelizable
 
     assert!(artifacts
         .original_log_queue_simulator
@@ -41,24 +65,22 @@ pub fn compute_logs_demux<E: Engine, R: CircuitArithmeticRoundFunction<E, 2, 3>>
     let input_queue_witness = &artifacts.original_log_queue_simulator.witness.as_slices().0;
     let mut states_iter = artifacts.original_log_queue_states.iter();
 
-    let mut results: Vec<LogDemuxerCircuitInstanceWitness<E>> = vec![];
+    let mut results: Vec<LogDemuxerCircuitInstanceWitness<F>> = vec![];
 
     let num_chunks = input_queue_witness.chunks(per_circuit_capacity).len();
-    use sync_vm::glue::demux_log_queue::input::*;
-    use sync_vm::traits::CSWitnessable;
 
     let mut state_idx = 0;
 
     let full_log_queue_state =
         take_queue_state_from_simulator(&artifacts.original_log_queue_simulator);
 
-    use zk_evm::zkevm_opcode_defs::system_params::{
+    use crate::zk_evm::zkevm_opcode_defs::system_params::{
         ECRECOVER_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
         KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
         SHA256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
     };
 
-    use zk_evm::zkevm_opcode_defs::system_params::{
+    use crate::zk_evm::zkevm_opcode_defs::system_params::{
         EVENT_AUX_BYTE, L1_MESSAGE_AUX_BYTE, PRECOMPILE_AUX_BYTE, STORAGE_AUX_BYTE,
     };
 
@@ -84,7 +106,7 @@ pub fn compute_logs_demux<E: Engine, R: CircuitArithmeticRoundFunction<E, 2, 3>>
 
         // simulate the circuit
         for (_encoding, _previous_tail, query) in input_chunk.iter() {
-            let (_, states) = states_iter.next().unwrap();
+            let (_, _states) = states_iter.next().unwrap();
             match query.aux_byte {
                 STORAGE_AUX_BYTE => {
                     // sort rollup and porter
@@ -120,7 +142,7 @@ pub fn compute_logs_demux<E: Engine, R: CircuitArithmeticRoundFunction<E, 2, 3>>
                 }
                 PRECOMPILE_AUX_BYTE => {
                     assert!(!query.rollback);
-                    use zk_evm::precompiles::*;
+                    use crate::zk_evm::zk_evm_abstractions::precompiles::*;
                     match query.address {
                         a if a == *KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
                             let item = demuxed_keccak_precompile_queries_it
@@ -175,10 +197,8 @@ pub fn compute_logs_demux<E: Engine, R: CircuitArithmeticRoundFunction<E, 2, 3>>
             .iter()
             .skip(state_idx)
             .take(input_chunk.len())
-            .map(|(encoding, old_tail, element)| {
-                let as_storage_log = log_query_into_storage_record_witness(element);
-
-                (*encoding, as_storage_log, *old_tail)
+            .map(|(_encoding, old_tail, element)| {
+                (log_query_into_circuit_log_query_witness(element), *old_tail)
             })
             .collect();
 
@@ -188,8 +208,8 @@ pub fn compute_logs_demux<E: Engine, R: CircuitArithmeticRoundFunction<E, 2, 3>>
 
         let mut fsm_output = LogDemuxerFSMInputOutput::placeholder_witness();
         let mut initial_log_queue_state = full_log_queue_state.clone();
-        initial_log_queue_state.head_state = artifacts.original_log_queue_states[idx].1.tail;
-        initial_log_queue_state.num_items -= artifacts.original_log_queue_states[idx].1.num_items;
+        initial_log_queue_state.head = artifacts.original_log_queue_states[idx].1.tail;
+        initial_log_queue_state.tail.length -= artifacts.original_log_queue_states[idx].1.num_items;
 
         fsm_output.initial_log_queue_state = initial_log_queue_state;
         fsm_output.storage_access_queue_state =
@@ -213,10 +233,15 @@ pub fn compute_logs_demux<E: Engine, R: CircuitArithmeticRoundFunction<E, 2, 3>>
                 observable_output: output_passthrough_data.clone(),
                 hidden_fsm_input: LogDemuxerFSMInputOutput::placeholder_witness(),
                 hidden_fsm_output: fsm_output,
-                _marker_e: (),
-                _marker: std::marker::PhantomData,
             },
-            initial_queue_witness: FixedWidthEncodingGenericQueueWitness { wit: input_witness },
+            initial_queue_witness: CircuitQueueRawWitness::<
+                F,
+                LogQuery<F>,
+                4,
+                LOG_QUERY_PACKED_WIDTH,
+            > {
+                elements: input_witness,
+            },
         };
 
         if is_last {

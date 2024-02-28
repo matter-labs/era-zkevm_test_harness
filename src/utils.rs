@@ -1,67 +1,25 @@
 use std::ops::Add;
 
-use crate::{ff::PrimeField, witness::tree::BinaryHasher};
-use num_bigint::BigUint;
-use sync_vm::vm::primitives::u160;
-use zk_evm::{address_to_u256, ethereum_types::*};
+use crate::boojum::algebraic_props::round_function::AbsorptionModeOverwrite;
+use crate::boojum::config::*;
+use crate::boojum::cs::implementations::setup::FinalizationHintsForProver;
+use crate::boojum::field::goldilocks::GoldilocksExt2;
+use crate::boojum::{algebraic_props::round_function, field::SmallField};
+use crate::witness::tree::BinaryHasher;
+use crate::zk_evm::{address_to_u256, ethereum_types::*};
+use circuit_definitions::encodings::{BytesSerializable, QueueSimulator};
 
-pub fn u160_from_address(address: Address) -> u160 {
-    // transform to limbs
-
-    let lowest = u64::from_be_bytes(address.0[12..20].try_into().unwrap());
-    let mid = u64::from_be_bytes(address.0[4..12].try_into().unwrap());
-    let high = u32::from_be_bytes(address.0[0..4].try_into().unwrap());
-
-    u160 {
-        limb0: lowest,
-        limb1: mid,
-        limb2: high,
-    }
+pub fn u64_as_u32_le(value: u64) -> [u32; 2] {
+    [value as u32, (value >> 32) as u32]
 }
 
-pub fn address_from_u160(value: u160) -> Address {
-    // transform to limbs
-
-    let lowest = value.limb0.to_be_bytes();
-    let mid = value.limb1.to_be_bytes();
-    let highest = value.limb2.to_be_bytes();
-
-    let mut result = Address::zero();
-    result[0..4].copy_from_slice(&highest);
-    result[4..12].copy_from_slice(&mid);
-    result[12..].copy_from_slice(&lowest);
-
-    result
-}
-
-pub fn biguint_from_u256(value: U256) -> BigUint {
-    let mut result = BigUint::from(value.0[3]);
-    result <<= 64u32;
-    result += BigUint::from(value.0[2]);
-    result <<= 64u32;
-    result += BigUint::from(value.0[1]);
-    result <<= 64u32;
-    result += BigUint::from(value.0[0]);
-
-    result
-}
-
-pub fn address_to_fe<F: PrimeField>(value: Address) -> F {
-    let value = address_to_u256(&value);
-    u256_to_fe::<F>(value)
-}
-
-pub fn u256_to_fe<F: PrimeField>(value: U256) -> F {
-    let num_bits = value.bits();
-    assert!(num_bits <= F::CAPACITY as usize);
-
-    let mut repr = F::zero().into_repr();
-    repr.as_mut()[0] = value.0[0];
-    repr.as_mut()[1] = value.0[1];
-    repr.as_mut()[2] = value.0[2];
-    repr.as_mut()[3] = value.0[3];
-
-    F::from_repr(repr).unwrap()
+pub fn u128_as_u32_le(value: u128) -> [u32; 4] {
+    [
+        value as u32,
+        (value >> 32) as u32,
+        (value >> 64) as u32,
+        (value >> 96) as u32,
+    ]
 }
 
 pub fn calldata_to_aligned_data(calldata: &Vec<u8>) -> Vec<U256> {
@@ -117,8 +75,6 @@ pub fn bytes_to_u128_le<const N: usize, const M: usize>(bytes: &[u8; N]) -> [u12
     result
 }
 
-use crate::encodings::initial_storage_write::BytesSerializable;
-
 pub fn binary_merklize_set<
     'a,
     const N: usize,
@@ -162,4 +118,43 @@ pub fn binary_merklize_set<
     let root = previous_layer_hashes[0];
 
     root
+}
+
+use crate::boojum::algebraic_props::round_function::AlgebraicRoundFunction;
+use crate::boojum::gadgets::traits::round_function::BuildableCircuitRoundFunction;
+use crate::zkevm_circuits::scheduler::QUEUE_FINAL_STATE_COMMITMENT_LENGTH;
+use circuit_definitions::encodings::OutOfCircuitFixedLengthEncodable;
+
+pub fn finalize_queue_state<
+    F: SmallField,
+    R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+    const N: usize,
+>(
+    tail: [F; N],
+    _round_function: &R,
+) -> [F; QUEUE_FINAL_STATE_COMMITMENT_LENGTH] {
+    // rescue prime paddings
+    let mut to_absorb = vec![];
+    to_absorb.extend(tail);
+    to_absorb.push(F::ONE);
+
+    let mut state = R::initial_state();
+    use crate::boojum::algebraic_props::round_function::absorb_into_state_vararg;
+    absorb_into_state_vararg::<F, R, AbsorptionModeOverwrite, 8, 12, 4>(&mut state, &to_absorb);
+    let commitment = <R as AlgebraicRoundFunction<F, 8, 12, 4>>::state_into_commitment::<
+        QUEUE_FINAL_STATE_COMMITMENT_LENGTH,
+    >(&state);
+
+    commitment
+}
+
+pub fn finalized_queue_state_as_bytes<F: SmallField>(
+    input: [F; QUEUE_FINAL_STATE_COMMITMENT_LENGTH],
+) -> [u8; 32] {
+    let mut result = [0u8; 32];
+    for (dst, src) in result.array_chunks_mut::<8>().zip(input.into_iter()) {
+        *dst = src.as_u64_reduced().to_be_bytes();
+    }
+
+    result
 }

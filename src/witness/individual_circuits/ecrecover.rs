@@ -1,28 +1,21 @@
 use super::*;
-use crate::biguint_from_u256;
-use crate::ff::{Field, PrimeField};
-use crate::pairing::Engine;
-use crate::witness::full_block_artifact::FullBlockArtifacts;
-use derivative::Derivative;
-use num_bigint::BigUint;
-use sync_vm::circuit_structures::traits::CircuitArithmeticRoundFunction;
-use sync_vm::franklin_crypto::plonk::circuit::utils::u64_to_fe;
-use sync_vm::glue::ecrecover_circuit::input::*;
-use sync_vm::precompiles::*;
-use sync_vm::scheduler::queues::FixedWidthEncodingGenericQueueWitness;
+use crate::zk_evm::zkevm_opcode_defs::ethereum_types::U256;
+use crate::zkevm_circuits::base_structures::log_query::*;
+use crate::zkevm_circuits::ecrecover::*;
+use circuit_definitions::encodings::*;
 
 // we want to simulate splitting of data into many separate instances of the same circuit.
 // So we basically need to reconstruct the FSM state on input/output, and passthrough data.
 // In practice the only difficulty is buffer state, everything else is provided by out-of-circuit VM
 
 pub fn ecrecover_decompose_into_per_circuit_witness<
-    E: Engine,
-    R: CircuitArithmeticRoundFunction<E, 2, 3>,
+    F: SmallField,
+    R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
-    artifacts: &mut FullBlockArtifacts<E>,
+    artifacts: &mut FullBlockArtifacts<F>,
     num_rounds_per_circuit: usize,
     round_function: &R,
-) -> Vec<EcrecoverCircuitInstanceWitness<E>> {
+) -> Vec<EcrecoverCircuitInstanceWitness<F>> {
     assert_eq!(
         artifacts.all_memory_queries_accumulated.len(),
         artifacts.all_memory_queue_states.len()
@@ -34,7 +27,7 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
 
     // split into aux witness, don't mix with the memory
 
-    use zk_evm::precompiles::ecrecover::ECRecoverRoundWitness;
+    use crate::zk_evm::zk_evm_abstractions::precompiles::ecrecover::ECRecoverRoundWitness;
     for (_cycle, _query, witness) in artifacts.ecrecover_witnesses.iter() {
         let ECRecoverRoundWitness {
             new_request: _,
@@ -75,37 +68,38 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
         let current_memory_queue_state = memory_queue_input_state.clone();
 
         let mut observable_input_data = PrecompileFunctionInputData::placeholder_witness();
-        observable_input_data.initial_memory_state = memory_queue_input_state.clone();
+        observable_input_data.initial_memory_queue_state = memory_queue_input_state.clone();
         observable_input_data.initial_log_queue_state = log_queue_input_state.clone();
 
         let mut observable_output_data = PrecompileFunctionOutputData::placeholder_witness();
         observable_output_data.final_memory_state = current_memory_queue_state.clone();
 
-        let witness = EcrecoverCircuitInstanceWitness::<E> {
-            closed_form_input: EcrecoverCircuitInputOutputWitness::<E> {
+        let witness = EcrecoverCircuitInstanceWitness::<F> {
+            closed_form_input: EcrecoverCircuitInputOutputWitness::<F> {
                 start_flag: true,
                 completion_flag: true,
                 observable_input: observable_input_data,
                 observable_output: observable_output_data,
-                hidden_fsm_input: EcrecoverCircuitFSMInputOutputWitness::<E> {
+                hidden_fsm_input: EcrecoverCircuitFSMInputOutputWitness::<F> {
                     log_queue_state: log_queue_input_state.clone(),
                     memory_queue_state: memory_queue_input_state,
-                    _marker: std::marker::PhantomData,
                 },
-                hidden_fsm_output: EcrecoverCircuitFSMInputOutputWitness::<E> {
+                hidden_fsm_output: EcrecoverCircuitFSMInputOutputWitness::<F> {
                     log_queue_state: take_queue_state_from_simulator(
                         &artifacts.demuxed_sha256_precompile_queue_simulator,
                     ),
                     memory_queue_state: current_memory_queue_state.clone(),
-                    _marker: std::marker::PhantomData,
                 },
-                _marker_e: (),
-                _marker: std::marker::PhantomData,
             },
-            requests_queue_witness: FixedWidthEncodingGenericQueueWitness {
-                wit: VecDeque::new(),
+            requests_queue_witness: CircuitQueueRawWitness::<
+                F,
+                LogQuery<F>,
+                4,
+                LOG_QUERY_PACKED_WIDTH,
+            > {
+                elements: VecDeque::new(),
             },
-            memory_reads_witness: vec![],
+            memory_reads_witness: VecDeque::new(),
         };
         result.push(witness);
 
@@ -118,8 +112,6 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
     // convension
     let mut log_queue_input_state =
         take_queue_state_from_simulator(&artifacts.demuxed_ecrecover_queue_simulator);
-    use sync_vm::traits::CSWitnessable;
-
     let mut memory_queries_it = memory_queries.into_iter();
 
     let mut memory_read_witnesses = vec![];
@@ -147,7 +139,7 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
         let (_cycle, _req, round_witness) = per_request_work;
         assert_eq!(request, _req);
 
-        use zk_evm::precompiles::precompile_abi_in_log;
+        use crate::zk_evm::zk_evm_abstractions::precompiles::precompile_abi_in_log;
         let mut precompile_request = precompile_abi_in_log(request);
         let is_last_request = request_idx == num_requests - 1;
 
@@ -156,7 +148,7 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
             let read_query = memory_queries_it.next().unwrap();
             assert!(read == read_query);
             assert!(read_query.rw_flag == false);
-            memory_reads_per_request.push(biguint_from_u256(read_query.value));
+            memory_reads_per_request.push(read_query.value);
 
             artifacts.all_memory_queries_accumulated.push(read);
             let (_, intermediate_info) = artifacts
@@ -200,16 +192,10 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
                 assert!(memory_queries_it.next().is_none());
             }
 
-            use crate::encodings::log_query::log_query_into_storage_record_witness;
-
             let range = starting_request_idx..(request_idx + 1);
             let wit: VecDeque<_> = (&simulator_witness[range])
                 .iter()
-                .map(|el| {
-                    let mapped = log_query_into_storage_record_witness::<E>(&el.2);
-
-                    (el.0, mapped, el.1)
-                })
+                .map(|el| (log_query_into_circuit_log_query_witness(&el.2), el.1))
                 .collect();
 
             let current_reads = std::mem::replace(&mut memory_reads_per_request, vec![]);
@@ -218,7 +204,7 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
 
             let mut observable_input_data = PrecompileFunctionInputData::placeholder_witness();
             if result.len() == 0 {
-                observable_input_data.initial_memory_state = memory_queue_input_state.clone();
+                observable_input_data.initial_memory_queue_state = memory_queue_input_state.clone();
                 observable_input_data.initial_log_queue_state = log_queue_input_state.clone();
             }
 
@@ -227,29 +213,35 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
                 observable_output_data.final_memory_state = current_memory_queue_state.clone();
             }
 
-            let witness = EcrecoverCircuitInstanceWitness::<E> {
-                closed_form_input: EcrecoverCircuitInputOutputWitness::<E> {
+            let witness = EcrecoverCircuitInstanceWitness::<F> {
+                closed_form_input: EcrecoverCircuitInputOutputWitness::<F> {
                     start_flag: result.len() == 0,
                     completion_flag: finished,
                     observable_input: observable_input_data,
                     observable_output: observable_output_data,
-                    hidden_fsm_input: EcrecoverCircuitFSMInputOutputWitness::<E> {
+                    hidden_fsm_input: EcrecoverCircuitFSMInputOutputWitness::<F> {
                         log_queue_state: log_queue_input_state.clone(),
                         memory_queue_state: memory_queue_input_state,
-                        _marker: std::marker::PhantomData,
                     },
-                    hidden_fsm_output: EcrecoverCircuitFSMInputOutputWitness::<E> {
+                    hidden_fsm_output: EcrecoverCircuitFSMInputOutputWitness::<F> {
                         log_queue_state: take_queue_state_from_simulator(
                             &artifacts.demuxed_ecrecover_queue_simulator,
                         ),
                         memory_queue_state: current_memory_queue_state.clone(),
-                        _marker: std::marker::PhantomData,
                     },
-                    _marker_e: (),
-                    _marker: std::marker::PhantomData,
                 },
-                requests_queue_witness: FixedWidthEncodingGenericQueueWitness { wit: wit },
-                memory_reads_witness: current_witness,
+                requests_queue_witness: CircuitQueueRawWitness::<
+                    F,
+                    LogQuery<F>,
+                    4,
+                    LOG_QUERY_PACKED_WIDTH,
+                > {
+                    elements: wit,
+                },
+                memory_reads_witness: current_witness
+                    .into_iter()
+                    .map(|el| el.try_into().expect("length must match"))
+                    .collect(),
             };
 
             // make non-inclusize

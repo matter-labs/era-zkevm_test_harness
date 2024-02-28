@@ -7,28 +7,40 @@ use crate::witness::full_block_artifact::BlockBasicCircuits;
 use crate::witness::full_block_artifact::BlockBasicCircuitsPublicCompactFormsWitnesses;
 use crate::witness::full_block_artifact::FullBlockArtifacts;
 use crate::witness::oracle::VmInstanceWitness;
-use crate::witness::oracle::VmWitnessOracle;
+use crate::witness::utils::*;
+use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
+use circuit_definitions::circuit_definitions::base_layer::*;
 
-use crate::abstract_zksync_circuit::concrete_circuits::*;
-use crate::pairing::bn256::Bn256;
-
+use crate::boojum::algebraic_props::round_function;
 use crossbeam::atomic::AtomicCell;
 use std::sync::Arc;
 
-pub const USE_BLAKE2S_EXTRA_TABLES: bool = true;
 pub const L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH: bool = false;
 
-pub fn create_leaf_level_circuits_and_scheduler_witness(
+use crate::boojum::algebraic_props::round_function::AlgebraicRoundFunction;
+use crate::boojum::field::SmallField;
+use crate::boojum::gadgets::traits::allocatable::CSAllocatableExt;
+use crate::boojum::gadgets::traits::round_function::*;
+
+pub fn create_leaf_level_circuits_and_scheduler_witness<
+F: SmallField,
+R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
+>(
     zkporter_is_available: bool,
     default_aa_code_hash: U256,
-    vm_instances_witness: Vec<VmInstanceWitness<Bn256, VmWitnessOracle<Bn256>>>,
-    artifacts: FullBlockArtifacts<Bn256>,
+    vm_instances_witness: Vec<VmInstanceWitness<F, VmWitnessOracle<F>>>,
+    artifacts: FullBlockArtifacts<F>,
     geometry: GeometryConfig,
-) -> (
-    BlockBasicCircuits<Bn256>,
-    BlockBasicCircuitsPublicInputs<Bn256>,
-    BlockBasicCircuitsPublicCompactFormsWitnesses<Bn256>,
-) {
+    round_function: &R,
+) -> (BlockBasicCircuits<F, R>, BlockBasicCircuitsPublicInputs<F>, BlockBasicCircuitsPublicCompactFormsWitnesses<F>)
+where [(); <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <zkevm_circuits::base_structures::memory_query::MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <zkevm_circuits::base_structures::decommit_query::DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <boojum::gadgets::u256::UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <boojum::gadgets::u256::UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN + 1]:,
+    [(); <zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+    [(); <zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
+{
     assert!(artifacts.is_processed);
 
     let FullBlockArtifacts {
@@ -39,29 +51,32 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         storage_deduplicator_circuit_data,
         events_deduplicator_circuit_data,
         l1_messages_deduplicator_circuit_data,
-        initial_writes_pubdata_hasher_circuit_data,
-        repeated_writes_pubdata_hasher_circuit_data,
         rollup_storage_application_circuit_data,
         keccak256_circuits_data,
         sha256_circuits_data,
         ecrecover_circuits_data,
-        l1_messages_merklizer_data,
         l1_messages_linear_hash_data,
         ..
     } = artifacts;
 
-    use crate::entry_point::create_in_circuit_global_context;
-    use sync_vm::glue::traits::GenericHasher;
-    use sync_vm::rescue_poseidon::RescueParams;
-    let params = sync_vm::utils::bn254_rescue_params();
-    let round_function =
-        GenericHasher::<Bn256, RescueParams<_, 2, 3>, 2, 3>::new_from_params(&params);
-    let round_function = Arc::new(round_function);
+    let round_function = Arc::new(round_function.clone());
 
-    let in_circuit_global_context =
-        create_in_circuit_global_context::<Bn256>(zkporter_is_available, default_aa_code_hash);
+    use crate::zkevm_circuits::base_structures::vm_state::GlobalContextWitness;
 
+    let in_circuit_global_context = GlobalContextWitness {
+        zkporter_is_available,
+        default_aa_code_hash,
+    };
+
+    use crate::witness::utils::create_cs_for_witness_generation;
     use crate::witness::utils::simulate_public_input_value_from_witness;
+
+    let mut cs_for_witness_generation = create_cs_for_witness_generation::<F, R>(
+        TRACE_LEN_LOG_2_FOR_CALCULATION,
+        MAX_VARS_LOG_2_FOR_CALCULATION,
+    );
+
+    let mut cycles_used: usize = 0;
 
     // VM
 
@@ -89,8 +104,20 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
                 observable_input.as_ref().unwrap().clone();
         }
 
-        let (proof_system_input, compact_form_witness) =
-            simulate_public_input_value_from_witness(circuit_input.closed_form_input.clone());
+        let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
+            &mut cs_for_witness_generation,
+            circuit_input.closed_form_input.clone(),
+            &*round_function,
+        );
+
+        cycles_used += 1;
+        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            cs_for_witness_generation = create_cs_for_witness_generation(
+                TRACE_LEN_LOG_2_FOR_CALCULATION,
+                MAX_VARS_LOG_2_FOR_CALCULATION,
+            );
+            cycles_used = 0;
+        }
 
         let instance = VMMainCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
@@ -108,15 +135,16 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
 
     let mut code_decommittments_sorter_circuits = vec![];
     let mut code_decommittments_sorter_circuits_inputs = vec![];
-    let mut code_decommittments_sorter_circuit_compact_forms_witnesses = vec![];
+    let mut code_decommittments_sorter_circuits_compact_forms_witnesses = vec![];
     let num_instances = decommittments_deduplicator_circuits_data.len();
     let mut observable_input = None;
-    for (circuit_idx, mut circuit_input) in decommittments_deduplicator_circuits_data.into_iter().enumerate() {
+    for (instance_idx, mut circuit_input) in decommittments_deduplicator_circuits_data
+        .into_iter()
+        .enumerate()
+    {
+        let is_first = instance_idx == 0;
+        let _is_last = instance_idx == num_instances - 1;
 
-        use crate::witness::utils::vm_instance_witness_to_circuit_formal_input;
-        let is_first = circuit_idx == 0;
-        let is_last = circuit_idx == num_instances - 1;
-        
         if observable_input.is_none() {
             assert!(is_first);
             observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
@@ -125,19 +153,31 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
                 observable_input.as_ref().unwrap().clone();
         }
 
-        let (proof_system_input, compact_form_witness) =
-            simulate_public_input_value_from_witness(circuit_input.closed_form_input.clone());
+        let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
+            &mut cs_for_witness_generation,
+            circuit_input.closed_form_input.clone(),
+            &*round_function,
+        );
+
+        cycles_used += 1;
+        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            cs_for_witness_generation = create_cs_for_witness_generation(
+                TRACE_LEN_LOG_2_FOR_CALCULATION,
+                MAX_VARS_LOG_2_FOR_CALCULATION,
+            );
+            cycles_used = 0;
+        }
 
         let instance = CodeDecommittsSorterCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
-            config: Arc::new(geometry.cycles_per_code_decommitter_sorter as usize),
+            config: Arc::new(geometry.cycles_code_decommitter_sorter as usize),
             round_function: round_function.clone(),
             expected_public_input: Some(proof_system_input),
         };
 
         code_decommittments_sorter_circuits.push(instance);
         code_decommittments_sorter_circuits_inputs.push(proof_system_input);
-        code_decommittments_sorter_circuit_compact_forms_witnesses.push(compact_form_witness);
+        code_decommittments_sorter_circuits_compact_forms_witnesses.push(compact_form_witness);
     }
 
     // Actual decommitter
@@ -160,8 +200,20 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
                 observable_input.as_ref().unwrap().clone();
         }
 
-        let (proof_system_input, compact_form_witness) =
-            simulate_public_input_value_from_witness(circuit_input.closed_form_input.clone());
+        let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
+            &mut cs_for_witness_generation,
+            circuit_input.closed_form_input.clone(),
+            &*round_function,
+        );
+
+        cycles_used += 1;
+        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            cs_for_witness_generation = create_cs_for_witness_generation(
+                TRACE_LEN_LOG_2_FOR_CALCULATION,
+                MAX_VARS_LOG_2_FOR_CALCULATION,
+            );
+            cycles_used = 0;
+        }
 
         let instance = CodeDecommitterCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
@@ -194,8 +246,20 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
                 observable_input.as_ref().unwrap().clone();
         }
 
-        let (proof_system_input, compact_form_witness) =
-            simulate_public_input_value_from_witness(circuit_input.closed_form_input.clone());
+        let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
+            &mut cs_for_witness_generation,
+            circuit_input.closed_form_input.clone(),
+            &*round_function,
+        );
+
+        cycles_used += 1;
+        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            cs_for_witness_generation = create_cs_for_witness_generation(
+                TRACE_LEN_LOG_2_FOR_CALCULATION,
+                MAX_VARS_LOG_2_FOR_CALCULATION,
+            );
+            cycles_used = 0;
+        }
 
         let instance = LogDemuxerCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
@@ -228,8 +292,20 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
                 observable_input.as_ref().unwrap().clone();
         }
 
-        let (proof_system_input, compact_form_witness) =
-            simulate_public_input_value_from_witness(circuit_input.closed_form_input.clone());
+        let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
+            &mut cs_for_witness_generation,
+            circuit_input.closed_form_input.clone(),
+            &*round_function,
+        );
+
+        cycles_used += 1;
+        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            cs_for_witness_generation = create_cs_for_witness_generation(
+                TRACE_LEN_LOG_2_FOR_CALCULATION,
+                MAX_VARS_LOG_2_FOR_CALCULATION,
+            );
+            cycles_used = 0;
+        }
 
         let instance = Keccak256RoundFunctionCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
@@ -262,8 +338,20 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
                 observable_input.as_ref().unwrap().clone();
         }
 
-        let (proof_system_input, compact_form_witness) =
-            simulate_public_input_value_from_witness(circuit_input.closed_form_input.clone());
+        let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
+            &mut cs_for_witness_generation,
+            circuit_input.closed_form_input.clone(),
+            &*round_function,
+        );
+
+        cycles_used += 1;
+        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            cs_for_witness_generation = create_cs_for_witness_generation(
+                TRACE_LEN_LOG_2_FOR_CALCULATION,
+                MAX_VARS_LOG_2_FOR_CALCULATION,
+            );
+            cycles_used = 0;
+        }
 
         let instance = Sha256RoundFunctionCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
@@ -296,8 +384,20 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
                 observable_input.as_ref().unwrap().clone();
         }
 
-        let (proof_system_input, compact_form_witness) =
-            simulate_public_input_value_from_witness(circuit_input.closed_form_input.clone());
+        let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
+            &mut cs_for_witness_generation,
+            circuit_input.closed_form_input.clone(),
+            &*round_function,
+        );
+
+        cycles_used += 1;
+        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            cs_for_witness_generation = create_cs_for_witness_generation(
+                TRACE_LEN_LOG_2_FOR_CALCULATION,
+                MAX_VARS_LOG_2_FOR_CALCULATION,
+            );
+            cycles_used = 0;
+        }
 
         let instance = ECRecoverFunctionCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
@@ -330,8 +430,20 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
                 observable_input.as_ref().unwrap().clone();
         }
 
-        let (proof_system_input, compact_form_witness) =
-            simulate_public_input_value_from_witness(circuit_input.closed_form_input.clone());
+        let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
+            &mut cs_for_witness_generation,
+            circuit_input.closed_form_input.clone(),
+            &*round_function,
+        );
+
+        cycles_used += 1;
+        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            cs_for_witness_generation = create_cs_for_witness_generation(
+                TRACE_LEN_LOG_2_FOR_CALCULATION,
+                MAX_VARS_LOG_2_FOR_CALCULATION,
+            );
+            cycles_used = 0;
+        }
 
         let instance = RAMPermutationCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
@@ -366,8 +478,20 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
                 observable_input.as_ref().unwrap().clone();
         }
 
-        let (proof_system_input, compact_form_witness) =
-            simulate_public_input_value_from_witness(circuit_input.closed_form_input.clone());
+        let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
+            &mut cs_for_witness_generation,
+            circuit_input.closed_form_input.clone(),
+            &*round_function,
+        );
+
+        cycles_used += 1;
+        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            cs_for_witness_generation = create_cs_for_witness_generation(
+                TRACE_LEN_LOG_2_FOR_CALCULATION,
+                MAX_VARS_LOG_2_FOR_CALCULATION,
+            );
+            cycles_used = 0;
+        }
 
         let instance = StorageSorterCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
@@ -403,15 +527,24 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
                 observable_input.as_ref().unwrap().clone();
         }
 
-        let (proof_system_input, compact_form_witness) =
-            simulate_public_input_value_from_witness(circuit_input.closed_form_input.clone());
+        let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
+            &mut cs_for_witness_generation,
+            circuit_input.closed_form_input.clone(),
+            &*round_function,
+        );
+
+        cycles_used += 1;
+        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            cs_for_witness_generation = create_cs_for_witness_generation(
+                TRACE_LEN_LOG_2_FOR_CALCULATION,
+                MAX_VARS_LOG_2_FOR_CALCULATION,
+            );
+            cycles_used = 0;
+        }
 
         let instance = StorageApplicationCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
-            config: Arc::new((
-                geometry.cycles_per_storage_application as usize,
-                USE_BLAKE2S_EXTRA_TABLES,
-            )),
+            config: Arc::new(geometry.cycles_per_storage_application as usize),
             round_function: round_function.clone(),
             expected_public_input: Some(proof_system_input),
         };
@@ -421,47 +554,43 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         storage_application_circuits_compact_forms_witnesses.push(compact_form_witness);
     }
 
-    // initial writes rehasher
+    // // initial writes rehasher
 
-    assert!(initial_writes_pubdata_hasher_circuit_data.len() == 1);
-    let circuit_input = initial_writes_pubdata_hasher_circuit_data
-        .into_iter()
-        .next()
-        .unwrap();
+    // assert!(initial_writes_pubdata_hasher_circuit_data.len() == 1);
+    // let circuit_input = initial_writes_pubdata_hasher_circuit_data.into_iter().next().unwrap();
 
-    let (proof_system_input, compact_form_witness) =
-        simulate_public_input_value_from_witness(circuit_input.closed_form_input.clone());
+    // let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
+    //     circuit_input.closed_form_input.clone(),
+    // );
 
-    let initial_writes_hasher_circuit = InitialStorageWritesPubdataHasherCircuit {
-        witness: AtomicCell::new(Some(circuit_input)),
-        config: Arc::new(geometry.limit_for_initial_writes_pubdata_hasher as usize),
-        round_function: round_function.clone(),
-        expected_public_input: Some(proof_system_input),
-    };
+    // let initial_writes_hasher_circuit = InitialStorageWritesPubdataHasherCircuit {
+    //     witness: AtomicCell::new(Some(circuit_input)),
+    //     config: Arc::new(geometry.limit_for_initial_writes_pubdata_hasher as usize),
+    //     round_function: round_function.clone(),
+    //     expected_public_input: Some(proof_system_input),
+    // };
 
-    let initial_writes_hasher_circuit_input = proof_system_input;
-    let initial_writes_hasher_circuit_compact_form_witness = compact_form_witness;
+    // let initial_writes_hasher_circuit_input = proof_system_input;
+    // let initial_writes_hasher_circuit_compact_form_witness = compact_form_witness;
 
-    // repetated writes
+    // // repetated writes
 
-    assert!(repeated_writes_pubdata_hasher_circuit_data.len() == 1);
-    let circuit_input = repeated_writes_pubdata_hasher_circuit_data
-        .into_iter()
-        .next()
-        .unwrap();
+    // assert!(repeated_writes_pubdata_hasher_circuit_data.len() == 1);
+    // let circuit_input = repeated_writes_pubdata_hasher_circuit_data.into_iter().next().unwrap();
 
-    let (proof_system_input, compact_form_witness) =
-        simulate_public_input_value_from_witness(circuit_input.closed_form_input.clone());
+    // let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
+    //     circuit_input.closed_form_input.clone(),
+    // );
 
-    let repeated_writes_hasher_circuit = RepeatedStorageWritesPubdataHasherCircuit {
-        witness: AtomicCell::new(Some(circuit_input)),
-        config: Arc::new(geometry.limit_for_repeated_writes_pubdata_hasher as usize),
-        round_function: round_function.clone(),
-        expected_public_input: Some(proof_system_input),
-    };
+    // let repeated_writes_hasher_circuit = RepeatedStorageWritesPubdataHasherCircuit {
+    //     witness: AtomicCell::new(Some(circuit_input)),
+    //     config: Arc::new(geometry.limit_for_repeated_writes_pubdata_hasher as usize),
+    //     round_function: round_function.clone(),
+    //     expected_public_input: Some(proof_system_input),
+    // };
 
-    let repeated_writes_hasher_circuit_input = proof_system_input;
-    let repeated_writes_hasher_circuit_compact_form_witness = compact_form_witness;
+    // let repeated_writes_hasher_circuit_input = proof_system_input;
+    // let repeated_writes_hasher_circuit_compact_form_witness = compact_form_witness;
 
     // events sorter
 
@@ -484,8 +613,20 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
                 observable_input.as_ref().unwrap().clone();
         }
 
-        let (proof_system_input, compact_form_witness) =
-            simulate_public_input_value_from_witness(circuit_input.closed_form_input.clone());
+        let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
+            &mut cs_for_witness_generation,
+            circuit_input.closed_form_input.clone(),
+            &*round_function,
+        );
+
+        cycles_used += 1;
+        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            cs_for_witness_generation = create_cs_for_witness_generation(
+                TRACE_LEN_LOG_2_FOR_CALCULATION,
+                MAX_VARS_LOG_2_FOR_CALCULATION,
+            );
+            cycles_used = 0;
+        }
 
         let instance = EventsSorterCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
@@ -521,8 +662,20 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
                 observable_input.as_ref().unwrap().clone();
         }
 
-        let (proof_system_input, compact_form_witness) =
-            simulate_public_input_value_from_witness(circuit_input.closed_form_input.clone());
+        let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
+            &mut cs_for_witness_generation,
+            circuit_input.closed_form_input.clone(),
+            &*round_function,
+        );
+
+        cycles_used += 1;
+        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            cs_for_witness_generation = create_cs_for_witness_generation(
+                TRACE_LEN_LOG_2_FOR_CALCULATION,
+                MAX_VARS_LOG_2_FOR_CALCULATION,
+            );
+            cycles_used = 0;
+        }
 
         let instance = L1MessagesSorterCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
@@ -538,42 +691,49 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
 
     // l1 messages pubdata hasher
 
-    assert!(l1_messages_linear_hash_data.len() == 1);
-    let circuit_input = l1_messages_linear_hash_data.into_iter().next().unwrap();
+    let mut l1_messages_hasher_circuits = vec![];
+    let mut l1_messages_hasher_circuits_inputs = vec![];
+    let mut l1_messages_hasher_circuits_compact_forms_witnesses = vec![];
+    let num_instances = l1_messages_linear_hash_data.len();
+    let mut observable_input = None;
+    for (instance_idx, mut circuit_input) in l1_messages_linear_hash_data.into_iter().enumerate() {
+        let is_first = instance_idx == 0;
+        let _is_last = instance_idx == num_instances - 1;
 
-    let (proof_system_input, compact_form_witness) =
-        simulate_public_input_value_from_witness(circuit_input.closed_form_input.clone());
+        if observable_input.is_none() {
+            assert!(is_first);
+            observable_input = Some(circuit_input.closed_form_input.observable_input.clone());
+        } else {
+            circuit_input.closed_form_input.observable_input =
+                observable_input.as_ref().unwrap().clone();
+        }
 
-    let l1_messages_pubdata_hasher_circuit = L1MessagesHasherCircuit {
-        witness: AtomicCell::new(Some(circuit_input)),
-        config: Arc::new(geometry.limit_for_l1_messages_pudata_hasher as usize),
-        round_function: round_function.clone(),
-        expected_public_input: Some(proof_system_input),
-    };
+        let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
+            &mut cs_for_witness_generation,
+            circuit_input.closed_form_input.clone(),
+            &*round_function,
+        );
 
-    let l1_messages_pubdata_hasher_circuit_input = proof_system_input;
-    let l1_messages_pubdata_hasher_circuit_compact_form_witness = compact_form_witness;
+        cycles_used += 1;
+        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            cs_for_witness_generation = create_cs_for_witness_generation(
+                TRACE_LEN_LOG_2_FOR_CALCULATION,
+                MAX_VARS_LOG_2_FOR_CALCULATION,
+            );
+            cycles_used = 0;
+        }
 
-    // l1 messages merklizer
+        let instance = L1MessagesHasherCircuit {
+            witness: AtomicCell::new(Some(circuit_input)),
+            config: Arc::new(geometry.limit_for_l1_messages_pudata_hasher as usize),
+            round_function: round_function.clone(),
+            expected_public_input: Some(proof_system_input),
+        };
 
-    assert!(l1_messages_merklizer_data.len() == 1);
-    let circuit_input = l1_messages_merklizer_data.into_iter().next().unwrap();
-
-    let (proof_system_input, compact_form_witness) =
-        simulate_public_input_value_from_witness(circuit_input.closed_form_input.clone());
-
-    let l1_messages_merklizer_circuit = L1MessagesMerklizerCircuit {
-        witness: AtomicCell::new(Some(circuit_input)),
-        config: Arc::new((
-            geometry.limit_for_l1_messages_merklizer as usize,
-            L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH,
-        )),
-        round_function: round_function.clone(),
-        expected_public_input: Some(proof_system_input),
-    };
-
-    let l1_messages_merklizer_circuit_input = proof_system_input;
-    let l1_messages_merklizer_circuit_compact_form_witness = compact_form_witness;
+        l1_messages_hasher_circuits.push(instance);
+        l1_messages_hasher_circuits_inputs.push(proof_system_input);
+        l1_messages_hasher_circuits_compact_forms_witnesses.push(compact_form_witness);
+    }
 
     // done!
 
@@ -588,12 +748,9 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         ram_permutation_circuits,
         storage_sorter_circuits,
         storage_application_circuits,
-        initial_writes_hasher_circuit,
-        repeated_writes_hasher_circuit,
         events_sorter_circuits,
         l1_messages_sorter_circuits,
-        l1_messages_pubdata_hasher_circuit,
-        l1_messages_merklizer_circuit,
+        l1_messages_hasher_circuits,
     };
 
     let basic_circuits_inputs = BlockBasicCircuitsPublicInputs {
@@ -607,17 +764,15 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         ram_permutation_circuits: ram_permutation_circuits_inputs,
         storage_sorter_circuits: storage_sorter_circuit_inputs,
         storage_application_circuits: storage_application_circuits_inputs,
-        initial_writes_hasher_circuit: initial_writes_hasher_circuit_input,
-        repeated_writes_hasher_circuit: repeated_writes_hasher_circuit_input,
         events_sorter_circuits: events_sorter_circuits_inputs,
         l1_messages_sorter_circuits: l1_messages_sorter_circuits_inputs,
-        l1_messages_pubdata_hasher_circuit: l1_messages_pubdata_hasher_circuit_input,
-        l1_messages_merklizer_circuit: l1_messages_merklizer_circuit_input,
+        l1_messages_hasher_circuits_inputs,
     };
 
     let basic_circuits_public_inputs = BlockBasicCircuitsPublicCompactFormsWitnesses {
         main_vm_circuits: main_vm_circuits_compact_forms_witnesses,
-        code_decommittments_sorter_circuits: code_decommittments_sorter_circuit_compact_forms_witnesses,
+        code_decommittments_sorter_circuits:
+            code_decommittments_sorter_circuits_compact_forms_witnesses,
         code_decommitter_circuits: code_decommitter_circuits_compact_forms_witnesses,
         log_demux_circuits: log_demux_circuits_compact_forms_witnesses,
         keccak_precompile_circuits: keccak_precompile_circuits_compact_forms_witnesses,
@@ -626,12 +781,9 @@ pub fn create_leaf_level_circuits_and_scheduler_witness(
         ram_permutation_circuits: ram_permutation_circuits_compact_forms_witnesses,
         storage_sorter_circuits: storage_sorter_circuit_compact_form_witnesses,
         storage_application_circuits: storage_application_circuits_compact_forms_witnesses,
-        initial_writes_hasher_circuit: initial_writes_hasher_circuit_compact_form_witness,
-        repeated_writes_hasher_circuit: repeated_writes_hasher_circuit_compact_form_witness,
         events_sorter_circuits: events_sorter_circuits_compact_forms_witnesses,
         l1_messages_sorter_circuits: l1_messages_sorter_circuits_compact_forms_witnesses,
-        l1_messages_pubdata_hasher_circuit: l1_messages_pubdata_hasher_circuit_compact_form_witness,
-        l1_messages_merklizer_circuit: l1_messages_merklizer_circuit_compact_form_witness,
+        l1_messages_hasher_circuits_compact_forms_witnesses,
     };
 
     (

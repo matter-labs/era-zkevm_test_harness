@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::witness::tracer::QueryMarker;
-use zk_evm::{aux_structures::LogQuery, vm_state::CallStackEntry};
+use crate::zk_evm::{aux_structures::LogQuery, vm_state::CallStackEntry};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum RenumeratedQueryIndex {
@@ -177,7 +177,8 @@ impl CallstackWithAuxData {
         previous_simple_entry: CallStackEntry,
         new_simple_entry: CallStackEntry,
     ) {
-        self.flat_new_frames_history.push((monotonic_cycle_counter, new_simple_entry));
+        self.flat_new_frames_history
+            .push((monotonic_cycle_counter, new_simple_entry));
 
         let new_counter = self.monotonic_frame_counter;
         self.monotonic_frame_counter += 1;
@@ -239,7 +240,7 @@ impl CallstackWithAuxData {
         let CallstackEntryWithAuxData {
             entry: _,
             current_history_record: history_of_current,
-            parent_frame_index,
+            parent_frame_index: _,
             frame_index,
             forward_queue,
             rollback_queue,

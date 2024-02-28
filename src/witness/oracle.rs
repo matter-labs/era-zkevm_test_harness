@@ -4,48 +4,43 @@
 
 use super::callstack_handler::*;
 use super::utils::*;
-use crate::encodings::callstack_entry::{CallstackSimulatorState, ExtendedCallstackEntry};
-use crate::encodings::decommittment_request::DecommittmentQueueSimulator;
-use crate::encodings::log_query::LogQueueSimulator;
-use crate::encodings::memory_query::MemoryQueueSimulator;
+use crate::boojum::algebraic_props::round_function::AlgebraicRoundFunction;
+use crate::boojum::field::SmallField;
+use crate::boojum::gadgets::queue::{QueueState, QueueStateWitness, QueueTailStateWitness};
+use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
+use crate::boojum::gadgets::traits::round_function::*;
 use crate::ethereum_types::U256;
-use crate::ff::Field;
 use crate::toolset::GeometryConfig;
-use crate::u160_from_address;
+use crate::witness::full_block_artifact::FullBlockArtifacts;
 use crate::witness::tracer::{QueryMarker, WitnessTracer};
+use crate::zk_evm::aux_structures::DecommittmentQuery;
+use crate::zk_evm::aux_structures::{LogQuery, MemoryIndex, MemoryPage, MemoryQuery};
+use crate::zk_evm::reference_impls::event_sink::ApplicationData;
+use crate::zk_evm::vm_state::{CallStackEntry, VmLocalState};
+use crate::zk_evm::zk_evm_abstractions::precompiles::ecrecover::ECRecoverRoundWitness;
+use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::Keccak256RoundWitness;
+use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Sha256RoundWitness;
+use crate::zkevm_circuits::base_structures::vm_state::{
+    GlobalContextWitness, FULL_SPONGE_QUEUE_STATE_WIDTH, QUEUE_STATE_WIDTH,
+};
+use crate::zkevm_circuits::main_vm::main_vm_entry_point;
+use crate::zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
+use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
+use circuit_definitions::encodings::callstack_entry::ExtendedCallstackEntry;
+use circuit_definitions::encodings::LogQueueSimulator;
 use derivative::Derivative;
-use num_bigint::BigUint;
 use rayon::slice::ParallelSliceMut;
 use smallvec::SmallVec;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::ops::RangeInclusive;
-use sync_vm::scheduler::queues::FixedWidthEncodingGenericQueueState;
-use sync_vm::scheduler::queues::FixedWidthEncodingGenericQueueStateWitness;
-use sync_vm::scheduler::queues::FullSpongeLikeQueueStateWitness;
-use sync_vm::scheduler::queues::{FullSpongeLikeQueueState, QueueStateWitness};
-use sync_vm::traits::CSWitnessable;
-use sync_vm::vm::vm_cycle::memory::MemoryLocation;
-use sync_vm::vm::vm_cycle::memory_view::write_query::MemoryWriteQuery;
-use sync_vm::vm::vm_cycle::witness_oracle::{u256_to_biguint, MemoryWitness, WitnessOracle};
-use sync_vm::{
-    circuit_structures::traits::CircuitArithmeticRoundFunction,
-    franklin_crypto::bellman::pairing::Engine,
-};
-use zk_evm::aux_structures::DecommittmentQuery;
-use zk_evm::aux_structures::{LogQuery, MemoryIndex, MemoryPage, MemoryQuery};
-use zk_evm::precompiles::ecrecover::ECRecoverRoundWitness;
-use zk_evm::precompiles::keccak256::Keccak256RoundWitness;
-use zk_evm::precompiles::sha256::Sha256RoundWitness;
-use zk_evm::reference_impls::event_sink::ApplicationData;
-use zk_evm::vm_state::{CallStackEntry, VmLocalState};
 
-use zk_evm::zkevm_opcode_defs::system_params::{
+use crate::zk_evm::zkevm_opcode_defs::system_params::{
     ECRECOVER_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
     KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
     SHA256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
 };
 
-use zk_evm::zkevm_opcode_defs::system_params::{
+use crate::zk_evm::zkevm_opcode_defs::system_params::{
     EVENT_AUX_BYTE, L1_MESSAGE_AUX_BYTE, PRECOMPILE_AUX_BYTE, STORAGE_AUX_BYTE,
 };
 
@@ -61,61 +56,54 @@ struct CallframeLogState {
 
 #[derive(Derivative)]
 #[derivative(Clone(bound = ""), Copy(bound = ""), Debug)]
-pub struct RollbackQueueStateWitness<E: Engine> {
-    pub head: E::Fr,
-    pub tail: E::Fr,
+pub struct RollbackQueueStateWitness<F: SmallField> {
+    pub head: [F; QUEUE_STATE_WIDTH],
+    pub tail: [F; QUEUE_STATE_WIDTH],
     pub segment_length: u32,
 }
 
-#[derive(Derivative, serde::Serialize, serde::Deserialize)]
-#[derivative(Default(bound = ""), Clone(bound = ""))]
-#[serde(bound = "")]
-pub struct VmWitnessOracle<E: Engine> {
-    pub memory_read_witness: VecDeque<(u32, MemoryQuery)>,
-    pub memory_write_witness: Option<VecDeque<(u32, MemoryQuery)>>,
-    pub rollback_queue_head_segments: VecDeque<(u32, E::Fr)>,
-    pub decommittment_requests_witness: VecDeque<(u32, DecommittmentQuery)>,
-    pub rollback_queue_initial_tails_for_new_frames: VecDeque<(u32, E::Fr)>,
-    pub storage_queries: VecDeque<(u32, LogQuery)>, // cycle, query
-    pub storage_refund_queries: VecDeque<(u32, LogQuery, u32)>, // cycle, query, pubdata refund
-    pub callstack_new_frames_witnesses:
-        VecDeque<(u32, CallStackEntry)>,
-    pub callstack_values_witnesses:
-        VecDeque<(u32, (ExtendedCallstackEntry<E>, CallstackSimulatorState<E>))>,
-}
-
 #[derive(Derivative)]
-#[derivative(Clone(bound = ""), Copy(bound = ""), Debug, Default, PartialEq, Eq)]
-pub struct StorageLogDetailedState<E: Engine> {
+#[derivative(
+    Clone(bound = ""),
+    Copy(bound = ""),
+    Debug,
+    PartialEq,
+    Eq,
+    Default(bound = "")
+)]
+pub struct StorageLogDetailedState<F: SmallField> {
     pub frame_idx: usize,
-    pub forward_tail: E::Fr,
+    pub forward_tail: [F; QUEUE_STATE_WIDTH],
     pub forward_length: u32,
-    pub rollback_head: E::Fr,
-    pub rollback_tail: E::Fr,
+    pub rollback_head: [F; QUEUE_STATE_WIDTH],
+    pub rollback_tail: [F; QUEUE_STATE_WIDTH],
     pub rollback_length: u32,
 }
 
 #[derive(Derivative)]
 #[derivative(Clone(bound = ""), Debug)]
-pub struct VmInCircuitAuxilaryParameters<E: Engine> {
-    pub callstack_state: ([E::Fr; 3], CallStackEntry),
-    pub decommittment_queue_state: FullSpongeLikeQueueStateWitness<E>,
-    pub memory_queue_state: FullSpongeLikeQueueStateWitness<E>,
-    pub storage_log_queue_state: FixedWidthEncodingGenericQueueStateWitness<E>,
-    pub current_frame_rollback_queue_tail: E::Fr,
-    pub current_frame_rollback_queue_head: E::Fr,
+pub struct VmInCircuitAuxilaryParameters<F: SmallField> {
+    pub callstack_state: ([F; FULL_SPONGE_QUEUE_STATE_WIDTH], CallStackEntry),
+    pub decommittment_queue_state: QueueStateWitness<F, FULL_SPONGE_QUEUE_STATE_WIDTH>,
+    pub memory_queue_state: QueueStateWitness<F, FULL_SPONGE_QUEUE_STATE_WIDTH>,
+    pub storage_log_queue_state: QueueStateWitness<F, QUEUE_STATE_WIDTH>,
+    pub current_frame_rollback_queue_tail: [F; QUEUE_STATE_WIDTH],
+    pub current_frame_rollback_queue_head: [F; QUEUE_STATE_WIDTH],
     pub current_frame_rollback_queue_segment_length: u32,
 }
 
-impl<E: Engine> std::default::Default for VmInCircuitAuxilaryParameters<E> {
+impl<F: SmallField> std::default::Default for VmInCircuitAuxilaryParameters<F> {
     fn default() -> Self {
         Self {
-            callstack_state: ([E::Fr::zero(); 3], CallStackEntry::empty_context()),
-            decommittment_queue_state: FullSpongeLikeQueueState::<E>::placeholder_witness(),
-            memory_queue_state: FullSpongeLikeQueueState::<E>::placeholder_witness(),
-            storage_log_queue_state: FixedWidthEncodingGenericQueueState::placeholder_witness(),
-            current_frame_rollback_queue_tail: E::Fr::zero(),
-            current_frame_rollback_queue_head: E::Fr::zero(),
+            callstack_state: (
+                [F::ZERO; FULL_SPONGE_QUEUE_STATE_WIDTH],
+                CallStackEntry::empty_context(),
+            ),
+            decommittment_queue_state: QueueState::placeholder_witness(),
+            memory_queue_state: QueueState::placeholder_witness(),
+            storage_log_queue_state: QueueState::placeholder_witness(),
+            current_frame_rollback_queue_tail: [F::ZERO; QUEUE_STATE_WIDTH],
+            current_frame_rollback_queue_head: [F::ZERO; QUEUE_STATE_WIDTH],
             current_frame_rollback_queue_segment_length: 0,
         }
     }
@@ -123,76 +111,77 @@ impl<E: Engine> std::default::Default for VmInCircuitAuxilaryParameters<E> {
 
 #[derive(Derivative)]
 #[derivative(Debug, Clone)]
-pub struct VmInstanceWitness<E: Engine, O: WitnessOracle<E>> {
+pub struct VmInstanceWitness<F: SmallField, O: WitnessOracle<F>> {
     // we need everything to start a circuit from this point of time
 
     // initial state - just copy the local state in full
     pub initial_state: VmLocalState,
     pub witness_oracle: O,
-    pub auxilary_initial_parameters: VmInCircuitAuxilaryParameters<E>,
+    pub auxilary_initial_parameters: VmInCircuitAuxilaryParameters<F>,
     pub cycles_range: std::ops::Range<u32>,
 
     // final state for test purposes
     pub final_state: VmLocalState,
-    pub auxilary_final_parameters: VmInCircuitAuxilaryParameters<E>,
-}
-
-use super::full_block_artifact::FullBlockArtifacts;
-
-#[derive(Derivative)]
-#[derivative(Clone(bound = ""), Copy(bound = ""), Debug, Default(bound = ""))]
-pub struct CommonLogSponges<E: Engine> {
-    pub rf_0: ([E::Fr; 3], [E::Fr; 3]),
-    pub rf_1: ([E::Fr; 3], [E::Fr; 3]),
+    pub auxilary_final_parameters: VmInCircuitAuxilaryParameters<F>,
 }
 
 #[derive(Derivative)]
-#[derivative(Clone(bound = ""), Copy(bound = ""), Debug, Default(bound = ""))]
-pub struct ForwardLogSponge<E: Engine> {
-    pub old_tail: E::Fr,
-    pub new_tail: E::Fr,
-    pub exclusive_rf: ([E::Fr; 3], [E::Fr; 3]),
+#[derivative(Clone(bound = ""), Copy(bound = ""), Debug, Default)]
+pub struct CommonLogSponges<F: SmallField> {
+    pub rf_0: ([F; 12], [F; 12]),
+    pub rf_1: ([F; 12], [F; 12]),
 }
 
 #[derive(Derivative)]
-#[derivative(Clone(bound = ""), Copy(bound = ""), Debug, Default(bound = ""))]
-pub struct RollbackLogSponge<E: Engine> {
-    pub old_head: E::Fr,
-    pub new_head: E::Fr,
-    pub exclusive_rf: ([E::Fr; 3], [E::Fr; 3]),
+#[derivative(Clone(bound = ""), Copy(bound = ""), Debug, Default)]
+pub struct ForwardLogSponge<F: SmallField> {
+    pub old_tail: [F; QUEUE_STATE_WIDTH],
+    pub new_tail: [F; QUEUE_STATE_WIDTH],
+    pub exclusive_rf: ([F; 12], [F; 12]),
 }
 
 #[derive(Derivative)]
-#[derivative(Clone(bound = ""), Copy(bound = ""), Debug, Default(bound = ""))]
-pub struct LogAccessSpongesInfo<E: Engine> {
+#[derivative(Clone(bound = ""), Copy(bound = ""), Debug, Default)]
+pub struct RollbackLogSponge<F: SmallField> {
+    pub old_head: [F; QUEUE_STATE_WIDTH],
+    pub new_head: [F; QUEUE_STATE_WIDTH],
+    pub exclusive_rf: ([F; 12], [F; 12]),
+}
+
+#[derive(Derivative)]
+#[derivative(Clone(bound = ""), Copy(bound = ""), Debug, Default)]
+pub struct LogAccessSpongesInfo<F: SmallField> {
     pub cycle: u32,
-    pub common_sponges: CommonLogSponges<E>,
-    pub forward_info: ForwardLogSponge<E>,
-    pub rollback_info: Option<RollbackLogSponge<E>>,
+    pub common_sponges: CommonLogSponges<F>,
+    pub forward_info: ForwardLogSponge<F>,
+    pub rollback_info: Option<RollbackLogSponge<F>>,
 }
 
 #[derive(Derivative)]
-#[derivative(Clone(bound = ""), Copy(bound = ""), Debug, Default(bound = ""))]
-struct FlattenedLogQueueIndexer<E: Engine> {
-    pub current_head: E::Fr,
-    pub current_tail: E::Fr,
+#[derivative(Clone(bound = ""), Copy(bound = ""), Debug, Default)]
+struct FlattenedLogQueueIndexer<F: SmallField> {
+    pub current_head: [F; QUEUE_STATE_WIDTH],
+    pub current_tail: [F; QUEUE_STATE_WIDTH],
     pub head_offset: usize,
     pub tail_offset: usize,
 }
 
-use crate::witness::tree::*;
 use crate::blake2::Blake2s256;
+use crate::witness::tree::*;
 
-pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction<E, 2, 3>>(
-    tracer: WitnessTracer,
+pub fn create_artifacts_from_tracer<
+    F: SmallField,
+    R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+>(
+    tracer: &mut WitnessTracer,
     round_function: &R,
     geometry: &GeometryConfig,
     entry_point_decommittment_query: (DecommittmentQuery, Vec<U256>),
     tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
     num_non_deterministic_heap_queries: usize,
 ) -> (
-    Vec<VmInstanceWitness<E, VmWitnessOracle<E>>>,
-    FullBlockArtifacts<E>,
+    Vec<VmInstanceWitness<F, VmWitnessOracle<F>>>,
+    FullBlockArtifacts<F>,
 ) {
     let WitnessTracer {
         memory_queries,
@@ -213,7 +202,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
     // we should have an initial query somewhat before the time
     assert!(decommittment_queries.len() >= 1);
     let (ts, q, w) = &decommittment_queries[0];
-    assert!(*ts < zk_evm::zkevm_opcode_defs::STARTING_TIMESTAMP);
+    assert!(*ts < crate::zk_evm::zkevm_opcode_defs::STARTING_TIMESTAMP);
     assert_eq!(q, &entry_point_decommittment_query.0);
     assert_eq!(w, &entry_point_decommittment_query.1);
 
@@ -247,7 +236,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
     // - compute initial tail segments (with head == tail) for every new call frame
     // - also compute head segments for every write-like actions
 
-    let mut log_queue_simulator = LogQueueSimulator::<E>::empty();
+    let mut log_queue_simulator = LogQueueSimulator::<F>::empty();
     assert!(
         callstack_with_aux_data.depth == 0,
         "parent frame didn't exit"
@@ -296,7 +285,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
     // that on some specific VM cycle we either read or write
 
     // from cycle into first two sponges (common), then tail-tail pair and 3rd sponge for forward, then head-head pair and 3rd sponge for rollback
-    let mut sponges_data: HashMap<u32, LogAccessSpongesInfo<E>> = HashMap::new();
+    let mut sponges_data: HashMap<u32, LogAccessSpongesInfo<F>> = HashMap::new();
 
     let mut callstack_frames_spans = std::collections::BTreeMap::new();
     let mut global_beginnings_of_frames: BTreeMap<usize, u32> = BTreeMap::new();
@@ -575,7 +564,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
                 }
                 PRECOMPILE_AUX_BYTE => {
                     assert!(!query.rollback);
-                    use zk_evm::precompiles::*;
+                    use crate::zk_evm::zk_evm_abstractions::precompiles::*;
                     match query.address {
                         a if a == *KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
                             demuxed_keccak_precompile_queries.push(query);
@@ -597,8 +586,8 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
     }
 
     use super::callstack_handler::CallstackAction;
-    use crate::encodings::callstack_entry::CallstackSimulator;
-    let mut callstack_argebraic_simulator = CallstackSimulator::<E>::empty();
+    use circuit_definitions::encodings::callstack_entry::CallstackSimulator;
+    let mut callstack_argebraic_simulator = CallstackSimulator::<F>::empty();
     let mut callstack_values_witnesses = vec![]; // index of cycle -> witness for callstack
                                                  // we need to simultaneously follow the logic of pushes/joins of the storage queues,
                                                  // and encoding of the current callstack state as the sponge state
@@ -609,7 +598,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
     // These are "frozen" states that just lie in the callstack for now and can not be modified
     let mut callstack_sponge_encoding_ranges = vec![];
     // pretend initial state
-    callstack_sponge_encoding_ranges.push((0, [E::Fr::zero(); 3]));
+    callstack_sponge_encoding_ranges.push((0, [F::ZERO; FULL_SPONGE_QUEUE_STATE_WIDTH]));
 
     // we need some information that spans the whole number of cycles with "what is a frame counter at this time"
 
@@ -620,7 +609,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
     let global_end_of_storage_log = chain_of_states
         .last()
         .map(|el| el.2 .1)
-        .unwrap_or(E::Fr::zero());
+        .unwrap_or([F::ZERO; QUEUE_STATE_WIDTH]);
     let mut frame_rollback_tails = BTreeMap::new();
 
     let mut rollback_queue_initial_tails_for_new_frames = vec![];
@@ -660,7 +649,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
     // so we can quickly reconstruct every current state
 
-    let mut rollback_queue_head_segments: Vec<(u32, E::Fr)> = vec![];
+    let mut rollback_queue_head_segments: Vec<(u32, [F; QUEUE_STATE_WIDTH])> = vec![];
 
     for (cycle, (_forward, rollback)) in cycle_into_flat_sequence_index.iter() {
         if let Some(pointer) = rollback {
@@ -672,13 +661,13 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
     let mut history_of_storage_log_states = BTreeMap::new();
 
     // we start with no rollbacks, but non-trivial tail
-    let mut current_storage_log_state = StorageLogDetailedState::<E>::default();
+    let mut current_storage_log_state = StorageLogDetailedState::<F>::default();
     current_storage_log_state.rollback_head = global_end_of_storage_log;
     current_storage_log_state.rollback_tail = global_end_of_storage_log;
 
     let mut storage_logs_states_stack = vec![];
 
-    let mut state_to_merge: Option<(bool, StorageLogDetailedState<E>)> = None;
+    let mut state_to_merge: Option<(bool, StorageLogDetailedState<F>)> = None;
 
     // and now do trivial simulation
 
@@ -742,7 +731,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
                 // dump it into the entry and dump entry into simulator
 
-                let entry = ExtendedCallstackEntry::<E> {
+                let entry = ExtendedCallstackEntry::<F> {
                     callstack_entry: el.affected_entry,
                     rollback_queue_head: current_storage_log_state.rollback_head,
                     rollback_queue_tail: current_storage_log_state.rollback_tail,
@@ -943,12 +932,12 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
     // each history record contains an information on what was the stack state between points
     // when it potentially came into and out of scope
 
-    let mut artifacts = FullBlockArtifacts::<E>::default();
-    artifacts.vm_memory_queries_accumulated = vm_memory_queries_accumulated;
-    artifacts.all_decommittment_queries = decommittment_queries;
-    artifacts.keccak_round_function_witnesses = keccak_round_function_witnesses;
-    artifacts.sha256_round_function_witnesses = sha256_round_function_witnesses;
-    artifacts.ecrecover_witnesses = ecrecover_witnesses;
+    let mut artifacts = FullBlockArtifacts::<F>::default();
+    artifacts.vm_memory_queries_accumulated = vm_memory_queries_accumulated.to_vec();
+    artifacts.all_decommittment_queries = decommittment_queries.to_vec();
+    artifacts.keccak_round_function_witnesses = keccak_round_function_witnesses.to_vec();
+    artifacts.sha256_round_function_witnesses = sha256_round_function_witnesses.to_vec();
+    artifacts.ecrecover_witnesses = ecrecover_witnesses.to_vec();
     artifacts.original_log_queue = original_log_queue;
     artifacts.original_log_queue_simulator =
         original_log_queue_simulator.unwrap_or(LogQueueSimulator::empty());
@@ -1016,7 +1005,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
             .take_while(|el| el.0 < initial_state.at_cycle)
             .last()
             .map(|el| transform_sponge_like_queue_state(el.2))
-            .unwrap_or(FullSpongeLikeQueueState::<E>::placeholder_witness());
+            .unwrap_or(QueueState::placeholder_witness());
 
         let decommittment_queue_state_for_entry = artifacts
             .all_decommittment_queue_states
@@ -1024,7 +1013,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
             .take_while(|el| el.0 < initial_state.at_cycle)
             .last()
             .map(|el| transform_sponge_like_queue_state(el.1))
-            .unwrap_or(FullSpongeLikeQueueState::<E>::placeholder_witness());
+            .unwrap_or(QueueState::placeholder_witness());
 
         // and finally we need the callstack current state
 
@@ -1036,7 +1025,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
             .take_while(|el| el.0 < initial_state.at_cycle)
             .last()
             .map(|el| el.1)
-            .unwrap_or([E::Fr::zero(); 3]);
+            .unwrap_or([F::ZERO; FULL_SPONGE_QUEUE_STATE_WIDTH]);
 
         // initial state is kind of done, now
         // split the oracle witness
@@ -1091,28 +1080,23 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
             .cloned()
             .collect();
 
-        let rollback_queue_head_segments = rollback_queue_head_segments.iter()
-            .skip_while(
-                |el| el.0 < initial_state.at_cycle
-            )
-            .take_while(
-                |el| el.0 < final_state.at_cycle
-            )
+        let rollback_queue_head_segments = rollback_queue_head_segments
+            .iter()
+            .skip_while(|el| el.0 < initial_state.at_cycle)
+            .take_while(|el| el.0 < final_state.at_cycle)
             .cloned()
             .collect();
 
-        let callstack_new_frames_witnesses = callstack_with_aux_data.flat_new_frames_history.iter()
-            .skip_while(
-                |el| el.0 < initial_state.at_cycle
-            )
-            .take_while(
-                |el| el.0 < final_state.at_cycle
-            )
+        let callstack_new_frames_witnesses = callstack_with_aux_data
+            .flat_new_frames_history
+            .iter()
+            .skip_while(|el| el.0 < initial_state.at_cycle)
+            .take_while(|el| el.0 < final_state.at_cycle)
             .cloned()
             .collect();
 
         // construct an oracle
-        let witness_oracle = VmWitnessOracle::<E> {
+        let witness_oracle = VmWitnessOracle::<F> {
             memory_read_witness: per_instance_memory_read_witnesses.into(),
             memory_write_witness: Some(per_instance_memory_write_witnesses.into()),
             rollback_queue_head_segments,
@@ -1135,11 +1119,12 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
                 initial
             });
 
-        let storage_log_queue_state_for_entry = FixedWidthEncodingGenericQueueStateWitness::<E> {
-            num_items: storage_log_queue_detailed_state_for_entry.forward_length,
-            head_state: E::Fr::zero(),
-            tail_state: storage_log_queue_detailed_state_for_entry.forward_tail,
-            _marker: std::marker::PhantomData,
+        let storage_log_queue_state_for_entry = QueueStateWitness {
+            head: [F::ZERO; QUEUE_STATE_WIDTH],
+            tail: QueueTailStateWitness {
+                tail: storage_log_queue_detailed_state_for_entry.forward_tail,
+                length: storage_log_queue_detailed_state_for_entry.forward_length,
+            },
         };
 
         // for current head it's a little bit more complex, as we need to find
@@ -1191,7 +1176,7 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
 
         // always an empty one
         last.auxilary_final_parameters.callstack_state = (
-            [E::Fr::zero(); 3],
+            [F::ZERO; FULL_SPONGE_QUEUE_STATE_WIDTH],
             final_state
                 .local_state
                 .callstack
@@ -1203,14 +1188,14 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
             .vm_memory_queue_states
             .last()
             .map(|el| transform_sponge_like_queue_state(el.2))
-            .unwrap_or(FullSpongeLikeQueueState::<E>::placeholder_witness());
+            .unwrap_or(QueueState::placeholder_witness());
 
         let final_decommittment_queue_state = artifacts
             .all_decommittment_queue_states
             .iter()
             .last()
             .map(|el| transform_sponge_like_queue_state(el.1))
-            .unwrap_or(FullSpongeLikeQueueState::<E>::placeholder_witness());
+            .unwrap_or(QueueState::placeholder_witness());
 
         let range = history_of_storage_log_states.range(..);
         let latest_log_queue_state = range
@@ -1219,11 +1204,12 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
             .copied()
             .unwrap_or(StorageLogDetailedState::default());
 
-        let final_storage_log_queue_state = FixedWidthEncodingGenericQueueStateWitness::<E> {
-            num_items: latest_log_queue_state.forward_length,
-            head_state: E::Fr::zero(),
-            tail_state: latest_log_queue_state.forward_tail,
-            _marker: std::marker::PhantomData,
+        let final_storage_log_queue_state = QueueStateWitness {
+            head: [F::ZERO; QUEUE_STATE_WIDTH],
+            tail: QueueTailStateWitness {
+                tail: latest_log_queue_state.forward_tail,
+                length: latest_log_queue_state.forward_length,
+            },
         };
 
         last.auxilary_final_parameters.decommittment_queue_state = final_decommittment_queue_state;
@@ -1252,615 +1238,4 @@ pub fn create_artifacts_from_tracer<E: Engine, R: CircuitArithmeticRoundFunction
     (all_instances_witnesses, artifacts)
 }
 
-use crate::franklin_crypto::plonk::circuit::boolean::*;
-use sync_vm::glue::code_unpacker_sha256::memory_query_updated::RawMemoryQuery;
-use sync_vm::scheduler::data_access_functions::StorageLogRecord;
-use sync_vm::scheduler::queues::DecommitQuery;
-use sync_vm::scheduler::queues::DecommitQueryWitness;
-use sync_vm::vm::primitives::*;
-use sync_vm::vm::vm_state::saved_contract_context::ExecutionContextRecord;
-use sync_vm::vm::vm_state::saved_contract_context::ExecutionContextRecordWitness;
-
 use crate::INITIAL_MONOTONIC_CYCLE_COUNTER;
-
-impl<E: Engine> WitnessOracle<E> for VmWitnessOracle<E> {
-    fn get_memory_witness_for_read(
-        &mut self,
-        timestamp: UInt32<E>,
-        key: &MemoryLocation<E>,
-        execute: &Boolean,
-    ) -> Option<MemoryWitness> {
-        if execute.get_value().unwrap_or(false) {
-            if self.memory_read_witness.is_empty() {
-                panic!(
-                    "should have a witness to read at timestamp {:?}, location {:?}",
-                    timestamp.get_value(),
-                    key.create_witness()
-                );
-            }
-            let (_cycle, query) = self.memory_read_witness.pop_front().unwrap();
-
-            // tracing::debug!("Query value = 0x{:064x}", query.value);
-            if let Some(ts) = timestamp.get_value() {
-                assert_eq!(
-                    ts,
-                    query.timestamp.0,
-                    "invalid memory access location at cycle {:?}: VM asks at timestamp {}, witness has timestamp {}. Witness key = {:?}, query = {:?}",
-                    _cycle,
-                    ts,
-                    query.timestamp.0,
-                    key.create_witness().unwrap(),
-                    query,
-                );
-            }
-
-            if let Some(location) = key.create_witness() {
-                assert_eq!(
-                    location.page,
-                    query.location.page.0,
-                    "invalid memory access location at timestamp {:?}: VM asks for page {}, witness has page {}",
-                    timestamp.get_value(),
-                    location.page,
-                    query.location.page.0,
-                );
-                assert_eq!(
-                    location.index,
-                    query.location.index.0,
-                    "invalid memory access location at timestamp {:?}: VM asks for index {}, witness has index {}",
-                    timestamp.get_value(),
-                    location.index,
-                    query.location.index.0,
-                );
-            }
-
-            // tracing::debug!("memory word = 0x{:x}", query.value);
-
-            Some(MemoryWitness {
-                value: u256_to_biguint(query.value),
-                is_ptr: query.value_is_pointer,
-            })
-        } else {
-            Some(MemoryWitness {
-                value: BigUint::from(0u64),
-                is_ptr: false,
-            })
-        }
-    }
-
-    fn push_memory_witness(&mut self, memory_query: &MemoryWriteQuery<E>, execute: &Boolean) {
-        if let Some(write_witness) = self.memory_write_witness.as_mut() {
-            if execute.get_value().unwrap_or(false) {
-                let wit = memory_query.create_witness().unwrap();
-
-                if write_witness.is_empty() {
-                    panic!(
-                        "should have a self-check witness to write at timestamp {}, page {}, index {}",
-                        wit.timestamp,
-                        wit.memory_page,
-                        wit.memory_index,
-                    );
-                }
-                let (_cycle, query) = write_witness.pop_front().unwrap();
-
-                assert_eq!(
-                    wit.timestamp,
-                    query.timestamp.0,
-                    "invalid memory access location at timestamp {:?}: VM writes into timestamp {}, witness has timestamp {}",
-                    wit.timestamp,
-                    wit.timestamp,
-                    query.timestamp.0,
-                );
-
-                assert_eq!(
-                    wit.memory_page,
-                    query.location.page.0,
-                    "invalid memory access location at timestamp {:?}: VM writes into page {}, witness has page {}",
-                    wit.timestamp,
-                    wit.memory_page,
-                    query.location.page.0,
-                );
-
-                assert_eq!(
-                    wit.memory_index,
-                    query.location.index.0,
-                    "invalid memory access location at timestamp {:?}: VM writes into index {}, witness has index {}",
-                    wit.timestamp,
-                    wit.memory_index,
-                    query.location.index.0,
-                );
-
-                // compare values
-
-                let mut wit_value = U256::from(wit.lowest_128);
-                wit_value.0[2] = wit.u64_word_2;
-                wit_value.0[3] = wit.u64_word_3;
-
-                assert_eq!(
-                    wit_value,
-                    query.value,
-                    "invalid memory access location at timestamp {:?}: VM writes value {}, witness has value {}",
-                    wit.timestamp,
-                    wit_value,
-                    query.value,
-                );
-
-                assert_eq!(
-                    wit.value_is_ptr,
-                    query.value_is_pointer,
-                    "invalid memory access location at timestamp {:?}: VM writes pointer {}, witness has pointer {}",
-                    wit.timestamp,
-                    wit.value_is_ptr,
-                    query.value_is_pointer,
-                );
-            }
-        }
-
-        // we do not care
-    }
-
-    fn get_storage_read_witness(
-        &mut self,
-        record: &StorageLogRecord<E>,
-        needs_read_witness: &Boolean,
-        execute: &Boolean,
-    ) -> Option<num_bigint::BigUint> {
-        if execute.get_value().unwrap_or(false) && needs_read_witness.get_value().unwrap_or(false) {
-            if self.storage_queries.is_empty() {
-                panic!(
-                    "should have a witness for storage read at {:?}",
-                    record.create_witness()
-                );
-            }
-            let (_cycle, query) = self.storage_queries.pop_front().unwrap();
-
-            if let Some(record) = record.create_witness() {
-                assert_eq!(record.aux_byte, query.aux_byte);
-                assert_eq!(record.address, u160_from_address(query.address));
-                assert_eq!(record.key, u256_to_biguint(query.key));
-                assert_eq!(record.r_w_flag, query.rw_flag);
-                if record.r_w_flag == true {
-                    // check written value
-                    assert_eq!(record.written_value, u256_to_biguint(query.written_value));
-                }
-                assert_eq!(record.rollback, false);
-                assert_eq!(record.rollback, query.rollback);
-                assert_eq!(record.is_service, query.is_service);
-                assert_eq!(record.shard_id, query.shard_id);
-                assert_eq!(record.tx_number_in_block, query.tx_number_in_block);
-                assert_eq!(record.timestamp, query.timestamp.0);
-            }
-
-            Some(u256_to_biguint(query.read_value))
-        } else {
-            Some(BigUint::from(0u64))
-        }
-    }
-
-    fn get_refunds(
-        &mut self,
-        record: &StorageLogRecord<E>,
-        is_write: &Boolean,
-        execute: &Boolean,
-    ) -> Option<u32> {
-        if execute.get_value().unwrap_or(false) && is_write.get_value().unwrap_or(false) {
-            if self.storage_refund_queries.is_empty() {
-                panic!(
-                    "should have a refund witness for storage write attempt at {:?}",
-                    record.create_witness()
-                );
-            }
-            let (_cycle, query, refund) = self.storage_refund_queries.pop_front().unwrap();
-
-            if let Some(record) = record.create_witness() {
-                assert_eq!(record.aux_byte, query.aux_byte);
-                assert_eq!(record.address, u160_from_address(query.address));
-                assert_eq!(record.key, u256_to_biguint(query.key));
-                assert_eq!(record.r_w_flag, query.rw_flag);
-                assert!(record.r_w_flag == true);
-                assert_eq!(record.written_value, u256_to_biguint(query.written_value));
-                assert_eq!(record.rollback, false);
-                assert_eq!(record.rollback, query.rollback);
-                assert_eq!(record.shard_id, query.shard_id);
-                // the rest are not filled in out-of-circuit implementations
-                assert_eq!(record.is_service, query.is_service);
-            }
-
-            Some(refund)
-        } else {
-            Some(0u32)
-        }
-    }
-
-    fn push_storage_witness(
-        &mut self,
-        _record: &StorageLogRecord<E>,
-        _is_write: &Boolean,
-        _execute: &Boolean,
-    ) {
-        // logic is captured in read for a reason that we NEED
-        // previous value of the cell for rollback to work
-        unreachable!()
-    }
-
-    // may be should also track key for debug purposes
-    fn get_rollback_queue_witness(
-        &mut self,
-        _key: &StorageLogRecord<E>,
-        execute: &Boolean,
-    ) -> Option<<E>::Fr> {
-        if execute.get_value().unwrap_or(false) {
-            let (_cycle, head) = self.rollback_queue_head_segments.pop_front().unwrap();
-            // dbg!(head);
-
-            Some(head)
-        } else {
-            Some(E::Fr::zero())
-        }
-    }
-
-    fn get_rollback_queue_tail_witness_for_call(
-        &mut self,
-        _timestamp: UInt32<E>,
-        execute: &Boolean,
-    ) -> Option<E::Fr> {
-        if execute.get_value().unwrap_or(false) {
-            let (_cycle_idx, tail) = self
-                .rollback_queue_initial_tails_for_new_frames
-                .pop_front()
-                .unwrap();
-            // dbg!(tail);
-
-            Some(tail)
-        } else {
-            Some(E::Fr::zero())
-        }
-    }
-
-    fn report_new_callstack_frame(
-        &mut self,
-        new_callstack: &ExecutionContextRecord<E>,
-        _new_depth: UInt32<E>,
-        is_call: &Boolean,
-        execute: &Boolean,
-    ) {
-        if execute.get_value().unwrap_or(false) && is_call.get_value().unwrap_or(false) {
-            let (_cycle_idx, entry) = 
-                self.callstack_new_frames_witnesses.pop_front().unwrap();
-
-            // compare
-            let witness = new_callstack.create_witness().unwrap();
-
-            assert_eq!(u160_from_address(entry.this_address), witness.common_part.this);
-            assert_eq!(u160_from_address(entry.msg_sender), witness.common_part.caller);
-            assert_eq!(u160_from_address(entry.code_address), witness.common_part.code_address);
-
-            assert_eq!(entry.code_page.0, witness.common_part.code_page);
-            assert_eq!(entry.base_memory_page.0, witness.common_part.base_page);
-
-            assert_eq!(entry.pc, witness.common_part.pc);
-            assert_eq!(entry.sp, witness.common_part.sp);
-
-            assert_eq!(entry.heap_bound, witness.common_part.heap_upper_bound);
-            assert_eq!(entry.aux_heap_bound, witness.common_part.aux_heap_upper_bound);
-
-            assert_eq!(entry.exception_handler_location, witness.common_part.exception_handler_loc);
-            assert_eq!(entry.ergs_remaining, witness.common_part.ergs_remaining);
-
-            assert_eq!(entry.is_static, witness.common_part.is_static_execution);
-            assert_eq!(entry.is_kernel_mode(), witness.common_part.is_kernel_mode);
-
-            assert_eq!(entry.this_shard_id, witness.common_part.this_shard_id);
-            assert_eq!(entry.caller_shard_id, witness.common_part.caller_shard_id);
-            assert_eq!(entry.code_shard_id, witness.common_part.code_shard_id);
-
-            assert_eq!([entry.context_u128_value as u64, (entry.context_u128_value >> 64) as u64], witness.common_part.context_u128_value_composite);
-
-            assert_eq!(entry.is_local_frame, witness.extension.is_local_call);
-        }
-    }
-
-    fn push_callstack_witness(
-        &mut self,
-        current_record: &ExecutionContextRecord<E>,
-        current_depth: &UInt32<E>,
-        execute: &Boolean,
-    ) {
-        // we do not care, but we can do self-check
-
-        if execute.get_value().unwrap_or(false) {
-            let (_cycle_idx, (extended_entry, internediate_info)) =
-                self.callstack_values_witnesses.pop_front().unwrap();
-
-            let CallstackSimulatorState {
-                is_push,
-                previous_state: _,
-                new_state: _,
-                depth: witness_depth,
-                round_function_execution_pairs: _,
-            } = internediate_info;
-            // compare
-            let witness = current_record.create_witness().unwrap();
-
-            assert!(
-                is_push,
-                "divergence at callstack push at cycle {}:\n pushing {:?}\n in circuit, but got POP of \n{:?}\n in oracle",
-                _cycle_idx,
-                &witness,
-                &extended_entry,
-            );
-
-            if let Some(depth) = current_depth.get_value() {
-                assert_eq!(
-                    depth + 1,
-                    witness_depth as u32,
-                    "depth diverged at callstack push at cycle {}:\n pushing {:?}\n, got \n{:?}\n in oracle",
-                    _cycle_idx,
-                    &witness,
-                    &extended_entry,
-                );
-            }
-
-            let ExtendedCallstackEntry {
-                callstack_entry: entry,
-                rollback_queue_head,
-                rollback_queue_tail,
-                rollback_queue_segment_length,
-            } = extended_entry;
-
-            assert_eq!(
-                u160_from_address(entry.this_address),
-                witness.common_part.this
-            );
-            assert_eq!(
-                u160_from_address(entry.msg_sender),
-                witness.common_part.caller
-            );
-            assert_eq!(
-                u160_from_address(entry.code_address),
-                witness.common_part.code_address
-            );
-
-            assert_eq!(entry.code_page.0, witness.common_part.code_page);
-            assert_eq!(entry.base_memory_page.0, witness.common_part.base_page);
-
-            assert_eq!(rollback_queue_head, witness.common_part.reverted_queue_head);
-            assert_eq!(rollback_queue_tail, witness.common_part.reverted_queue_tail);
-            assert_eq!(
-                rollback_queue_segment_length,
-                witness.common_part.reverted_queue_segment_len
-            );
-
-            assert_eq!(entry.pc, witness.common_part.pc);
-            assert_eq!(entry.sp, witness.common_part.sp);
-
-            assert_eq!(entry.heap_bound, witness.common_part.heap_upper_bound);
-            assert_eq!(
-                entry.aux_heap_bound,
-                witness.common_part.aux_heap_upper_bound
-            );
-
-            assert_eq!(
-                entry.exception_handler_location,
-                witness.common_part.exception_handler_loc
-            );
-            assert_eq!(entry.ergs_remaining, witness.common_part.ergs_remaining);
-
-            assert_eq!(entry.is_static, witness.common_part.is_static_execution);
-            assert_eq!(entry.is_kernel_mode(), witness.common_part.is_kernel_mode);
-
-            assert_eq!(entry.this_shard_id, witness.common_part.this_shard_id);
-            assert_eq!(entry.caller_shard_id, witness.common_part.caller_shard_id);
-            assert_eq!(entry.code_shard_id, witness.common_part.code_shard_id);
-
-            assert_eq!(
-                [
-                    entry.context_u128_value as u64,
-                    (entry.context_u128_value >> 64) as u64
-                ],
-                witness.common_part.context_u128_value_composite
-            );
-
-            assert_eq!(entry.is_local_frame, witness.extension.is_local_call);
-        }
-    }
-
-    fn get_callstack_witness(
-        &mut self,
-        execute: &Boolean,
-        depth: &UInt32<E>,
-    ) -> (
-        Option<ExecutionContextRecordWitness<E>>,
-        Option<[<E>::Fr; 3]>,
-    ) {
-        if execute.get_value().unwrap_or(false) {
-            let (_cycle_idx, (extended_entry, internediate_info)) =
-                self.callstack_values_witnesses.pop_front().unwrap();
-            let CallstackSimulatorState {
-                is_push,
-                previous_state: _,
-                new_state,
-                depth: witness_depth,
-                round_function_execution_pairs: _,
-            } = internediate_info;
-
-            assert!(
-                !is_push,
-                "divergence at callstack pop at cycle {}: POP in circuit, but got PUSH of \n{:?}\n in oracle",
-                _cycle_idx,
-                &extended_entry,
-            );
-
-            if let Some(depth) = depth.get_value() {
-                assert_eq!(
-                    depth - 1,
-                    witness_depth as u32,
-                    "depth diverged at callstack pop at cycle {}, got \n{:?}\n in oracle",
-                    _cycle_idx,
-                    &extended_entry,
-                );
-            }
-
-            // dbg!(new_state);
-
-            let ExtendedCallstackEntry {
-                callstack_entry: entry,
-                rollback_queue_head,
-                rollback_queue_tail,
-                rollback_queue_segment_length,
-            } = extended_entry;
-
-            use sync_vm::vm::vm_state::saved_contract_context::ExecutionContextRecordCommomPartWitness;
-            use sync_vm::vm::vm_state::saved_contract_context::ExecutionContextRecordExtensionWitness;
-
-            let witness = ExecutionContextRecordWitness {
-                common_part: ExecutionContextRecordCommomPartWitness {
-                    this: u160_from_address(entry.this_address),
-                    caller: u160_from_address(entry.msg_sender),
-                    code_address: u160_from_address(entry.code_address),
-                    code_page: entry.code_page.0,
-                    base_page: entry.base_memory_page.0,
-                    reverted_queue_head: rollback_queue_head,
-                    reverted_queue_tail: rollback_queue_tail,
-                    reverted_queue_segment_len: rollback_queue_segment_length,
-                    pc: entry.pc,
-                    sp: entry.sp,
-                    exception_handler_loc: entry.exception_handler_location,
-                    ergs_remaining: entry.ergs_remaining,
-                    pubdata_bytes_remaining: 0, // UNUSED
-                    is_static_execution: entry.is_static,
-                    is_kernel_mode: entry.is_kernel_mode(),
-                    this_shard_id: entry.this_shard_id,
-                    caller_shard_id: entry.caller_shard_id,
-                    code_shard_id: entry.code_shard_id,
-                    context_u128_value_composite: [
-                        entry.context_u128_value as u64,
-                        (entry.context_u128_value >> 64) as u64,
-                    ],
-                    heap_upper_bound: entry.heap_bound,
-                    aux_heap_upper_bound: entry.aux_heap_bound,
-                    _marker: std::marker::PhantomData,
-                },
-                extension: ExecutionContextRecordExtensionWitness {
-                    is_local_call: entry.is_local_frame,
-                    marker: (),
-                    _marker: std::marker::PhantomData,
-                },
-                _marker: std::marker::PhantomData,
-            };
-
-            (Some(witness), Some(new_state))
-        } else {
-            (
-                Some(ExecutionContextRecord::placeholder_witness()),
-                Some([E::Fr::zero(); 3]),
-            )
-        }
-    }
-
-    fn get_decommittment_request_witness(
-        &mut self,
-        request: &DecommitQuery<E>,
-        execute: &Boolean,
-    ) -> Option<DecommitQueryWitness<E>> {
-        if execute.get_value().unwrap_or(false) {
-            if self.decommittment_requests_witness.is_empty() {
-                if let Some(wit) = request.create_witness() {
-                    panic!("Witness value is missing for {:?}", wit);
-                }
-                panic!("Witness value is missing");
-            }
-
-            let (_frame_idx, query) = self
-                .decommittment_requests_witness
-                .pop_front()
-                .unwrap_or_else(|| {
-                    if let Some(wit) = request.create_witness() {
-                        panic!("Witness value is missing for {:?}", wit);
-                    }
-                    panic!("Witness value is missing");
-                });
-
-            if let Some(wit) = request.create_witness() {
-                assert_eq!(wit.timestamp, query.timestamp.0);
-                assert!(
-                    wit.root_hash.clone() == u256_to_biguint(query.hash),
-                    "circuit expected hash 0x{:064x}, while witness had 0x{:064x}",
-                    wit.root_hash,
-                    u256_to_biguint(query.hash)
-                );
-            }
-
-            let wit = DecommitQueryWitness::<E> {
-                root_hash: u256_to_biguint(query.hash),
-                page: query.memory_page.0,
-                is_first: query.is_fresh,
-                timestamp: query.timestamp.0,
-                _marker: std::marker::PhantomData,
-            };
-
-            Some(wit)
-        } else {
-            Some(DecommitQuery::placeholder_witness())
-        }
-    }
-
-    fn at_completion(self) {
-        if self.memory_read_witness.is_empty() == false {
-            panic!(
-                "Too many memory queries in witness: have left\n{:?}",
-                self.memory_read_witness
-            );
-        }
-
-        if let Some(memory_write_witness) = self.memory_write_witness {
-            if memory_write_witness.is_empty() == false {
-                panic!(
-                    "Too many memory write queries in witness: have left\n{:?}",
-                    memory_write_witness
-                );
-            }
-        }
-
-        if self.storage_queries.is_empty() == false {
-            panic!(
-                "Too many storage queries in witness: have left\n{:?}",
-                self.storage_queries
-            );
-        }
-
-        if self.storage_refund_queries.is_empty() == false {
-            panic!(
-                "Too many storage queries for refunds in witness: have left\n{:?}",
-                self.storage_refund_queries
-            );
-        }
-
-        if self.callstack_values_witnesses.is_empty() == false {
-            panic!(
-                "Too many callstack sponge witnesses: have left\n{:?}",
-                self.callstack_values_witnesses
-            );
-        }
-
-        if self.decommittment_requests_witness.is_empty() == false {
-            panic!(
-                "Too many decommittment request witnesses: have left\n{:?}",
-                self.decommittment_requests_witness
-            );
-        }
-
-        if self.rollback_queue_head_segments.is_empty() == false {
-            panic!(
-                "Too many rollback queue heads in witnesses: have left\n{:?}",
-                self.rollback_queue_head_segments
-            );
-        }
-
-        if self.rollback_queue_initial_tails_for_new_frames.is_empty() == false {
-            panic!(
-                "Too many rollback queue heads new stack frames in witnesses: have left\n{:?}",
-                self.rollback_queue_initial_tails_for_new_frames
-            );
-        }
-    }
-}
