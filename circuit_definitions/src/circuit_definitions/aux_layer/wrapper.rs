@@ -14,7 +14,7 @@ pub enum ZkSyncCompressionWrapper {
     CompressionMode2Circuit,
     CompressionMode3Circuit,
     CompressionMode4Circuit,
-    CompressionModeToL1Circuit,
+    CompressionMode5Circuit,
 }
 
 impl ZkSyncCompressionWrapper {
@@ -32,8 +32,8 @@ impl ZkSyncCompressionWrapper {
             a if a == ZkSyncCompressionLayerStorageType::CompressionMode4Circuit as u8 => {
                 Self::CompressionMode4Circuit
             }
-            a if a == ZkSyncCompressionLayerStorageType::CompressionModeToL1Circuit as u8 => {
-                Self::CompressionModeToL1Circuit
+            a if a == ZkSyncCompressionLayerStorageType::CompressionMode5Circuit as u8 => {
+                Self::CompressionMode5Circuit
             }
             a => panic!("Unknown numeric circuit type: {}", a),
         }
@@ -53,8 +53,8 @@ impl ZkSyncCompressionWrapper {
             Self::CompressionMode4Circuit => {
                 ZkSyncCompressionLayerStorageType::CompressionMode4Circuit as u8
             }
-            Self::CompressionModeToL1Circuit => {
-                ZkSyncCompressionLayerStorageType::CompressionModeToL1Circuit as u8
+            Self::CompressionMode5Circuit => {
+                ZkSyncCompressionLayerStorageType::CompressionMode5Circuit as u8
             }
         }
     }
@@ -77,8 +77,8 @@ impl<E: Engine> ProofWrapperFunction<E> for ZkSyncCompressionWrapper {
             Self::CompressionMode4Circuit => {
                 Box::new(CompressionMode4ForWrapperCircuitBuilder::default())
             }
-            Self::CompressionModeToL1Circuit => {
-                Box::new(CompressionModeToL1ForWrapperCircuitBuilder::default())
+            Self::CompressionMode5Circuit => {
+                Box::new(CompressionMode5ForWrapperCircuitBuilder::default())
             }
         }
     }
@@ -97,8 +97,8 @@ impl<E: Engine> ProofWrapperFunction<E> for ZkSyncCompressionWrapper {
             Self::CompressionMode4Circuit => {
                 CompressionMode4ForWrapper::proof_config_for_compression_step()
             }
-            Self::CompressionModeToL1Circuit => {
-                CompressionModeToL1ForWrapper::proof_config_for_compression_step()
+            Self::CompressionMode5Circuit => {
+                CompressionMode5ForWrapper::proof_config_for_compression_step()
             }
         }
     }

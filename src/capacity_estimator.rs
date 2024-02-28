@@ -1,3 +1,4 @@
+use std::alloc::Global;
 use std::panic;
 
 use crate::boojum::cs::CSGeometry;
@@ -57,7 +58,6 @@ where
             let builder_impl =
                 CsReferenceImplementationBuilder::<GoldilocksField, P, SetupCSConfig>::new(
                     geometry,
-                    1, // resolver is inactive in this mode
                     1 << max_trace_len_log_2,
                 );
             let builder = new_builder::<_, GoldilocksField>(builder_impl);
@@ -67,11 +67,11 @@ where
             let config = config;
 
             let builder = SF::configure_builder(builder);
-            let mut cs = builder.build(());
+            let mut cs = builder.build(1); // Resolver is inactive in this mode
             SF::add_tables(&mut cs);
             let _ = SF::synthesize_into_cs_inner(&mut cs, witness, &round_function, config);
             let (max_trace_len, _) = cs.pad_and_shrink();
-            let cs = cs.into_assembly();
+            let cs = cs.into_assembly::<Global>();
 
             cs.print_gate_stats();
 
@@ -171,7 +171,7 @@ pub fn keccak256_rf_capacity() -> usize {
         ZkSyncDefaultRoundFunction,
     >;
 
-    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(512), |x: usize| x)
+    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(100), |x: usize| x)
 }
 
 pub fn sha256_rf_capacity() -> usize {

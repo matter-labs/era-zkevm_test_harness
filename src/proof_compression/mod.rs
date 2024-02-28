@@ -20,14 +20,16 @@ type RH = CircuitGoldilocksPoseidon2Sponge;
 
 #[cfg(test)]
 mod test {
+    use std::alloc::Global;
+
     use circuit_definitions::boojum::cs::implementations::pow::NoPow;
     use circuit_definitions::boojum::cs::implementations::proof::Proof;
     use circuit_definitions::boojum::cs::implementations::verifier::VerificationKey;
     use circuit_definitions::circuit_definitions::aux_layer::compression_modes::*;
     use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit;
     use circuit_definitions::{
-        base_layer_proof_config,
         circuit_definitions::recursion_layer::ZkSyncRecursionLayerStorageType,
+        recursion_layer_proof_config,
     };
 
     use super::*;
@@ -36,7 +38,9 @@ mod test {
     use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
     use crate::boojum::cs::oracle::TreeHasher;
     use crate::boojum::worker::Worker;
-    use crate::data_source::{BlockDataSource, LocalFileDataSource, SetupDataSource};
+    use crate::data_source::{
+        local_file_data_source::LocalFileDataSource, BlockDataSource, SetupDataSource,
+    };
 
     fn prove_and_save<CF: ProofCompressionFunction>(
         circuit: CompressionLayerCircuit<CF>,
@@ -54,16 +58,15 @@ mod test {
 
         let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
             geometry,
-            num_vars.unwrap(),
             max_trace_len.unwrap(),
         );
         let builder = new_builder::<_, GoldilocksField>(builder_impl);
         let builder = circuit.configure_builder_proxy(builder);
-        let mut cs_owned = builder.build(());
+        let mut cs_owned = builder.build(num_vars.unwrap());
         circuit.synthesize_into_cs(&mut cs_owned);
 
         cs_owned.pad_and_shrink();
-        let mut assembly = cs_owned.into_assembly();
+        let mut assembly = cs_owned.into_assembly::<Global>();
         assembly.print_gate_stats();
 
         assert!(assembly.check_if_satisfied(&worker));
@@ -84,6 +87,7 @@ mod test {
 
     #[test]
     fn preform_step_1_compression() {
+        LocalFileDataSource::create_folders_for_storing_data();
         let source = LocalFileDataSource;
         let proof = source.get_scheduler_proof().unwrap();
         let vk = source
@@ -105,7 +109,7 @@ mod test {
         let circuit = CompressionMode1Circuit {
             witness: Some(proof.clone().into_inner()),
             config: CompressionRecursionConfig {
-                proof_config: base_layer_proof_config(),
+                proof_config: recursion_layer_proof_config(),
                 verification_key: vk.into_inner(),
                 _marker: std::marker::PhantomData,
             },
@@ -282,7 +286,7 @@ mod test {
         assert!(is_valid);
 
         // make a compression circuit
-        let circuit = CompressionModeToL1Circuit {
+        let circuit = CompressionMode5Circuit {
             witness: Some(proof.clone()),
             config: CompressionRecursionConfig {
                 proof_config: CompressionMode4::proof_config_for_compression_step(),
@@ -298,6 +302,7 @@ mod test {
 
     #[test]
     fn compress_1() {
+        LocalFileDataSource::create_folders_for_storing_data();
         let source = LocalFileDataSource;
         let proof = source.get_scheduler_proof().unwrap();
         let vk = source
@@ -318,7 +323,7 @@ mod test {
         let circuit = CompressionMode1Circuit {
             witness: Some(proof.clone().into_inner()),
             config: CompressionRecursionConfig {
-                proof_config: base_layer_proof_config(),
+                proof_config: recursion_layer_proof_config(),
                 verification_key: vk.into_inner(),
                 _marker: std::marker::PhantomData,
             },
@@ -333,16 +338,15 @@ mod test {
 
         let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
             geometry,
-            num_vars.unwrap(),
             max_trace_len.unwrap(),
         );
         let builder = new_builder::<_, GoldilocksField>(builder_impl);
         let builder = circuit.configure_builder_proxy(builder);
-        let mut cs_owned = builder.build(());
+        let mut cs_owned = builder.build(num_vars.unwrap());
         circuit.synthesize_into_cs(&mut cs_owned);
         let _num_gates = cs_owned.pad_and_shrink();
 
-        let mut assembly = cs_owned.into_assembly();
+        let mut assembly = cs_owned.into_assembly::<Global>();
         assembly.print_gate_stats();
 
         assert!(assembly.check_if_satisfied(&worker));

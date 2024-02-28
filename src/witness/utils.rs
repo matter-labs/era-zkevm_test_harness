@@ -27,6 +27,13 @@ use crate::zkevm_circuits::base_structures::vm_state::{
     FULL_SPONGE_QUEUE_STATE_WIDTH, QUEUE_STATE_WIDTH,
 };
 use crate::zkevm_circuits::fsm_input_output::circuit_inputs::INPUT_OUTPUT_COMMITMENT_LENGTH;
+use circuit_definitions::boojum::cs::gates::lookup_marker::LookupFormalGate;
+use circuit_definitions::boojum::cs::gates::ConstantToVariableMappingToolMarker;
+use circuit_definitions::boojum::cs::gates::FmaGateInBaseWithoutConstantParams;
+use circuit_definitions::boojum::cs::gates::ReductionGateParams;
+use circuit_definitions::boojum::cs::GateTypeEntry;
+use circuit_definitions::boojum::cs::Tool;
+use circuit_definitions::boojum::cs::Variable;
 use circuit_definitions::encodings::*;
 use circuit_definitions::ZkSyncDefaultRoundFunction;
 
@@ -118,6 +125,7 @@ pub fn take_sponge_like_queue_state_from_simulator<
 use crate::boojum::gadgets::queue::CircuitQueueWitness;
 use circuit_definitions::encodings::CircuitEquivalentReflection;
 use circuit_definitions::encodings::OutOfCircuitFixedLengthEncodable;
+use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::RwLock;
 
@@ -145,6 +153,50 @@ use crate::boojum::gadgets::traits::witnessable::WitnessHookable;
 use crate::zk_evm::aux_structures::MemoryQuery;
 use crate::zkevm_circuits::fsm_input_output::*;
 
+pub type ConstraintSystemImpl<F, R> = CSReferenceImplementation<
+    F,
+    F,
+    ProvingCSConfig,
+    (
+        GateTypeEntry<F, SelectionGate, Option<(usize, usize)>>,
+        (
+            GateTypeEntry<
+                F,
+                ReductionGate<F, 4>,
+                (usize, HashMap<ReductionGateParams<F, 4>, (usize, usize)>),
+            >,
+            (
+                GateTypeEntry<F, BooleanConstraintGate, Option<(usize, usize)>>,
+                (
+                    GateTypeEntry<
+                        F,
+                        FmaGateInBaseFieldWithoutConstant<F>,
+                        (
+                            usize,
+                            HashMap<FmaGateInBaseWithoutConstantParams<F>, (usize, usize)>,
+                        ),
+                    >,
+                    <R as BuildableCircuitRoundFunction<F, 8, 12, 4>>::GateConfiguration<(
+                        GateTypeEntry<F, ConstantsAllocatorGate<F>, Option<(usize, usize)>>,
+                        (
+                            GateTypeEntry<
+                                F,
+                                LookupFormalGate,
+                                (Vec<Option<(usize, usize)>>, usize),
+                            >,
+                            (),
+                        ),
+                    )>,
+                ),
+            ),
+        ),
+    ),
+    <R as BuildableCircuitRoundFunction<F, 8, 12, 4>>::Toolbox<(
+        Tool<ConstantToVariableMappingToolMarker, HashMap<F, Variable>>,
+        (),
+    )>,
+>;
+
 pub const TRACE_LEN_LOG_2_FOR_CALCULATION: usize = 20;
 pub const MAX_VARS_LOG_2_FOR_CALCULATION: usize = 26;
 pub const CYCLES_PER_SCRATCH_SPACE: usize = 256;
@@ -158,13 +210,7 @@ pub fn create_cs_for_witness_generation<
 >(
     max_trace_len_log_2: usize,
     max_vars_log_2: usize,
-) -> CSReferenceImplementation<
-    F,
-    F,
-    ProvingCSConfig,
-    impl GateConfigurationHolder<F>,
-    impl StaticToolboxHolder,
-> {
+) -> ConstraintSystemImpl<F, R> {
     // create temporary cs, and allocate in full
 
     let geometry = CSGeometry {
@@ -178,11 +224,8 @@ pub fn create_cs_for_witness_generation<
 
     use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
 
-    let builder_impl = CsReferenceImplementationBuilder::<F, F, ProvingCSConfig>::new(
-        geometry,
-        num_vars,
-        max_trace_len,
-    );
+    let builder_impl =
+        CsReferenceImplementationBuilder::<F, F, ProvingCSConfig>::new(geometry, max_trace_len);
     let builder = boojum::cs::cs_builder::new_builder::<_, F>(builder_impl);
     let builder = builder.allow_lookup(
         boojum::cs::LookupParameters::UseSpecializedColumnsWithTableIdAsConstant {
@@ -212,7 +255,7 @@ pub fn create_cs_for_witness_generation<
     let builder =
         SelectionGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
 
-    let mut cs = builder.build(());
+    let mut cs = builder.build(num_vars);
 
     use crate::boojum::cs::traits::cs::ConstraintSystem;
     use crate::boojum::gadgets::tables::*;

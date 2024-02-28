@@ -4,6 +4,7 @@ pub mod invididual_debugs;
 mod test_synthesis;
 
 pub mod testing_wrapper;
+pub mod wrapper_negative_tests;
 
 use std::collections::{HashMap, VecDeque};
 
@@ -17,6 +18,7 @@ use crate::compute_setups::*;
 use crate::entry_point::create_out_of_circuit_global_context;
 use crate::ethereum_types::*;
 use crate::helper::artifact_utils::TestArtifact;
+use crate::proof_wrapper_utils::{WrapperConfig, DEFAULT_WRAPPER_CONFIG};
 use crate::prover_utils::*;
 use crate::toolset::{create_tools, GeometryConfig};
 use crate::witness::oracle::create_artifacts_from_tracer;
@@ -29,6 +31,8 @@ use crate::zk_evm::testing::storage::InMemoryStorage;
 use crate::zk_evm::utils::{bytecode_to_code_hash, contract_bytecode_to_words};
 use crate::zk_evm::witness_trace::VmWitnessTracer;
 use crate::zk_evm::GenericNoopTracer;
+use crate::zkevm_circuits::eip_4844::input::*;
+use crate::zkevm_circuits::scheduler::block_header::MAX_4844_BLOBS_PER_BLOCK;
 use crate::zkevm_circuits::scheduler::input::SchedulerCircuitInstanceWitness;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use circuit_definitions::circuit_definitions::aux_layer::compression::{
@@ -39,36 +43,40 @@ use circuit_definitions::circuit_definitions::base_layer::*;
 use circuit_definitions::circuit_definitions::recursion_layer::leaf_layer::ZkSyncLeafLayerRecursiveCircuit;
 use circuit_definitions::circuit_definitions::recursion_layer::scheduler::SchedulerCircuit;
 use circuit_definitions::circuit_definitions::recursion_layer::*;
+use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
+use circuit_definitions::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
 use circuit_definitions::zkevm_circuits::scheduler::aux::NUM_CIRCUIT_TYPES_TO_SCHEDULE;
 use circuit_definitions::{
     base_layer_proof_config, recursion_layer_proof_config, BASE_LAYER_CAP_SIZE,
     BASE_LAYER_FRI_LDE_FACTOR, RECURSION_LAYER_CAP_SIZE, RECURSION_LAYER_FRI_LDE_FACTOR,
 };
+use circuit_definitions::{eip4844_proof_config, Field, RoundFunction};
 use utils::read_basic_test_artifact;
 
 use zkevm_assembly::Assembly;
 
+const EIP4844_CYCLE_LIMIT: usize = 4096;
+
 #[test]
 fn basic_test() {
     let test_artifact = read_basic_test_artifact();
-    run_and_try_create_witness_inner(test_artifact, 20000);
+    run_and_try_create_witness_inner(test_artifact, 20000, None);
     // run_and_try_create_witness_inner(test_artifact, 16);
 }
 
 #[test]
-fn basic_test_compression_only() {
-    let compression = std::env::var("COMPRESSION_NUM")
-        .map(|s| s.parse::<usize>().expect("should be a number"))
-        .unwrap_or(1);
+fn test_single_compression() {
+    let config = testing_wrapper::get_testing_wrapper_config();
 
-    testing_wrapper::test_compression_for_compression_num(compression as u8);
+    testing_wrapper::test_compression_for_compression_num(config);
 }
 
 #[test]
-fn basic_test_compression_all_modes() {
-    for compression in 1..=5 {
+fn test_compression_all_modes() {
+    for compression in 1..=WrapperConfig::MAX_COMPRESSION_LAYERS {
         println!("Testing wrapper for mode {}", compression);
-        testing_wrapper::test_compression_for_compression_num(compression as u8);
+        let config = WrapperConfig::new(compression as u8);
+        testing_wrapper::test_compression_for_compression_num(config);
     }
 }
 
@@ -77,7 +85,7 @@ use circuit_definitions::circuit_definitions::aux_layer::compression_modes::*;
 use circuit_definitions::circuit_definitions::aux_layer::*;
 use circuit_definitions::circuit_definitions::aux_layer::compression::ProofCompressionFunction;
 use circuit_definitions::circuit_definitions::aux_layer::ZkSyncCompressionLayerVerificationKey;
-use crate::data_source::{LocalFileDataSource, SetupDataSource, BlockDataSource};
+use crate::data_source::{local_file_data_source::LocalFileDataSource, SetupDataSource, BlockDataSource};
 use circuit_definitions::circuit_definitions::aux_layer::compression::*;
 use snark_wrapper::verifier_structs::allocated_vk::AllocatedVerificationKey;
 use snark_wrapper::franklin_crypto::plonk::circuit::bigint_new::BITWISE_LOGICAL_OPS_TABLE_NAME;
@@ -101,12 +109,12 @@ use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::gates
 use crate::boojum::algebraic_props::round_function::AbsorptionModeOverwrite;
 use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
 use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
-use crate::in_memory_data_source::InMemoryDataSource;
+use crate::data_source::in_memory_data_source::InMemoryDataSource;
 use crate::witness::full_block_artifact::*;
 
-fn get_geometry_config() -> GeometryConfig {
-    // let geometry = crate::geometry_config::get_geometry_config();
-
+/// Lover memory requirements
+/// Used only for base layer debugging
+fn get_testing_geometry_config() -> GeometryConfig {
     GeometryConfig {
         // cycles_per_vm_snapshot: 1,
         cycles_per_vm_snapshot: 1024,
@@ -131,9 +139,12 @@ pub(crate) fn generate_base_layer(
     cycle_limit: usize,
     geometry: GeometryConfig,
 ) -> (
-    BlockBasicCircuits<GoldilocksField, ZkSyncDefaultRoundFunction>,
-    BlockBasicCircuitsPublicInputs<GoldilocksField>,
-    BlockBasicCircuitsPublicCompactFormsWitnesses<GoldilocksField>,
+    Vec<ZkSyncBaseLayerCircuit<Field, VmWitnessOracle<Field>, RoundFunction>>,
+    Vec<(
+        u64,
+        RecursionQueueSimulator<Field>,
+        Vec<ZkSyncBaseLayerClosedFormInput<Field>>,
+    )>,
     SchedulerCircuitInstanceWitness<
         GoldilocksField,
         CircuitGoldilocksPoseidon2Sponge,
@@ -141,8 +152,6 @@ pub(crate) fn generate_base_layer(
     >,
 ) {
     use crate::zk_evm::zkevm_opcode_defs::system_params::BOOTLOADER_FORMAL_ADDRESS;
-
-    let round_function = ZkSyncDefaultRoundFunction::default();
 
     use crate::external_calls::run;
     use crate::toolset::GeometryConfig;
@@ -220,14 +229,9 @@ pub(crate) fn generate_base_layer(
 
     println!("Default AA code hash 0x{:x}", default_account_codehash);
 
-    // let (basic_block_circuits, basic_block_circuits_inputs, mut scheduler_partial_input) = run(
-    let (
-        basic_block_circuits,
-        basic_block_circuits_inputs,
-        closed_form_inputs,
-        scheduler_partial_input,
-        _aux_data,
-    ) = run(
+    let mut basic_block_circuits = vec![];
+    let mut recursion_queues = vec![];
+    let (scheduler_partial_input, _aux_data) = run(
         Address::zero(),
         test_artifact.entry_point_address,
         test_artifact.entry_point_code,
@@ -237,53 +241,49 @@ pub(crate) fn generate_base_layer(
         used_bytecodes,
         vec![],
         cycle_limit,
-        round_function.clone(),
         geometry,
         storage_impl,
         &mut tree,
+        |circuit| basic_block_circuits.push(circuit),
+        |a, b, c| {
+            recursion_queues.push((
+                a,
+                b,
+                c.into_iter()
+                    .map(|x| ZkSyncBaseLayerStorage::from_inner(a as u8, x))
+                    .collect(),
+            ))
+        },
     );
 
     (
         basic_block_circuits,
-        basic_block_circuits_inputs,
-        closed_form_inputs,
+        recursion_queues,
         scheduler_partial_input,
     )
 }
 
-fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: usize) {
+fn run_and_try_create_witness_inner(
+    test_artifact: TestArtifact,
+    cycle_limit: usize,
+    blobs: Option<[Vec<u8>; 2]>,
+) {
     use crate::external_calls::run;
     use crate::toolset::GeometryConfig;
 
-    let geometry = get_geometry_config();
+    // let geometry = get_testing_geometry_config();
+    let geometry = crate::geometry_config::get_geometry_config();
 
     // let (basic_block_circuits, basic_block_circuits_inputs, mut scheduler_partial_input) = run(
-    let (
-        basic_block_circuits,
-        basic_block_circuits_inputs,
-        per_circuit_closed_form_inputs,
-        scheduler_partial_input,
-    ) = generate_base_layer(test_artifact, cycle_limit, geometry);
+    let (basic_block_circuits, recursion_queues, scheduler_partial_input) =
+        generate_base_layer(test_artifact, cycle_limit, geometry);
 
-    let _num_vm_circuits = basic_block_circuits.main_vm_circuits.len();
-
-    for (idx, (el, input_value)) in basic_block_circuits
-        .clone()
-        .into_flattened_set()
-        .into_iter()
-        .zip(
-            basic_block_circuits_inputs
-                .clone()
-                .into_flattened_set()
-                .into_iter(),
-        )
-        .enumerate()
-    {
+    for (idx, el) in basic_block_circuits.clone().into_iter().enumerate() {
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
 
         match &el {
-            ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {
+            ZkSyncBaseLayerCircuit::ECRecover(inner) => {
                 dbg!(&*inner.config);
                 // let witness = inner.clone_witness().unwrap();
                 // dbg!(&witness.closed_form_input);
@@ -306,15 +306,12 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
     let mut setup_data = None;
 
-    let mut source = InMemoryDataSource::new();
+    // let mut source = InMemoryDataSource::new();
+    let mut source = LocalFileDataSource;
+    LocalFileDataSource::create_folders_for_storing_data();
     use crate::data_source::*;
 
-    for (idx, el) in basic_block_circuits
-        .clone()
-        .into_flattened_set()
-        .into_iter()
-        .enumerate()
-    {
+    for (idx, el) in basic_block_circuits.clone().into_iter().enumerate() {
         let descr = el.short_description();
         println!("Doing {}: {}", idx, descr);
 
@@ -409,13 +406,6 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
         instance_idx += 1;
     }
-
-    let round_function = ZkSyncDefaultRoundFunction::default();
-
-    println!("Preparing recursion queues");
-
-    let recursion_queues = basic_block_circuits_inputs
-        .into_recursion_queues(per_circuit_closed_form_inputs, &round_function);
 
     println!("Assembling keys");
 
@@ -570,10 +560,6 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
             if let Ok(proof) = source.get_leaf_layer_proof(el.numeric_circuit_type(), instance_idx)
             {
-                if instance_idx == 0 {
-                    source.set_recursion_layer_padding_proof(proof).unwrap();
-                }
-
                 instance_idx += 1;
                 continue;
             }
@@ -653,29 +639,6 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
             let is_valid = verify_recursion_layer_proof::<NoPow>(&el, &proof, &vk);
 
             assert!(is_valid);
-
-            if instance_idx == 0 {
-                source
-                    .set_recursion_layer_padding_proof(ZkSyncRecursionLayerProof::from_inner(
-                        el.numeric_circuit_type(),
-                        proof.clone(),
-                    ))
-                    .unwrap();
-
-                // any circuit type would work
-                if el.numeric_circuit_type()
-                    == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForMainVM as u8
-                {
-                    source
-                        .set_recursion_layer_leaf_padding_proof(
-                            ZkSyncRecursionLayerProof::from_inner(
-                                el.numeric_circuit_type(),
-                                proof.clone(),
-                            ),
-                        )
-                        .unwrap();
-                }
-            }
 
             source
                 .set_leaf_layer_proof(
@@ -885,11 +848,6 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
                 if let Ok(proof) =
                     source.get_node_layer_proof(recursive_circuit_type as u8, depth, idx)
                 {
-                    if idx == 0 {
-                        source
-                            .set_recursion_layer_node_padding_proof(proof)
-                            .unwrap();
-                    }
                     continue;
                 }
 
@@ -961,14 +919,6 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
 
                 assert!(is_valid);
 
-                if idx == 0 && depth == 0 {
-                    source
-                        .set_recursion_layer_node_padding_proof(
-                            ZkSyncRecursionLayerProof::NodeLayerCircuit(proof.clone()),
-                        )
-                        .unwrap();
-                }
-
                 source
                     .set_node_layer_proof(
                         recursive_circuit_type as u8,
@@ -1034,12 +984,94 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
         _marker: std::marker::PhantomData,
     };
 
-    let scheduler_circuit = SchedulerCircuit {
+    let mut scheduler_circuit = SchedulerCircuit {
         witness: scheduler_witness.clone(),
         config,
         transcript_params: (),
+        eip4844_proof_config: None,
+        eip4844_vk_fixed_parameters: None,
+        eip4844_vk: None,
         _marker: std::marker::PhantomData,
     };
+
+    if let Some(blobs) = blobs {
+        let mut eip4844_proofs = vec![];
+        scheduler_circuit.eip4844_proof_config = Some(eip4844_proof_config());
+        let mut eip4844_vk = None;
+        for blob in blobs {
+            let (blob_arr, linear_hash, versioned_hash, output_hash) =
+                generate_eip4844_witness::<GoldilocksField>(blob, "src/kzg/trusted_setup.json");
+            use crate::zkevm_circuits::eip_4844::input::BlobChunkWitness;
+            use crate::zkevm_circuits::eip_4844::input::EIP4844CircuitInstanceWitness;
+            use crate::zkevm_circuits::eip_4844::input::EIP4844InputOutputWitness;
+            use crate::zkevm_circuits::eip_4844::input::EIP4844OutputDataWitness;
+            use circuit_definitions::circuit_definitions::eip4844::EIP4844Circuit;
+            use crossbeam::atomic::AtomicCell;
+            use std::collections::VecDeque;
+            use std::sync::Arc;
+
+            let eip4844_proof_config = eip4844_proof_config();
+            let blob = blob_arr
+                .iter()
+                .map(|el| BlobChunkWitness { inner: *el })
+                .collect::<Vec<BlobChunkWitness<GoldilocksField>>>();
+            let witness = EIP4844CircuitInstanceWitness {
+                closed_form_input: EIP4844InputOutputWitness {
+                    start_flag: true,
+                    completion_flag: true,
+                    hidden_fsm_input: (),
+                    hidden_fsm_output: (),
+                    observable_input: (),
+                    observable_output: EIP4844OutputDataWitness {
+                        linear_hash,
+                        output_hash,
+                    },
+                },
+                data_chunks: VecDeque::from(blob),
+                linear_hash_output: linear_hash,
+                versioned_hash,
+            };
+            let circuit = EIP4844Circuit {
+                witness: AtomicCell::new(Some(witness)),
+                config: Arc::new(EIP4844_CYCLE_LIMIT),
+                round_function: ZkSyncDefaultRoundFunction::default().into(),
+                expected_public_input: None,
+            };
+            let (setup_base, setup, vk, setup_tree, vars_hint, wits_hint, finalization_hint) =
+                create_eip4844_setup_data(
+                    circuit.clone(),
+                    &worker,
+                    eip4844_proof_config.fri_lde_factor,
+                    eip4844_proof_config.merkle_tree_cap_size,
+                );
+
+            if eip4844_vk.is_none() {
+                eip4844_vk = Some(vk.clone());
+            }
+
+            let proof = prove_eip4844_circuit::<NoPow>(
+                circuit.clone(),
+                &worker,
+                eip4844_proof_config,
+                &setup_base,
+                &setup,
+                &setup_tree,
+                &vk,
+                &vars_hint,
+                &wits_hint,
+                &finalization_hint,
+            );
+
+            let is_valid = verify_eip4844_proof::<NoPow>(&circuit, &proof, &vk);
+            assert!(is_valid);
+
+            eip4844_proofs.push(proof);
+        }
+
+        scheduler_circuit.eip4844_vk = eip4844_vk.clone();
+        scheduler_circuit.eip4844_vk_fixed_parameters = Some(eip4844_vk.unwrap().fixed_parameters);
+        scheduler_circuit.witness.eip4844_proofs = eip4844_proofs.into();
+    }
 
     println!("Computing scheduler proof");
 
@@ -1100,58 +1132,6 @@ fn run_and_try_create_witness_inner(test_artifact: TestArtifact, cycle_limit: us
             .unwrap();
     }
 
-    println!("Computing compression proofs");
-
-    try_to_compress_and_wrap_to_snark(scheduler_witness);
-
-    println!("DONE");
-}
-
-fn try_to_compress_and_wrap_to_snark(
-    scheduler_witness: SchedulerCircuitInstanceWitness<
-        GoldilocksField,
-        boojum::gadgets::round_function::CircuitSimpleAlgebraicSponge<
-            GoldilocksField,
-            8,
-            12,
-            4,
-            Poseidon2Goldilocks,
-            true,
-        >,
-        GoldilocksExt2,
-    >,
-) {
-    use crate::data_source::*;
-    use crate::zkevm_circuits::scheduler::SchedulerConfig;
-
-    let worker = Worker::new_with_num_threads(8);
-
-    println!("Computing scheduler proof");
-    let mut source = LocalFileDataSource;
-
-    let node_vk = source.get_recursion_layer_node_vk().unwrap().into_inner();
-
-    let config = SchedulerConfig {
-        proof_config: recursion_layer_proof_config(),
-        vk_fixed_parameters: node_vk.fixed_parameters,
-        capacity: SCHEDULER_CAPACITY,
-        _marker: std::marker::PhantomData,
-    };
-
-    let scheduler_circuit = SchedulerCircuit {
-        witness: scheduler_witness,
-        config,
-        transcript_params: (),
-        _marker: std::marker::PhantomData,
-    };
-
-    let scheduler_circuit = ZkSyncRecursiveLayerCircuit::SchedulerCircuit(scheduler_circuit);
-
-    match source.get_scheduler_proof() {
-        Err(_) => panic!(),
-        Ok(proof) => {}
-    }
-
     println!("DONE");
 }
 
@@ -1162,11 +1142,7 @@ fn run_single() {
     use crate::data_source::*;
     use circuit_definitions::circuit_definitions::recursion_layer::verifier_builder::dyn_verifier_builder_for_recursive_circuit_type;
 
-    type P = GoldilocksField;
     type TR = GoldilocksPoisedon2Transcript;
-    type R = Poseidon2Goldilocks;
-    type CTR = CircuitAlgebraicSpongeBasedTranscript<GoldilocksField, 8, 12, 4, R>;
-    type EXT = GoldilocksExt2;
     type H = GoldilocksPoseidon2Sponge<AbsorptionModeOverwrite>;
 
     let f = std::fs::File::open("tmp.json").unwrap();
@@ -1184,6 +1160,7 @@ fn run_single() {
         ZkSyncRecursionLayerStorageType::NodeLayerCircuit,
     );
     let verifier = verifier_builder.create_verifier();
+    LocalFileDataSource::create_folders_for_storing_data();
     let source = LocalFileDataSource;
     let vk = source.get_recursion_layer_node_vk().unwrap().into_inner();
 

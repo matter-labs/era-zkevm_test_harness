@@ -1,1 +1,257 @@
-{"StorageSorter":{"fixed_parameters":{"parameters":{"num_columns_under_copy_permutation":132,"num_witness_columns":0,"num_constant_columns":4,"max_allowed_constraint_degree":8},"lookup_parameters":{"UseSpecializedColumnsWithTableIdAsConstant":{"width":1,"num_repetitions":16,"share_table_id":true}},"domain_size":1048576,"total_tables_len":256,"public_inputs_locations":[[0,1044628],[1,1044628],[2,1044628],[3,1044628]],"extra_constant_polys_for_selectors":3,"table_ids_column_idxes":[7],"quotient_degree":8,"selectors_placement":{"Fork":{"left":{"GateOnly":{"gate_idx":1,"num_constants":0,"degree":7,"needs_selector":true,"is_lookup":false}},"right":{"Fork":{"left":{"Fork":{"left":{"Fork":{"left":{"Fork":{"left":{"GateOnly":{"gate_idx":3,"num_constants":2,"degree":3,"needs_selector":true,"is_lookup":false}},"right":{"Fork":{"left":{"GateOnly":{"gate_idx":5,"num_constants":0,"degree":2,"needs_selector":true,"is_lookup":false}},"right":{"GateOnly":{"gate_idx":6,"num_constants":0,"degree":2,"needs_selector":true,"is_lookup":false}}}}}},"right":{"Fork":{"left":{"GateOnly":{"gate_idx":2,"num_constants":0,"degree":2,"needs_selector":true,"is_lookup":false}},"right":{"GateOnly":{"gate_idx":7,"num_constants":0,"degree":0,"needs_selector":true,"is_lookup":false}}}}}},"right":{"GateOnly":{"gate_idx":4,"num_constants":1,"degree":2,"needs_selector":true,"is_lookup":false}}}},"right":{"Fork":{"left":{"GateOnly":{"gate_idx":8,"num_constants":4,"degree":2,"needs_selector":true,"is_lookup":false}},"right":{"GateOnly":{"gate_idx":0,"num_constants":4,"degree":1,"needs_selector":true,"is_lookup":false}}}}}}}},"fri_lde_factor":2,"cap_size":16},"setup_merkle_tree_cap":[[18353038824771834181,6180039936290620596,9566046629535886545,1194749282273701730],[25931497575710606,4939580180726571178,9971692296422121050,10321682835888101865],[14476617363912627618,18433740955496184028,1866402502799305529,13630516779228168836],[5297717495027830927,10843206047833997321,12103660641452100213,962276586389403171],[18191621713764018306,18034247738724721784,17062774240988584015,4793091222754364718],[11975292609810709594,3410068686607534834,7176581702346144340,15010624823757225375],[4386781545910081212,12096044536926128763,5099067130359909936,4702254698651040446],[4564824446576585585,10282250482097501467,3576706676505948505,8070857080847133156],[4021025381485058227,15830498207667536258,11765654863279694638,8603645468978049764],[12131291478449851192,884696930963928594,5603953053234603685,15160539006841845005],[137229235654780143,1982984178531442102,8969623252708511178,2605510294647382796],[117138863215117992,11155889783333849588,11385131969922449424,2463919755275823513],[3448822069412323905,6853611764127119403,1354074653325845412,10520097888465643033],[12126792712339142861,3208769323001970463,8541345094141085129,5739333931443919780],[6375726425445642922,15388895865216583137,7439749375147960286,16154657507801467365],[5187536080858526742,8938762330808016184,441459701363466307,11617235719453000530]]}}
+{
+  "StorageSorter": {
+    "fixed_parameters": {
+      "parameters": {
+        "num_columns_under_copy_permutation": 132,
+        "num_witness_columns": 0,
+        "num_constant_columns": 4,
+        "max_allowed_constraint_degree": 8
+      },
+      "lookup_parameters": {
+        "UseSpecializedColumnsWithTableIdAsConstant": {
+          "width": 1,
+          "num_repetitions": 16,
+          "share_table_id": true
+        }
+      },
+      "domain_size": 1048576,
+      "total_tables_len": 256,
+      "public_inputs_locations": [
+        [
+          0,
+          1046317
+        ],
+        [
+          1,
+          1046317
+        ],
+        [
+          2,
+          1046317
+        ],
+        [
+          3,
+          1046317
+        ]
+      ],
+      "extra_constant_polys_for_selectors": 3,
+      "table_ids_column_idxes": [
+        7
+      ],
+      "quotient_degree": 8,
+      "selectors_placement": {
+        "Fork": {
+          "left": {
+            "GateOnly": {
+              "gate_idx": 1,
+              "num_constants": 0,
+              "degree": 7,
+              "needs_selector": true,
+              "is_lookup": false
+            }
+          },
+          "right": {
+            "Fork": {
+              "left": {
+                "Fork": {
+                  "left": {
+                    "Fork": {
+                      "left": {
+                        "Fork": {
+                          "left": {
+                            "GateOnly": {
+                              "gate_idx": 3,
+                              "num_constants": 2,
+                              "degree": 3,
+                              "needs_selector": true,
+                              "is_lookup": false
+                            }
+                          },
+                          "right": {
+                            "Fork": {
+                              "left": {
+                                "GateOnly": {
+                                  "gate_idx": 5,
+                                  "num_constants": 0,
+                                  "degree": 2,
+                                  "needs_selector": true,
+                                  "is_lookup": false
+                                }
+                              },
+                              "right": {
+                                "GateOnly": {
+                                  "gate_idx": 6,
+                                  "num_constants": 0,
+                                  "degree": 2,
+                                  "needs_selector": true,
+                                  "is_lookup": false
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "right": {
+                        "Fork": {
+                          "left": {
+                            "GateOnly": {
+                              "gate_idx": 2,
+                              "num_constants": 0,
+                              "degree": 2,
+                              "needs_selector": true,
+                              "is_lookup": false
+                            }
+                          },
+                          "right": {
+                            "GateOnly": {
+                              "gate_idx": 7,
+                              "num_constants": 0,
+                              "degree": 0,
+                              "needs_selector": true,
+                              "is_lookup": false
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "right": {
+                    "GateOnly": {
+                      "gate_idx": 4,
+                      "num_constants": 1,
+                      "degree": 2,
+                      "needs_selector": true,
+                      "is_lookup": false
+                    }
+                  }
+                }
+              },
+              "right": {
+                "Fork": {
+                  "left": {
+                    "GateOnly": {
+                      "gate_idx": 8,
+                      "num_constants": 4,
+                      "degree": 2,
+                      "needs_selector": true,
+                      "is_lookup": false
+                    }
+                  },
+                  "right": {
+                    "GateOnly": {
+                      "gate_idx": 0,
+                      "num_constants": 4,
+                      "degree": 1,
+                      "needs_selector": true,
+                      "is_lookup": false
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "fri_lde_factor": 2,
+      "cap_size": 16
+    },
+    "setup_merkle_tree_cap": [
+      [
+        4720381805984417431,
+        13078422028573677966,
+        12719610199416872768,
+        814461378397191674
+      ],
+      [
+        7528162393526520082,
+        16021794900358493536,
+        10778196681779195944,
+        16999373544006604274
+      ],
+      [
+        6747601332592429411,
+        10839430478686810097,
+        13645038614460463708,
+        13820943711197201062
+      ],
+      [
+        3296980954753787898,
+        16847154708500530922,
+        4760207114567346237,
+        933989207013374596
+      ],
+      [
+        435751225506322730,
+        11838854342511914922,
+        8141668552314414324,
+        2080639242020278276
+      ],
+      [
+        12577933521680800715,
+        7013157337092792023,
+        8948304311622302542,
+        13444594627920045180
+      ],
+      [
+        10039030243356480714,
+        16189912181289242789,
+        10233207085455746896,
+        9133045755698092179
+      ],
+      [
+        4258951657397630338,
+        7089329735582865970,
+        7454083395219072742,
+        6942440874612228572
+      ],
+      [
+        4205365380387206769,
+        4810070288054886759,
+        12185381545408489993,
+        9168852501594036569
+      ],
+      [
+        10516394727687757858,
+        13834473449189539894,
+        14081317825129873045,
+        6351648171885016957
+      ],
+      [
+        18078042118328183988,
+        6073950769044690696,
+        16412846409205043478,
+        2130555455391847686
+      ],
+      [
+        11243654607886467582,
+        16949864848604250653,
+        9402265113410343268,
+        5314745691722462235
+      ],
+      [
+        15979853768668375314,
+        12543007664588017291,
+        12965088303373453422,
+        2147288991358425708
+      ],
+      [
+        244366469137530999,
+        6419427921450944899,
+        11667939960797081159,
+        12423571797082389411
+      ],
+      [
+        1119341028349378585,
+        6534556044367196007,
+        17980160443578730518,
+        15264250936810044760
+      ],
+      [
+        13689391307335641715,
+        17074269686100848413,
+        17922241310959477038,
+        13088974302469761152
+      ]
+    ]
+  }
+}

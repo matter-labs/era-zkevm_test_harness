@@ -1,4 +1,5 @@
 use super::*;
+use crate::witness::full_block_artifact::LogQueue;
 use crate::zkevm_circuits::base_structures::log_query::{
     LOG_QUERY_ABSORBTION_ROUNDS, LOG_QUERY_PACKED_WIDTH,
 };
@@ -13,6 +14,7 @@ pub fn compute_storage_dedup_and_sort<
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     artifacts: &mut FullBlockArtifacts<F>,
+    demuxed_rollup_storage_queue: LogQueue<F>,
     per_circuit_capacity: usize,
     round_function: &R,
 ) -> Vec<StorageDeduplicatorInstanceWitness<F>> {
@@ -24,20 +26,23 @@ pub fn compute_storage_dedup_and_sort<
         // return singe dummy witness
         use crate::boojum::gadgets::queue::QueueState;
 
-        let initial_fsm_state = StorageDeduplicatorFSMInputOutput::<F>::placeholder_witness();
+        let mut initial_fsm_state = StorageDeduplicatorFSMInputOutput::<F>::placeholder_witness();
 
         assert_eq!(
-            take_queue_state_from_simulator(&artifacts.demuxed_rollup_storage_queue_simulator),
+            take_queue_state_from_simulator(&demuxed_rollup_storage_queue.simulator),
             QueueState::placeholder_witness()
         );
 
         let mut passthrough_input = StorageDeduplicatorInputData::placeholder_witness();
         passthrough_input.shard_id_to_process = SHARD_ID_TO_PROCEED;
         passthrough_input.unsorted_log_queue_state =
-            take_queue_state_from_simulator(&artifacts.demuxed_rollup_storage_queue_simulator);
+            take_queue_state_from_simulator(&demuxed_rollup_storage_queue.simulator);
         passthrough_input.intermediate_sorted_queue_state = QueueState::placeholder_witness();
 
-        let final_fsm_state = StorageDeduplicatorFSMInputOutput::<F>::placeholder_witness();
+        let mut final_fsm_state = StorageDeduplicatorFSMInputOutput::<F>::placeholder_witness();
+        final_fsm_state.lhs_accumulator = [F::from_u64_unchecked(1); 2];
+        final_fsm_state.rhs_accumulator = [F::from_u64_unchecked(1); 2];
+        final_fsm_state.cycle_idx = 4;
 
         let mut passthrough_output = StorageDeduplicatorOutputData::placeholder_witness();
         passthrough_output.final_sorted_queue_state = QueueState::placeholder_witness();
@@ -85,7 +90,7 @@ pub fn compute_storage_dedup_and_sort<
     }
 
     let unsorted_simulator_final_state =
-        take_queue_state_from_simulator(&artifacts.demuxed_rollup_storage_queue_simulator);
+        take_queue_state_from_simulator(&demuxed_rollup_storage_queue.simulator);
 
     let intermediate_sorted_log_simulator_final_state =
         take_queue_state_from_simulator(&intermediate_sorted_log_simulator);
@@ -137,7 +142,7 @@ pub fn compute_storage_dedup_and_sort<
         })
         .collect();
 
-    // let lhs_contributions: Vec<_> = artifacts.demuxed_rollup_storage_queue_simulator.witness.iter().map(|el| el.0).collect();
+    // let lhs_contributions: Vec<_> = demuxed_rollup_storage_queue.simulator.witness.iter().map(|el| el.0).collect();
     let rhs_contributions: Vec<_> = intermediate_sorted_log_simulator
         .witness
         .iter()
@@ -164,10 +169,7 @@ pub fn compute_storage_dedup_and_sort<
 
         assert_eq!(
             lhs_grand_product_chain.len(),
-            artifacts
-                .demuxed_rollup_storage_queue_simulator
-                .witness
-                .len()
+            demuxed_rollup_storage_queue.simulator.witness.len()
         );
         assert_eq!(
             rhs_grand_product_chain.len(),
@@ -191,8 +193,8 @@ pub fn compute_storage_dedup_and_sort<
     // as usual we simulate logic of the circuit and chunk. It's a little less convenient here than in RAM since we
     // have to chunk based on 2 queues, but also guess the result of the 3rd queue, but managable
 
-    assert!(artifacts
-        .demuxed_rollup_storage_queue_simulator
+    assert!(demuxed_rollup_storage_queue
+        .simulator
         .witness
         .as_slices()
         .1
@@ -203,15 +205,15 @@ pub fn compute_storage_dedup_and_sort<
         .1
         .is_empty());
 
-    let it = artifacts
-        .demuxed_rollup_storage_queue_states
+    let it = demuxed_rollup_storage_queue
+        .states
         .chunks(per_circuit_capacity)
         .zip(intermediate_sorted_log_simulator_states.chunks(per_circuit_capacity))
         .zip(transposed_lhs_chains.into_iter())
         .zip(transposed_rhs_chains.into_iter())
         .zip(
-            artifacts
-                .demuxed_rollup_storage_queue_simulator
+            demuxed_rollup_storage_queue
+                .simulator
                 .witness
                 .as_slices()
                 .0
@@ -652,6 +654,15 @@ pub fn compute_storage_dedup_and_sort<
                 .closed_form_input
                 .hidden_fsm_output
                 .this_cell_has_explicit_read_and_rollback_depth_zero = false;
+        } else {
+            if is_last {
+                // at the very end of the work circuit resets this_cell_has_explicit_read_and_rollback_depth_zero
+                // in any case
+                instance_witness
+                    .closed_form_input
+                    .hidden_fsm_output
+                    .this_cell_has_explicit_read_and_rollback_depth_zero = false;
+            }
         }
 
         current_lhs_product = accumulated_lhs;

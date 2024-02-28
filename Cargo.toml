@@ -1,6 +1,6 @@
 [package]
 name = "zkevm_test_harness"
-version = "1.4.0"
+version = "1.4.1"
 edition = "2021"
 authors = ["Alex Vlasov <alex.m.vlasov@gmail.com>", "Konstantin Panarin <kp@matterlabs.dev>"]
 
@@ -27,8 +27,9 @@ rescue_poseidon = {git = "https://github.com/matter-labs/rescue-poseidon.git", b
 # snark_wrapper = {path = "../snark_wrapper"}
 # rescue_poseidon = {path = "../rescue-poseidon"}
 
-zkevm-assembly = {git = "https://github.com/matter-labs/era-zkEVM-assembly.git", branch = "v1.3.2"}
+zkevm-assembly = {git = "https://github.com/matter-labs/era-zkEVM-assembly.git", branch = "v1.4.1"}
 
+rand = "0.4"
 rayon = "*"
 derivative = "*"
 hex = "*"
@@ -42,6 +43,13 @@ env_logger = "*"
 smallvec = "*"
 structopt = "0.3.26"
 codegen = "0.2.0"
+lazy_static = "1.4"
+reqwest = { version = "0.11", features = ["blocking"] }
+curl = "0.4"
+walkdir = "2.4"
+
+[dev-dependencies]
+rand = "0.4"
 
 [profile.release]
 debug = false
