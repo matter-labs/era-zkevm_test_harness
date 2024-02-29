@@ -207,7 +207,6 @@ pub fn run<
             .cycle(&mut tracer)
             .expect("cycle should finish succesfully");
     }
-
     assert!(
         out_of_circuit_vm.execution_has_ended(),
         "VM execution didn't finish"
@@ -232,6 +231,7 @@ pub fn run<
 
     // dbg!(tools.witness_tracer.vm_snapshots.len());
 
+    let now = std::time::Instant::now();
     let (basic_circuits, compact_form_witnesses) = create_artifacts_from_tracer(
         out_of_circuit_vm.witness_tracer,
         &round_function,
@@ -247,6 +247,7 @@ pub fn run<
         circuit_callback,
         queue_simulator_callback,
     );
+    println!("######################################## {:?}", now.elapsed());
 
     let (scheduler_circuit_witness, aux_data) = {
         use crate::zkevm_circuits::scheduler::block_header::*;
