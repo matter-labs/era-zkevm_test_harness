@@ -38,7 +38,7 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
     );
 
     assert!(
-        artifacts.all_decommittment_queries.len() > 0,
+        artifacts.all_executed_decommittment_queries.len() > 0,
         "VM should have made some code decommits"
     );
 
@@ -52,17 +52,17 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
     let mut sorted_decommittment_queue_states = vec![];
 
     let mut unsorted_decommittment_requests_with_data = vec![];
-    for (_cycle, decommittment_request, writes) in artifacts.all_decommittment_queries.iter_mut() {
+    for (_cycle, decommittment_request, writes) in artifacts.all_executed_decommittment_queries.iter_mut() {
         let data = std::mem::replace(writes, vec![]);
         unsorted_decommittment_requests_with_data.push((*decommittment_request, data));
     }
 
-    let num_circuits = (artifacts.all_decommittment_queries.len() + deduplicator_circuit_capacity
+    let num_circuits = (artifacts.all_executed_decommittment_queries.len() + deduplicator_circuit_capacity
         - 1)
         / deduplicator_circuit_capacity;
 
     // internally parallelizable by the factor of 3
-    for (cycle, decommittment_request, _) in artifacts.all_decommittment_queries.iter() {
+    for (cycle, decommittment_request, _) in artifacts.all_executed_decommittment_queries.iter() {
         // sponge
         let (_old_tail, intermediate_info) = unsorted_decommittment_queue_simulator
             .push_and_output_intermediate_data(*decommittment_request, round_function);

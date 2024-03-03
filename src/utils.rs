@@ -203,6 +203,7 @@ pub fn generate_eip4844_witness<F: SmallField>(
     let settings = KzgSettings::new(setup_json);
 
     let commitment = compute_commitment(&settings, &poly);
+    use crate::sha2::Sha256;
     let mut versioned_hash: [u8; 32] = Sha256::digest(&commitment.into_compressed())
         .try_into()
         .expect("should be able to create an array from a keccak digest");

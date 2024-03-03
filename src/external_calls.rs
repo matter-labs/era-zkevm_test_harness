@@ -134,12 +134,21 @@ pub fn run<
         is_fresh: true,
     };
 
-    let (entry_point_decommittment_query, entry_point_decommittment_query_witness) = tools
+    // manually decommit entry point
+    let prepared_entry_point_decommittment_query = tools
         .decommittment_processor
-        .decommit_into_memory(0, entry_point_decommittment_query, &mut tools.memory)
-        .expect("must decommit the extry point");
+        .prepare_to_decommit(0, entry_point_decommittment_query)
+        .expect("must prepare decommit of entry point");
+    tools.witness_tracer.prepare_for_decommittment(
+        0,
+        entry_point_decommittment_query,
+    );
+    let entry_point_decommittment_query_witness = tools
+        .decommittment_processor
+        .decommit_into_memory(0, prepared_entry_point_decommittment_query, &mut tools.memory)
+        .expect("must execute decommit of entry point");
     let entry_point_decommittment_query_witness = entry_point_decommittment_query_witness.unwrap();
-    tools.witness_tracer.add_decommittment(
+    tools.witness_tracer.execute_decommittment(
         0,
         entry_point_decommittment_query,
         entry_point_decommittment_query_witness.clone(),

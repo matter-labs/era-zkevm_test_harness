@@ -43,6 +43,7 @@ use circuit_definitions::zkevm_circuits::demux_log_queue::input::LogDemuxerOutpu
 use circuit_definitions::zkevm_circuits::ecrecover::EcrecoverCircuitFSMInputOutput;
 use circuit_definitions::zkevm_circuits::ecrecover::EcrecoverCircuitInputOutput;
 use circuit_definitions::zkevm_circuits::ecrecover::EcrecoverCircuitInstanceWitness;
+use circuit_definitions::zkevm_circuits::eip_4844::input::EIP4844CircuitInstanceWitness;
 use circuit_definitions::zkevm_circuits::fsm_input_output::circuit_inputs::main_vm;
 use circuit_definitions::zkevm_circuits::fsm_input_output::circuit_inputs::INPUT_OUTPUT_COMMITMENT_LENGTH;
 use circuit_definitions::zkevm_circuits::fsm_input_output::{
@@ -88,6 +89,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use circuit_definitions::zkevm_circuits::secp256r1_verify::input::*;
 use circuit_definitions::zkevm_circuits::transient_storage_validity_by_grand_product::input::*;
+use crate::zkevm_circuits::eip_4844::input::EIP4844OutputData;
 
 pub const L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH: bool = false;
 
@@ -328,6 +330,18 @@ impl<F: SmallField> ClosedFormInputField<F> for Secp256r1VerifyCircuitInstanceWi
     type T = Secp256r1VerifyCircuitFSMInputOutput<F>;
     type IN = PrecompileFunctionInputData<F>;
     type OUT = PrecompileFunctionOutputData<F>;
+
+    fn closed_form_input(
+        &mut self,
+    ) -> &mut ClosedFormInputWitness<F, Self::T, Self::IN, Self::OUT> {
+        &mut self.closed_form_input
+    }
+}
+
+impl<F: SmallField> ClosedFormInputField<F> for EIP4844CircuitInstanceWitness<F> {
+    type T = ();
+    type IN = ();
+    type OUT = EIP4844OutputData<F>;
 
     fn closed_form_input(
         &mut self,

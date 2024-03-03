@@ -222,7 +222,8 @@ pub fn create_artifacts_from_tracer<
         storage_queries,
         cold_warm_refunds_logs,
         pubdata_cost_logs,
-        decommittment_queries,
+        prepared_decommittment_queries,
+        executed_decommittment_queries,
         keccak_round_function_witnesses,
         sha256_round_function_witnesses,
         ecrecover_witnesses,
@@ -237,8 +238,10 @@ pub fn create_artifacts_from_tracer<
     let callstack_with_aux_data = callstack_with_aux_data;
 
     // we should have an initial query somewhat before the time
-    assert!(decommittment_queries.len() >= 1);
-    let (ts, q, w) = &decommittment_queries[0];
+    assert!(prepared_decommittment_queries.len() >= 1);
+    assert!(executed_decommittment_queries.len() >= 1);
+    assert!(prepared_decommittment_queries.len() >= executed_decommittment_queries.len());
+    let (ts, q, w) = &executed_decommittment_queries[0];
     assert!(*ts < crate::zk_evm::zkevm_opcode_defs::STARTING_TIMESTAMP);
     assert_eq!(q, &entry_point_decommittment_query.0);
     assert_eq!(w, &entry_point_decommittment_query.1);
@@ -981,7 +984,8 @@ pub fn create_artifacts_from_tracer<
 
     let artifacts = {
         let mut artifacts = FullBlockArtifacts::default();
-        artifacts.all_decommittment_queries = decommittment_queries;
+        artifacts.all_prepared_decommittment_queries = prepared_decommittment_queries;
+        artifacts.all_executed_decommittment_queries = executed_decommittment_queries;
         artifacts.keccak_round_function_witnesses = keccak_round_function_witnesses;
         artifacts.sha256_round_function_witnesses = sha256_round_function_witnesses;
         artifacts.ecrecover_witnesses = ecrecover_witnesses;
@@ -1453,8 +1457,9 @@ pub fn create_artifacts_from_tracer<
             .cloned()
             .collect();
 
+        // here we need all answers from the oracle, not just ones that will be executed
         let decommittment_requests_witness: Vec<_> = artifacts
-            .all_decommittment_queries
+            .all_prepared_decommittment_queries
             .iter()
             .skip_while(|el| el.0 < initial_state.at_cycle)
             .take_while(|el| el.0 < final_state.at_cycle)

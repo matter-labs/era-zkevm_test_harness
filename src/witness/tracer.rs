@@ -77,7 +77,8 @@ pub struct WitnessTracer {
     pub storage_queries: Vec<(u32, LogQuery)>,   // storage read queries with cycle indicators
     pub cold_warm_refunds_logs: Vec<(u32, LogQuery, u32)>,
     pub pubdata_cost_logs: Vec<(u32, LogQuery, PubdataCost)>,
-    pub decommittment_queries: Vec<(u32, DecommittmentQuery, Vec<U256>)>,
+    pub prepared_decommittment_queries: Vec<(u32, DecommittmentQuery)>,
+    pub executed_decommittment_queries: Vec<(u32, DecommittmentQuery, Vec<U256>)>,
     pub keccak_round_function_witnesses: Vec<(u32, LogQuery, Vec<Keccak256RoundWitness>)>,
     pub sha256_round_function_witnesses: Vec<(u32, LogQuery, Vec<Sha256RoundWitness>)>,
     pub ecrecover_witnesses: Vec<(u32, LogQuery, ECRecoverRoundWitness)>,
@@ -138,7 +139,8 @@ impl WitnessTracer {
             storage_queries: vec![],
             cold_warm_refunds_logs: vec![],
             pubdata_cost_logs: vec![],
-            decommittment_queries: vec![],
+            prepared_decommittment_queries: vec![],
+            executed_decommittment_queries: vec![],
             keccak_round_function_witnesses: vec![],
             sha256_round_function_witnesses: vec![],
             ecrecover_witnesses: vec![],
@@ -311,14 +313,24 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
             .add_log_query(monotonic_cycle_counter, log_query);
     }
 
-    fn add_decommittment(
+    fn prepare_for_decommittment(
+        &mut self,
+        monotonic_cycle_counter: u32,
+        decommittment_query: DecommittmentQuery,
+    ) {
+        self.prepared_decommittment_queries.push((
+            monotonic_cycle_counter,
+            decommittment_query,
+        ));
+    }
+
+    fn execute_decommittment(
         &mut self,
         monotonic_cycle_counter: u32,
         decommittment_query: DecommittmentQuery,
         mem_witness: Vec<U256>,
     ) {
-        // this will literally form the queue of decommittment queries, one to one
-        self.decommittment_queries.push((
+        self.executed_decommittment_queries.push((
             monotonic_cycle_counter,
             decommittment_query,
             mem_witness,

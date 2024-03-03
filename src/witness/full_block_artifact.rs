@@ -51,7 +51,8 @@ pub struct FullBlockArtifacts<F: SmallField> {
     // all the RAM queue states
     pub all_memory_queue_states: Vec<MemoryQueueState<F>>,
     // decommittment queue
-    pub all_decommittment_queries: Vec<(u32, DecommittmentQuery, Vec<U256>)>,
+    pub all_prepared_decommittment_queries: Vec<(u32, DecommittmentQuery)>,
+    pub all_executed_decommittment_queries: Vec<(u32, DecommittmentQuery, Vec<U256>)>,
     pub all_decommittment_queue_states: Vec<(u32, DecommittmentQueueState<F>)>,
 
     // log queue
