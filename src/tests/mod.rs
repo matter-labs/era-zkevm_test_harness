@@ -129,13 +129,7 @@ pub(crate) fn eip4844_test_circuit(
     assert!(is_satisfied);
 }
 
-pub(crate) fn base_test_circuit(
-    circuit: ZkSyncBaseLayerCircuit<
-        GoldilocksField,
-        VmWitnessOracle<GoldilocksField>,
-        ZkSyncDefaultRoundFunction,
-    >,
-) {
+pub(crate) fn base_test_circuit(circuit: ZkSyncBaseLayerCircuit) {
     use crate::boojum::config::DevCSConfig;
     use crate::boojum::cs::cs_builder::new_builder;
     use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;

@@ -141,7 +141,7 @@ pub(crate) fn generate_base_layer(
     cycle_limit: usize,
     geometry: GeometryConfig,
 ) -> (
-    Vec<ZkSyncBaseLayerCircuit<Field, VmWitnessOracle<Field>, RoundFunction>>,
+    Vec<ZkSyncBaseLayerCircuit>,
     Vec<(
         u64,
         RecursionQueueSimulator<Field>,

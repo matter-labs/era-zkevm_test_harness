@@ -29,13 +29,7 @@ use tracing;
 use crate::sha3::Digest;
 
 pub fn decompose_into_storage_application_witnesses<
-    CB: FnMut(
-        ZkSyncBaseLayerCircuit<
-            GoldilocksField,
-            VmWitnessOracle<GoldilocksField>,
-            Poseidon2Goldilocks,
-        >,
-    ),
+    CB: FnMut(ZkSyncBaseLayerCircuit),
     QSCB: FnMut(
         u64,
         RecursionQueueSimulator<GoldilocksField>,
@@ -52,9 +46,7 @@ pub fn decompose_into_storage_application_witnesses<
     mut circuit_callback: CB,
     mut recursion_queue_callback: QSCB,
 ) -> (
-    FirstAndLastCircuit<
-        StorageApplicationInstanceSynthesisFunction<GoldilocksField, Poseidon2Goldilocks>,
-    >,
+    FirstAndLastCircuit<StorageApplicationInstanceSynthesisFunction>,
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
 ) {
     use crate::witness::tree::EnumeratedBinaryLeaf;
