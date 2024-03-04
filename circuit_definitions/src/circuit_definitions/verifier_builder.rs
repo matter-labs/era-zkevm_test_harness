@@ -1,3 +1,5 @@
+use snark_wrapper::boojum::field::goldilocks::{GoldilocksExt2, GoldilocksField};
+
 use super::*;
 
 use crate::aux_definitions::witness_oracle::VmWitnessOracle;
@@ -10,14 +12,14 @@ use crate::circuit_definitions::eip4844::EIP4844InstanceSynthesisFunction;
 pub type EIP4844VerifierBuilder<F, R> =
     CircuitBuilderProxy<F, EIP4844InstanceSynthesisFunction<F, R>>;
 
-pub type VMMainCircuitVerifierBuilder<F, W, R> =
-    CircuitBuilderProxy<F, VmMainInstanceSynthesisFunction<F, W, R>>;
+pub type VMMainCircuitVerifierBuilder =
+    CircuitBuilderProxy<GoldilocksField, VmMainInstanceSynthesisFunction>;
 pub type CodeDecommittsSorterVerifierBuilder<F, R> =
     CircuitBuilderProxy<F, CodeDecommittmentsSorterSynthesisFunction<F, R>>;
 pub type CodeDecommitterVerifierBuilder<F, R> =
     CircuitBuilderProxy<F, CodeDecommitterInstanceSynthesisFunction<F, R>>;
-pub type LogDemuxerVerifierBuilder<F, R> =
-    CircuitBuilderProxy<F, LogDemuxInstanceSynthesisFunction<F, R>>;
+pub type LogDemuxerVerifierBuilder =
+    CircuitBuilderProxy<GoldilocksField, LogDemuxInstanceSynthesisFunction>;
 pub type Keccak256RoundFunctionVerifierBuilder<F, R> =
     CircuitBuilderProxy<F, Keccak256RoundFunctionInstanceSynthesisFunction<F, R>>;
 pub type Sha256RoundFunctionVerifierBuilder<F, R> =
@@ -37,14 +39,11 @@ pub type L1MessagesSorterVerifierBuilder<F, R> =
 pub type L1MessagesHaherVerifierBuilder<F, R> =
     CircuitBuilderProxy<F, LinearHasherInstanceSynthesisFunction<F, R>>;
 
-pub fn dyn_verifier_builder_for_circuit_type<
-    F: SmallField,
-    EXT: FieldExtension<2, BaseField = F>,
-    R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-        + AlgebraicRoundFunction<F, 8, 12, 4>
-        + serde::Serialize
-        + serde::de::DeserializeOwned,
->(
+type F = GoldilocksField;
+type EXT = GoldilocksExt2;
+type R = Poseidon2Goldilocks;
+
+pub fn dyn_verifier_builder_for_circuit_type(
     circuit_type: u8,
 ) -> Box<dyn crate::boojum::cs::traits::circuit::ErasedBuilderForVerifier<F, EXT>>
 where
@@ -60,7 +59,7 @@ where
 
     match circuit_type {
         i if i == BaseLayerCircuitType::VM as u8 => {
-            VMMainCircuitVerifierBuilder::<F, VmWitnessOracle<F>, R>::dyn_verifier_builder()
+            VMMainCircuitVerifierBuilder::dyn_verifier_builder()
         }
         i if i == BaseLayerCircuitType::DecommitmentsFilter as u8 => {
             CodeDecommittsSorterVerifierBuilder::<F, R>::dyn_verifier_builder()
@@ -69,7 +68,7 @@ where
             CodeDecommitterVerifierBuilder::<F, R>::dyn_verifier_builder()
         }
         i if i == BaseLayerCircuitType::LogDemultiplexer as u8 => {
-            LogDemuxerVerifierBuilder::<F, R>::dyn_verifier_builder()
+            LogDemuxerVerifierBuilder::dyn_verifier_builder()
         }
         i if i == BaseLayerCircuitType::KeccakPrecompile as u8 => {
             Keccak256RoundFunctionVerifierBuilder::<F, R>::dyn_verifier_builder()
@@ -105,13 +104,7 @@ where
 }
 
 pub fn dyn_recursive_verifier_builder_for_circuit_type<
-    F: SmallField,
-    EXT: FieldExtension<2, BaseField = F>,
-    CS: ConstraintSystem<F> + 'static,
-    R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-        + AlgebraicRoundFunction<F, 8, 12, 4>
-        + serde::Serialize
-        + serde::de::DeserializeOwned,
+    CS: ConstraintSystem<GoldilocksField> + 'static,
 >(
     circuit_type: u8,
 ) -> Box<dyn crate::boojum::cs::traits::circuit::ErasedBuilderForRecursiveVerifier<F, EXT, CS>>
@@ -128,8 +121,7 @@ where
 
     match circuit_type {
         i if i == BaseLayerCircuitType::VM as u8 => {
-            VMMainCircuitVerifierBuilder::<F, VmWitnessOracle<F>, R>::dyn_recursive_verifier_builder(
-            )
+            VMMainCircuitVerifierBuilder::dyn_recursive_verifier_builder()
         }
         i if i == BaseLayerCircuitType::DecommitmentsFilter as u8 => {
             CodeDecommittsSorterVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
@@ -138,7 +130,7 @@ where
             CodeDecommitterVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
         }
         i if i == BaseLayerCircuitType::LogDemultiplexer as u8 => {
-            LogDemuxerVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
+            LogDemuxerVerifierBuilder::dyn_recursive_verifier_builder()
         }
         i if i == BaseLayerCircuitType::KeccakPrecompile as u8 => {
             Keccak256RoundFunctionVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()

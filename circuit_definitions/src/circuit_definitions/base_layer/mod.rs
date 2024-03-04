@@ -47,14 +47,14 @@ pub use self::vm_main::VmMainInstanceSynthesisFunction;
 // Type definitions for circuits, so one can easily form circuits with witness, and their definition
 // will take care of particular synthesis function. There is already an implementation of Circuit<F> for ZkSyncUniformCircuitInstance,
 // so as soon as the structure is instantiated it is ready for proving
-pub type VMMainCircuit<F, W, R> =
-    ZkSyncUniformCircuitInstance<F, VmMainInstanceSynthesisFunction<F, W, R>>;
+pub type VMMainCircuit =
+    ZkSyncUniformCircuitInstance<GoldilocksField, VmMainInstanceSynthesisFunction>;
 pub type CodeDecommittsSorterCircuit<F, R> =
     ZkSyncUniformCircuitInstance<F, CodeDecommittmentsSorterSynthesisFunction<F, R>>;
 pub type CodeDecommitterCircuit<F, R> =
     ZkSyncUniformCircuitInstance<F, CodeDecommitterInstanceSynthesisFunction<F, R>>;
-pub type LogDemuxerCircuit<F, R> =
-    ZkSyncUniformCircuitInstance<F, LogDemuxInstanceSynthesisFunction<F, R>>;
+pub type LogDemuxerCircuit =
+    ZkSyncUniformCircuitInstance<GoldilocksField, LogDemuxInstanceSynthesisFunction>;
 pub type Keccak256RoundFunctionCircuit<F, R> =
     ZkSyncUniformCircuitInstance<F, Keccak256RoundFunctionInstanceSynthesisFunction<F, R>>;
 pub type Sha256RoundFunctionCircuit<F, R> =
@@ -202,17 +202,14 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
     }
 }
 
+type F = GoldilocksField;
+type R = Poseidon2Goldilocks;
+
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone(bound = ""))]
 #[serde(bound = "")]
-pub enum ZkSyncBaseLayerCircuit<
-    F: SmallField,
-    W: WitnessOracle<F>,
-    R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-        + AlgebraicRoundFunction<F, 8, 12, 4>
-        + serde::Serialize
-        + serde::de::DeserializeOwned,
-> where
+pub enum ZkSyncBaseLayerCircuit
+where
     [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
@@ -221,10 +218,10 @@ pub enum ZkSyncBaseLayerCircuit<
     [(); <ExecutionContextRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <TimestampedStorageLogRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
 {
-    MainVM(VMMainCircuit<F, W, R>),
+    MainVM(VMMainCircuit),
     CodeDecommittmentsSorter(CodeDecommittsSorterCircuit<F, R>),
     CodeDecommitter(CodeDecommitterCircuit<F, R>),
-    LogDemuxer(LogDemuxerCircuit<F, R>),
+    LogDemuxer(LogDemuxerCircuit),
     KeccakRoundFunction(Keccak256RoundFunctionCircuit<F, R>),
     Sha256RoundFunction(Sha256RoundFunctionCircuit<F, R>),
     ECRecover(ECRecoverFunctionCircuit<F, R>),
@@ -236,14 +233,7 @@ pub enum ZkSyncBaseLayerCircuit<
     L1MessagesHasher(L1MessagesHasherCircuit<F, R>),
 }
 
-impl<
-        F: SmallField,
-        W: WitnessOracle<F>,
-        R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-            + AlgebraicRoundFunction<F, 8, 12, 4>
-            + serde::Serialize
-            + serde::de::DeserializeOwned,
-    > ZkSyncBaseLayerCircuit<F, W, R>
+impl ZkSyncBaseLayerCircuit
 where
     [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
