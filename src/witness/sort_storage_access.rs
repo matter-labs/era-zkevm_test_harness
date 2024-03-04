@@ -1,12 +1,11 @@
-use crate::encodings::log_query::*;
-use crate::ethereum_types::H160;
-use crate::ethereum_types::U256;
 use derivative::Derivative;
-use rayon::prelude::*;
+use rayon::prelude::ParallelSliceMut;
 use std::cmp::Ordering;
 use std::iter::IntoIterator;
 use zk_evm::aux_structures::LogQuery;
 use zk_evm::aux_structures::Timestamp;
+use zk_evm::ethereum_types::H160;
+use zk_evm::ethereum_types::U256;
 
 #[derive(Derivative)]
 #[derivative(Default(bound = ""), Debug)]
