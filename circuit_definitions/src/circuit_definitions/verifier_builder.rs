@@ -14,30 +14,30 @@ pub type EIP4844VerifierBuilder<F, R> =
 
 pub type VMMainCircuitVerifierBuilder =
     CircuitBuilderProxy<GoldilocksField, VmMainInstanceSynthesisFunction>;
-pub type CodeDecommittsSorterVerifierBuilder<F, R> =
-    CircuitBuilderProxy<F, CodeDecommittmentsSorterSynthesisFunction<F, R>>;
-pub type CodeDecommitterVerifierBuilder<F, R> =
-    CircuitBuilderProxy<F, CodeDecommitterInstanceSynthesisFunction<F, R>>;
+pub type CodeDecommittsSorterVerifierBuilder =
+    CircuitBuilderProxy<GoldilocksField, CodeDecommittmentsSorterSynthesisFunction>;
+pub type CodeDecommitterVerifierBuilder =
+    CircuitBuilderProxy<GoldilocksField, CodeDecommitterInstanceSynthesisFunction>;
 pub type LogDemuxerVerifierBuilder =
     CircuitBuilderProxy<GoldilocksField, LogDemuxInstanceSynthesisFunction>;
-pub type Keccak256RoundFunctionVerifierBuilder<F, R> =
-    CircuitBuilderProxy<F, Keccak256RoundFunctionInstanceSynthesisFunction<F, R>>;
-pub type Sha256RoundFunctionVerifierBuilder<F, R> =
-    CircuitBuilderProxy<F, Sha256RoundFunctionInstanceSynthesisFunction<F, R>>;
-pub type ECRecoverFunctionVerifierBuilder<F, R> =
-    CircuitBuilderProxy<F, ECRecoverFunctionInstanceSynthesisFunction<F, R>>;
-pub type RAMPermutationVerifierBuilder<F, R> =
-    CircuitBuilderProxy<F, RAMPermutationInstanceSynthesisFunction<F, R>>;
-pub type StorageSorterVerifierBuilder<F, R> =
-    CircuitBuilderProxy<F, StorageSortAndDedupInstanceSynthesisFunction<F, R>>;
-pub type StorageApplicationVerifierBuilder<F, R> =
-    CircuitBuilderProxy<F, StorageApplicationInstanceSynthesisFunction<F, R>>;
-pub type EventsSorterVerifierBuilder<F, R> =
-    CircuitBuilderProxy<F, EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction<F, R>>;
-pub type L1MessagesSorterVerifierBuilder<F, R> =
-    CircuitBuilderProxy<F, EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction<F, R>>;
-pub type L1MessagesHaherVerifierBuilder<F, R> =
-    CircuitBuilderProxy<F, LinearHasherInstanceSynthesisFunction<F, R>>;
+pub type Keccak256RoundFunctionVerifierBuilder =
+    CircuitBuilderProxy<GoldilocksField, Keccak256RoundFunctionInstanceSynthesisFunction>;
+pub type Sha256RoundFunctionVerifierBuilder =
+    CircuitBuilderProxy<GoldilocksField, Sha256RoundFunctionInstanceSynthesisFunction>;
+pub type ECRecoverFunctionVerifierBuilder =
+    CircuitBuilderProxy<GoldilocksField, ECRecoverFunctionInstanceSynthesisFunction>;
+pub type RAMPermutationVerifierBuilder =
+    CircuitBuilderProxy<GoldilocksField, RAMPermutationInstanceSynthesisFunction>;
+pub type StorageSorterVerifierBuilder =
+    CircuitBuilderProxy<GoldilocksField, StorageSortAndDedupInstanceSynthesisFunction>;
+pub type StorageApplicationVerifierBuilder =
+    CircuitBuilderProxy<GoldilocksField, StorageApplicationInstanceSynthesisFunction>;
+pub type EventsSorterVerifierBuilder =
+    CircuitBuilderProxy<GoldilocksField, EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction>;
+pub type L1MessagesSorterVerifierBuilder =
+    CircuitBuilderProxy<GoldilocksField, EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction>;
+pub type L1MessagesHaherVerifierBuilder =
+    CircuitBuilderProxy<GoldilocksField, LinearHasherInstanceSynthesisFunction>;
 
 type F = GoldilocksField;
 type EXT = GoldilocksExt2;
@@ -62,40 +62,40 @@ where
             VMMainCircuitVerifierBuilder::dyn_verifier_builder()
         }
         i if i == BaseLayerCircuitType::DecommitmentsFilter as u8 => {
-            CodeDecommittsSorterVerifierBuilder::<F, R>::dyn_verifier_builder()
+            CodeDecommittsSorterVerifierBuilder::dyn_verifier_builder()
         }
         i if i == BaseLayerCircuitType::Decommiter as u8 => {
-            CodeDecommitterVerifierBuilder::<F, R>::dyn_verifier_builder()
+            CodeDecommitterVerifierBuilder::dyn_verifier_builder()
         }
         i if i == BaseLayerCircuitType::LogDemultiplexer as u8 => {
             LogDemuxerVerifierBuilder::dyn_verifier_builder()
         }
         i if i == BaseLayerCircuitType::KeccakPrecompile as u8 => {
-            Keccak256RoundFunctionVerifierBuilder::<F, R>::dyn_verifier_builder()
+            Keccak256RoundFunctionVerifierBuilder::dyn_verifier_builder()
         }
         i if i == BaseLayerCircuitType::Sha256Precompile as u8 => {
-            Sha256RoundFunctionVerifierBuilder::<F, R>::dyn_verifier_builder()
+            Sha256RoundFunctionVerifierBuilder::dyn_verifier_builder()
         }
         i if i == BaseLayerCircuitType::EcrecoverPrecompile as u8 => {
-            ECRecoverFunctionVerifierBuilder::<F, R>::dyn_verifier_builder()
+            ECRecoverFunctionVerifierBuilder::dyn_verifier_builder()
         }
         i if i == BaseLayerCircuitType::RamValidation as u8 => {
-            RAMPermutationVerifierBuilder::<F, R>::dyn_verifier_builder()
+            RAMPermutationVerifierBuilder::dyn_verifier_builder()
         }
         i if i == BaseLayerCircuitType::StorageFilter as u8 => {
-            StorageSorterVerifierBuilder::<F, R>::dyn_verifier_builder()
+            StorageSorterVerifierBuilder::dyn_verifier_builder()
         }
         i if i == BaseLayerCircuitType::StorageApplicator as u8 => {
-            StorageApplicationVerifierBuilder::<F, R>::dyn_verifier_builder()
+            StorageApplicationVerifierBuilder::dyn_verifier_builder()
         }
         i if i == BaseLayerCircuitType::EventsRevertsFilter as u8 => {
-            EventsSorterVerifierBuilder::<F, R>::dyn_verifier_builder()
+            EventsSorterVerifierBuilder::dyn_verifier_builder()
         }
         i if i == BaseLayerCircuitType::L1MessagesRevertsFilter as u8 => {
-            L1MessagesSorterVerifierBuilder::<F, R>::dyn_verifier_builder()
+            L1MessagesSorterVerifierBuilder::dyn_verifier_builder()
         }
         i if i == BaseLayerCircuitType::L1MessagesHasher as u8 => {
-            L1MessagesHaherVerifierBuilder::<F, R>::dyn_verifier_builder()
+            L1MessagesHaherVerifierBuilder::dyn_verifier_builder()
         }
         _ => {
             panic!("unknown circuit type = {}", circuit_type);
@@ -124,40 +124,40 @@ where
             VMMainCircuitVerifierBuilder::dyn_recursive_verifier_builder()
         }
         i if i == BaseLayerCircuitType::DecommitmentsFilter as u8 => {
-            CodeDecommittsSorterVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
+            CodeDecommittsSorterVerifierBuilder::dyn_recursive_verifier_builder()
         }
         i if i == BaseLayerCircuitType::Decommiter as u8 => {
-            CodeDecommitterVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
+            CodeDecommitterVerifierBuilder::dyn_recursive_verifier_builder()
         }
         i if i == BaseLayerCircuitType::LogDemultiplexer as u8 => {
             LogDemuxerVerifierBuilder::dyn_recursive_verifier_builder()
         }
         i if i == BaseLayerCircuitType::KeccakPrecompile as u8 => {
-            Keccak256RoundFunctionVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
+            Keccak256RoundFunctionVerifierBuilder::dyn_recursive_verifier_builder()
         }
         i if i == BaseLayerCircuitType::Sha256Precompile as u8 => {
-            Sha256RoundFunctionVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
+            Sha256RoundFunctionVerifierBuilder::dyn_recursive_verifier_builder()
         }
         i if i == BaseLayerCircuitType::EcrecoverPrecompile as u8 => {
-            ECRecoverFunctionVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
+            ECRecoverFunctionVerifierBuilder::dyn_recursive_verifier_builder()
         }
         i if i == BaseLayerCircuitType::RamValidation as u8 => {
-            RAMPermutationVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
+            RAMPermutationVerifierBuilder::dyn_recursive_verifier_builder()
         }
         i if i == BaseLayerCircuitType::StorageFilter as u8 => {
-            StorageSorterVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
+            StorageSorterVerifierBuilder::dyn_recursive_verifier_builder()
         }
         i if i == BaseLayerCircuitType::StorageApplicator as u8 => {
-            StorageApplicationVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
+            StorageApplicationVerifierBuilder::dyn_recursive_verifier_builder()
         }
         i if i == BaseLayerCircuitType::EventsRevertsFilter as u8 => {
-            EventsSorterVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
+            EventsSorterVerifierBuilder::dyn_recursive_verifier_builder()
         }
         i if i == BaseLayerCircuitType::L1MessagesRevertsFilter as u8 => {
-            L1MessagesSorterVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
+            L1MessagesSorterVerifierBuilder::dyn_recursive_verifier_builder()
         }
         i if i == BaseLayerCircuitType::L1MessagesHasher as u8 => {
-            L1MessagesHaherVerifierBuilder::<F, R>::dyn_recursive_verifier_builder()
+            L1MessagesHaherVerifierBuilder::dyn_recursive_verifier_builder()
         }
         _ => {
             panic!("unknown circuit type = {}", circuit_type);
