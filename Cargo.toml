@@ -6,18 +6,6 @@ authors = ["Alex Vlasov <alex.m.vlasov@gmail.com>", "Konstantin Panarin <kp@matt
 
 resolver = "2"
 
-# [[bin]]
-# name = "circuit_limit_estimator"
-# path = "src/circuit_limit_estimator/main.rs"
-
-# [[bin]]
-# name = "circuit_synthesis_performance_test"
-# path = "src/circuit_synthesis_performance_test/main.rs"
-
- [[bin]]
- name = "geometry_config_generator"
- path = "src/geometry_config_generator/main.rs"
-
 [dependencies]
 circuit_definitions = {path = "./circuit_definitions"}
 

@@ -20,6 +20,9 @@ use crate::boojum::gadgets::queue::QueueTailState;
 use crate::boojum::gadgets::queue::QueueTailStateWitness;
 use crate::boojum::gadgets::traits::encodable::CircuitEncodable;
 use crate::boojum::gadgets::traits::round_function::*;
+use crate::utils::calldata_to_aligned_data;
+use crate::utils::finalize_queue_state;
+use crate::utils::finalized_queue_state_as_bytes;
 use crate::zk_evm::aux_structures::LogQuery;
 use crate::zkevm_circuits::base_structures::vm_state::GlobalContextWitness;
 use crate::zkevm_circuits::base_structures::vm_state::VmLocalStateWitness;
@@ -27,27 +30,8 @@ use crate::zkevm_circuits::base_structures::vm_state::{
     FULL_SPONGE_QUEUE_STATE_WIDTH, QUEUE_STATE_WIDTH,
 };
 use crate::zkevm_circuits::fsm_input_output::circuit_inputs::INPUT_OUTPUT_COMMITMENT_LENGTH;
-use circuit_definitions::encodings::*;
-use circuit_definitions::ZkSyncDefaultRoundFunction;
 
 use super::*;
-
-pub fn log_queries_into_states<
-    F: SmallField,
-    R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
->(
-    queries: impl Iterator<Item = LogQuery>,
-    round_function: &R,
-) -> Vec<LogQueueState<F>> {
-    let mut result = vec![];
-    let mut simulator = LogQueueSimulator::<F>::empty();
-    for q in queries {
-        let (_, intermediate_info) = simulator.push_and_output_intermediate_data(q, round_function);
-        result.push(intermediate_info);
-    }
-
-    result
-}
 
 pub fn transform_queue_state<F: SmallField, const N: usize, const M: usize>(
     witness_state: QueueIntermediateStates<F, QUEUE_STATE_WIDTH, N, M>,
@@ -117,7 +101,13 @@ pub fn take_sponge_like_queue_state_from_simulator<
 
 use crate::boojum::gadgets::queue::CircuitQueueWitness;
 use circuit_definitions::encodings::CircuitEquivalentReflection;
+use circuit_definitions::encodings::FullWidthQueueIntermediateStates;
+use circuit_definitions::encodings::FullWidthQueueSimulator;
+use circuit_definitions::encodings::LogQueueSimulator;
+use circuit_definitions::encodings::LogQueueState;
 use circuit_definitions::encodings::OutOfCircuitFixedLengthEncodable;
+use circuit_definitions::encodings::QueueIntermediateStates;
+use circuit_definitions::encodings::QueueSimulator;
 use std::collections::VecDeque;
 use std::sync::RwLock;
 
@@ -257,196 +247,6 @@ where
     let public_input = input_commitment.witness_hook(&*cs)().unwrap();
 
     (public_input, compact_form_witness)
-}
-
-use crate::witness::oracle::VmInCircuitAuxilaryParameters;
-
-pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
-    vm_state: &zk_evm::vm_state::VmLocalState,
-    aux_params: &VmInCircuitAuxilaryParameters<F>,
-) -> VmLocalStateWitness<F> {
-    use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
-    use crate::zkevm_circuits::base_structures::vm_state::VmLocalState;
-
-    let mut hidden_fsm = VmLocalState::placeholder_witness();
-    // depth and state encoding
-    hidden_fsm.callstack.stack_sponge_state = aux_params.callstack_state.0;
-    hidden_fsm.callstack.context_stack_depth = vm_state.callstack.depth() as u32;
-
-    // non-saved part
-    hidden_fsm
-        .callstack
-        .current_context
-        .log_queue_forward_part_length = aux_params.storage_log_queue_state.tail.length;
-    hidden_fsm.callstack.current_context.log_queue_forward_tail =
-        aux_params.storage_log_queue_state.tail.tail;
-    // saved part
-
-    let ctx = &mut hidden_fsm.callstack.current_context;
-    let out_of_circuit_context = &vm_state.callstack.current;
-
-    // memory pages
-    ctx.saved_context.base_page = out_of_circuit_context.base_memory_page.0;
-    ctx.saved_context.code_page = out_of_circuit_context.code_page.0;
-
-    // memory sizes
-    ctx.saved_context.heap_upper_bound = out_of_circuit_context.heap_bound;
-    ctx.saved_context.aux_heap_upper_bound = out_of_circuit_context.aux_heap_bound;
-
-    // context composite
-    ctx.saved_context.context_u128_value_composite =
-        u128_as_u32_le(out_of_circuit_context.context_u128_value);
-
-    // various counters
-    ctx.saved_context.pc = out_of_circuit_context.pc;
-    ctx.saved_context.sp = out_of_circuit_context.sp;
-    ctx.saved_context.exception_handler_loc = out_of_circuit_context.exception_handler_location;
-    ctx.saved_context.ergs_remaining = out_of_circuit_context.ergs_remaining;
-
-    // addresses
-    ctx.saved_context.code_address = out_of_circuit_context.code_address;
-    ctx.saved_context.this = out_of_circuit_context.this_address;
-    ctx.saved_context.caller = out_of_circuit_context.msg_sender;
-
-    // flags
-    ctx.saved_context.is_static_execution = out_of_circuit_context.is_static;
-    ctx.saved_context.is_local_call = out_of_circuit_context.is_local_frame;
-    ctx.saved_context.is_kernel_mode = out_of_circuit_context.is_kernel_mode();
-
-    drop(ctx);
-
-    // storage log specific part
-    hidden_fsm
-        .callstack
-        .current_context
-        .saved_context
-        .reverted_queue_head = aux_params.current_frame_rollback_queue_head;
-    hidden_fsm
-        .callstack
-        .current_context
-        .saved_context
-        .reverted_queue_tail = aux_params.current_frame_rollback_queue_tail;
-    hidden_fsm
-        .callstack
-        .current_context
-        .saved_context
-        .reverted_queue_segment_len = aux_params.current_frame_rollback_queue_segment_length;
-
-    use crate::zkevm_circuits::base_structures::vm_state::ArithmeticFlagsPortWitness;
-
-    // arithmetic flags
-    hidden_fsm.flags = ArithmeticFlagsPortWitness {
-        overflow_or_less_than: vm_state.flags.overflow_or_less_than_flag,
-        equal: vm_state.flags.equality_flag,
-        greater_than: vm_state.flags.greater_than_flag,
-    };
-
-    // registers
-    assert_eq!(hidden_fsm.registers.len(), vm_state.registers.len());
-    for (dst, src) in hidden_fsm
-        .registers
-        .iter_mut()
-        .zip(vm_state.registers.iter())
-    {
-        dst.value = src.value;
-        dst.is_pointer = src.is_pointer;
-    }
-
-    hidden_fsm.previous_code_word = vm_state.previous_code_word;
-
-    // auxilary counters and information
-
-    hidden_fsm.timestamp = vm_state.timestamp;
-    hidden_fsm.memory_page_counter = vm_state.memory_page_counter;
-    hidden_fsm.tx_number_in_block = vm_state.tx_number_in_block as u32;
-    hidden_fsm.previous_code_page = vm_state.previous_code_memory_page.0;
-    hidden_fsm.previous_super_pc = vm_state.previous_super_pc;
-    hidden_fsm.ergs_per_pubdata_byte = vm_state.current_ergs_per_pubdata_byte;
-    hidden_fsm.pending_exception = vm_state.pending_exception;
-
-    hidden_fsm.context_composite_u128 = u128_as_u32_le(vm_state.context_u128_register);
-
-    hidden_fsm.memory_queue_state = aux_params.memory_queue_state.tail.tail;
-    hidden_fsm.memory_queue_length = aux_params.memory_queue_state.tail.length;
-
-    hidden_fsm.code_decommittment_queue_state = aux_params.decommittment_queue_state.tail.tail;
-    hidden_fsm.code_decommittment_queue_length = aux_params.decommittment_queue_state.tail.length;
-
-    hidden_fsm
-}
-
-use crate::witness::oracle::VmInstanceWitness;
-use crate::zkevm_circuits::fsm_input_output::circuit_inputs::main_vm::VmCircuitWitness;
-use crate::zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
-
-pub fn vm_instance_witness_to_circuit_formal_input<F: SmallField, O: WitnessOracle<F>>(
-    witness: VmInstanceWitness<F, O>,
-    is_first: bool,
-    is_last: bool,
-    global_context: GlobalContextWitness<F>,
-) -> VmCircuitWitness<F, O> {
-    let VmInstanceWitness {
-        initial_state,
-        witness_oracle,
-        auxilary_initial_parameters,
-        cycles_range: _,
-
-        // final state for test purposes
-        final_state,
-        auxilary_final_parameters,
-    } = witness;
-
-    use crate::witness::oracle::VmInCircuitAuxilaryParameters;
-
-    let hidden_fsm_input =
-        vm_instance_witness_to_vm_formal_state(&initial_state, &auxilary_initial_parameters);
-
-    let hidden_fsm_output =
-        vm_instance_witness_to_vm_formal_state(&final_state, &auxilary_final_parameters);
-
-    use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
-    use crate::zkevm_circuits::fsm_input_output::circuit_inputs::main_vm::*;
-
-    let mut observable_input = VmInputData::placeholder_witness();
-    if is_first {
-        let VmInCircuitAuxilaryParameters {
-            decommittment_queue_state,
-            memory_queue_state,
-            current_frame_rollback_queue_tail,
-            ..
-        } = auxilary_initial_parameters;
-
-        observable_input.rollback_queue_tail_for_block = current_frame_rollback_queue_tail;
-        observable_input.memory_queue_initial_state = memory_queue_state.tail;
-        observable_input.decommitment_queue_initial_state = decommittment_queue_state.tail;
-        observable_input.per_block_context = global_context;
-    }
-
-    let mut observable_output = VmOutputData::placeholder_witness();
-    if is_last {
-        let VmInCircuitAuxilaryParameters {
-            decommittment_queue_state,
-            memory_queue_state,
-            storage_log_queue_state,
-            ..
-        } = auxilary_final_parameters;
-
-        observable_output.memory_queue_final_state = memory_queue_state;
-        observable_output.decommitment_queue_final_state = decommittment_queue_state;
-        observable_output.log_queue_final_state = storage_log_queue_state;
-    }
-
-    VmCircuitWitness {
-        closed_form_input: VmCircuitInputOutputWitness {
-            start_flag: is_first,
-            completion_flag: is_last,
-            observable_input,
-            observable_output,
-            hidden_fsm_input,
-            hidden_fsm_output,
-        },
-        witness_oracle,
-    }
 }
 
 pub fn produce_fs_challenges<
@@ -699,9 +499,9 @@ pub fn initial_heap_content_commitment<
 }
 
 pub fn initial_heap_content_commitment_fixed(bootloader_heap_data: &Vec<u8>) -> [u8; 32] {
-    initial_heap_content_commitment::<GoldilocksField, ZkSyncDefaultRoundFunction>(
+    initial_heap_content_commitment::<GoldilocksField, Poseidon2Goldilocks>(
         bootloader_heap_data,
-        &ZkSyncDefaultRoundFunction::default(),
+        &Poseidon2Goldilocks::default(),
     )
 }
 
@@ -727,8 +527,8 @@ pub fn events_queue_commitment<
 }
 
 pub fn events_queue_commitment_fixed(sorted_and_deduplicated_events: &Vec<LogQuery>) -> [u8; 32] {
-    events_queue_commitment::<GoldilocksField, ZkSyncDefaultRoundFunction>(
+    events_queue_commitment::<GoldilocksField, Poseidon2Goldilocks>(
         sorted_and_deduplicated_events,
-        &ZkSyncDefaultRoundFunction::default(),
+        &Poseidon2Goldilocks::default(),
     )
 }

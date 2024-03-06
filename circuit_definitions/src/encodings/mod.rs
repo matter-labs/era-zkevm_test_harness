@@ -16,7 +16,7 @@ pub trait OutOfCircuitFixedLengthEncodable<F: SmallField, const N: usize>: Clone
 }
 
 // all encodings must match circuit counterparts
-pub mod callstack_entry;
+//pub mod callstack_entry;
 pub mod decommittment_request;
 pub mod log_query;
 pub mod memory_query;

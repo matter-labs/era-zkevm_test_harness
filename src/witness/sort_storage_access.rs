@@ -17,6 +17,7 @@ pub struct StorageSlotHistoryKeeper<L: LogQueryLike> {
     pub did_read_at_depth_zero: bool,
 }
 
+// REMAIN
 pub fn sort_storage_access_queries<'a, L: LogQueryLike, I: IntoIterator<Item = &'a L>>(
     unsorted_storage_queries: I,
 ) -> (Vec<LogQueryLikeWithExtendedEnumeration<L>>, Vec<L>) {
