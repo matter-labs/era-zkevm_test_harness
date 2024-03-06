@@ -710,7 +710,7 @@ pub fn verify_compression_layer_proof<POW: PoWRunner>(
 }
 
 pub fn create_eip4844_setup_data(
-    circuit: EIP4844Circuit<GoldilocksField, ZkSyncDefaultRoundFunction>,
+    circuit: EIP4844Circuit,
     worker: &Worker,
     fri_lde_factor: usize,
     merkle_tree_cap_size: usize,
@@ -761,7 +761,7 @@ pub fn create_eip4844_setup_data(
 }
 
 pub fn prove_eip4844_circuit<POW: PoWRunner>(
-    circuit: EIP4844Circuit<GoldilocksField, ZkSyncDefaultRoundFunction>,
+    circuit: EIP4844Circuit,
     worker: &Worker,
     proof_config: ProofConfig,
     setup_base: &SetupBaseStorage<F, P>,
@@ -808,12 +808,10 @@ pub fn prove_eip4844_circuit<POW: PoWRunner>(
 }
 
 pub fn verify_eip4844_proof<POW: PoWRunner>(
-    circuit: &EIP4844Circuit<GoldilocksField, ZkSyncDefaultRoundFunction>,
     proof: &Proof<F, H, EXT>,
     vk: &VerificationKey<F, H>,
 ) -> bool {
-    let verifier_builder =
-        EIP4844VerifierBuilder::<F, ZkSyncDefaultRoundFunction>::dyn_verifier_builder();
+    let verifier_builder = EIP4844VerifierBuilder::dyn_verifier_builder();
     let verifier = verifier_builder.create_verifier();
     // let verifier = verifier_builder.create_dyn_verifier();
     verifier.verify::<H, TR, POW>((), vk, proof)

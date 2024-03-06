@@ -298,7 +298,7 @@ pub fn generate_eip4844_circuit_and_witness(
     blob: Vec<u8>,
     trusted_setup_path: &str,
 ) -> (
-    EIP4844Circuit<GoldilocksField, ZkSyncDefaultRoundFunction>,
+    EIP4844Circuit,
     EIP4844CircuitInstanceWitness<GoldilocksField>,
 ) {
     let (blob_arr, linear_hash, versioned_hash, output_hash) =

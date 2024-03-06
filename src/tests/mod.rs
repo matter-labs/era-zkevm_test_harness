@@ -97,9 +97,7 @@ pub(crate) fn save_predeployed_contracts(
 
 // NOTE: this is here while the EIP circuit isn't considered base layer, and should be removed once
 // it is made a base layer circuit in a later version.
-pub(crate) fn eip4844_test_circuit(
-    circuit: EIP4844Circuit<GoldilocksField, ZkSyncDefaultRoundFunction>,
-) {
+pub(crate) fn eip4844_test_circuit(circuit: EIP4844Circuit) {
     use crate::boojum::config::DevCSConfig;
     use crate::boojum::cs::cs_builder::new_builder;
     use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;

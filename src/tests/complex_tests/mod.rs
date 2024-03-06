@@ -1067,7 +1067,7 @@ fn run_and_try_create_witness_inner(
                 &finalization_hint,
             );
 
-            let is_valid = verify_eip4844_proof::<NoPow>(&circuit, &proof, &vk);
+            let is_valid = verify_eip4844_proof::<NoPow>(&proof, &vk);
             assert!(is_valid);
 
             eip4844_proofs.push(proof);

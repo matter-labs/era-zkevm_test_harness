@@ -14,8 +14,7 @@ pub struct ECRecoverFunctionInstanceSynthesisFunction {
 
 use zkevm_circuits::ecrecover::input::*;
 use zkevm_circuits::ecrecover::{
-    decomp_table::*, ecrecover_function_entry_point, naf_abs_div2_table::*,
-    secp256k1::fixed_base_mul_table::*,
+    ecrecover_function_entry_point, secp256k1::fixed_base_mul_table::*,
 };
 
 impl CircuitBuilder<F> for ECRecoverFunctionInstanceSynthesisFunction

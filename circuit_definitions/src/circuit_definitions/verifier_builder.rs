@@ -2,15 +2,12 @@ use snark_wrapper::boojum::field::goldilocks::{GoldilocksExt2, GoldilocksField};
 
 use super::*;
 
-use crate::aux_definitions::witness_oracle::VmWitnessOracle;
-
 use crate::boojum::cs::traits::circuit::CircuitBuilderProxy;
 use crate::circuit_definitions::base_layer::*;
 
 use crate::circuit_definitions::eip4844::EIP4844InstanceSynthesisFunction;
 
-pub type EIP4844VerifierBuilder<F, R> =
-    CircuitBuilderProxy<F, EIP4844InstanceSynthesisFunction<F, R>>;
+pub type EIP4844VerifierBuilder = CircuitBuilderProxy<F, EIP4844InstanceSynthesisFunction>;
 
 pub type VMMainCircuitVerifierBuilder =
     CircuitBuilderProxy<GoldilocksField, VmMainInstanceSynthesisFunction>;
