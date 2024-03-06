@@ -40,8 +40,6 @@ pub fn recursion_layer_proof_config() -> ProofConfig {
     }
 }
 
-//pub mod aux_definitions;
-//pub mod circuit_definitions;
 pub mod encodings;
 
 use crate::boojum::implementations::poseidon2::Poseidon2Goldilocks;

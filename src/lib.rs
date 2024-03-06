@@ -19,9 +19,11 @@ use circuit_definitions::zk_evm;
 use circuit_definitions::zkevm_circuits;
 
 mod geometry_config;
-pub use geometry_config::get_geometry_config;
-
+mod toolset;
+mod utils;
 mod witness;
+
+pub use geometry_config::get_geometry_config;
 
 pub use toolset::GeometryConfig;
 pub use witness::sort_storage_access::sort_storage_access_queries;
@@ -30,8 +32,5 @@ pub use witness::utils::initial_heap_content_commitment;
 pub use witness::utils::initial_heap_content_commitment_fixed;
 
 pub use crate::zk_evm::ethereum_types;
-mod utils;
-
-mod toolset;
 
 pub const INITIAL_MONOTONIC_CYCLE_COUNTER: u32 = 1024;

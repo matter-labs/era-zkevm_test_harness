@@ -16,14 +16,11 @@ pub trait OutOfCircuitFixedLengthEncodable<F: SmallField, const N: usize>: Clone
 }
 
 // all encodings must match circuit counterparts
-//pub mod callstack_entry;
-pub mod decommittment_request;
 pub mod log_query;
 pub mod memory_query;
-pub mod recursion_request;
-pub mod state_diff_record;
 
-pub use self::log_query::*;
+pub use self::log_query::{LogQueryLike, LogQueryLikeWithExtendedEnumeration, LogQueueSimulator};
+pub use self::memory_query::MemoryQueueSimulator;
 
 pub(crate) fn make_round_function_pairs<F: SmallField, const N: usize, const ROUNDS: usize>(
     initial: [F; N],
