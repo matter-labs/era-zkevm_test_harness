@@ -77,26 +77,6 @@ pub struct LogQueryLikeWithExtendedEnumeration<L: LogQueryLike> {
 
 use super::*;
 
-use zkevm_circuits::storage_validity_by_grand_product::input::PACKED_KEY_LENGTH;
-
-pub fn comparison_key(query: &LogQuery) -> Key<PACKED_KEY_LENGTH> {
-    let key = decompose_u256_as_u32x8(query.key);
-    let address = decompose_address_as_u32x5(query.address);
-
-    let le_words = [
-        key[0], key[1], key[2], key[3], key[4], key[5], key[6], key[7], address[0], address[1],
-        address[2], address[3], address[4],
-    ];
-
-    Key(le_words)
-}
-
-pub fn event_comparison_key(query: &LogQuery) -> Key<1> {
-    let le_words = [query.timestamp.0];
-
-    Key(le_words)
-}
-
 use zkevm_circuits::base_structures::log_query::LOG_QUERY_PACKED_WIDTH;
 
 impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, LOG_QUERY_PACKED_WIDTH> for LogQuery {
@@ -435,22 +415,6 @@ pub type LogQueueSimulator<F> = QueueSimulator<
     LOG_QUERY_PACKED_WIDTH,
     LOG_QUERY_ABSORBTION_ROUNDS,
 >;
-pub type LogQueueState<F> = QueueIntermediateStates<
-    F,
-    QUEUE_STATE_WIDTH,
-    FULL_SPONGE_QUEUE_STATE_WIDTH,
-    LOG_QUERY_ABSORBTION_ROUNDS,
->;
-
-pub type LogWithExtendedEnumerationQueueSimulator<F> = QueueSimulator<
-    F,
-    LogQueryWithExtendedEnumeration,
-    QUEUE_STATE_WIDTH,
-    LOG_QUERY_PACKED_WIDTH,
-    LOG_QUERY_ABSORBTION_ROUNDS,
->;
-// pub type LogQueueState<F> = QueueIntermediateStates<F, QUEUE_STATE_WIDTH, FULL_SPONGE_QUEUE_STATE_WIDTH, LOG_QUERY_ABSORBTION_ROUNDS>;
-
 pub fn log_query_into_circuit_log_query_witness<F: SmallField>(
     query: &LogQuery,
 ) -> <zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocatable<F>>::Witness {

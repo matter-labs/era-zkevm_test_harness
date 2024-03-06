@@ -4,7 +4,6 @@ use crate::boojum::algebraic_props::round_function::{
 use crate::boojum::field::SmallField;
 use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 use crate::boojum::gadgets::traits::round_function::*;
-use crate::boojum::gadgets::u160::decompose_address_as_u32x5;
 use crate::boojum::gadgets::u256::decompose_u256_as_u32x8;
 use derivative::Derivative;
 use std::collections::VecDeque;
@@ -16,14 +15,10 @@ pub trait OutOfCircuitFixedLengthEncodable<F: SmallField, const N: usize>: Clone
 }
 
 // all encodings must match circuit counterparts
-pub mod callstack_entry;
-pub mod decommittment_request;
-pub mod log_query;
+mod log_query;
 pub mod memory_query;
-pub mod recursion_request;
-pub mod state_diff_record;
 
-pub use self::log_query::*;
+pub use self::log_query::{LogQueryLike, LogQueryLikeWithExtendedEnumeration, LogQueueSimulator};
 
 pub(crate) fn make_round_function_pairs<F: SmallField, const N: usize, const ROUNDS: usize>(
     initial: [F; N],
