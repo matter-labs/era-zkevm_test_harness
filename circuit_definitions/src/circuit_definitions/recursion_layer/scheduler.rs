@@ -9,7 +9,6 @@ use crate::boojum::gadgets::recursion::circuit_pow::*;
 use crate::boojum::gadgets::tables::*;
 use crate::circuit_definitions::base_layer::TARGET_CIRCUIT_TRACE_LENGTH;
 use crate::circuit_definitions::implementations::verifier::VerificationKeyCircuitGeometry;
-use crate::circuit_definitions::traits::circuit::ErasedBuilderForRecursiveVerifier;
 use crate::circuit_definitions::verifier_builder::EIP4844VerifierBuilder;
 use crate::ProofConfig;
 use zkevm_circuits::base_structures::recursion_query::RecursionQuery;
@@ -204,7 +203,7 @@ where
             NodeLayerCircuitBuilder::<POW>::dyn_recursive_verifier_builder::<EXT, CS>();
 
         let eip4844_verifier_builder = if eip4844_proof_config.is_some() {
-            Some(EIP4844VerifierBuilder::<F, ZkSyncDefaultRoundFunction>::dyn_recursive_verifier_builder())
+            Some(EIP4844VerifierBuilder::dyn_recursive_verifier_builder())
         } else {
             None
         };

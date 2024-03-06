@@ -92,35 +92,26 @@ use crate::boojum::gadgets::traits::allocatable::CSAllocatableExt;
 use crate::boojum::gadgets::traits::round_function::*;
 
 pub struct BlockFirstAndLastBasicCircuits {
-    pub main_vm_circuits: FirstAndLastCircuit<
-        VmMainInstanceSynthesisFunction<Field, VmWitnessOracle<Field>, RoundFunction>,
-    >,
+    pub main_vm_circuits: FirstAndLastCircuit<VmMainInstanceSynthesisFunction>,
     pub code_decommittments_sorter_circuits:
-        FirstAndLastCircuit<CodeDecommittmentsSorterSynthesisFunction<Field, RoundFunction>>,
-    pub code_decommitter_circuits:
-        FirstAndLastCircuit<CodeDecommitterInstanceSynthesisFunction<Field, RoundFunction>>,
-    pub log_demux_circuits:
-        FirstAndLastCircuit<LogDemuxInstanceSynthesisFunction<Field, RoundFunction>>,
+        FirstAndLastCircuit<CodeDecommittmentsSorterSynthesisFunction>,
+    pub code_decommitter_circuits: FirstAndLastCircuit<CodeDecommitterInstanceSynthesisFunction>,
+    pub log_demux_circuits: FirstAndLastCircuit<LogDemuxInstanceSynthesisFunction>,
     pub keccak_precompile_circuits:
-        FirstAndLastCircuit<Keccak256RoundFunctionInstanceSynthesisFunction<Field, RoundFunction>>,
+        FirstAndLastCircuit<Keccak256RoundFunctionInstanceSynthesisFunction>,
     pub sha256_precompile_circuits:
-        FirstAndLastCircuit<Sha256RoundFunctionInstanceSynthesisFunction<Field, RoundFunction>>,
+        FirstAndLastCircuit<Sha256RoundFunctionInstanceSynthesisFunction>,
     pub ecrecover_precompile_circuits:
-        FirstAndLastCircuit<ECRecoverFunctionInstanceSynthesisFunction<Field, RoundFunction>>,
-    pub ram_permutation_circuits:
-        FirstAndLastCircuit<RAMPermutationInstanceSynthesisFunction<Field, RoundFunction>>,
-    pub storage_sorter_circuits:
-        FirstAndLastCircuit<StorageSortAndDedupInstanceSynthesisFunction<Field, RoundFunction>>,
+        FirstAndLastCircuit<ECRecoverFunctionInstanceSynthesisFunction>,
+    pub ram_permutation_circuits: FirstAndLastCircuit<RAMPermutationInstanceSynthesisFunction>,
+    pub storage_sorter_circuits: FirstAndLastCircuit<StorageSortAndDedupInstanceSynthesisFunction>,
     pub storage_application_circuits:
-        FirstAndLastCircuit<StorageApplicationInstanceSynthesisFunction<Field, RoundFunction>>,
-    pub events_sorter_circuits: FirstAndLastCircuit<
-        EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction<Field, RoundFunction>,
-    >,
-    pub l1_messages_sorter_circuits: FirstAndLastCircuit<
-        EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction<Field, RoundFunction>,
-    >,
-    pub l1_messages_hasher_circuits:
-        FirstAndLastCircuit<LinearHasherInstanceSynthesisFunction<Field, RoundFunction>>,
+        FirstAndLastCircuit<StorageApplicationInstanceSynthesisFunction>,
+    pub events_sorter_circuits:
+        FirstAndLastCircuit<EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction>,
+    pub l1_messages_sorter_circuits:
+        FirstAndLastCircuit<EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction>,
+    pub l1_messages_hasher_circuits: FirstAndLastCircuit<LinearHasherInstanceSynthesisFunction>,
 }
 
 pub struct FirstAndLastCircuit<S>

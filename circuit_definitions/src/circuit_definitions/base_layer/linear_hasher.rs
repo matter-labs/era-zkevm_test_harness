@@ -3,28 +3,19 @@ use derivative::*;
 use super::*;
 use crate::boojum::cs::traits::circuit::CircuitBuilder;
 
+type F = GoldilocksField;
+type R = Poseidon2Goldilocks;
+
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone, Copy, Debug, Default(bound = ""))]
-pub struct LinearHasherInstanceSynthesisFunction<
-    F: SmallField,
-    R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-        + AlgebraicRoundFunction<F, 8, 12, 4>
-        + serde::Serialize
-        + serde::de::DeserializeOwned,
-> {
+pub struct LinearHasherInstanceSynthesisFunction {
     _marker: std::marker::PhantomData<(F, R)>,
 }
 
 use zkevm_circuits::linear_hasher::input::LinearHasherCircuitInstanceWitness;
 use zkevm_circuits::linear_hasher::linear_hasher_entry_point;
 
-impl<
-        F: SmallField,
-        R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-            + AlgebraicRoundFunction<F, 8, 12, 4>
-            + serde::Serialize
-            + serde::de::DeserializeOwned,
-    > CircuitBuilder<F> for LinearHasherInstanceSynthesisFunction<F, R>
+impl CircuitBuilder<F> for LinearHasherInstanceSynthesisFunction
 where
     [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
@@ -110,13 +101,7 @@ where
     }
 }
 
-impl<
-        F: SmallField,
-        R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-            + AlgebraicRoundFunction<F, 8, 12, 4>
-            + serde::Serialize
-            + serde::de::DeserializeOwned,
-    > ZkSyncUniformSynthesisFunction<F> for LinearHasherInstanceSynthesisFunction<F, R>
+impl ZkSyncUniformSynthesisFunction<F> for LinearHasherInstanceSynthesisFunction
 where
     [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,

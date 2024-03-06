@@ -183,13 +183,7 @@ use crate::blake2::Blake2s256;
 use crate::witness::tree::*;
 
 pub fn create_artifacts_from_tracer<
-    CB: FnMut(
-        ZkSyncBaseLayerCircuit<
-            GoldilocksField,
-            VmWitnessOracle<GoldilocksField>,
-            Poseidon2Goldilocks,
-        >,
-    ),
+    CB: FnMut(ZkSyncBaseLayerCircuit),
     QSCB: FnMut(
         u64,
         RecursionQueueSimulator<GoldilocksField>,

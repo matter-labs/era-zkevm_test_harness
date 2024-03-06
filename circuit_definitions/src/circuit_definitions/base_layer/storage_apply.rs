@@ -3,28 +3,19 @@ use derivative::*;
 use super::*;
 use crate::boojum::cs::traits::circuit::CircuitBuilder;
 
+type F = GoldilocksField;
+type R = Poseidon2Goldilocks;
+
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone, Copy, Debug, Default(bound = ""))]
-pub struct StorageApplicationInstanceSynthesisFunction<
-    F: SmallField,
-    R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-        + AlgebraicRoundFunction<F, 8, 12, 4>
-        + serde::Serialize
-        + serde::de::DeserializeOwned,
-> {
+pub struct StorageApplicationInstanceSynthesisFunction {
     _marker: std::marker::PhantomData<(F, R)>,
 }
 
 use zkevm_circuits::storage_application::input::StorageApplicationCircuitInstanceWitness;
 use zkevm_circuits::storage_application::storage_applicator_entry_point;
 
-impl<
-        F: SmallField,
-        R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-            + AlgebraicRoundFunction<F, 8, 12, 4>
-            + serde::Serialize
-            + serde::de::DeserializeOwned,
-    > CircuitBuilder<F> for StorageApplicationInstanceSynthesisFunction<F, R>
+impl CircuitBuilder<F> for StorageApplicationInstanceSynthesisFunction
 where
     [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
@@ -110,13 +101,7 @@ where
     }
 }
 
-impl<
-        F: SmallField,
-        R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-            + AlgebraicRoundFunction<F, 8, 12, 4>
-            + serde::Serialize
-            + serde::de::DeserializeOwned,
-    > ZkSyncUniformSynthesisFunction<F> for StorageApplicationInstanceSynthesisFunction<F, R>
+impl ZkSyncUniformSynthesisFunction<F> for StorageApplicationInstanceSynthesisFunction
 where
     [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
