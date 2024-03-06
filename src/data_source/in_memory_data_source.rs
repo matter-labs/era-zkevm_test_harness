@@ -1,9 +1,11 @@
 use super::{BlockDataSource, SetupDataSource, SourceResult};
+use circuit_definitions::boojum::cs::implementations::setup::FinalizationHintsForProver;
 use circuit_definitions::circuit_definitions::aux_layer::{
-    ZkSyncCompressionForWrapperFinalizationHint, ZkSyncCompressionForWrapperProof,
-    ZkSyncCompressionForWrapperVerificationKey, ZkSyncCompressionLayerFinalizationHint,
-    ZkSyncCompressionLayerProof, ZkSyncCompressionLayerVerificationKey, ZkSyncSnarkWrapperProof,
-    ZkSyncSnarkWrapperSetup, ZkSyncSnarkWrapperVK,
+    EIP4844VerificationKey, ZkSyncCompressionForWrapperFinalizationHint,
+    ZkSyncCompressionForWrapperProof, ZkSyncCompressionForWrapperVerificationKey,
+    ZkSyncCompressionLayerFinalizationHint, ZkSyncCompressionLayerProof,
+    ZkSyncCompressionLayerVerificationKey, ZkSyncSnarkWrapperProof, ZkSyncSnarkWrapperSetup,
+    ZkSyncSnarkWrapperVK,
 };
 use circuit_definitions::circuit_definitions::base_layer::{
     ZkSyncBaseLayerFinalizationHint, ZkSyncBaseLayerProof, ZkSyncBaseLayerVerificationKey,
@@ -22,10 +24,7 @@ pub struct InMemoryDataSource {
     base_layer_finalization_hint: HashMap<u8, ZkSyncBaseLayerFinalizationHint>,
     recursion_layer_vk: HashMap<u8, ZkSyncRecursionLayerVerificationKey>,
     recursion_layer_node_vk: Option<ZkSyncRecursionLayerVerificationKey>,
-    recursion_layer_padding_proof: HashMap<u8, ZkSyncRecursionLayerProof>,
     recursion_layer_finalization_hint: HashMap<u8, ZkSyncRecursionLayerFinalizationHint>,
-    recursion_layer_leaf_padding_proof: Option<ZkSyncRecursionLayerProof>,
-    recursion_layer_node_padding_proof: Option<ZkSyncRecursionLayerProof>,
     recursion_layer_node_finalization_hint: Option<ZkSyncRecursionLayerFinalizationHint>,
     compression_vk: HashMap<u8, ZkSyncCompressionLayerVerificationKey>,
     compression_hint: HashMap<u8, ZkSyncCompressionLayerFinalizationHint>,
@@ -33,6 +32,8 @@ pub struct InMemoryDataSource {
     compression_for_wrapper_hint: HashMap<u8, ZkSyncCompressionForWrapperFinalizationHint>,
     wrapper_setup: HashMap<u8, ZkSyncSnarkWrapperSetup>,
     wrapper_vk: HashMap<u8, ZkSyncSnarkWrapperVK>,
+    eip_4844_vk: Option<EIP4844VerificationKey>,
+    eip_4844_hint: Option<FinalizationHintsForProver>,
 
     ///data structures required for holding [`BlockDataSource`] result
     base_layer_proofs: HashMap<(u8, usize), ZkSyncBaseLayerProof>,
@@ -52,10 +53,7 @@ impl InMemoryDataSource {
             base_layer_finalization_hint: HashMap::new(),
             recursion_layer_vk: HashMap::new(),
             recursion_layer_node_vk: None,
-            recursion_layer_padding_proof: HashMap::new(),
             recursion_layer_finalization_hint: HashMap::new(),
-            recursion_layer_leaf_padding_proof: None,
-            recursion_layer_node_padding_proof: None,
             recursion_layer_node_finalization_hint: None,
             compression_vk: HashMap::new(),
             compression_hint: HashMap::new(),
@@ -63,6 +61,8 @@ impl InMemoryDataSource {
             compression_for_wrapper_hint: HashMap::new(),
             wrapper_setup: HashMap::new(),
             wrapper_vk: HashMap::new(),
+            eip_4844_vk: None,
+            eip_4844_hint: None,
             base_layer_proofs: HashMap::new(),
             leaf_layer_proofs: HashMap::new(),
             node_layer_proofs: HashMap::new(),
@@ -130,19 +130,6 @@ impl SetupDataSource for InMemoryDataSource {
             )))
     }
 
-    fn get_recursion_layer_padding_proof(
-        &self,
-        circuit_type: u8,
-    ) -> SourceResult<ZkSyncRecursionLayerProof> {
-        self.recursion_layer_padding_proof
-            .get(&circuit_type)
-            .cloned()
-            .ok_or(Box::new(Error::new(
-                ErrorKind::Other,
-                format!("no data for circuit type {}", circuit_type),
-            )))
-    }
-
     fn get_recursion_layer_finalization_hint(
         &self,
         circuit_type: u8,
@@ -153,24 +140,6 @@ impl SetupDataSource for InMemoryDataSource {
             .ok_or(Box::new(Error::new(
                 ErrorKind::Other,
                 format!("no data for circuit type {}", circuit_type),
-            )))
-    }
-
-    fn get_recursion_layer_leaf_padding_proof(&self) -> SourceResult<ZkSyncRecursionLayerProof> {
-        self.recursion_layer_leaf_padding_proof
-            .clone()
-            .ok_or(Box::new(Error::new(
-                ErrorKind::Other,
-                format!("no data for recursion layer node vk"),
-            )))
-    }
-
-    fn get_recursion_layer_node_padding_proof(&self) -> SourceResult<ZkSyncRecursionLayerProof> {
-        self.recursion_layer_node_padding_proof
-            .clone()
-            .ok_or(Box::new(Error::new(
-                ErrorKind::Other,
-                format!("no data for recursion layer node vk"),
             )))
     }
 
@@ -294,37 +263,12 @@ impl SetupDataSource for InMemoryDataSource {
         Ok(())
     }
 
-    fn set_recursion_layer_padding_proof(
-        &mut self,
-        proof: ZkSyncRecursionLayerProof,
-    ) -> SourceResult<()> {
-        self.recursion_layer_padding_proof
-            .insert(proof.numeric_circuit_type(), proof);
-        Ok(())
-    }
-
     fn set_recursion_layer_finalization_hint(
         &mut self,
         hint: ZkSyncRecursionLayerFinalizationHint,
     ) -> SourceResult<()> {
         self.recursion_layer_finalization_hint
             .insert(hint.numeric_circuit_type(), hint);
-        Ok(())
-    }
-
-    fn set_recursion_layer_leaf_padding_proof(
-        &mut self,
-        proof: ZkSyncRecursionLayerProof,
-    ) -> SourceResult<()> {
-        self.recursion_layer_leaf_padding_proof = Some(proof);
-        Ok(())
-    }
-
-    fn set_recursion_layer_node_padding_proof(
-        &mut self,
-        proof: ZkSyncRecursionLayerProof,
-    ) -> SourceResult<()> {
-        self.recursion_layer_node_padding_proof = Some(proof);
         Ok(())
     }
 
@@ -379,6 +323,32 @@ impl SetupDataSource for InMemoryDataSource {
 
     fn set_wrapper_vk(&mut self, vk: ZkSyncSnarkWrapperVK) -> SourceResult<()> {
         self.wrapper_vk.insert(vk.numeric_circuit_type(), vk);
+        Ok(())
+    }
+
+    fn get_eip4844_vk(&self) -> SourceResult<EIP4844VerificationKey> {
+        self.eip_4844_vk
+            .clone()
+            .ok_or(Box::new(Error::new(ErrorKind::Other, "No VK for 4844")))
+    }
+
+    fn set_eip4844_vk(&mut self, vk: EIP4844VerificationKey) -> SourceResult<()> {
+        self.eip_4844_vk = Some(vk);
+        Ok(())
+    }
+
+    fn get_eip4844_finalization_hint(&self) -> SourceResult<FinalizationHintsForProver> {
+        self.eip_4844_hint.clone().ok_or(Box::new(Error::new(
+            ErrorKind::Other,
+            "No finalization hint for 4844",
+        )))
+    }
+
+    fn set_eip4844_finalization_hint(
+        &mut self,
+        hint: FinalizationHintsForProver,
+    ) -> SourceResult<()> {
+        self.eip_4844_hint = Some(hint);
         Ok(())
     }
 }

@@ -9,6 +9,9 @@ use crate::zkevm_circuits::base_structures::decommit_query::DecommitQueryWitness
 use crate::zkevm_circuits::base_structures::decommit_query::DECOMMIT_QUERY_PACKED_WIDTH;
 use crate::zkevm_circuits::code_unpacker_sha256::input::*;
 use crate::zkevm_circuits::code_unpacker_sha256::*;
+use circuit_definitions::encodings::decommittment_request::DecommittmentQueueSimulator;
+use circuit_definitions::encodings::decommittment_request::DecommittmentQueueState;
+use circuit_definitions::zk_evm::aux_structures::DecommittmentQuery;
 use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::collections::VecDeque;
@@ -19,6 +22,9 @@ pub fn compute_decommitter_circuit_snapshots<
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     artifacts: &mut FullBlockArtifacts<F>,
+    deduplicated_decommittment_queue_simulator: &mut DecommittmentQueueSimulator<F>,
+    deduplicated_decommittment_queue_states: &mut Vec<DecommittmentQueueState<F>>,
+    deduplicated_decommit_requests_with_data: &mut Vec<(DecommittmentQuery, Vec<U256>)>,
     round_function: &R,
     decommiter_circuit_capacity: usize,
 ) -> Vec<CodeDecommitterCircuitInstanceWitness<F>> {
@@ -38,7 +44,7 @@ pub fn compute_decommitter_circuit_snapshots<
 
     // now we should start chunking the requests into separate decommittment circuits by running a micro-simulator
 
-    for (query, writes) in artifacts.deduplicated_decommit_requests_with_data.iter() {
+    for (query, writes) in deduplicated_decommit_requests_with_data.iter() {
         assert!(query.is_fresh);
 
         // now feed the queries into it
@@ -89,43 +95,33 @@ pub fn compute_decommitter_circuit_snapshots<
     }
 
     let final_deduplicated_queue_state = transform_sponge_like_queue_state(
-        artifacts
-            .deduplicated_decommittment_queue_states
+        deduplicated_decommittment_queue_states
             .last()
             .unwrap()
             .clone(),
     );
     assert_eq!(
-        artifacts.deduplicated_decommit_requests_with_data.len(),
-        artifacts.deduplicated_decommittment_queue_states.len()
+        deduplicated_decommit_requests_with_data.len(),
+        deduplicated_decommittment_queue_states.len()
     );
 
     let mut current_decommittment_requests_queue_simulator =
-        artifacts.deduplicated_decommittment_queue_simulator.clone();
+        deduplicated_decommittment_queue_simulator.clone();
 
     assert_eq!(
-        artifacts.deduplicated_decommit_requests_with_data.len(),
-        artifacts.deduplicated_decommittment_queue_states.len(),
+        deduplicated_decommit_requests_with_data.len(),
+        deduplicated_decommittment_queue_states.len(),
     );
 
     assert_eq!(
-        artifacts.deduplicated_decommit_requests_with_data.len(),
-        artifacts
-            .deduplicated_decommittment_queue_simulator
-            .witness
-            .len(),
+        deduplicated_decommit_requests_with_data.len(),
+        deduplicated_decommittment_queue_simulator.witness.len(),
     );
 
-    let mut it = artifacts
-        .deduplicated_decommit_requests_with_data
+    let mut it = deduplicated_decommit_requests_with_data
         .drain(..)
-        .zip(artifacts.deduplicated_decommittment_queue_states.iter())
-        .zip(
-            artifacts
-                .deduplicated_decommittment_queue_simulator
-                .witness
-                .iter(),
-        )
+        .zip(deduplicated_decommittment_queue_states.iter())
+        .zip(deduplicated_decommittment_queue_simulator.witness.iter())
         .peekable();
 
     let mut fsm_state = DecommitterState::BeginNew;

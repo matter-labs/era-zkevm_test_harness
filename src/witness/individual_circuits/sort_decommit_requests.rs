@@ -13,6 +13,7 @@ use crate::zkevm_circuits::sort_decommittment_requests::input::*;
 use crate::zkevm_circuits::DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS;
 use circuit_definitions::encodings::decommittment_request::*;
 use circuit_definitions::encodings::CircuitEquivalentReflection;
+use circuit_definitions::zk_evm::aux_structures::DecommittmentQuery;
 use rayon::prelude::*;
 use std::cmp::Ordering;
 
@@ -21,6 +22,9 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     artifacts: &mut FullBlockArtifacts<F>,
+    deduplicated_decommittment_queue_simulator: &mut DecommittmentQueueSimulator<F>,
+    deduplicated_decommittment_queue_states: &mut Vec<DecommittmentQueueState<F>>,
+    deduplicated_decommit_requests_with_data: &mut Vec<(DecommittmentQuery, Vec<U256>)>,
     round_function: &R,
     deduplicator_circuit_capacity: usize,
 ) -> Vec<CodeDecommittmentsDeduplicatorInstanceWitness<F>> {
@@ -86,9 +90,7 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
     let mut first_encountered_timestamps = vec![];
     let mut first_encountered_timestamp = 0;
     let mut previous_deduplicated_decommittment_queue_simulator_state =
-        take_sponge_like_queue_state_from_simulator(
-            &artifacts.deduplicated_decommittment_queue_simulator,
-        );
+        take_sponge_like_queue_state_from_simulator(&deduplicated_decommittment_queue_simulator);
 
     let num_items = sorted_decommittment_requests_with_data.len();
 
@@ -121,31 +123,21 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
 
             first_encountered_timestamp = query.timestamp.0;
 
-            // and sorted request
-            artifacts.deduplicated_decommittment_queries.push(query);
-
             previous_deduplicated_decommittment_queue_simulator_state =
                 take_sponge_like_queue_state_from_simulator(
-                    &artifacts.deduplicated_decommittment_queue_simulator,
+                    &deduplicated_decommittment_queue_simulator,
                 );
-            let (_old_tail, intermediate_info) = artifacts
-                .deduplicated_decommittment_queue_simulator
+            let (_old_tail, intermediate_info) = deduplicated_decommittment_queue_simulator
                 .push_and_output_intermediate_data(query, round_function);
 
-            artifacts
-                .deduplicated_decommittment_queue_states
-                .push(intermediate_info);
-            artifacts
-                .deduplicated_decommit_requests_with_data
-                .push((query, writes));
+            deduplicated_decommittment_queue_states.push(intermediate_info);
+            deduplicated_decommit_requests_with_data.push((query, writes));
         }
 
         let (_old_tail, intermediate_info) = sorted_decommittment_queue_simulator
             .push_and_output_intermediate_data(query, round_function);
 
         sorted_decommittment_queue_states.push(intermediate_info);
-
-        artifacts.sorted_decommittment_queries.push(query);
 
         counter += 1;
 
@@ -154,7 +146,7 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
 
             if last {
                 deduplicated_intermediate_states.push(take_sponge_like_queue_state_from_simulator(
-                    &artifacts.deduplicated_decommittment_queue_simulator,
+                    &deduplicated_decommittment_queue_simulator,
                 ));
             } else {
                 deduplicated_intermediate_states
@@ -177,7 +169,7 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
     }
     if counter > 0 {
         deduplicated_intermediate_states.push(take_sponge_like_queue_state_from_simulator(
-            &artifacts.deduplicated_decommittment_queue_simulator,
+            &deduplicated_decommittment_queue_simulator,
         ));
 
         previous_packed_keys.push([0u32; PACKED_KEY_LENGTH]);
@@ -205,9 +197,8 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
 
     let mut output_passthrough_data =
         CodeDecommittmentsDeduplicatorOutputData::<F>::placeholder_witness();
-    output_passthrough_data.final_queue_state = take_sponge_like_queue_state_from_simulator(
-        &artifacts.deduplicated_decommittment_queue_simulator,
-    );
+    output_passthrough_data.final_queue_state =
+        take_sponge_like_queue_state_from_simulator(&deduplicated_decommittment_queue_simulator);
 
     // now we should chunk it by circuits but briefly simulating their logic
 

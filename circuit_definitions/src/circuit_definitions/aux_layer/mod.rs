@@ -12,7 +12,9 @@ use crate::circuit_definitions::cs_builder_reference::CsReferenceImplementationB
 use crate::circuit_definitions::implementations::reference_cs::CSReferenceAssembly;
 
 use crate::recursion_layer_proof_config;
-use snark_wrapper::franklin_crypto::plonk::circuit;
+use snark_wrapper::boojum::config::CSConfig;
+use snark_wrapper::boojum::dag::CircuitResolver;
+use snark_wrapper::boojum::dag::StCircuitResolver;
 use zkevm_circuits::recursion::compression::CompressionRecursionConfig;
 
 use crate::ProofConfig;
@@ -136,24 +138,31 @@ impl ZkSyncCompressionLayerCircuit {
         }
     }
 
-    fn synthesis_inner<
-        P: PrimeFieldLikeVectorized<Base = GoldilocksField>,
-        CF: ProofCompressionFunction,
-    >(
+    fn synthesis_inner<P, CF, CR>(
         inner: &CompressionLayerCircuit<CF>,
         hint: &FinalizationHintsForProver,
-    ) -> CSReferenceAssembly<GoldilocksField, P, ProvingCSConfig> {
+    ) -> CSReferenceAssembly<GoldilocksField, P, ProvingCSConfig>
+    where
+        P: PrimeFieldLikeVectorized<Base = GoldilocksField>,
+        CF: ProofCompressionFunction,
+        CR: CircuitResolver<
+            F,
+            zkevm_circuits::boojum::config::Resolver<
+                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts,
+            >,
+        >,
+        usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>,
+    {
         let geometry = inner.geometry();
         let (max_trace_len, num_vars) = inner.size_hint();
         let builder_impl =
-            CsReferenceImplementationBuilder::<GoldilocksField, P, ProvingCSConfig>::new(
+            CsReferenceImplementationBuilder::<GoldilocksField, P, ProvingCSConfig, CR>::new(
                 geometry,
-                num_vars.unwrap(),
                 max_trace_len.unwrap(),
             );
         let cs_builder = new_builder::<_, GoldilocksField>(builder_impl);
         let builder = inner.configure_builder_proxy(cs_builder);
-        let mut cs = builder.build(());
+        let mut cs = builder.build(num_vars.unwrap());
         inner.add_tables(&mut cs);
         inner.clone().synthesize_into_cs(&mut cs);
         cs.pad_and_shrink_using_hint(hint);
@@ -164,12 +173,32 @@ impl ZkSyncCompressionLayerCircuit {
         &self,
         hint: &FinalizationHintsForProver,
     ) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
+        self.synthesis_wrapped::<
+            P,
+            StCircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>
+        >(hint)
+    }
+
+    pub fn synthesis_wrapped<P, CR>(
+        &self,
+        hint: &FinalizationHintsForProver,
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig>
+    where
+        P: PrimeFieldLikeVectorized<Base = F>,
+        CR: CircuitResolver<
+            F,
+            zkevm_circuits::boojum::config::Resolver<
+                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts,
+            >,
+        >,
+        usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>,
+    {
         match &self {
-            Self::CompressionMode1Circuit(inner) => Self::synthesis_inner(inner, hint),
-            Self::CompressionMode2Circuit(inner) => Self::synthesis_inner(inner, hint),
-            Self::CompressionMode3Circuit(inner) => Self::synthesis_inner(inner, hint),
-            Self::CompressionMode4Circuit(inner) => Self::synthesis_inner(inner, hint),
-            Self::CompressionMode5Circuit(inner) => Self::synthesis_inner(inner, hint),
+            Self::CompressionMode1Circuit(inner) => Self::synthesis_inner::<_, _, CR>(inner, hint),
+            Self::CompressionMode2Circuit(inner) => Self::synthesis_inner::<_, _, CR>(inner, hint),
+            Self::CompressionMode3Circuit(inner) => Self::synthesis_inner::<_, _, CR>(inner, hint),
+            Self::CompressionMode4Circuit(inner) => Self::synthesis_inner::<_, _, CR>(inner, hint),
+            Self::CompressionMode5Circuit(inner) => Self::synthesis_inner::<_, _, CR>(inner, hint),
         }
     }
 
@@ -261,9 +290,6 @@ impl ZkSyncCompressionLayerCircuit {
         Self::from_witness_and_vk(None, vk, circuit_type)
     }
 }
-
-use crate::circuit_definitions::recursion_layer::scheduler::ConcreteSchedulerCircuitBuilder;
-use zkevm_circuits::scheduler::auxiliary::BaseLayerCircuitType;
 
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone(bound = ""), Debug)]
@@ -459,12 +485,11 @@ impl ZkSyncCompressionForWrapperCircuit {
         let builder_impl =
             CsReferenceImplementationBuilder::<GoldilocksField, P, ProvingCSConfig>::new(
                 geometry,
-                num_vars.unwrap(),
                 max_trace_len.unwrap(),
             );
         let cs_builder = new_builder::<_, GoldilocksField>(builder_impl);
         let builder = inner.configure_builder_proxy(cs_builder);
-        let mut cs = builder.build(());
+        let mut cs = builder.build(num_vars.unwrap());
         inner.add_tables(&mut cs);
         inner.clone().synthesize_into_cs(&mut cs);
         cs.pad_and_shrink_using_hint(hint);
@@ -643,3 +668,6 @@ pub type ZkSyncSnarkWrapperSetup =
     ZkSyncCompressionLayerStorage<Arc<SnarkSetup<Bn256, ZkSyncSnarkWrapperCircuit>>>;
 pub type ZkSyncSnarkWrapperVK =
     ZkSyncCompressionLayerStorage<SnarkVK<Bn256, ZkSyncSnarkWrapperCircuit>>;
+
+pub type EIP4844VerificationKey =
+    VerificationKey<GoldilocksField, GoldilocksPoseidon2Sponge<AbsorptionModeOverwrite>>;

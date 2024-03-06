@@ -1,7 +1,13 @@
+use std::sync::Arc;
+
+use self::toolset::GeometryConfig;
+use self::witness::postprocessing::FirstAndLastCircuit;
+
 use super::*;
 use crate::boojum::gadgets::keccak256::{self};
 use crate::boojum::sha3::digest::{FixedOutput, Update};
 use crate::witness::individual_circuits::keccak256_round_function::encode_kecca256_inner_state;
+use crate::witness::postprocessing::CircuitMaker;
 use crate::witness::tree::*;
 use crate::zk_evm::sha3::Keccak256;
 use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::{
@@ -10,29 +16,64 @@ use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::{
 use crate::zkevm_circuits::base_structures::state_diff_record::NUM_KECCAK256_ROUNDS_PER_RECORD_ACCUMULATION;
 use crate::zkevm_circuits::storage_application::input::*;
 use blake2::Blake2s256;
+use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
+use circuit_definitions::circuit_definitions::base_layer::{
+    StorageApplicationInstanceSynthesisFunction, ZkSyncBaseLayerCircuit,
+};
+use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::encodings::state_diff_record::StateDiffRecord;
+use circuit_definitions::zk_evm::testing::storage;
+use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use tracing;
 
 use crate::sha3::Digest;
 
 pub fn decompose_into_storage_application_witnesses<
-    F: SmallField,
-    R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+    CB: FnMut(
+        ZkSyncBaseLayerCircuit<
+            GoldilocksField,
+            VmWitnessOracle<GoldilocksField>,
+            Poseidon2Goldilocks,
+        >,
+    ),
+    QSCB: FnMut(
+        u64,
+        RecursionQueueSimulator<GoldilocksField>,
+        Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
+    ),
 >(
-    artifacts: &mut FullBlockArtifacts<F>,
+    artifacts: &mut FullBlockArtifacts<GoldilocksField>,
     tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
-    round_function: &R,
+    round_function: &Poseidon2Goldilocks,
     num_rounds_per_circuit: usize,
-) -> Vec<StorageApplicationCircuitInstanceWitness<F>> {
+    geometry: &GeometryConfig,
+    cs_for_witness_generation: &mut ConstraintSystemImpl<GoldilocksField, Poseidon2Goldilocks>,
+    cycles_used: &mut usize,
+    mut circuit_callback: CB,
+    mut recursion_queue_callback: QSCB,
+) -> (
+    FirstAndLastCircuit<
+        StorageApplicationInstanceSynthesisFunction<GoldilocksField, Poseidon2Goldilocks>,
+    >,
+    Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
+) {
     use crate::witness::tree::EnumeratedBinaryLeaf;
     use crate::witness::tree::ZkSyncStorageLeaf;
 
     const SHARD_ID_TO_PROCEED: u8 = 0; // rollup shard ID
 
+    let circuit_type = BaseLayerCircuitType::StorageApplicator;
+    let mut maker = CircuitMaker::new(
+        geometry.cycles_per_storage_application,
+        Arc::new(round_function.clone()),
+        cs_for_witness_generation,
+        cycles_used,
+    );
+
     if artifacts.deduplicated_rollup_storage_queries.is_empty() {
         // return singe dummy witness
 
-        let initial_fsm_state = StorageApplicationFSMInputOutput::<F>::placeholder_witness();
+        let initial_fsm_state = StorageApplicationFSMInputOutput::placeholder_witness();
 
         let mut passthrough_input = StorageApplicationInputData::placeholder_witness();
         passthrough_input.initial_next_enumeration_counter =
@@ -48,7 +89,7 @@ pub fn decompose_into_storage_application_witnesses<
 
         let state = transmute_state(hasher);
 
-        let mut final_fsm_state = StorageApplicationFSMInputOutput::<F>::placeholder_witness();
+        let mut final_fsm_state = StorageApplicationFSMInputOutput::placeholder_witness();
         final_fsm_state.next_enumeration_counter = u64_as_u32_le(tree.next_enumeration_index());
         final_fsm_state.current_root_hash = tree.root();
         final_fsm_state.current_storage_application_log_state = take_queue_state_from_simulator(
@@ -78,10 +119,26 @@ pub fn decompose_into_storage_application_witnesses<
             leaf_indexes_for_reads: VecDeque::new(),
         };
 
-        return vec![wit];
-    }
+        circuit_callback(ZkSyncBaseLayerCircuit::StorageApplication(
+            maker.process(wit, circuit_type),
+        ));
 
-    let mut result = vec![];
+        let (
+            storage_application_circuits,
+            queue_simulator,
+            storage_application_circuits_compact_forms_witnesses,
+        ) = maker.into_results();
+        recursion_queue_callback(
+            circuit_type as u64,
+            queue_simulator,
+            storage_application_circuits_compact_forms_witnesses.clone(),
+        );
+
+        return (
+            storage_application_circuits,
+            storage_application_circuits_compact_forms_witnesses,
+        );
+    }
 
     // first split into chunks of work for every circuit
 
@@ -120,7 +177,7 @@ pub fn decompose_into_storage_application_witnesses<
     use crate::bytes_to_u32_le;
     use crate::witness::tree::BinarySparseStorageTree;
 
-    let mut initial_fsm_state = StorageApplicationFSMInputOutput::<F>::placeholder_witness();
+    let mut initial_fsm_state = StorageApplicationFSMInputOutput::placeholder_witness();
     // queue states are trivial for a start
 
     let mut hasher = <Keccak256 as Digest>::new();
@@ -236,7 +293,7 @@ pub fn decompose_into_storage_application_witnesses<
 
         let state = transmute_state(hasher.clone());
 
-        let mut final_fsm_state = StorageApplicationFSMInputOutput::<F>::placeholder_witness();
+        let mut final_fsm_state = StorageApplicationFSMInputOutput::placeholder_witness();
         final_fsm_state.next_enumeration_counter = u64_as_u32_le(tree.next_enumeration_index());
         final_fsm_state.current_root_hash = tree.root();
         final_fsm_state.current_storage_application_log_state =
@@ -283,8 +340,21 @@ pub fn decompose_into_storage_application_witnesses<
 
         initial_fsm_state = final_fsm_state.clone();
 
-        result.push(input);
+        circuit_callback(ZkSyncBaseLayerCircuit::StorageApplication(
+            maker.process(input, circuit_type),
+        ));
     }
+
+    let (
+        storage_application_circuits,
+        queue_simulator,
+        storage_application_circuits_compact_forms_witnesses,
+    ) = maker.into_results();
+    recursion_queue_callback(
+        circuit_type as u64,
+        queue_simulator,
+        storage_application_circuits_compact_forms_witnesses.clone(),
+    );
 
     tracing::debug!(
         "Final enumeration index = {}",
@@ -292,5 +362,8 @@ pub fn decompose_into_storage_application_witnesses<
     );
     tracing::debug!("Final root = {}", hex::encode(&tree.root()));
 
-    result
+    (
+        storage_application_circuits,
+        storage_application_circuits_compact_forms_witnesses,
+    )
 }

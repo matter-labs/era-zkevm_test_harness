@@ -1,12 +1,12 @@
 #![recursion_limit = "32"]
 #![allow(dropping_references)]
+#![feature(allocator_api)]
 #![feature(array_chunks)]
 #![feature(stmt_expr_attributes)]
 #![feature(generic_const_exprs)]
 #![feature(iter_array_chunks)]
 #![feature(iter_next_chunk)]
 #![feature(associated_type_defaults)]
-#![feature(return_position_impl_trait_in_trait)]
 #![feature(bigint_helper_methods)]
 #![allow(unused_imports)]
 #![allow(clippy::drop_ref)]
@@ -41,7 +41,6 @@ pub use crate::zk_evm::ethereum_types;
 use self::utils::*;
 
 pub mod capacity_estimator;
-pub mod compute_setups;
 pub mod external_calls;
 pub mod toolset;
 // pub mod circuit_limit_estimator;
@@ -50,5 +49,7 @@ pub const INITIAL_MONOTONIC_CYCLE_COUNTER: u32 = 1024;
 
 // #[cfg(test)]
 pub mod helper;
+
+pub mod compute_setups;
 pub mod proof_wrapper_utils;
 pub(crate) mod tests;

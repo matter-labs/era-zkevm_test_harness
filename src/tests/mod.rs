@@ -22,6 +22,7 @@ use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit
 use circuit_definitions::circuit_definitions::eip4844::EIP4844Circuit;
 use circuit_definitions::circuit_definitions::recursion_layer::ZkSyncRecursiveLayerCircuit;
 use circuit_definitions::ZkSyncDefaultRoundFunction;
+use std::alloc::Global;
 use std::collections::HashMap;
 
 const ACCOUNT_CODE_STORAGE_ADDRESS: Address = H160([
@@ -113,17 +114,16 @@ pub(crate) fn eip4844_test_circuit(
 
     let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
         geometry,
-        num_vars.unwrap(),
         max_trace_len.unwrap(),
     );
     let builder = new_builder::<_, GoldilocksField>(builder_impl);
 
     let builder = circuit.configure_builder_proxy(builder);
-    let mut cs = builder.build(());
+    let mut cs = builder.build(num_vars.unwrap());
     circuit.add_tables_proxy(&mut cs);
     circuit.synthesize_proxy(&mut cs);
     let _ = cs.pad_and_shrink();
-    let mut cs = cs.into_assembly();
+    let mut cs = cs.into_assembly::<Global>();
 
     let is_satisfied = cs.check_if_satisfied(&worker);
     assert!(is_satisfied);
@@ -150,23 +150,23 @@ pub(crate) fn base_test_circuit(
 
     let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
         geometry,
-        num_vars.unwrap(),
         max_trace_len.unwrap(),
     );
+    let arg = num_vars.unwrap();
     let builder = new_builder::<_, GoldilocksField>(builder_impl);
 
     let mut cs = match circuit {
         ZkSyncBaseLayerCircuit::MainVM(inner) => {
             let builder = inner.configure_builder_proxy(builder);
-            let mut cs = builder.build(());
+            let mut cs = builder.build(arg);
             inner.add_tables_proxy(&mut cs);
             inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
-            cs.into_assembly()
+            cs.into_assembly::<Global>()
         }
         ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {
             let builder = inner.configure_builder_proxy(builder);
-            let mut cs = builder.build(());
+            let mut cs = builder.build(arg);
             inner.add_tables_proxy(&mut cs);
             inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
@@ -174,7 +174,7 @@ pub(crate) fn base_test_circuit(
         }
         ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {
             let builder = inner.configure_builder_proxy(builder);
-            let mut cs = builder.build(());
+            let mut cs = builder.build(arg);
             inner.add_tables_proxy(&mut cs);
             inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
@@ -182,7 +182,7 @@ pub(crate) fn base_test_circuit(
         }
         ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {
             let builder = inner.configure_builder_proxy(builder);
-            let mut cs = builder.build(());
+            let mut cs = builder.build(arg);
             inner.add_tables_proxy(&mut cs);
             inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
@@ -190,7 +190,7 @@ pub(crate) fn base_test_circuit(
         }
         ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {
             let builder = inner.configure_builder_proxy(builder);
-            let mut cs = builder.build(());
+            let mut cs = builder.build(arg);
             inner.add_tables_proxy(&mut cs);
             inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
@@ -198,7 +198,7 @@ pub(crate) fn base_test_circuit(
         }
         ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {
             let builder = inner.configure_builder_proxy(builder);
-            let mut cs = builder.build(());
+            let mut cs = builder.build(arg);
             inner.add_tables_proxy(&mut cs);
             inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
@@ -206,7 +206,7 @@ pub(crate) fn base_test_circuit(
         }
         ZkSyncBaseLayerCircuit::ECRecover(inner) => {
             let builder = inner.configure_builder_proxy(builder);
-            let mut cs = builder.build(());
+            let mut cs = builder.build(arg);
             inner.add_tables_proxy(&mut cs);
             inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
@@ -214,7 +214,7 @@ pub(crate) fn base_test_circuit(
         }
         ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {
             let builder = inner.configure_builder_proxy(builder);
-            let mut cs = builder.build(());
+            let mut cs = builder.build(arg);
             inner.add_tables_proxy(&mut cs);
             inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
@@ -222,7 +222,7 @@ pub(crate) fn base_test_circuit(
         }
         ZkSyncBaseLayerCircuit::StorageSorter(inner) => {
             let builder = inner.configure_builder_proxy(builder);
-            let mut cs = builder.build(());
+            let mut cs = builder.build(arg);
             inner.add_tables_proxy(&mut cs);
             inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
@@ -230,7 +230,7 @@ pub(crate) fn base_test_circuit(
         }
         ZkSyncBaseLayerCircuit::StorageApplication(inner) => {
             let builder = inner.configure_builder_proxy(builder);
-            let mut cs = builder.build(());
+            let mut cs = builder.build(arg);
             inner.add_tables_proxy(&mut cs);
             inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
@@ -238,7 +238,7 @@ pub(crate) fn base_test_circuit(
         }
         ZkSyncBaseLayerCircuit::EventsSorter(inner) => {
             let builder = inner.configure_builder_proxy(builder);
-            let mut cs = builder.build(());
+            let mut cs = builder.build(arg);
             inner.add_tables_proxy(&mut cs);
             inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
@@ -246,7 +246,7 @@ pub(crate) fn base_test_circuit(
         }
         ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {
             let builder = inner.configure_builder_proxy(builder);
-            let mut cs = builder.build(());
+            let mut cs = builder.build(arg);
             inner.add_tables_proxy(&mut cs);
             inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
@@ -254,7 +254,7 @@ pub(crate) fn base_test_circuit(
         }
         ZkSyncBaseLayerCircuit::L1MessagesHasher(inner) => {
             let builder = inner.configure_builder_proxy(builder);
-            let mut cs = builder.build(());
+            let mut cs = builder.build(arg);
             inner.add_tables_proxy(&mut cs);
             inner.synthesize_proxy(&mut cs);
             let _ = cs.pad_and_shrink();
@@ -281,7 +281,6 @@ pub(crate) fn test_recursive_circuit(circuit: ZkSyncRecursiveLayerCircuit) {
 
     let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
         geometry,
-        num_vars.unwrap(),
         max_trace_len.unwrap(),
     );
     let builder = new_builder::<_, GoldilocksField>(builder_impl);
@@ -290,15 +289,15 @@ pub(crate) fn test_recursive_circuit(circuit: ZkSyncRecursiveLayerCircuit) {
     let mut cs = match circuit {
         ZkSyncRecursiveLayerCircuit::SchedulerCircuit(inner) => {
             let builder = inner.configure_builder_proxy(builder);
-            let mut cs = builder.build(());
+            let mut cs = builder.build(num_vars.unwrap());
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs, &round_function);
             let _ = cs.pad_and_shrink();
-            cs.into_assembly()
+            cs.into_assembly::<Global>()
         }
         ZkSyncRecursiveLayerCircuit::NodeLayerCircuit(inner) => {
             let builder = inner.configure_builder_proxy(builder);
-            let mut cs = builder.build(());
+            let mut cs = builder.build(num_vars.unwrap());
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs, &round_function);
             let _ = cs.pad_and_shrink();
@@ -318,7 +317,7 @@ pub(crate) fn test_recursive_circuit(circuit: ZkSyncRecursiveLayerCircuit) {
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForL1MessagesSorter(inner)
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForL1MessagesHasher(inner) => {
             let builder = inner.configure_builder_proxy(builder);
-            let mut cs = builder.build(());
+            let mut cs = builder.build(num_vars.unwrap());
             inner.add_tables(&mut cs);
             inner.synthesize_into_cs(&mut cs, &round_function);
             let _ = cs.pad_and_shrink();
@@ -352,18 +351,16 @@ pub(crate) fn test_compression_circuit(circuit: ZkSyncCompressionLayerCircuit) {
 
         let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
             geometry,
-            num_vars.unwrap(),
             max_trace_len.unwrap(),
         );
         let builder = new_builder::<_, GoldilocksField>(builder_impl);
         let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
             geometry,
-            num_vars.unwrap(),
             max_trace_len.unwrap(),
         );
         let builder = new_builder::<_, GoldilocksField>(builder_impl);
         let builder = circuit.configure_builder_proxy(builder);
-        let mut cs = builder.build(());
+        let mut cs = builder.build(num_vars.unwrap());
         circuit.synthesize_into_cs(&mut cs);
 
         cs.pad_and_shrink();
@@ -403,18 +400,16 @@ pub(crate) fn test_compression_for_wrapper_circuit(circuit: ZkSyncCompressionFor
 
         let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
             geometry,
-            num_vars.unwrap(),
             max_trace_len.unwrap(),
         );
         let builder = new_builder::<_, GoldilocksField>(builder_impl);
         let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
             geometry,
-            num_vars.unwrap(),
             max_trace_len.unwrap(),
         );
         let builder = new_builder::<_, GoldilocksField>(builder_impl);
         let builder = circuit.configure_builder_proxy(builder);
-        let mut cs = builder.build(());
+        let mut cs = builder.build(num_vars.unwrap());
         circuit.synthesize_into_cs(&mut cs);
 
         cs.pad_and_shrink();

@@ -10,9 +10,6 @@ use crate::boojum::{
 use crate::entry_point::*;
 use crate::toolset::create_tools;
 use crate::toolset::GeometryConfig;
-use crate::witness::full_block_artifact::BlockBasicCircuits;
-use crate::witness::full_block_artifact::BlockBasicCircuitsPublicCompactFormsWitnesses;
-use crate::witness::full_block_artifact::BlockBasicCircuitsPublicInputs;
 use crate::witness::oracle::create_artifacts_from_tracer;
 use crate::witness::tree::BinarySparseStorageTree;
 use crate::witness::tree::ZKSyncTestingTree;
@@ -34,7 +31,14 @@ use crate::{
     utils::{calldata_to_aligned_data, u64_as_u32_le},
 };
 use ::tracing;
-use circuit_definitions::ZkSyncDefaultRoundFunction;
+use circuit_definitions::boojum::field::Field;
+use circuit_definitions::boojum::implementations::poseidon2::Poseidon2Goldilocks;
+use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit;
+use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
+use circuit_definitions::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
+use circuit_definitions::{Field as MainField, RoundFunction, ZkSyncDefaultRoundFunction};
+use snark_wrapper::boojum::field::goldilocks::GoldilocksExt2;
+use snark_wrapper::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
 
 pub const SCHEDULER_TIMESTAMP: u32 = 1;
 
@@ -47,44 +51,42 @@ use crate::witness::oracle::VmInstanceWitness;
 use crate::zkevm_circuits::scheduler::block_header::BlockAuxilaryOutputWitness;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 
-/// This is a testing interface that basically will
-/// setup the environment and will run out-of-circuit and then in-circuit
-/// and perform intermediate tests
+/// Executes a given set of instructions, and returns things necessary to do the proving:
+/// - all circuits as a callback
+/// - circuit recursion queues and associated inputs as a callback
+/// - partial witness for the scheduler circuit (later we have to add proof witnesses for the nodes)
+/// - witness with AUX data (with information that might be useful during verification to generate the public input)
+///
+/// This function will setup the environment and will run out-of-circuit and then in-circuit
 pub fn run<
-    F: SmallField,
-    R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4> + serde::Serialize + serde::de::DeserializeOwned,
-    H: RecursiveTreeHasher<F, Num<F>>,
-    EXT: FieldExtension<2, BaseField = F>,
-    S: Storage
+    S: Storage,
+    CB: FnMut(ZkSyncBaseLayerCircuit<MainField, VmWitnessOracle<MainField>, RoundFunction>),
+    QSCB: FnMut(
+        u64,
+        RecursionQueueSimulator<MainField>,
+        Vec<ClosedFormInputCompactFormWitness<MainField>>,
+    ),
 >(
-caller: Address, // for real block must be zero
-entry_point_address: Address, // for real block must be the bootloader
-entry_point_code: Vec<[u8; 32]>, // for read lobkc must be a bootloader code
-initial_heap_content: Vec<u8>, // bootloader starts with non-deterministic heap
+    caller: Address,                 // for real block must be zero
+    entry_point_address: Address,    // for real block must be the bootloader
+    entry_point_code: Vec<[u8; 32]>, // for read lobkc must be a bootloader code
+    initial_heap_content: Vec<u8>,   // bootloader starts with non-deterministic heap
     zk_porter_is_available: bool,
     default_aa_code_hash: U256,
-used_bytecodes: std::collections::HashMap<U256, Vec<[u8; 32]>>, // auxilary information to avoid passing a full set of all used codes
-ram_verification_queries: Vec<(u32, U256)>, // we may need to check that after the bootloader's memory is filled
+    used_bytecodes: std::collections::HashMap<U256, Vec<[u8; 32]>>, // auxilary information to avoid passing a full set of all used codes
+    ram_verification_queries: Vec<(u32, U256)>, // we may need to check that after the bootloader's memory is filled
     cycle_limit: usize,
-round_function: R, // used for all queues implementation
     geometry: GeometryConfig,
     storage: S,
     tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
+    circuit_callback: CB,
+    queue_simulator_callback: QSCB,
 ) -> (
-    BlockBasicCircuits<F, R>,
-    BlockBasicCircuitsPublicInputs<F>,
-    BlockBasicCircuitsPublicCompactFormsWitnesses<F>,
-    SchedulerCircuitInstanceWitness<F, H, EXT>,
-    BlockAuxilaryOutputWitness<F>,
-)
-    where [(); <crate::zkevm_circuits::base_structures::log_query::LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <crate::zkevm_circuits::base_structures::memory_query::MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <crate::zkevm_circuits::base_structures::decommit_query::DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <crate::boojum::gadgets::u256::UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <crate::boojum::gadgets::u256::UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN + 1]:,
-    [(); <crate::zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-    [(); <crate::zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
-{
+    SchedulerCircuitInstanceWitness<MainField, CircuitGoldilocksPoseidon2Sponge, GoldilocksExt2>,
+    BlockAuxilaryOutputWitness<MainField>,
+) {
+    let round_function = ZkSyncDefaultRoundFunction::default();
+
     assert!(zk_porter_is_available == false);
     assert_eq!(
         ram_verification_queries.len(),
@@ -229,8 +231,8 @@ round_function: R, // used for all queues implementation
 
     // dbg!(tools.witness_tracer.vm_snapshots.len());
 
-    let (instance_oracles, artifacts) = create_artifacts_from_tracer(
-        &mut out_of_circuit_vm.witness_tracer,
+    let (basic_circuits, compact_form_witnesses) = create_artifacts_from_tracer(
+        out_of_circuit_vm.witness_tracer,
         &round_function,
         &geometry,
         (
@@ -239,36 +241,11 @@ round_function: R, // used for all queues implementation
         ),
         tree,
         num_non_deterministic_heap_queries,
+        zk_porter_is_available,
+        default_aa_code_hash,
+        circuit_callback,
+        queue_simulator_callback,
     );
-
-    assert!(artifacts.special_initial_decommittment_queries.len() == 1);
-
-    // use sync_vm::scheduler::queues::SpongeLikeQueueStateWitness;
-    // let memory_state_after_bootloader_heap_writes = if num_non_deterministic_heap_queries == 0 {
-    //     // empty
-    //     SpongeLikeQueueStateWitness::<Bn256, 3>::empty()
-    // } else {
-    //     let full_info = &artifacts.all_memory_queue_states[num_non_deterministic_heap_queries-1];
-    //     let sponge_state = full_info.tail;
-    //     let length = full_info.num_items;
-
-    //     SpongeLikeQueueStateWitness::<Bn256, 3> {
-    //         length,
-    //         sponge_state
-    //     }
-    // };
-
-    use crate::witness::postprocessing::create_leaf_level_circuits_and_scheduler_witness;
-
-    let (basic_circuits, basic_circuits_inputs, compact_form_witnesses) =
-        create_leaf_level_circuits_and_scheduler_witness(
-            zk_porter_is_available,
-            default_aa_code_hash,
-            instance_oracles,
-            artifacts,
-            geometry,
-            &round_function,
-        );
 
     let (scheduler_circuit_witness, aux_data) = {
         use crate::zkevm_circuits::scheduler::block_header::*;
@@ -301,7 +278,8 @@ round_function: R, // used for all queues implementation
 
         let t = basic_circuits
             .events_sorter_circuits
-            .last()
+            .last
+            .clone()
             .map(|el| {
                 let wit = el.clone_witness().unwrap();
                 wit.closed_form_input
@@ -310,7 +288,7 @@ round_function: R, // used for all queues implementation
                     .tail
                     .tail
             })
-            .unwrap_or([F::ZERO; QUEUE_STATE_WIDTH]);
+            .unwrap_or([MainField::ZERO; QUEUE_STATE_WIDTH]);
 
         use crate::finalize_queue_state;
         use crate::finalized_queue_state_as_bytes;
@@ -320,7 +298,8 @@ round_function: R, // used for all queues implementation
 
         let t = basic_circuits
             .main_vm_circuits
-            .first()
+            .first
+            .clone()
             .map(|el| {
                 let wit = el.clone_witness().unwrap();
                 wit.closed_form_input
@@ -328,7 +307,7 @@ round_function: R, // used for all queues implementation
                     .memory_queue_initial_state
                     .tail
             })
-            .unwrap_or([F::ZERO; FULL_SPONGE_QUEUE_STATE_WIDTH]);
+            .unwrap_or([MainField::ZERO; FULL_SPONGE_QUEUE_STATE_WIDTH]);
 
         let bootloader_heap_initial_content = finalize_queue_state(t, &round_function);
         let bootloader_heap_initial_content =
@@ -336,7 +315,8 @@ round_function: R, // used for all queues implementation
 
         let rollup_state_diff_for_compression = basic_circuits
             .storage_application_circuits
-            .last()
+            .last
+            .clone()
             .map(|el| {
                 let wit = el.clone_witness().unwrap();
                 wit.closed_form_input
@@ -347,7 +327,8 @@ round_function: R, // used for all queues implementation
 
         let l1_messages_linear_hash = basic_circuits
             .l1_messages_hasher_circuits
-            .last()
+            .last
+            .clone()
             .map(|el| {
                 let wit = el.clone_witness().unwrap();
                 wit.closed_form_input.observable_output.keccak256_hash
@@ -355,7 +336,7 @@ round_function: R, // used for all queues implementation
             .expect("at least 1 L2 to L1 message");
 
         // aux
-        let aux_data = BlockAuxilaryOutputWitness::<F> {
+        let aux_data = BlockAuxilaryOutputWitness::<MainField> {
             events_queue_state,
             bootloader_heap_initial_content,
             rollup_state_diff_for_compression,
@@ -363,15 +344,6 @@ round_function: R, // used for all queues implementation
             eip4844_linear_hashes: [[0u8; 32]; 2],
             eip4844_output_commitment_hashes: [[0u8; 32]; 2],
         };
-
-        use crate::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
-        let per_circuit_inputs: VecDeque<ClosedFormInputCompactFormWitness<F>> =
-            compact_form_witnesses
-                .clone()
-                .into_flattened_set()
-                .into_iter()
-                .map(|el| el.into_inner())
-                .collect();
 
         // let memory_verification_queries: [sync_vm::glue::code_unpacker_sha256::memory_query_updated::MemoryQueryWitness<Bn256>; NUM_MEMORY_QUERIES_TO_VERIFY] = memory_verification_queries.try_into().unwrap();
 
@@ -384,7 +356,7 @@ round_function: R, // used for all queues implementation
             block_meta_parameters,
             vm_end_of_execution_observable_output: basic_circuits
                 .main_vm_circuits
-                .last()
+                .last
                 .unwrap()
                 .clone_witness()
                 .unwrap()
@@ -392,7 +364,7 @@ round_function: R, // used for all queues implementation
                 .observable_output,
             decommits_sorter_observable_output: basic_circuits
                 .code_decommittments_sorter_circuits
-                .last()
+                .last
                 .unwrap()
                 .clone_witness()
                 .unwrap()
@@ -400,7 +372,7 @@ round_function: R, // used for all queues implementation
                 .observable_output,
             code_decommitter_observable_output: basic_circuits
                 .code_decommitter_circuits
-                .last()
+                .last
                 .unwrap()
                 .clone_witness()
                 .unwrap()
@@ -408,7 +380,7 @@ round_function: R, // used for all queues implementation
                 .observable_output,
             log_demuxer_observable_output: basic_circuits
                 .log_demux_circuits
-                .last()
+                .last
                 .unwrap()
                 .clone_witness()
                 .unwrap()
@@ -416,7 +388,7 @@ round_function: R, // used for all queues implementation
                 .observable_output,
             keccak256_observable_output: basic_circuits
                 .keccak_precompile_circuits
-                .last()
+                .last
                 .unwrap()
                 .clone_witness()
                 .unwrap()
@@ -424,7 +396,7 @@ round_function: R, // used for all queues implementation
                 .observable_output,
             sha256_observable_output: basic_circuits
                 .sha256_precompile_circuits
-                .last()
+                .last
                 .unwrap()
                 .clone_witness()
                 .unwrap()
@@ -432,7 +404,7 @@ round_function: R, // used for all queues implementation
                 .observable_output,
             ecrecover_observable_output: basic_circuits
                 .ecrecover_precompile_circuits
-                .last()
+                .last
                 .unwrap()
                 .clone_witness()
                 .unwrap()
@@ -440,7 +412,7 @@ round_function: R, // used for all queues implementation
                 .observable_output,
             storage_sorter_observable_output: basic_circuits
                 .storage_sorter_circuits
-                .last()
+                .last
                 .unwrap()
                 .clone_witness()
                 .unwrap()
@@ -448,7 +420,7 @@ round_function: R, // used for all queues implementation
                 .observable_output,
             storage_application_observable_output: basic_circuits
                 .storage_application_circuits
-                .last()
+                .last
                 .unwrap()
                 .clone_witness()
                 .unwrap()
@@ -456,7 +428,7 @@ round_function: R, // used for all queues implementation
                 .observable_output,
             events_sorter_observable_output: basic_circuits
                 .events_sorter_circuits
-                .last()
+                .last
                 .unwrap()
                 .clone_witness()
                 .unwrap()
@@ -464,7 +436,7 @@ round_function: R, // used for all queues implementation
                 .observable_output,
             l1messages_sorter_observable_output: basic_circuits
                 .l1_messages_sorter_circuits
-                .last()
+                .last
                 .unwrap()
                 .clone_witness()
                 .unwrap()
@@ -472,7 +444,7 @@ round_function: R, // used for all queues implementation
                 .observable_output,
             l1messages_linear_hasher_observable_output: basic_circuits
                 .l1_messages_hasher_circuits
-                .last()
+                .last
                 .unwrap()
                 .clone_witness()
                 .unwrap()
@@ -480,18 +452,19 @@ round_function: R, // used for all queues implementation
                 .observable_output,
             storage_log_tail: basic_circuits
                 .main_vm_circuits
-                .first()
+                .first
+                .clone()
                 .unwrap()
                 .clone_witness()
                 .unwrap()
                 .closed_form_input
                 .observable_input
                 .rollback_queue_tail_for_block,
-            per_circuit_closed_form_inputs: per_circuit_inputs,
+            per_circuit_closed_form_inputs: compact_form_witnesses.into(),
 
             bootloader_heap_memory_state: basic_circuits
                 .main_vm_circuits
-                .first()
+                .first
                 .unwrap()
                 .clone_witness()
                 .unwrap()
@@ -500,7 +473,7 @@ round_function: R, // used for all queues implementation
                 .memory_queue_initial_state,
             ram_sorted_queue_state: basic_circuits
                 .ram_permutation_circuits
-                .first()
+                .first
                 .unwrap()
                 .clone_witness()
                 .unwrap()
@@ -510,7 +483,7 @@ round_function: R, // used for all queues implementation
                 .tail,
             decommits_sorter_intermediate_queue_state: basic_circuits
                 .code_decommittments_sorter_circuits
-                .first()
+                .first
                 .unwrap()
                 .clone_witness()
                 .unwrap()
@@ -520,7 +493,7 @@ round_function: R, // used for all queues implementation
                 .tail,
             events_sorter_intermediate_queue_state: basic_circuits
                 .events_sorter_circuits
-                .first()
+                .first
                 .unwrap()
                 .clone_witness()
                 .unwrap()
@@ -530,7 +503,7 @@ round_function: R, // used for all queues implementation
                 .tail,
             l1messages_sorter_intermediate_queue_state: basic_circuits
                 .l1_messages_sorter_circuits
-                .first()
+                .first
                 .unwrap()
                 .clone_witness()
                 .unwrap()
@@ -540,7 +513,7 @@ round_function: R, // used for all queues implementation
                 .tail,
             rollup_storage_sorter_intermediate_queue_state: basic_circuits
                 .storage_sorter_circuits
-                .first()
+                .first
                 .unwrap()
                 .clone_witness()
                 .unwrap()
@@ -566,61 +539,5 @@ round_function: R, // used for all queues implementation
         (scheduler_circuit_witness, aux_data)
     };
 
-    (
-        basic_circuits,
-        basic_circuits_inputs,
-        compact_form_witnesses,
-        scheduler_circuit_witness,
-        aux_data,
-    )
-}
-
-use crate::boojum::field::goldilocks::GoldilocksExt2;
-use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
-
-/// Executes a given set of instructions, and returns things necessary to do the proving:
-/// - list of circuits with their inputs and witnesses
-/// - partial witness for the scheduler circuit (later we have to add proof witnesses for the nodes)
-/// - witness with AUX data (with information that might be useful during verification to generate the public input)
-pub fn run_with_fixed_params<S: Storage>(
-    caller: Address,                 // for real block must be zero
-    entry_point_address: Address,    // for real block must be the bootloader
-    entry_point_code: Vec<[u8; 32]>, // for real block must be a bootloader code
-    initial_heap_content: Vec<u8>,   // bootloader starts with non-deterministic heap
-    zk_porter_is_available: bool,
-    default_aa_code_hash: U256,
-    used_bytecodes: std::collections::HashMap<U256, Vec<[u8; 32]>>, // auxilary information to avoid passing a full set of all used codes
-    ram_verification_queries: Vec<(u32, U256)>, // we may need to check that after the bootloader's memory is filled
-    cycle_limit: usize,
-    geometry: GeometryConfig,
-    storage: S,
-    tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
-) -> (
-    BlockBasicCircuits<GoldilocksField, ZkSyncDefaultRoundFunction>,
-    BlockBasicCircuitsPublicInputs<GoldilocksField>,
-    BlockBasicCircuitsPublicCompactFormsWitnesses<GoldilocksField>,
-    SchedulerCircuitInstanceWitness<
-        GoldilocksField,
-        CircuitGoldilocksPoseidon2Sponge,
-        GoldilocksExt2,
-    >,
-    BlockAuxilaryOutputWitness<GoldilocksField>,
-) {
-    let round_function = ZkSyncDefaultRoundFunction::default();
-
-    run(
-        caller,
-        entry_point_address,
-        entry_point_code,
-        initial_heap_content,
-        zk_porter_is_available,
-        default_aa_code_hash,
-        used_bytecodes,
-        ram_verification_queries,
-        cycle_limit,
-        round_function,
-        geometry,
-        storage,
-        tree,
-    )
+    (scheduler_circuit_witness, aux_data)
 }
