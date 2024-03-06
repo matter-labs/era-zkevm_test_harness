@@ -208,14 +208,12 @@ pub fn generate_eip4844_witness<F: SmallField>(
     // compute versioned hash
 
     // There chunks are representation of the monomial form
-    let mut poly = crate::zkevm_circuits::eip_4844::zksync_pubdata_into_monomial_form_poly(
-        &blob
-    );
+    let mut poly = crate::zkevm_circuits::eip_4844::zksync_pubdata_into_monomial_form_poly(&blob);
     // so FFT then
     crate::zkevm_circuits::eip_4844::fft(&mut poly);
     // and bitreverse
     crate::zkevm_circuits::eip_4844::bitreverse(&mut poly);
-    // now they can be an input to KZG commitment 
+    // now they can be an input to KZG commitment
 
     use crate::kzg::compute_commitment;
     use circuit_definitions::boojum::pairing::CurveAffine;
