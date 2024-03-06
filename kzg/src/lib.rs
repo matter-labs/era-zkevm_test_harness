@@ -16,6 +16,10 @@ use boojum::{
 };
 use rayon::prelude::*;
 
+// Remove these, once we move all kzg logic from zksync-era crate.
+pub use boojum;
+pub use zkevm_circuits;
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 struct TrustedSetup {
     g1_lagrange: Vec<String>,

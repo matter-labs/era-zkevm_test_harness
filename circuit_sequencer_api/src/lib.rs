@@ -6,3 +6,7 @@ pub mod queue;
 pub mod sort_storage_access;
 pub mod toolset;
 pub mod utils;
+
+pub use circuit_encodings::zkevm_circuits::eip_4844::input::{
+    BLOB_CHUNK_SIZE, ELEMENTS_PER_4844_BLOCK,
+};
