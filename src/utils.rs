@@ -1,25 +1,7 @@
-use std::ops::Add;
-
 use crate::boojum::algebraic_props::round_function::AbsorptionModeOverwrite;
-use crate::boojum::config::*;
-use crate::boojum::cs::implementations::setup::FinalizationHintsForProver;
-use crate::boojum::field::goldilocks::GoldilocksExt2;
-use crate::boojum::{algebraic_props::round_function, field::SmallField};
-use crate::zk_evm::{address_to_u256, ethereum_types::*};
-use circuit_definitions::encodings::{BytesSerializable, QueueSimulator};
 
-pub fn u64_as_u32_le(value: u64) -> [u32; 2] {
-    [value as u32, (value >> 32) as u32]
-}
-
-pub fn u128_as_u32_le(value: u128) -> [u32; 4] {
-    [
-        value as u32,
-        (value >> 32) as u32,
-        (value >> 64) as u32,
-        (value >> 96) as u32,
-    ]
-}
+use crate::boojum::field::SmallField;
+use crate::zk_evm::ethereum_types::*;
 
 pub fn calldata_to_aligned_data(calldata: &Vec<u8>) -> Vec<U256> {
     if calldata.len() == 0 {
@@ -46,38 +28,9 @@ pub fn calldata_to_aligned_data(calldata: &Vec<u8>) -> Vec<U256> {
     result
 }
 
-pub fn bytes_to_u32_le<const N: usize, const M: usize>(bytes: &[u8; N]) -> [u32; M] {
-    assert!(M > 0);
-    assert!(M * 4 == N);
-
-    let mut result = [0u32; M];
-
-    for (idx, chunk) in bytes.chunks_exact(4).enumerate() {
-        let word = u32::from_le_bytes(chunk.try_into().unwrap());
-        result[idx] = word;
-    }
-
-    result
-}
-
-pub fn bytes_to_u128_le<const N: usize, const M: usize>(bytes: &[u8; N]) -> [u128; M] {
-    assert!(M > 0);
-    assert!(M * 16 == N);
-
-    let mut result = [0u128; M];
-
-    for (idx, chunk) in bytes.chunks_exact(16).enumerate() {
-        let word = u128::from_le_bytes(chunk.try_into().unwrap());
-        result[idx] = word;
-    }
-
-    result
-}
-
 use crate::boojum::algebraic_props::round_function::AlgebraicRoundFunction;
 use crate::boojum::gadgets::traits::round_function::BuildableCircuitRoundFunction;
 use crate::zkevm_circuits::scheduler::QUEUE_FINAL_STATE_COMMITMENT_LENGTH;
-use circuit_definitions::encodings::OutOfCircuitFixedLengthEncodable;
 
 pub fn finalize_queue_state<
     F: SmallField,

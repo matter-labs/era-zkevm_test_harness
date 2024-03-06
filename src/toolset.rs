@@ -1,10 +1,3 @@
-use crate::zk_evm::abstractions::Storage;
-use crate::zk_evm::reference_impls::decommitter::SimpleDecommitter;
-use crate::zk_evm::reference_impls::event_sink::InMemoryEventSink;
-use crate::zk_evm::zk_evm_abstractions::precompiles::DefaultPrecompilesProcessor;
-use crate::zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS;
-use std::hash::Hash;
-
 use derivative::Derivative;
 
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
@@ -24,10 +17,3 @@ pub struct GeometryConfig {
 
     pub limit_for_l1_messages_pudata_hasher: u32,
 }
-
-//use crate::entry_point::initial_out_of_circuit_context;
-use crate::ethereum_types::Address;
-use crate::zk_evm::block_properties::BlockProperties;
-use crate::zk_evm::reference_impls::memory::SimpleMemory;
-use crate::zk_evm::vm_state::{PrimitiveValue, VmState};
-use crate::zk_evm::zkevm_opcode_defs::*;
