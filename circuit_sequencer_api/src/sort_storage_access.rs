@@ -1,12 +1,11 @@
-use crate::encodings::log_query::*;
-use crate::ethereum_types::H160;
-use crate::ethereum_types::U256;
 use derivative::Derivative;
 use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::iter::IntoIterator;
-use zk_evm::aux_structures::LogQuery;
-use zk_evm::aux_structures::Timestamp;
+use zk_evm::{
+    aux_structures::{LogQuery, Timestamp},
+    ethereum_types::{H160, U256},
+};
 
 #[derive(Derivative)]
 #[derivative(Default(bound = ""), Debug)]
@@ -126,7 +125,7 @@ pub fn sort_storage_access_queries<'a, L: LogQueryLike, I: IntoIterator<Item = &
             break;
         }
 
-        let candidate = it.peek().unwrap().clone();
+        let candidate = (*it.peek().unwrap()).clone();
 
         let subit = it.clone().take_while(|el| {
             el.raw_query.shard_id() == candidate.raw_query.shard_id()
@@ -242,8 +241,6 @@ pub fn sort_storage_access_queries<'a, L: LogQueryLike, I: IntoIterator<Item = &
                 }
             }
         }
-
-        use zk_evm::aux_structures::Timestamp;
 
         if current_element_history.did_read_at_depth_zero == false
             && current_element_history.changes_stack.is_empty()

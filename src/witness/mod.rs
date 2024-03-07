@@ -7,7 +7,7 @@ pub mod individual_circuits;
 pub mod oracle;
 pub mod postprocessing;
 pub mod recursive_aggregation;
-pub mod sort_storage_access;
+pub use circuit_sequencer_api::sort_storage_access;
 pub mod tracer;
 pub mod tree;
 pub mod utils;
