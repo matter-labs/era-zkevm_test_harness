@@ -28,7 +28,7 @@ use crate::zkevm_circuits::{
 };
 use crate::{
     ethereum_types::{Address, U256},
-    utils::{calldata_to_aligned_data, u64_as_u32_le},
+    utils::u64_as_u32_le,
 };
 use circuit_definitions::boojum::field::Field;
 use circuit_definitions::boojum::implementations::poseidon2::Poseidon2Goldilocks;
@@ -115,7 +115,7 @@ pub fn run<
     }
     tools.decommittment_processor.populate(to_fill);
 
-    let heap_writes = calldata_to_aligned_data(&initial_heap_content);
+    let heap_writes = circuit_sequencer_api::utils::calldata_to_aligned_data(&initial_heap_content);
     let num_non_deterministic_heap_queries = heap_writes.len();
 
     // bootloader decommit query
@@ -290,8 +290,8 @@ pub fn run<
             })
             .unwrap_or([MainField::ZERO; QUEUE_STATE_WIDTH]);
 
-        use crate::finalize_queue_state;
-        use crate::finalized_queue_state_as_bytes;
+        use circuit_sequencer_api::queue::finalize_queue_state;
+        use circuit_sequencer_api::queue::finalized_queue_state_as_bytes;
 
         let events_queue_state = finalize_queue_state(t, &round_function);
         let events_queue_state = finalized_queue_state_as_bytes(events_queue_state);

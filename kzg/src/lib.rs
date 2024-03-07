@@ -1,16 +1,24 @@
 //! Implementation based on https://github.com/ethereum/consensus-specs/blob/86fb82b221474cc89387fa6436806507b3849d88/specs/deneb/polynomial-commitments.md
-use crate::boojum::blake2::Digest;
-use crate::boojum::pairing::bls12_381::fq::Fq;
-use crate::boojum::pairing::bls12_381::fq12::Fq12;
-use crate::boojum::pairing::bls12_381::fr::{Fr, FrRepr};
-use crate::boojum::pairing::bls12_381::Bls12;
-use crate::boojum::pairing::bls12_381::{G1Affine, G1Compressed, G2Affine, G2Compressed, G1, G2};
-use crate::boojum::pairing::ff::{Field, PrimeField, PrimeFieldRepr};
-use crate::boojum::pairing::Engine;
-use crate::boojum::pairing::{CurveAffine, CurveProjective, EncodedPoint};
-use crate::sha2::Sha256;
+#![feature(array_chunks)]
+#![feature(bigint_helper_methods)]
+use boojum::{
+    blake2::Digest,
+    pairing::{
+        bls12_381::{
+            fq12::Fq12,
+            fr::{Fr, FrRepr},
+            Bls12, G1Affine, G1Compressed, G2Affine, G2Compressed, G1, G2,
+        },
+        ff::{Field, PrimeField, PrimeFieldRepr},
+        CurveAffine, CurveProjective, EncodedPoint, Engine,
+    },
+    sha2::Sha256,
+};
 use rayon::prelude::*;
-use serde::Serialize;
+
+// Remove these, once we move all kzg logic from zksync-era crate.
+pub use boojum;
+pub use zkevm_circuits;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 struct TrustedSetup {
@@ -377,7 +385,7 @@ fn u8_repr_to_u64_repr_be(bytes: [u8; 32]) -> [u64; 4] {
     bytes
         .array_chunks::<8>()
         .enumerate()
-        .map(|(i, chunk)| u64::from_be_bytes(*chunk))
+        .map(|(_, chunk)| u64::from_be_bytes(*chunk))
         .rev()
         .collect::<Vec<u64>>()
         .try_into()

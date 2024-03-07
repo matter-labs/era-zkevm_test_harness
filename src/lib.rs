@@ -26,10 +26,11 @@ pub use crate::zk_evm::blake2;
 pub use crate::zk_evm::sha2;
 pub use crate::zk_evm::sha3;
 
+pub use kzg;
+
 pub mod data_source;
 pub mod entry_point;
 pub mod geometry_config;
-pub mod kzg;
 pub mod proof_compression;
 pub mod prover_utils;
 pub mod snark_wrapper_test;

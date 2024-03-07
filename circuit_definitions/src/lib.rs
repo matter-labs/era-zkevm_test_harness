@@ -58,7 +58,6 @@ pub fn eip4844_proof_config() -> ProofConfig {
 
 pub mod aux_definitions;
 pub mod circuit_definitions;
-pub mod encodings;
 
 use crate::boojum::implementations::poseidon2::Poseidon2Goldilocks;
 pub use zk_evm::ethereum_types;
@@ -68,3 +67,5 @@ pub type ZkSyncDefaultRoundFunction = Poseidon2Goldilocks;
 pub use zk_evm;
 pub use zkevm_circuits;
 pub use zkevm_circuits::boojum;
+
+pub use circuit_encodings as encodings;

@@ -1,5 +1,5 @@
 [package]
-name = "circuit_definitions"
+name = "circuit_encodings"
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
@@ -10,18 +10,12 @@ license = "MIT OR Apache-2.0"
 # zk_evm = {path = "../../zk_evm"}
 # zkevm_circuits = {path = "../../zkevm_circuits", features = ["verbose_circuits"]}
 
-snark_wrapper = {git = "https://github.com/matter-labs/snark-wrapper.git", branch = "main"}
-# snark_wrapper = {path = "../../snark_wrapper"}
-
 zkevm_circuits = {git = "https://github.com/matter-labs/era-zkevm_circuits.git", branch = "v1.4.1"}
 zk_evm = {git = "https://github.com/matter-labs/era-zk_evm.git", branch = "v1.4.1"}
 
-circuit_encodings = {path = "../circuit_encodings"}
-
 derivative = "*"
 serde = {version = "1", features = ["derive"]}
-crossbeam = "0.8"
-seq-macro = "0.3.5"
+
 
 [features]
 default = []

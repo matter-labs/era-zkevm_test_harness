@@ -7,6 +7,27 @@ decentralization. Since it's EVM compatible (Solidity/Vyper), 99% of Ethereum pr
 or re-auditing a single line of code. zkSync Era also uses an LLVM-based compiler that will eventually let developers
 write smart contracts in C++, Rust and other popular languages.
 
+# Crates
+
+## circuit_definitions
+
+Contains the definitions of all the basic, recursive and AUX circuits.
+
+## circuits_encodings
+
+Contains the information that are shared across circuits, like memory queries etc.
+
+## circuits_sequencer_api
+This is the 'public' crate, taht can be used by sequencer. It represents things
+that can be used inside blockchains / sequencer.
+
+## kzg
+
+Utility crate with helper kzg functions.
+
+## main crate
+Main crate has tests and witness methods, that can be used during proving itself.
+
 # How to use
 
 This repo contains a mixture of witness generation harness (that runs block's code and produces circuit-specific witness parts) and basic examples of full block proof workflow execution, that is:
