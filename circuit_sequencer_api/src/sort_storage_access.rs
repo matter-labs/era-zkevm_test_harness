@@ -2,10 +2,10 @@ use derivative::Derivative;
 use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::iter::IntoIterator;
-use zk_evm::{
-    aux_structures::{LogQuery, Timestamp},
-    ethereum_types::{H160, U256},
-};
+use zk_evm::ethereum_types::U256;
+
+use circuit_definitions::encodings::LogQueryLike;
+use circuit_definitions::encodings::LogQueryLikeWithExtendedEnumeration;
 
 #[derive(Derivative)]
 #[derivative(Default(bound = ""), Debug)]
