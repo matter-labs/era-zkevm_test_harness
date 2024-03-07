@@ -45,7 +45,7 @@ pub mod external_calls;
 pub mod toolset;
 // pub mod circuit_limit_estimator;
 
-pub const INITIAL_MONOTONIC_CYCLE_COUNTER: u32 = 1024;
+pub use circuit_sequencer_api::INITIAL_MONOTONIC_CYCLE_COUNTER;
 
 // #[cfg(test)]
 pub mod helper;
