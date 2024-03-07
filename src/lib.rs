@@ -28,7 +28,7 @@ pub use crate::zk_evm::sha3;
 
 pub mod data_source;
 pub mod entry_point;
-pub mod geometry_config;
+pub use circuit_sequencer_api::geometry_config;
 pub mod proof_compression;
 pub mod prover_utils;
 pub mod snark_wrapper_test;
