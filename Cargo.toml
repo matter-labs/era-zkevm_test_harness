@@ -20,6 +20,7 @@ resolver = "2"
 
 [dependencies]
 circuit_definitions = {path = "./circuit_definitions"}
+circuit_sequencer_api = {path = "./circuit_sequencer_api"}
 
 zkevm-assembly = {git = "https://github.com/matter-labs/era-zkEVM-assembly.git", branch = "v1.3.2"}
 
