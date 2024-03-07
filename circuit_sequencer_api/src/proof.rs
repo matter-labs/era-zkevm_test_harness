@@ -8,6 +8,8 @@ use bellman::{
 
 // Wrapper for the final scheduler proof.
 // We use generic circuit here, as this is used only for serializing & deserializing in sequencer.
+// The exact circuti type does not change the rules of (de)serialization, so we use a very lightweight
+// circuit in places that only pass proofs around to avoid unnecessary heavy compilation in most places.
 pub type FinalProof = Proof<Bn256, GenericCircuit>;
 
 #[derive(Clone)]
