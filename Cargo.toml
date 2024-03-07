@@ -19,6 +19,8 @@ name = "geometry_config_generator"
 path = "src/geometry_config_generator/main.rs"
 
 [dependencies]
+circuit_sequencer_api = {path = "./circuit_sequencer_api"}
+
 # zk_evm = {path = "../zk_evm"}
 # sync_vm = {path = "../sync_vm", features = ["external_testing"]}
 # zkevm-assembly = {path = "../zkEVM-assembly"}

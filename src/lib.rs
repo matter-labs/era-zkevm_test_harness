@@ -32,7 +32,7 @@ pub mod toolset;
 
 pub mod abstract_zksync_circuit;
 
-pub const INITIAL_MONOTONIC_CYCLE_COUNTER: u32 = 1024;
+pub use circuit_sequencer_api::INITIAL_MONOTONIC_CYCLE_COUNTER;
 
 // #[cfg(test)]
 pub(crate) mod tests;
