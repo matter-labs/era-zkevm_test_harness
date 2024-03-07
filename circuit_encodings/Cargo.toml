@@ -1,6 +1,6 @@
 [package]
 name = "circuit_encodings"
-version = "0.1.40"
+version = "0.1.41"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 
@@ -10,8 +10,8 @@ license = "MIT OR Apache-2.0"
 # zk_evm = {path = "../../zk_evm"}
 # zkevm_circuits = {path = "../../zkevm_circuits", features = ["verbose_circuits"]}
 
-zkevm_circuits = {git = "https://github.com/matter-labs/era-zkevm_circuits.git", branch = "v1.4.0"}
-zk_evm = {git = "https://github.com/matter-labs/era-zk_evm.git", branch = "v1.4.0"}
+zkevm_circuits = {git = "https://github.com/matter-labs/era-zkevm_circuits.git", branch = "v1.4.1"}
+zk_evm = {git = "https://github.com/matter-labs/era-zk_evm.git", branch = "v1.4.1"}
 
 derivative = "*"
 serde = {version = "1", features = ["derive"]}
