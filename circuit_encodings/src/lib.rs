@@ -10,6 +10,15 @@ use derivative::Derivative;
 use std::collections::VecDeque;
 use zkevm_circuits::base_structures::vm_state::{FULL_SPONGE_QUEUE_STATE_WIDTH, QUEUE_STATE_WIDTH};
 
+use crate::boojum::implementations::poseidon2::Poseidon2Goldilocks;
+pub use zk_evm::ethereum_types;
+
+pub type ZkSyncDefaultRoundFunction = Poseidon2Goldilocks;
+
+pub use zk_evm;
+pub use zkevm_circuits;
+pub use zkevm_circuits::boojum;
+
 // for we need to encode some structures as packed field elements
 pub trait OutOfCircuitFixedLengthEncodable<F: SmallField, const N: usize>: Clone {
     fn encoding_witness(&self) -> [F; N];
