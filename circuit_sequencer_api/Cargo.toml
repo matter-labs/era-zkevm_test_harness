@@ -8,7 +8,8 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 
-zk_evm = {git = "https://github.com/matter-labs/era-zk_evm.git", branch = "v1.3.3"}
+zk_evm = {git = "https://github.com/matter-labs/era-zk_evm.git", branch = "v1.4.0"}
+circuit_definitions = {path = "../circuit_definitions"}
 bellman = { package = "bellman_ce", git = "https://github.com/matter-labs/bellman", branch = "dev" }
 
 
