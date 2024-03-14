@@ -29,7 +29,7 @@ pub fn sort_storage_access_queries<'a, L: LogQueryLike, I: IntoIterator<Item = &
         .collect();
 
     sorted_storage_queries_with_extra_timestamp.par_sort_by(|a, b| {
-        match a.raw_query.shard_id().cmp(&a.raw_query.shard_id()) {
+        match a.raw_query.shard_id().cmp(&b.raw_query.shard_id()) {
             Ordering::Equal => match a.raw_query.address().cmp(&b.raw_query.address()) {
                 Ordering::Equal => match a.raw_query.key().cmp(&b.raw_query.key()) {
                     Ordering::Equal => a.extended_timestamp.cmp(&b.extended_timestamp),
