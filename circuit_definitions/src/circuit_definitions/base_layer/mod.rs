@@ -4,7 +4,10 @@ use crate::boojum::cs::implementations::setup::FinalizationHintsForProver;
 use crate::boojum::cs::traits::gate::GatePlacementStrategy;
 use crate::boojum::field::goldilocks::{GoldilocksExt2, GoldilocksField};
 use crate::boojum::gadgets::tables::*;
+use snark_wrapper::boojum::dag::StCircuitResolver;
 use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
+use zkevm_circuits::boojum::config::CSConfig;
+use zkevm_circuits::boojum::dag::{CircuitResolver, DefaultCircuitResolver};
 use zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
 use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord;
 use zkevm_circuits::tables::*;
@@ -20,32 +23,32 @@ pub mod events_sort_dedup;
 pub mod keccak256_round_function;
 pub mod log_demux;
 pub mod ram_permutation;
+pub mod secp256r1_verify;
 pub mod sha256_round_function;
 pub mod sort_code_decommits;
 pub mod storage_apply;
 pub mod storage_sort_dedup;
-pub mod vm_main;
-pub mod secp256r1_verify;
 pub mod transient_storage_sort;
+pub mod vm_main;
 // pub mod l1_messages_sort_dedup; // equal to one above
-pub mod linear_hasher;
 pub mod eip4844;
+pub mod linear_hasher;
 
 pub use self::code_decommitter::CodeDecommitterInstanceSynthesisFunction;
 pub use self::ecrecover::ECRecoverFunctionInstanceSynthesisFunction;
+pub use self::eip4844::EIP4844InstanceSynthesisFunction;
 pub use self::events_sort_dedup::EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction;
 pub use self::keccak256_round_function::Keccak256RoundFunctionInstanceSynthesisFunction;
 pub use self::linear_hasher::LinearHasherInstanceSynthesisFunction;
 pub use self::log_demux::LogDemuxInstanceSynthesisFunction;
 pub use self::ram_permutation::RAMPermutationInstanceSynthesisFunction;
+pub use self::secp256r1_verify::Secp256r1VerifyFunctionInstanceSynthesisFunction;
 pub use self::sha256_round_function::Sha256RoundFunctionInstanceSynthesisFunction;
 pub use self::sort_code_decommits::CodeDecommittmentsSorterSynthesisFunction;
 pub use self::storage_apply::StorageApplicationInstanceSynthesisFunction;
 pub use self::storage_sort_dedup::StorageSortAndDedupInstanceSynthesisFunction;
-pub use self::vm_main::VmMainInstanceSynthesisFunction;
-pub use self::secp256r1_verify::Secp256r1VerifyFunctionInstanceSynthesisFunction;
 pub use self::transient_storage_sort::TransientStorageSortAndDedupInstanceSynthesisFunction;
-pub use self::eip4844::EIP4844InstanceSynthesisFunction;
+pub use self::vm_main::VmMainInstanceSynthesisFunction;
 
 // Type definitions for circuits, so one can easily form circuits with witness, and their definition
 // will take care of particular synthesis function. There is already an implementation of Circuit<F> for ZkSyncUniformCircuitInstance,
@@ -170,9 +173,7 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             ZkSyncBaseLayerStorage::Secp256r1Verify(..) => {
                 BaseLayerCircuitType::Secp256r1Verify as u8
             }
-            ZkSyncBaseLayerStorage::EIP4844Repack(..) => {
-                BaseLayerCircuitType::EIP4844Repack as u8
-            }
+            ZkSyncBaseLayerStorage::EIP4844Repack(..) => BaseLayerCircuitType::EIP4844Repack as u8,
         }
     }
 
@@ -224,7 +225,9 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
                 Self::L1MessagesSorter(inner)
             }
             a if a == BaseLayerCircuitType::L1MessagesHasher as u8 => Self::L1MessagesHasher(inner),
-            a if a == BaseLayerCircuitType::TransientStorageChecker as u8 => Self::TransientStorageSorter(inner),
+            a if a == BaseLayerCircuitType::TransientStorageChecker as u8 => {
+                Self::TransientStorageSorter(inner)
+            }
             a if a == BaseLayerCircuitType::Secp256r1Verify as u8 => Self::Secp256r1Verify(inner),
             a if a == BaseLayerCircuitType::EIP4844Repack as u8 => Self::EIP4844Repack(inner),
             a @ _ => panic!("unknown numeric type {}", a),
@@ -328,13 +331,23 @@ where
         }
     }
 
-    fn synthesis_inner<P: PrimeFieldLikeVectorized<Base = F>>(
+    fn synthesis_inner<P, CR>(
         inner: &ZkSyncUniformCircuitInstance<F, impl ZkSyncUniformSynthesisFunction<F>>,
         hint: &FinalizationHintsForProver,
-    ) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig>
+    where
+        P: PrimeFieldLikeVectorized<Base = F>,
+        CR: CircuitResolver<
+            F,
+            zkevm_circuits::boojum::config::Resolver<
+                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts,
+            >,
+        >,
+        usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>,
+    {
         let geometry = inner.geometry_proxy();
         let (max_trace_len, num_vars) = inner.size_hint();
-        let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig>::new(
+        let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig, CR>::new(
             geometry,
             max_trace_len.unwrap(),
         );
@@ -351,29 +364,71 @@ where
         &self,
         hint: &FinalizationHintsForProver,
     ) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
+        self.synthesis_wrapped::<
+            P,
+            StCircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>
+        >(hint)
+    }
+
+    pub fn synthesis_wrapped<P, CR>(
+        &self,
+        hint: &FinalizationHintsForProver,
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig>
+    where
+        P: PrimeFieldLikeVectorized<Base = F>,
+        CR: CircuitResolver<
+            F,
+            zkevm_circuits::boojum::config::Resolver<
+                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts,
+            >,
+        >,
+        usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>,
+    {
         match &self {
-            ZkSyncBaseLayerCircuit::MainVM(inner) => Self::synthesis_inner(inner, hint),
+            ZkSyncBaseLayerCircuit::MainVM(inner) => Self::synthesis_inner::<_, CR>(inner, hint),
             ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(inner) => {
-                Self::synthesis_inner(inner, hint)
+                Self::synthesis_inner::<_, CR>(inner, hint)
             }
-            ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => Self::synthesis_inner(inner, hint),
-            ZkSyncBaseLayerCircuit::LogDemuxer(inner) => Self::synthesis_inner(inner, hint),
+            ZkSyncBaseLayerCircuit::CodeDecommitter(inner) => {
+                Self::synthesis_inner::<_, CR>(inner, hint)
+            }
+            ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {
+                Self::synthesis_inner::<_, CR>(inner, hint)
+            }
             ZkSyncBaseLayerCircuit::KeccakRoundFunction(inner) => {
-                Self::synthesis_inner(inner, hint)
+                Self::synthesis_inner::<_, CR>(inner, hint)
             }
             ZkSyncBaseLayerCircuit::Sha256RoundFunction(inner) => {
-                Self::synthesis_inner(inner, hint)
+                Self::synthesis_inner::<_, CR>(inner, hint)
             }
-            ZkSyncBaseLayerCircuit::ECRecover(inner) => Self::synthesis_inner(inner, hint),
-            ZkSyncBaseLayerCircuit::RAMPermutation(inner) => Self::synthesis_inner(inner, hint),
-            ZkSyncBaseLayerCircuit::StorageSorter(inner) => Self::synthesis_inner(inner, hint),
-            ZkSyncBaseLayerCircuit::StorageApplication(inner) => Self::synthesis_inner(inner, hint),
-            ZkSyncBaseLayerCircuit::EventsSorter(inner) => Self::synthesis_inner(inner, hint),
-            ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => Self::synthesis_inner(inner, hint),
-            ZkSyncBaseLayerCircuit::L1MessagesHasher(inner) => Self::synthesis_inner(inner, hint),
-            ZkSyncBaseLayerCircuit::TransientStorageSorter(inner) => Self::synthesis_inner(inner, hint),
-            ZkSyncBaseLayerCircuit::Secp256r1Verify(inner) => Self::synthesis_inner(inner, hint),
-            ZkSyncBaseLayerCircuit::EIP4844Repack(inner) => Self::synthesis_inner(inner, hint),
+            ZkSyncBaseLayerCircuit::ECRecover(inner) => Self::synthesis_inner::<_, CR>(inner, hint),
+            ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {
+                Self::synthesis_inner::<_, CR>(inner, hint)
+            }
+            ZkSyncBaseLayerCircuit::StorageSorter(inner) => {
+                Self::synthesis_inner::<_, CR>(inner, hint)
+            }
+            ZkSyncBaseLayerCircuit::StorageApplication(inner) => {
+                Self::synthesis_inner::<_, CR>(inner, hint)
+            }
+            ZkSyncBaseLayerCircuit::EventsSorter(inner) => {
+                Self::synthesis_inner::<_, CR>(inner, hint)
+            }
+            ZkSyncBaseLayerCircuit::L1MessagesSorter(inner) => {
+                Self::synthesis_inner::<_, CR>(inner, hint)
+            }
+            ZkSyncBaseLayerCircuit::L1MessagesHasher(inner) => {
+                Self::synthesis_inner::<_, CR>(inner, hint)
+            }
+            ZkSyncBaseLayerCircuit::TransientStorageSorter(inner) => {
+                Self::synthesis_inner::<_, CR>(inner, hint)
+            }
+            ZkSyncBaseLayerCircuit::Secp256r1Verify(inner) => {
+                Self::synthesis_inner::<_, CR>(inner, hint)
+            }
+            ZkSyncBaseLayerCircuit::EIP4844Repack(inner) => {
+                Self::synthesis_inner::<_, CR>(inner, hint)
+            }
         }
     }
 
@@ -492,9 +547,7 @@ where
             ZkSyncBaseLayerCircuit::Secp256r1Verify(..) => {
                 BaseLayerCircuitType::Secp256r1Verify as u8
             }
-            ZkSyncBaseLayerCircuit::EIP4844Repack(..) => {
-                BaseLayerCircuitType::EIP4844Repack as u8
-            }
+            ZkSyncBaseLayerCircuit::EIP4844Repack(..) => BaseLayerCircuitType::EIP4844Repack as u8,
         }
     }
 }
