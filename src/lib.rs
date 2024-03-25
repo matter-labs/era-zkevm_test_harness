@@ -8,7 +8,6 @@
 #![feature(iter_next_chunk)]
 #![feature(associated_type_defaults)]
 #![feature(bigint_helper_methods)]
-#![feature(allocator_api)]
 #![allow(unused_imports)]
 #![allow(clippy::drop_ref)]
 
