@@ -1,3 +1,4 @@
+use std::alloc::Global;
 use std::panic;
 
 use crate::boojum::cs::CSGeometry;
@@ -223,13 +224,19 @@ pub fn l1_messages_hasher_capacity() -> usize {
 }
 
 pub fn transient_storage_sorter_capacity() -> usize {
-    type SF = TransientStorageSortAndDedupInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+    type SF = TransientStorageSortAndDedupInstanceSynthesisFunction<
+        GoldilocksField,
+        ZkSyncDefaultRoundFunction,
+    >;
 
     compute_size_inner::<SF, _>(SF::geometry(), 20, Some(22000), |x: usize| x)
 }
 
 pub fn secp256r1_verify_capacity() -> usize {
-    type SF = Secp256r1VerifyFunctionInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+    type SF = Secp256r1VerifyFunctionInstanceSynthesisFunction<
+        GoldilocksField,
+        ZkSyncDefaultRoundFunction,
+    >;
 
     compute_size_inner::<SF, _>(SF::geometry(), 20, Some(2), |x: usize| x)
 }

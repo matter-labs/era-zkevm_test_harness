@@ -5,7 +5,7 @@ use crate::boojum::pairing::bls12_381::fq12::Fq12;
 use crate::boojum::pairing::bls12_381::fr::{Fr, FrRepr};
 use crate::boojum::pairing::bls12_381::Bls12;
 use crate::boojum::pairing::bls12_381::{G1Affine, G1Compressed, G2Affine, G2Compressed, G1, G2};
-use crate::boojum::pairing::ff::{Field, PrimeField};
+use crate::boojum::pairing::ff::{Field, PrimeField, PrimeFieldRepr};
 use crate::boojum::pairing::Engine;
 use crate::boojum::pairing::{CurveAffine, CurveProjective, EncodedPoint};
 use crate::sha2::Sha256;
@@ -349,21 +349,23 @@ fn eval_poly(settings: &KzgSettings, blob: &[Fr], z: &Fr) -> Fr {
 }
 
 fn compute_challenge(blob: &[Fr], commitment: &G1Affine) -> Fr {
-    let mut data = String::from("FSBLOBVERIFY_V1_");
-    let degree_separator: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0];
-    data.push_str(std::str::from_utf8(&degree_separator).unwrap());
-    let encoded_blob = bincode::serialize(&blob).expect("should be able to serialize blob");
-    data.push_str(&format!("{:x?}", encoded_blob));
-    let encoded_commitment =
-        bincode::serialize(&commitment).expect("should be able to serialize commitment");
-    data.push_str(&format!("{:x?}", encoded_commitment));
+    let mut data = String::from("FSBLOBVERIFY_V1_").into_bytes();
+    let degree_separator: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x10, 0];
+    data.extend(&degree_separator);
+    data.reserve(FIELD_ELEMENTS_PER_BLOB * 32);
+    blob.iter().for_each(|el| {
+        el.into_repr()
+            .write_be(&mut data)
+            .expect("should be able to write to data vector");
+    });
+    data.extend(commitment.into_compressed().as_ref());
 
     let mut result = [0u8; 32];
     let digest = Sha256::digest(data);
     result.copy_from_slice(&digest);
 
     // reduce to fit within bls scalar field
-    let mut repr = u8_repr_to_u64_repr(result);
+    let mut repr = u8_repr_to_u64_repr_be(result);
     while repr_greater_than(repr, BLS_MODULUS) != std::cmp::Ordering::Less {
         repr = reduce(repr, BLS_MODULUS);
     }
@@ -371,20 +373,15 @@ fn compute_challenge(blob: &[Fr], commitment: &G1Affine) -> Fr {
     Fr::from_repr(FrRepr(repr)).unwrap()
 }
 
-fn u8_repr_to_u64_repr(bytes: [u8; 32]) -> [u64; 4] {
-    let mut ret = [0u64; 4];
-    for (i, el) in ret.iter_mut().enumerate() {
-        *el |= bytes[i * 8] as u64;
-        *el |= (bytes[1 + i * 8] as u64) << 8;
-        *el |= (bytes[2 + i * 8] as u64) << 16;
-        *el |= (bytes[3 + i * 8] as u64) << 24;
-        *el |= (bytes[4 + i * 8] as u64) << 32;
-        *el |= (bytes[5 + i * 8] as u64) << 40;
-        *el |= (bytes[6 + i * 8] as u64) << 48;
-        *el |= (bytes[7 + i * 8] as u64) << 56;
-    }
-
-    ret
+fn u8_repr_to_u64_repr_be(bytes: [u8; 32]) -> [u64; 4] {
+    bytes
+        .array_chunks::<8>()
+        .enumerate()
+        .map(|(i, chunk)| u64::from_be_bytes(*chunk))
+        .rev()
+        .collect::<Vec<u64>>()
+        .try_into()
+        .expect("should always produce a 4-element vector of u64")
 }
 
 fn repr_greater_than(repr: [u64; 4], modulus: [u64; 4]) -> std::cmp::Ordering {

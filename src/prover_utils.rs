@@ -37,6 +37,7 @@ type P = GoldilocksField;
 type TR = GoldilocksPoisedon2Transcript;
 type R = Poseidon2Goldilocks;
 type CTR = CircuitAlgebraicSpongeBasedTranscript<GoldilocksField, 8, 12, 4, R>;
+
 type EXT = GoldilocksExt2;
 type H = GoldilocksPoseidon2Sponge<AbsorptionModeOverwrite>;
 type RH = CircuitGoldilocksPoseidon2Sponge;
@@ -73,6 +74,8 @@ pub fn create_base_layer_setup_data(
         geometry,
         max_trace_len.unwrap(),
     );
+
+    let arg = num_vars.unwrap();
     let builder = new_builder::<_, GoldilocksField>(builder_impl);
 
     let (cs, finalization_hint) = match circuit {
@@ -253,6 +256,7 @@ pub fn prove_base_layer_circuit<POW: PoWRunner>(
         geometry,
         max_trace_len.unwrap(),
     );
+    let arg = num_vars.unwrap();
     let builder = new_builder::<_, GoldilocksField>(builder_impl);
 
     let cs = match circuit {
@@ -466,6 +470,7 @@ pub fn create_recursive_layer_setup_data(
         geometry,
         max_trace_len.unwrap(),
     );
+    let arg = num_vars.unwrap();
     let builder = new_builder::<_, GoldilocksField>(builder_impl);
 
     let (cs, finalization_hint) = match circuit {
@@ -557,6 +562,7 @@ pub fn prove_recursion_layer_circuit<POW: PoWRunner>(
         geometry,
         max_trace_len.unwrap(),
     );
+    let arg = num_vars.unwrap();
     let builder = new_builder::<_, GoldilocksField>(builder_impl);
 
     let cs = match circuit {

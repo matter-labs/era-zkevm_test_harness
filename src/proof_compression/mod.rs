@@ -20,6 +20,8 @@ type RH = CircuitGoldilocksPoseidon2Sponge;
 
 #[cfg(test)]
 mod test {
+    use std::alloc::Global;
+
     use circuit_definitions::boojum::cs::implementations::pow::NoPow;
     use circuit_definitions::boojum::cs::implementations::proof::Proof;
     use circuit_definitions::boojum::cs::implementations::verifier::VerificationKey;
@@ -344,7 +346,7 @@ mod test {
         circuit.synthesize_into_cs(&mut cs_owned);
         let _num_gates = cs_owned.pad_and_shrink();
 
-        let mut assembly = cs_owned.into_assembly::<std::alloc::Global>();
+        let mut assembly = cs_owned.into_assembly::<Global>();
         assembly.print_gate_stats();
 
         assert!(assembly.check_if_satisfied(&worker));

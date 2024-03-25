@@ -5,6 +5,7 @@ pub mod compression_modes;
 pub mod wrapper;
 
 use crate::boojum::config::ProvingCSConfig;
+use crate::boojum::dag::CircuitResolverOpts;
 use crate::boojum::field::traits::field_like::PrimeFieldLikeVectorized;
 use crate::circuit_definitions::aux_layer::compression::*;
 use crate::circuit_definitions::aux_layer::compression_modes::*;
