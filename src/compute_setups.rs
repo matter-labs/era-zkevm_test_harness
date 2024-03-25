@@ -1,15 +1,26 @@
 use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use crate::boojum::worker::Worker;
 use circuit_definitions::{
-    circuit_definitions::base_layer::{
-        ZkSyncBaseLayerCircuit, ZkSyncBaseLayerFinalizationHint, ZkSyncBaseLayerProof,
-        ZkSyncBaseLayerVerificationKey,
-    }, recursion_layer_proof_config, zkevm_circuits::eip_4844::input::ENCODABLE_BYTES_PER_BLOB, RECURSION_LAYER_CAP_SIZE, RECURSION_LAYER_FRI_LDE_FACTOR
+    aux_definitions::witness_oracle::VmWitnessOracle,
+    circuit_definitions::{
+        base_layer::{
+            ZkSyncBaseLayerCircuit, ZkSyncBaseLayerFinalizationHint, ZkSyncBaseLayerProof,
+            ZkSyncBaseLayerVerificationKey,
+        },
+        ZkSyncUniformCircuitInstance,
+    },
+    recursion_layer_proof_config,
+    zkevm_circuits::eip_4844::input::ENCODABLE_BYTES_PER_BLOB,
+    RECURSION_LAYER_CAP_SIZE, RECURSION_LAYER_FRI_LDE_FACTOR,
 };
+use crossbeam::atomic::AtomicCell;
+
+use self::toolset::GeometryConfig;
 
 use super::*;
 
@@ -33,41 +44,120 @@ use std::collections::VecDeque;
 
 use crate::prover_utils::*;
 
+/// Returns all types of basic circuits, with empty witnesses.
+/// Can be used for things like verification key generation.
+fn get_all_basic_circuits(
+    geometry: &GeometryConfig,
+) -> Vec<
+    ZkSyncBaseLayerCircuit<GoldilocksField, VmWitnessOracle<GoldilocksField>, Poseidon2Goldilocks>,
+> {
+    vec![
+        ZkSyncBaseLayerCircuit::MainVM(ZkSyncUniformCircuitInstance {
+            witness: AtomicCell::new(None),
+            config: Arc::new(geometry.cycles_per_vm_snapshot as usize),
+            round_function: Arc::new(Poseidon2Goldilocks),
+            expected_public_input: None,
+        }),
+        ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(ZkSyncUniformCircuitInstance {
+            witness: AtomicCell::new(None),
+            config: Arc::new(geometry.cycles_code_decommitter_sorter as usize),
+            round_function: Arc::new(Poseidon2Goldilocks),
+            expected_public_input: None,
+        }),
+        ZkSyncBaseLayerCircuit::CodeDecommitter(ZkSyncUniformCircuitInstance {
+            witness: AtomicCell::new(None),
+
+            config: Arc::new(geometry.cycles_per_code_decommitter as usize),
+            round_function: Arc::new(Poseidon2Goldilocks),
+            expected_public_input: None,
+        }),
+        ZkSyncBaseLayerCircuit::LogDemuxer(ZkSyncUniformCircuitInstance {
+            witness: AtomicCell::new(None),
+            config: Arc::new(geometry.cycles_per_log_demuxer as usize),
+            round_function: Arc::new(Poseidon2Goldilocks),
+            expected_public_input: None,
+        }),
+        ZkSyncBaseLayerCircuit::KeccakRoundFunction(ZkSyncUniformCircuitInstance {
+            witness: AtomicCell::new(None),
+            config: Arc::new(geometry.cycles_per_keccak256_circuit as usize),
+            round_function: Arc::new(Poseidon2Goldilocks),
+            expected_public_input: None,
+        }),
+        ZkSyncBaseLayerCircuit::Sha256RoundFunction(ZkSyncUniformCircuitInstance {
+            witness: AtomicCell::new(None),
+            config: Arc::new(geometry.cycles_per_sha256_circuit as usize),
+            round_function: Arc::new(Poseidon2Goldilocks),
+            expected_public_input: None,
+        }),
+        ZkSyncBaseLayerCircuit::ECRecover(ZkSyncUniformCircuitInstance {
+            witness: AtomicCell::new(None),
+            config: Arc::new(geometry.cycles_per_ecrecover_circuit as usize),
+            round_function: Arc::new(Poseidon2Goldilocks),
+            expected_public_input: None,
+        }),
+        ZkSyncBaseLayerCircuit::RAMPermutation(ZkSyncUniformCircuitInstance {
+            witness: AtomicCell::new(None),
+            config: Arc::new(geometry.cycles_per_ram_permutation as usize),
+            round_function: Arc::new(Poseidon2Goldilocks),
+            expected_public_input: None,
+        }),
+        ZkSyncBaseLayerCircuit::StorageSorter(ZkSyncUniformCircuitInstance {
+            witness: AtomicCell::new(None),
+            config: Arc::new(geometry.cycles_per_storage_sorter as usize),
+            round_function: Arc::new(Poseidon2Goldilocks),
+            expected_public_input: None,
+        }),
+        ZkSyncBaseLayerCircuit::StorageApplication(ZkSyncUniformCircuitInstance {
+            witness: AtomicCell::new(None),
+            config: Arc::new(geometry.cycles_per_storage_application as usize),
+            round_function: Arc::new(Poseidon2Goldilocks),
+            expected_public_input: None,
+        }),
+        ZkSyncBaseLayerCircuit::EventsSorter(ZkSyncUniformCircuitInstance {
+            witness: AtomicCell::new(None),
+            config: Arc::new(geometry.cycles_per_events_or_l1_messages_sorter as usize),
+            round_function: Arc::new(Poseidon2Goldilocks),
+            expected_public_input: None,
+        }),
+        ZkSyncBaseLayerCircuit::L1MessagesSorter(ZkSyncUniformCircuitInstance {
+            witness: AtomicCell::new(None),
+            config: Arc::new(geometry.cycles_per_events_or_l1_messages_sorter as usize),
+            round_function: Arc::new(Poseidon2Goldilocks),
+            expected_public_input: None,
+        }),
+        ZkSyncBaseLayerCircuit::L1MessagesHasher(ZkSyncUniformCircuitInstance {
+            witness: AtomicCell::new(None),
+            config: Arc::new(geometry.limit_for_l1_messages_pudata_hasher as usize),
+            round_function: Arc::new(Poseidon2Goldilocks),
+            expected_public_input: None,
+        }),
+    ]
+}
+
+/// For backwards compatibility (as zksync-era uses this method).
+/// For new cases please use generate_base_layer_vks directly.
 pub fn generate_base_layer_vks_and_proofs(
     source: &mut dyn SetupDataSource,
 ) -> crate::data_source::SourceResult<()> {
-    let test_artifact = read_basic_test_artifact();
-    let geometry = crate::geometry_config::get_geometry_config();
-    let blobs = std::array::from_fn(|i| {
-        if i == 0 {
-            Some(vec![0xff; ENCODABLE_BYTES_PER_BLOB])
-        } else {
-            None
-        }
-    });
-    let (base_layer_circuit, _, _) = generate_base_layer(test_artifact, 20000, geometry, blobs);
+    generate_base_layer_vks(source)
+}
 
+/// Generate Verification keys for all base layer circuits.
+pub fn generate_base_layer_vks(
+    source: &mut dyn SetupDataSource,
+) -> crate::data_source::SourceResult<()> {
+    let geometry = crate::geometry_config::get_geometry_config();
     let worker = Worker::new();
 
-    let mut processed = HashSet::new();
+    for circuit in get_all_basic_circuits(&geometry) {
+        let circuit_type = circuit.numeric_circuit_type();
 
-    for el in base_layer_circuit.into_iter() {
-        let name = el.short_description();
-        if processed.contains(&name) {
-            continue;
-        }
-
-        println!("Will compute for {} circuit type", &name);
-
-        let circuit_type = el.numeric_circuit_type();
-
-        let (setup_base, setup, vk, setup_tree, vars_hint, wits_hint, finalization_hint) =
-            create_base_layer_setup_data(
-                el.clone(),
-                &worker,
-                BASE_LAYER_FRI_LDE_FACTOR,
-                BASE_LAYER_CAP_SIZE,
-            );
+        let (_, _, vk, _, _, _, finalization_hint) = create_base_layer_setup_data(
+            circuit,
+            &worker,
+            BASE_LAYER_FRI_LDE_FACTOR,
+            BASE_LAYER_CAP_SIZE,
+        );
 
         let typed_vk = ZkSyncBaseLayerVerificationKey::from_inner(circuit_type, vk.clone());
         let typed_finalization_hint =
@@ -75,35 +165,6 @@ pub fn generate_base_layer_vks_and_proofs(
 
         source.set_base_layer_finalization_hint(typed_finalization_hint)?;
         source.set_base_layer_vk(typed_vk)?;
-
-        let proof_config = base_layer_proof_config();
-
-        println!("Proving!");
-        let now = std::time::Instant::now();
-
-        let proof = prove_base_layer_circuit::<NoPow>(
-            el.clone(),
-            &worker,
-            proof_config,
-            &setup_base,
-            &setup,
-            &setup_tree,
-            &vk,
-            &vars_hint,
-            &wits_hint,
-            &finalization_hint,
-        );
-
-        println!("Proving is DONE, taken {:?}", now.elapsed());
-
-        let is_valid = verify_base_layer_proof::<NoPow>(&el, &proof, &vk);
-
-        assert!(is_valid);
-
-        let proof = ZkSyncBaseLayerProof::from_inner(circuit_type, proof);
-        source.set_base_layer_padding_proof(proof)?;
-
-        processed.insert(name);
     }
 
     Ok(())
@@ -346,7 +407,7 @@ mod test {
     fn test_run_create_base_layer_vks_and_proofs() {
         LocalFileDataSource::create_folders_for_storing_data();
         let mut source = LocalFileDataSource;
-        generate_base_layer_vks_and_proofs(&mut source).expect("must compute setup");
+        generate_base_layer_vks(&mut source).expect("must compute setup");
     }
 
     #[test]
