@@ -58,40 +58,6 @@ pub fn compute_logs_demux<
         .0
         .is_empty()
     {
-        // return singe dummy witness
-        use crate::boojum::gadgets::queue::QueueState;
-
-        let initial_fsm_state = LogDemuxerFSMInputOutput::placeholder_witness();
-
-        assert_eq!(
-            take_queue_state_from_simulator(&artifacts.original_log_queue_simulator),
-            QueueState::placeholder_witness()
-        );
-        let mut passthrough_input = LogDemuxerInputData::placeholder_witness();
-        passthrough_input.initial_log_queue_state = QueueState::placeholder_witness();
-
-        let final_fsm_state = LogDemuxerFSMInputOutput::placeholder_witness();
-
-        let passthrough_output = LogDemuxerOutputData::placeholder_witness();
-
-        let wit = LogDemuxerCircuitInstanceWitness {
-            closed_form_input: LogDemuxerInputOutputWitness {
-                start_flag: true,
-                completion_flag: true,
-                observable_input: passthrough_input,
-                observable_output: passthrough_output,
-                hidden_fsm_input: initial_fsm_state.clone(),
-                hidden_fsm_output: final_fsm_state.clone(),
-            },
-            initial_queue_witness: CircuitQueueRawWitness {
-                elements: VecDeque::new(),
-            },
-        };
-
-        circuit_callback(ZkSyncBaseLayerCircuit::LogDemuxer(
-            maker.process(wit, circuit_type),
-        ));
-
         let (log_demux_circuits, queue_simulator, log_demux_circuits_compact_forms_witnesses) =
             maker.into_results();
         recursion_queue_callback(
