@@ -84,8 +84,6 @@ pub struct FullBlockArtifacts<F: SmallField> {
     pub code_decommitter_circuits_data: Vec<CodeDecommitterCircuitInstanceWitness<F>>,
     pub decommittments_deduplicator_circuits_data:
         Vec<CodeDecommittmentsDeduplicatorInstanceWitness<F>>,
-    //
-    pub log_demuxer_circuit_data: Vec<LogDemuxerCircuitInstanceWitness<F>>,
     // IO related circuits
     pub storage_deduplicator_circuit_data: Vec<StorageDeduplicatorInstanceWitness<F>>,
     pub events_deduplicator_circuit_data: Vec<EventsDeduplicatorInstanceWitness<F>>,
