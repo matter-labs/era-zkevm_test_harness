@@ -52,14 +52,16 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
     let mut sorted_decommittment_queue_states = vec![];
 
     let mut unsorted_decommittment_requests_with_data = vec![];
-    for (_cycle, decommittment_request, writes) in artifacts.all_executed_decommittment_queries.iter_mut() {
+    for (_cycle, decommittment_request, writes) in
+        artifacts.all_executed_decommittment_queries.iter_mut()
+    {
         let data = std::mem::replace(writes, vec![]);
         unsorted_decommittment_requests_with_data.push((*decommittment_request, data));
     }
 
-    let num_circuits = (artifacts.all_executed_decommittment_queries.len() + deduplicator_circuit_capacity
-        - 1)
-        / deduplicator_circuit_capacity;
+    let num_circuits =
+        (artifacts.all_executed_decommittment_queries.len() + deduplicator_circuit_capacity - 1)
+            / deduplicator_circuit_capacity;
 
     // internally parallelizable by the factor of 3
     for (cycle, decommittment_request, _) in artifacts.all_executed_decommittment_queries.iter() {
@@ -114,7 +116,11 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
                 *timestamp = query.timestamp;
             }
         } else {
-            tmp = Some((normalized_preimage_as_u256(&query.normalized_preimage), query.memory_page, query.timestamp));
+            tmp = Some((
+                normalized_preimage_as_u256(&query.normalized_preimage),
+                query.memory_page,
+                query.timestamp,
+            ));
         }
     }
 
@@ -162,7 +168,10 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
                 .witness
                 .pop_back()
                 .unwrap();
-            previous_packed_keys.push(concatenate_key(normalized_preimage_as_u256(&record.2.normalized_preimage), record.2.timestamp.0));
+            previous_packed_keys.push(concatenate_key(
+                normalized_preimage_as_u256(&record.2.normalized_preimage),
+                record.2.timestamp.0,
+            ));
 
             previous_records.push(record.2.reflect());
             first_encountered_timestamps.push(first_encountered_timestamp);

@@ -16,7 +16,6 @@ use circuit_definitions::{
     },
     recursion_layer_proof_config,
     zkevm_circuits::eip_4844::input::{ELEMENTS_PER_4844_BLOCK, ENCODABLE_BYTES_PER_BLOB},
-   
     zkevm_circuits::scheduler::aux::BaseLayerCircuitType,
     EIP4844_CYCLE_LIMIT, RECURSION_LAYER_CAP_SIZE, RECURSION_LAYER_FRI_LDE_FACTOR,
 };
@@ -164,7 +163,6 @@ fn get_all_basic_circuits(geometry: &GeometryConfig) -> Vec<ZkSyncBaseLayerCircu
     ]
 }
 
-
 /// Returns all the recursive circuits (including leaves, nodes and scheduler).
 /// Source must contain the verification keys for basic layer, leaf and node.
 fn get_all_recursive_circuits(
@@ -280,9 +278,9 @@ fn get_node_circuit(
 fn get_scheduler_circuit(
     source: &mut dyn SetupDataSource,
 ) -> crate::data_source::SourceResult<ZkSyncRecursiveLayerCircuit> {
+    use crate::zkevm_circuits::eip_4844::input::EIP4844OutputDataWitness;
     use crate::zkevm_circuits::scheduler::SchedulerConfig;
     use circuit_definitions::circuit_definitions::recursion_layer::scheduler::SchedulerCircuit;
-    use crate::zkevm_circuits::eip_4844::input::EIP4844OutputDataWitness;
 
     let node_vk = source.get_recursion_layer_node_vk()?.into_inner();
 
@@ -377,7 +375,6 @@ pub fn generate_circuit_setup_data(
         finalization_hint,
     })
 }
-
 
 /// For backwards compatibility (as zksync-era uses this method).
 /// For new cases please use generate_base_layer_vks directly.
@@ -520,7 +517,6 @@ pub fn generate_recursive_layer_vks_and_proofs(
     println!("Computing scheduler vk");
 
     {
-
         let scheduler_circuit = get_scheduler_circuit(source)?;
 
         let (_setup_base, _setup, vk, _setup_tree, _vars_hint, _wits_hint, finalization_hint) =

@@ -8,15 +8,15 @@ use crate::zk_evm::vm_state::CallStackEntry;
 
 use crate::zk_evm::zk_evm_abstractions::precompiles::ecrecover::ECRecoverRoundWitness;
 use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::Keccak256RoundWitness;
-use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Sha256RoundWitness;
 use crate::zk_evm::zk_evm_abstractions::precompiles::secp256r1_verify::Secp256r1VerifyRoundWitness;
+use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Sha256RoundWitness;
 
+use crate::zk_evm::abstractions::StorageAccessRefund;
 use crate::zk_evm::zkevm_opcode_defs::decoding::EncodingModeProduction;
 use crate::zk_evm::zkevm_opcode_defs::system_params::STORAGE_AUX_BYTE;
 use crate::zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS;
 use crate::zk_evm::zkevm_opcode_defs::system_params::VM_MAX_STACK_DEPTH;
 use circuit_definitions::zk_evm::zkevm_opcode_defs::system_params::TRANSIENT_STORAGE_AUX_BYTE;
-use crate::zk_evm::abstractions::StorageAccessRefund;
 use tracing;
 
 // cycle indicators below are not timestamps!
@@ -304,7 +304,9 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
 
     fn add_log_query(&mut self, monotonic_cycle_counter: u32, log_query: LogQuery) {
         // log both reads and writes
-        if log_query.aux_byte == STORAGE_AUX_BYTE || log_query.aux_byte == TRANSIENT_STORAGE_AUX_BYTE {
+        if log_query.aux_byte == STORAGE_AUX_BYTE
+            || log_query.aux_byte == TRANSIENT_STORAGE_AUX_BYTE
+        {
             self.storage_queries
                 .push((monotonic_cycle_counter, log_query));
         }
@@ -318,10 +320,8 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
         monotonic_cycle_counter: u32,
         decommittment_query: DecommittmentQuery,
     ) {
-        self.prepared_decommittment_queries.push((
-            monotonic_cycle_counter,
-            decommittment_query,
-        ));
+        self.prepared_decommittment_queries
+            .push((monotonic_cycle_counter, decommittment_query));
     }
 
     fn execute_decommittment(
