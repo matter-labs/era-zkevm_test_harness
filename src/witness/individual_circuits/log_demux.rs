@@ -96,12 +96,13 @@ pub fn compute_logs_demux<
     use crate::zk_evm::zkevm_opcode_defs::system_params::{
         ECRECOVER_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
         KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
-        SHA256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
         SECP256R1_VERIFY_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
+        SHA256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
     };
 
     use crate::zk_evm::zkevm_opcode_defs::system_params::{
-        EVENT_AUX_BYTE, L1_MESSAGE_AUX_BYTE, PRECOMPILE_AUX_BYTE, STORAGE_AUX_BYTE, TRANSIENT_STORAGE_AUX_BYTE,
+        EVENT_AUX_BYTE, L1_MESSAGE_AUX_BYTE, PRECOMPILE_AUX_BYTE, STORAGE_AUX_BYTE,
+        TRANSIENT_STORAGE_AUX_BYTE,
     };
 
     let mut demuxed_rollup_storage_queries_it = artifacts.demuxed_rollup_storage_queries.iter();
@@ -137,11 +138,14 @@ pub fn compute_logs_demux<
                     match query.shard_id {
                         0 => {
                             let item = demuxed_rollup_storage_queries_it.next().copied().unwrap();
-                            let (_old_tail, intermediate_info) = output_queues[DemuxOutput::RollupStorage as usize]
+                            let (_old_tail, intermediate_info) = output_queues
+                                [DemuxOutput::RollupStorage as usize]
                                 .simulator
                                 .push_and_output_intermediate_data(item, round_function);
 
-                                output_queues[DemuxOutput::RollupStorage as usize].states.push(intermediate_info);
+                            output_queues[DemuxOutput::RollupStorage as usize]
+                                .states
+                                .push(intermediate_info);
                         }
                         _ => unreachable!(),
                     }
@@ -151,30 +155,39 @@ pub fn compute_logs_demux<
                     match query.shard_id {
                         0 => {
                             let item = demuxed_transient_storage_it.next().copied().unwrap();
-                            let (_old_tail, intermediate_info) = output_queues[DemuxOutput::TransientStorage as usize]
+                            let (_old_tail, intermediate_info) = output_queues
+                                [DemuxOutput::TransientStorage as usize]
                                 .simulator
                                 .push_and_output_intermediate_data(item, round_function);
 
-                                output_queues[DemuxOutput::TransientStorage as usize].states.push(intermediate_info);
+                            output_queues[DemuxOutput::TransientStorage as usize]
+                                .states
+                                .push(intermediate_info);
                         }
                         _ => unreachable!(),
                     }
                 }
                 L1_MESSAGE_AUX_BYTE => {
                     let item = demuxed_to_l1_queries_it.next().copied().unwrap();
-                    let (_old_tail, intermediate_info) = output_queues[DemuxOutput::L2ToL1Messages as usize]
+                    let (_old_tail, intermediate_info) = output_queues
+                        [DemuxOutput::L2ToL1Messages as usize]
                         .simulator
                         .push_and_output_intermediate_data(item, round_function);
 
-                    output_queues[DemuxOutput::L2ToL1Messages as usize].states.push(intermediate_info);
+                    output_queues[DemuxOutput::L2ToL1Messages as usize]
+                        .states
+                        .push(intermediate_info);
                 }
                 EVENT_AUX_BYTE => {
                     let item = demuxed_event_queries_it.next().copied().unwrap();
-                    let (_old_tail, intermediate_info) = output_queues[DemuxOutput::Events as usize]
+                    let (_old_tail, intermediate_info) = output_queues
+                        [DemuxOutput::Events as usize]
                         .simulator
                         .push_and_output_intermediate_data(item, round_function);
 
-                    output_queues[DemuxOutput::Events as usize].states.push(intermediate_info);
+                    output_queues[DemuxOutput::Events as usize]
+                        .states
+                        .push(intermediate_info);
                 }
                 PRECOMPILE_AUX_BYTE => {
                     assert!(!query.rollback);
@@ -185,7 +198,8 @@ pub fn compute_logs_demux<
                                 .next()
                                 .copied()
                                 .unwrap();
-                            let (_old_tail, intermediate_info) = output_queues[DemuxOutput::Keccak as usize]
+                            let (_old_tail, intermediate_info) = output_queues
+                                [DemuxOutput::Keccak as usize]
                                 .simulator
                                 .push_and_output_intermediate_data(item, round_function);
 
@@ -198,7 +212,8 @@ pub fn compute_logs_demux<
                                 .next()
                                 .copied()
                                 .unwrap();
-                            let (_old_tail, intermediate_info) = output_queues[DemuxOutput::Sha256 as usize]
+                            let (_old_tail, intermediate_info) = output_queues
+                                [DemuxOutput::Sha256 as usize]
                                 .simulator
                                 .push_and_output_intermediate_data(item, round_function);
 
@@ -208,19 +223,25 @@ pub fn compute_logs_demux<
                         }
                         a if a == *ECRECOVER_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
                             let item = demuxed_ecrecover_queries_it.next().copied().unwrap();
-                            let (_old_tail, intermediate_info) = output_queues[DemuxOutput::ECRecover as usize]
+                            let (_old_tail, intermediate_info) = output_queues
+                                [DemuxOutput::ECRecover as usize]
                                 .simulator
                                 .push_and_output_intermediate_data(item, round_function);
 
-                            output_queues[DemuxOutput::ECRecover as usize].states.push(intermediate_info);
+                            output_queues[DemuxOutput::ECRecover as usize]
+                                .states
+                                .push(intermediate_info);
                         }
                         a if a == *SECP256R1_VERIFY_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
                             let item = demuxed_secp256r1_verify_queries_it.next().copied().unwrap();
-                            let (_old_tail, intermediate_info) = output_queues[DemuxOutput::Secp256r1Verify as usize]
+                            let (_old_tail, intermediate_info) = output_queues
+                                [DemuxOutput::Secp256r1Verify as usize]
                                 .simulator
                                 .push_and_output_intermediate_data(item, round_function);
 
-                            output_queues[DemuxOutput::Secp256r1Verify as usize].states.push(intermediate_info);
+                            output_queues[DemuxOutput::Secp256r1Verify as usize]
+                                .states
+                                .push(intermediate_info);
                         }
                         _ => {
                             // just burn ergs
@@ -254,9 +275,8 @@ pub fn compute_logs_demux<
         initial_log_queue_state.tail.length -= artifacts.original_log_queue_states[idx].1.num_items;
 
         fsm_output.initial_log_queue_state = initial_log_queue_state;
-        fsm_output.output_queue_states = std::array::from_fn(|i| {
-            take_queue_state_from_simulator(&output_queues[i].simulator)
-        });
+        fsm_output.output_queue_states =
+            std::array::from_fn(|i| take_queue_state_from_simulator(&output_queues[i].simulator));
 
         let mut witness = LogDemuxerCircuitInstanceWitness {
             closed_form_input: ClosedFormInputWitness {
@@ -282,8 +302,8 @@ pub fn compute_logs_demux<
                 .closed_form_input
                 .observable_output
                 .output_queue_states = std::array::from_fn(|i| {
-                    take_queue_state_from_simulator(&output_queues[i].simulator)
-                });
+                take_queue_state_from_simulator(&output_queues[i].simulator)
+            });
         }
 
         if let Some(output) = previous_hidden_fsm_output {

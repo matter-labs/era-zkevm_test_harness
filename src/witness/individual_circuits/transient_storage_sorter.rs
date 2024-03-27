@@ -4,8 +4,8 @@ use crate::zkevm_circuits::base_structures::log_query::{
     LOG_QUERY_ABSORBTION_ROUNDS, LOG_QUERY_PACKED_WIDTH,
 };
 use crate::zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
-use crate::zkevm_circuits::transient_storage_validity_by_grand_product::input::*;
 use crate::zkevm_circuits::storage_validity_by_grand_product::TIMESTAMPED_STORAGE_LOG_ENCODING_LEN;
+use crate::zkevm_circuits::transient_storage_validity_by_grand_product::input::*;
 use crate::zkevm_circuits::DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS;
 use circuit_definitions::encodings::*;
 use std::cmp::Ordering;
@@ -30,7 +30,7 @@ pub fn compute_transient_storage_dedup_and_sort<
     use crate::witness::sort_storage_access::sort_transient_storage_access_queries;
 
     let sorted_storage_queries_with_extra_timestamp =
-    sort_transient_storage_access_queries(&artifacts.demuxed_transient_storage_queries);
+        sort_transient_storage_access_queries(&artifacts.demuxed_transient_storage_queries);
 
     // dbg!(&sorted_storage_queries_with_extra_timestamp);
     // dbg!(&deduplicated_rollup_storage_queries);
@@ -152,9 +152,7 @@ pub fn compute_transient_storage_dedup_and_sort<
         .witness
         .make_contiguous();
 
-    intermediate_sorted_log_simulator
-        .witness
-        .make_contiguous();
+    intermediate_sorted_log_simulator.witness.make_contiguous();
 
     assert!(demuxed_transient_storage_queue
         .simulator
@@ -294,10 +292,7 @@ pub fn compute_transient_storage_dedup_and_sort<
         let last_timestamp = last_sorted_query.extended_timestamp;
 
         // simulate the logic
-        let (
-            new_this_cell_current_value,
-            new_this_cell_current_depth,
-        ) = {
+        let (new_this_cell_current_value, new_this_cell_current_depth) = {
             let mut current_address = previous_address;
             let mut current_key = previous_key;
             let mut current_tx_number = previous_tx_number;
@@ -378,14 +373,10 @@ pub fn compute_transient_storage_dedup_and_sort<
                 current_address = item.raw_query.address;
                 current_key = item.raw_query.key;
 
-                if is_last_ever {
-                }
+                if is_last_ever {}
             }
 
-            (
-                new_this_cell_current_value,
-                new_this_cell_current_depth,
-            )
+            (new_this_cell_current_value, new_this_cell_current_depth)
         };
 
         use crate::boojum::gadgets::queue::QueueState;
@@ -483,9 +474,7 @@ pub fn compute_transient_storage_dedup_and_sort<
                 .hidden_fsm_output
                 .previous_timestamp = 0u32;
         } else {
-            if is_last {
-
-            }
+            if is_last {}
         }
 
         current_lhs_product = accumulated_lhs;

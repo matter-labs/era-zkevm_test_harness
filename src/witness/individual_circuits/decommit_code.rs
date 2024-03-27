@@ -9,10 +9,10 @@ use crate::zkevm_circuits::base_structures::decommit_query::DecommitQueryWitness
 use crate::zkevm_circuits::base_structures::decommit_query::DECOMMIT_QUERY_PACKED_WIDTH;
 use crate::zkevm_circuits::code_unpacker_sha256::input::*;
 use crate::zkevm_circuits::code_unpacker_sha256::*;
+use circuit_definitions::encodings::decommittment_request::normalized_preimage_as_u256;
 use circuit_definitions::encodings::decommittment_request::DecommittmentQueueSimulator;
 use circuit_definitions::encodings::decommittment_request::DecommittmentQueueState;
 use circuit_definitions::zk_evm::aux_structures::DecommittmentQuery;
-use circuit_definitions::encodings::decommittment_request::normalized_preimage_as_u256;
 use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::collections::VecDeque;
