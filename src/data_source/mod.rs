@@ -1,6 +1,7 @@
 use super::*;
 use std::{error::Error, fs::File};
 
+use circuit_definitions::boojum::cs::implementations::setup::FinalizationHintsForProver;
 use circuit_definitions::circuit_definitions::aux_layer::*;
 use circuit_definitions::circuit_definitions::base_layer::*;
 use circuit_definitions::circuit_definitions::recursion_layer::*;
@@ -28,19 +29,16 @@ pub trait SetupDataSource {
         circuit_type: u8,
     ) -> SourceResult<ZkSyncRecursionLayerVerificationKey>;
     fn get_recursion_layer_node_vk(&self) -> SourceResult<ZkSyncRecursionLayerVerificationKey>;
-    fn get_recursion_layer_padding_proof(
-        &self,
-        circuit_type: u8,
-    ) -> SourceResult<ZkSyncRecursionLayerProof>;
     fn get_recursion_layer_finalization_hint(
         &self,
         circuit_type: u8,
     ) -> SourceResult<ZkSyncRecursionLayerFinalizationHint>;
-    fn get_recursion_layer_leaf_padding_proof(&self) -> SourceResult<ZkSyncRecursionLayerProof>;
-    fn get_recursion_layer_node_padding_proof(&self) -> SourceResult<ZkSyncRecursionLayerProof>;
     fn get_recursion_layer_node_finalization_hint(
         &self,
     ) -> SourceResult<ZkSyncRecursionLayerFinalizationHint>;
+
+    fn get_eip4844_finalization_hint(&self) -> SourceResult<FinalizationHintsForProver>;
+
     fn get_compression_vk(
         &self,
         circuit_type: u8,
@@ -76,22 +74,11 @@ pub trait SetupDataSource {
         &mut self,
         vk: ZkSyncRecursionLayerVerificationKey,
     ) -> SourceResult<()>;
-    fn set_recursion_layer_padding_proof(
-        &mut self,
-        proof: ZkSyncRecursionLayerProof,
-    ) -> SourceResult<()>;
     fn set_recursion_layer_finalization_hint(
         &mut self,
         hint: ZkSyncRecursionLayerFinalizationHint,
     ) -> SourceResult<()>;
-    fn set_recursion_layer_leaf_padding_proof(
-        &mut self,
-        proof: ZkSyncRecursionLayerProof,
-    ) -> SourceResult<()>;
-    fn set_recursion_layer_node_padding_proof(
-        &mut self,
-        proof: ZkSyncRecursionLayerProof,
-    ) -> SourceResult<()>;
+
     fn set_recursion_layer_node_finalization_hint(
         &mut self,
         hint: ZkSyncRecursionLayerFinalizationHint,
@@ -113,6 +100,11 @@ pub trait SetupDataSource {
     fn set_wrapper_setup(&mut self, setup: ZkSyncSnarkWrapperSetup) -> SourceResult<()>;
     fn set_wrapper_vk(&mut self, vk: ZkSyncSnarkWrapperVK) -> SourceResult<()>;
     fn set_eip4844_vk(&mut self, vk: EIP4844VerificationKey) -> SourceResult<()>;
+
+    fn set_eip4844_finalization_hint(
+        &mut self,
+        hint: FinalizationHintsForProver,
+    ) -> SourceResult<()>;
 }
 
 // Object save trait to just get things for BLOCK
