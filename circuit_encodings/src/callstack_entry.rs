@@ -1,7 +1,16 @@
-use crate::{aux_definitions::witness_oracle::u128_as_u32_le, boojum::field::SmallField};
+use crate::boojum::field::SmallField;
 use zk_evm::vm_state::CallStackEntry;
 
 use super::*;
+
+pub fn u128_as_u32_le(value: u128) -> [u32; 4] {
+    [
+        value as u32,
+        (value >> 32) as u32,
+        (value >> 64) as u32,
+        (value >> 96) as u32,
+    ]
+}
 
 // we need some extra data to preserve
 #[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]

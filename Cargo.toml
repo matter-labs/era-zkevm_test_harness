@@ -1,6 +1,6 @@
 [package]
 name = "zkevm_test_harness"
-version = "1.4.2"
+version = "1.5.0"
 edition = "2021"
 authors = ["Alex Vlasov <alex.m.vlasov@gmail.com>", "Konstantin Panarin <kp@matterlabs.dev>"]
 
@@ -20,6 +20,8 @@ path = "src/geometry_config_generator/main.rs"
 
 [dependencies]
 circuit_definitions = {path = "./circuit_definitions"}
+circuit_sequencer_api = {path = "./circuit_sequencer_api"}
+kzg = {path = "./kzg"}
 
 snark_wrapper = {git = "https://github.com/matter-labs/snark-wrapper.git", branch = "main"}
 rescue_poseidon = {git = "https://github.com/matter-labs/rescue-poseidon.git", branch = "poseidon2"}
