@@ -25,10 +25,8 @@ use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Sha256RoundWitness;
 use crate::zkevm_circuits::base_structures::vm_state::{
     GlobalContextWitness, FULL_SPONGE_QUEUE_STATE_WIDTH, QUEUE_STATE_WIDTH,
 };
-use crate::zkevm_circuits::eip_4844::input::ENCODABLE_BYTES_PER_BLOB;
 use crate::zkevm_circuits::main_vm::main_vm_entry_point;
 use crate::zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
-use crate::zkevm_circuits::scheduler::block_header::MAX_4844_BLOBS_PER_BLOCK;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use circuit_definitions::boojum::field::goldilocks::GoldilocksField;
 use circuit_definitions::boojum::field::{Field, U64Representable};
@@ -39,9 +37,7 @@ use circuit_definitions::encodings::recursion_request::{
     RecursionQueueSimulator, RecursionRequest,
 };
 use circuit_definitions::encodings::LogQueueSimulator;
-use circuit_definitions::zk_evm::zkevm_opcode_defs::system_params::{
-    SECP256R1_VERIFY_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS, TRANSIENT_STORAGE_AUX_BYTE,
-};
+use circuit_definitions::zk_evm::zkevm_opcode_defs::system_params::{SECP256R1_VERIFY_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS, TRANSIENT_STORAGE_AUX_BYTE};
 use circuit_definitions::zkevm_circuits::eip_4844::input::EIP4844CircuitInstanceWitness;
 use circuit_definitions::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
@@ -52,6 +48,8 @@ use smallvec::SmallVec;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::ops::RangeInclusive;
 use std::sync::Arc;
+use crate::zkevm_circuits::eip_4844::input::ENCODABLE_BYTES_PER_BLOB;
+use crate::zkevm_circuits::scheduler::block_header::MAX_4844_BLOBS_PER_BLOCK;
 
 use crate::zk_evm::zkevm_opcode_defs::system_params::{
     ECRECOVER_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
@@ -1017,10 +1015,7 @@ pub fn create_artifacts_from_tracer<
 
         tracing::debug!("Running keccak simulation");
 
-        let demuxed_keccak_precompile_queue = std::mem::replace(
-            &mut all_demuxed_queues[DemuxOutput::Keccak as usize],
-            Default::default(),
-        );
+        let demuxed_keccak_precompile_queue = std::mem::replace(&mut all_demuxed_queues[DemuxOutput::Keccak as usize], Default::default());
 
         let keccak256_circuits_data = keccak256_decompose_into_per_circuit_witness(
             this,
@@ -1036,10 +1031,7 @@ pub fn create_artifacts_from_tracer<
 
         tracing::debug!("Running sha256 simulation");
 
-        let demuxed_sha256_precompile_queue = std::mem::replace(
-            &mut all_demuxed_queues[DemuxOutput::Sha256 as usize],
-            Default::default(),
-        );
+        let demuxed_sha256_precompile_queue = std::mem::replace(&mut all_demuxed_queues[DemuxOutput::Sha256 as usize], Default::default());
 
         let sha256_circuits_data = sha256_decompose_into_per_circuit_witness(
             this,
@@ -1055,10 +1047,7 @@ pub fn create_artifacts_from_tracer<
 
         tracing::debug!("Running ecrecover simulation");
 
-        let demuxed_ecrecover_queue = std::mem::replace(
-            &mut all_demuxed_queues[DemuxOutput::ECRecover as usize],
-            Default::default(),
-        );
+        let demuxed_ecrecover_queue = std::mem::replace(&mut all_demuxed_queues[DemuxOutput::ECRecover as usize], Default::default());
 
         let ecrecover_circuits_data = ecrecover_decompose_into_per_circuit_witness(
             this,
@@ -1072,10 +1061,7 @@ pub fn create_artifacts_from_tracer<
 
         tracing::debug!("Running secp256r1_simulation simulation");
 
-        let demuxed_secp256r1_verify_queue = std::mem::replace(
-            &mut all_demuxed_queues[DemuxOutput::Secp256r1Verify as usize],
-            Default::default(),
-        );
+        let demuxed_secp256r1_verify_queue = std::mem::replace(&mut all_demuxed_queues[DemuxOutput::Secp256r1Verify as usize], Default::default());
 
         let secp256r1_verify_circuits_data = secp256r1_verify_decompose_into_per_circuit_witness(
             this,
@@ -1112,10 +1098,7 @@ pub fn create_artifacts_from_tracer<
 
         tracing::debug!("Running storage deduplication simulation");
 
-        let demuxed_rollup_storage_queue = std::mem::replace(
-            &mut all_demuxed_queues[DemuxOutput::RollupStorage as usize],
-            Default::default(),
-        );
+        let demuxed_rollup_storage_queue = std::mem::replace(&mut all_demuxed_queues[DemuxOutput::RollupStorage as usize], Default::default());
 
         let storage_deduplicator_circuit_data = compute_storage_dedup_and_sort(
             this,
@@ -1129,10 +1112,7 @@ pub fn create_artifacts_from_tracer<
 
         tracing::debug!("Running events deduplication simulation");
 
-        let demuxed_event_queue = std::mem::replace(
-            &mut all_demuxed_queues[DemuxOutput::Events as usize],
-            Default::default(),
-        );
+        let demuxed_event_queue = std::mem::replace(&mut all_demuxed_queues[DemuxOutput::Events as usize], Default::default());
 
         let events_deduplicator_circuit_data = compute_events_dedup_and_sort(
             &this.demuxed_event_queries,
@@ -1146,10 +1126,7 @@ pub fn create_artifacts_from_tracer<
 
         tracing::debug!("Running L1 messages deduplication simulation");
 
-        let demuxed_to_l1_queue = std::mem::replace(
-            &mut all_demuxed_queues[DemuxOutput::L2ToL1Messages as usize],
-            Default::default(),
-        );
+        let demuxed_to_l1_queue = std::mem::replace(&mut all_demuxed_queues[DemuxOutput::L2ToL1Messages as usize], Default::default());
 
         let mut deduplicated_to_l1_queue_simulator = Default::default();
         let l1_messages_deduplicator_circuit_data = compute_events_dedup_and_sort(
@@ -1166,10 +1143,7 @@ pub fn create_artifacts_from_tracer<
 
         tracing::debug!("Running transient storage sorting simulation");
 
-        let demuxed_transient_storage_queue = std::mem::replace(
-            &mut all_demuxed_queues[DemuxOutput::TransientStorage as usize],
-            Default::default(),
-        );
+        let demuxed_transient_storage_queue = std::mem::replace(&mut all_demuxed_queues[DemuxOutput::TransientStorage as usize], Default::default());
 
         let transient_storage_sorter_circuit_data = compute_transient_storage_dedup_and_sort(
             this,
@@ -1904,12 +1878,12 @@ pub fn create_artifacts_from_tracer<
                 continue;
             };
             use crate::generate_eip4844_witness;
-            let (chunks, linear_hash, versioned_hash, output_hash) =
-                generate_eip4844_witness::<GoldilocksField>(&input_witness[..]);
-            let data_chunks: VecDeque<_> = chunks
-                .iter()
-                .map(|el| BlobChunkWitness { inner: *el })
-                .collect();
+            let (chunks, linear_hash, versioned_hash, output_hash) = generate_eip4844_witness::<GoldilocksField>(
+                &input_witness[..]
+            );
+            let data_chunks: VecDeque<_> = chunks.iter().map(|el| BlobChunkWitness {
+                inner: *el,
+            }).collect();
             use crate::zkevm_circuits::eip_4844::input::*;
             use crate::zkevm_circuits::fsm_input_output::ClosedFormInputWitness;
             let output_data = EIP4844OutputDataWitness {
@@ -1936,8 +1910,11 @@ pub fn create_artifacts_from_tracer<
                 maker.process(circuit_input, circuit_type),
             ));
         }
-        let (_eip_4844_circuits, queue_simulator, eip_4844_circuits_compact_forms_witnesses) =
-            maker.into_results();
+        let (
+            _eip_4844_circuits,
+            queue_simulator,
+            eip_4844_circuits_compact_forms_witnesses,
+        ) = maker.into_results();
         recursion_queue_callback(
             circuit_type as u64,
             queue_simulator,
@@ -1963,7 +1940,7 @@ pub fn create_artifacts_from_tracer<
             transient_storage_sorter_circuits,
             secp256r1_verify_circuits,
         };
-
+        
         // NOTE: this should follow in a sequence same as scheduler's work and `SEQUENCE_OF_CIRCUIT_TYPES`
 
         let all_compact_forms = main_vm_circuits_compact_forms_witnesses
