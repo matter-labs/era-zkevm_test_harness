@@ -4,6 +4,8 @@ use crate::boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcrip
 use crate::boojum::field::goldilocks::{GoldilocksExt2, GoldilocksField};
 use crate::boojum::gadgets::recursion::recursive_transcript::CircuitAlgebraicSpongeBasedTranscript;
 use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
+use snark_wrapper::boojum::config::CSConfig;
+use snark_wrapper::boojum::dag::{CircuitResolver, StCircuitResolver};
 use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
 use zkevm_circuits::boojum::cs::traits::circuit::CircuitBuilder;
 use zkevm_circuits::recursion::leaf_layer::input::RecursionLeafParametersWitness;
@@ -13,14 +15,14 @@ use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogReco
 pub mod circuit_def;
 pub mod leaf_layer;
 pub mod node_layer;
+pub mod recursion_tip;
 pub mod scheduler;
 pub mod verifier_builder;
-pub mod recursion_tip;
 
 use self::leaf_layer::*;
 use self::node_layer::*;
-use self::scheduler::*;
 use self::recursion_tip::*;
+use self::scheduler::*;
 
 pub const RECURSION_ARITY: usize = 32;
 pub const SCHEDULER_CAPACITY: usize = (1 << 14) + (1 << 13);
@@ -157,9 +159,7 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             ZkSyncRecursionLayerStorage::LeafLayerCircuitForEIP4844Repack(..) => {
                 "Leaf for EIP4844 repack"
             }
-            ZkSyncRecursionLayerStorage::RecursionTipCircuit(..) => {
-                "Recursion tip"
-            }
+            ZkSyncRecursionLayerStorage::RecursionTipCircuit(..) => "Recursion tip",
         }
     }
 
@@ -312,23 +312,18 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
                 Self::LeafLayerCircuitForL1MessagesHasher(inner)
             }
             a if a
-                == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForTransientStorageSorter as u8 =>
+                == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForTransientStorageSorter
+                    as u8 =>
             {
                 Self::LeafLayerCircuitForTransientStorageSorter(inner)
             }
-            a if a
-                == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForSecp256r1Verify as u8 =>
-            {
+            a if a == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForSecp256r1Verify as u8 => {
                 Self::LeafLayerCircuitForSecp256r1Verify(inner)
             }
-            a if a
-                == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForEIP4844Repack as u8 =>
-            {
+            a if a == ZkSyncRecursionLayerStorageType::LeafLayerCircuitForEIP4844Repack as u8 => {
                 Self::LeafLayerCircuitForEIP4844Repack(inner)
             }
-            a if a
-                == ZkSyncRecursionLayerStorageType::RecursionTipCircuit as u8 =>
-            {
+            a if a == ZkSyncRecursionLayerStorageType::RecursionTipCircuit as u8 => {
                 Self::RecursionTipCircuit(inner)
             }
             a @ _ => panic!("unknown numeric type {}", a),
@@ -370,9 +365,7 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             BaseLayerCircuitType::Secp256r1Verify => {
                 Self::LeafLayerCircuitForSecp256r1Verify(inner)
             }
-            BaseLayerCircuitType::EIP4844Repack => {
-                Self::LeafLayerCircuitForEIP4844Repack(inner)
-            }
+            BaseLayerCircuitType::EIP4844Repack => Self::LeafLayerCircuitForEIP4844Repack(inner),
             circuit_type => {
                 panic!("unknown base circuit type for leaf: {:?}", circuit_type);
             }
@@ -437,7 +430,9 @@ impl ZkSyncRecursiveLayerCircuit {
             Self::LeafLayerCircuitForEventsSorter(..) => "Leaf for Events sorter",
             Self::LeafLayerCircuitForL1MessagesSorter(..) => "Leaf for L1 messages sorter",
             Self::LeafLayerCircuitForL1MessagesHasher(..) => "Leaf for L1 messages hasher",
-            Self::LeafLayerCircuitForTransientStorageSorter(..) => "Leaf for transient storage sorter",
+            Self::LeafLayerCircuitForTransientStorageSorter(..) => {
+                "Leaf for transient storage sorter"
+            }
             Self::LeafLayerCircuitForSecp256r1Verify(..) => "Leaf for Secp256r1 verify",
             Self::LeafLayerCircuitForEIP4844Repack(..) => "Leaf for EIP4844 repack",
             Self::RecursionTipCircuit(..) => "Recursion tip",
@@ -518,7 +513,7 @@ impl ZkSyncRecursiveLayerCircuit {
             | Self::LeafLayerCircuitForStorageApplication(inner)
             | Self::LeafLayerCircuitForEventsSorter(inner)
             | Self::LeafLayerCircuitForL1MessagesSorter(inner)
-            | Self::LeafLayerCircuitForL1MessagesHasher(inner) 
+            | Self::LeafLayerCircuitForL1MessagesHasher(inner)
             | Self::LeafLayerCircuitForTransientStorageSorter(inner)
             | Self::LeafLayerCircuitForSecp256r1Verify(inner)
             | Self::LeafLayerCircuitForEIP4844Repack(inner) => inner.size_hint(),
@@ -542,25 +537,33 @@ impl ZkSyncRecursiveLayerCircuit {
             | Self::LeafLayerCircuitForStorageApplication(..)
             | Self::LeafLayerCircuitForEventsSorter(..)
             | Self::LeafLayerCircuitForL1MessagesSorter(..)
-            | Self::LeafLayerCircuitForL1MessagesHasher(..) 
+            | Self::LeafLayerCircuitForL1MessagesHasher(..)
             | Self::LeafLayerCircuitForTransientStorageSorter(..)
             | Self::LeafLayerCircuitForSecp256r1Verify(..)
-            | Self::LeafLayerCircuitForEIP4844Repack(..)=> {
+            | Self::LeafLayerCircuitForEIP4844Repack(..) => {
                 ZkSyncLeafLayerRecursiveCircuit::geometry()
-            },
-            Self::RecursionTipCircuit(..) => {
-                ZkSyncRecursionTipCircuit::geometry()
             }
+            Self::RecursionTipCircuit(..) => ZkSyncRecursionTipCircuit::geometry(),
         }
     }
 
-    fn synthesis_inner<P: PrimeFieldLikeVectorized<Base = F>>(
+    fn synthesis_inner<P, CR>(
         inner: &ZkSyncLeafLayerRecursiveCircuit,
         hint: &FinalizationHintsForProver,
-    ) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig>
+    where
+        P: PrimeFieldLikeVectorized<Base = F>,
+        CR: CircuitResolver<
+            F,
+            zkevm_circuits::boojum::config::Resolver<
+                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts,
+            >,
+        >,
+        usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>,
+    {
         let geometry = ZkSyncLeafLayerRecursiveCircuit::geometry();
         let (max_trace_len, num_vars) = inner.size_hint();
-        let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig>::new(
+        let builder_impl = CsReferenceImplementationBuilder::<F, P, ProvingCSConfig, CR>::new(
             geometry,
             max_trace_len.unwrap(),
         );
@@ -578,6 +581,26 @@ impl ZkSyncRecursiveLayerCircuit {
         &self,
         hint: &FinalizationHintsForProver,
     ) -> CSReferenceAssembly<F, P, ProvingCSConfig> {
+        self.synthesis_wrapped::<
+            P,
+            StCircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>
+        >(hint)
+    }
+
+    pub fn synthesis_wrapped<P, CR>(
+        &self,
+        hint: &FinalizationHintsForProver,
+    ) -> CSReferenceAssembly<F, P, ProvingCSConfig>
+    where
+        P: PrimeFieldLikeVectorized<Base = F>,
+        CR: CircuitResolver<
+            F,
+            zkevm_circuits::boojum::config::Resolver<
+                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts,
+            >,
+        >,
+        usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>,
+    {
         match &self {
             Self::SchedulerCircuit(inner) => {
                 let geometry = ZkSyncSchedulerCircuit::geometry();
@@ -625,9 +648,9 @@ impl ZkSyncRecursiveLayerCircuit {
             | Self::LeafLayerCircuitForL1MessagesSorter(inner)
             | Self::LeafLayerCircuitForL1MessagesHasher(inner)
             | Self::LeafLayerCircuitForTransientStorageSorter(inner)
-            | Self::LeafLayerCircuitForSecp256r1Verify(inner) 
+            | Self::LeafLayerCircuitForSecp256r1Verify(inner)
             | Self::LeafLayerCircuitForEIP4844Repack(inner) => {
-                Self::synthesis_inner(inner, hint)
+                Self::synthesis_inner::<_, CR>(inner, hint)
             }
             Self::RecursionTipCircuit(inner) => {
                 let geometry = ZkSyncRecursionTipCircuit::geometry();
@@ -670,12 +693,12 @@ impl ZkSyncRecursiveLayerCircuit {
             | Self::LeafLayerCircuitForStorageApplication(..)
             | Self::LeafLayerCircuitForEventsSorter(..)
             | Self::LeafLayerCircuitForL1MessagesSorter(..)
-            | Self::LeafLayerCircuitForL1MessagesHasher(..) 
+            | Self::LeafLayerCircuitForL1MessagesHasher(..)
             | Self::LeafLayerCircuitForTransientStorageSorter(..)
-            | Self::LeafLayerCircuitForSecp256r1Verify(..) 
+            | Self::LeafLayerCircuitForSecp256r1Verify(..)
             | Self::LeafLayerCircuitForEIP4844Repack(..) => {
                 ConcreteNodeLayerCircuitBuilder::dyn_verifier_builder::<EXT>()
-            },
+            }
             Self::RecursionTipCircuit(..) => {
                 ConcreteRecursionTipCircuitBuilder::dyn_verifier_builder::<EXT>()
             }
@@ -705,12 +728,12 @@ impl ZkSyncRecursiveLayerCircuit {
             | Self::LeafLayerCircuitForStorageApplication(..)
             | Self::LeafLayerCircuitForEventsSorter(..)
             | Self::LeafLayerCircuitForL1MessagesSorter(..)
-            | Self::LeafLayerCircuitForL1MessagesHasher(..) 
+            | Self::LeafLayerCircuitForL1MessagesHasher(..)
             | Self::LeafLayerCircuitForTransientStorageSorter(..)
-            | Self::LeafLayerCircuitForSecp256r1Verify(..) 
+            | Self::LeafLayerCircuitForSecp256r1Verify(..)
             | Self::LeafLayerCircuitForEIP4844Repack(..) => {
                 ConcreteNodeLayerCircuitBuilder::dyn_recursive_verifier_builder::<EXT, CS>()
-            },
+            }
             Self::RecursionTipCircuit(..) => {
                 ConcreteRecursionTipCircuitBuilder::dyn_recursive_verifier_builder::<EXT, CS>()
             }
@@ -755,9 +778,7 @@ impl ZkSyncRecursiveLayerCircuit {
             BaseLayerCircuitType::Secp256r1Verify => {
                 Self::LeafLayerCircuitForSecp256r1Verify(inner)
             }
-            BaseLayerCircuitType::EIP4844Repack => {
-                Self::LeafLayerCircuitForEIP4844Repack(inner)
-            }
+            BaseLayerCircuitType::EIP4844Repack => Self::LeafLayerCircuitForEIP4844Repack(inner),
             circuit_type => {
                 panic!("unknown base circuit type for leaf: {:?}", circuit_type);
             }
