@@ -41,9 +41,8 @@ pub type EIP4844VerifierBuilder =
 type F = GoldilocksField;
 type EXT = GoldilocksExt2;
 type R = Poseidon2Goldilocks;
-    
+
 pub fn dyn_verifier_builder_for_circuit_type(
-   
     circuit_type: u8,
 ) -> Box<dyn crate::boojum::cs::traits::circuit::ErasedBuilderForVerifier<F, EXT>>
 where

@@ -1,6 +1,8 @@
 use super::*;
-use zk_evm::{aux_structures::DecommittmentQuery, zkevm_opcode_defs::VersionedHashNormalizedPreimage};
 use crate::ethereum_types::U256;
+use zk_evm::{
+    aux_structures::DecommittmentQuery, zkevm_opcode_defs::VersionedHashNormalizedPreimage,
+};
 
 use zkevm_circuits::base_structures::decommit_query::DECOMMIT_QUERY_PACKED_WIDTH;
 
