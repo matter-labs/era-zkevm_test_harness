@@ -83,8 +83,10 @@ pub type L1MessagesSorterCircuit = ZkSyncUniformCircuitInstance<
 >;
 pub type L1MessagesHasherCircuit =
     ZkSyncUniformCircuitInstance<GoldilocksField, LinearHasherInstanceSynthesisFunction>;
-pub type TransientStorageSorterCircuit =
-    ZkSyncUniformCircuitInstance<GoldilocksField, TransientStorageSortAndDedupInstanceSynthesisFunction>;
+pub type TransientStorageSorterCircuit = ZkSyncUniformCircuitInstance<
+    GoldilocksField,
+    TransientStorageSortAndDedupInstanceSynthesisFunction,
+>;
 pub type Secp256r1VerifyCircuit =
     ZkSyncUniformCircuitInstance<GoldilocksField, Secp256r1VerifyFunctionInstanceSynthesisFunction>;
 pub type EIP4844Circuit =

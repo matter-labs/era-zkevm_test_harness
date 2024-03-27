@@ -101,16 +101,30 @@ pub fn event_comparison_key(query: &LogQuery) -> Key<1> {
     Key(le_words)
 }
 
-
 use zkevm_circuits::transient_storage_validity_by_grand_product::input::TRANSIENT_STORAGE_VALIDITY_CHECK_PACKED_KEY_LENGTH;
 
-pub fn transient_storage_comparison_key(query: &LogQuery) -> Key<TRANSIENT_STORAGE_VALIDITY_CHECK_PACKED_KEY_LENGTH> {
+pub fn transient_storage_comparison_key(
+    query: &LogQuery,
+) -> Key<TRANSIENT_STORAGE_VALIDITY_CHECK_PACKED_KEY_LENGTH> {
     let key = decompose_u256_as_u32x8(query.key);
     let address = decompose_address_as_u32x5(query.address);
 
     let le_words = [
-        key[0], key[1], key[2], key[3], key[4], key[5], key[6], key[7], address[0], address[1],
-        address[2], address[3], address[4], query.shard_id as u32, query.tx_number_in_block as u32,
+        key[0],
+        key[1],
+        key[2],
+        key[3],
+        key[4],
+        key[5],
+        key[6],
+        key[7],
+        address[0],
+        address[1],
+        address[2],
+        address[3],
+        address[4],
+        query.shard_id as u32,
+        query.tx_number_in_block as u32,
     ];
 
     Key(le_words)

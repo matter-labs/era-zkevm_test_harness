@@ -134,6 +134,11 @@ where
         round_function: &Self::RoundFunction,
         config: Self::Config,
     ) -> [Num<F>; INPUT_OUTPUT_COMMITMENT_LENGTH] {
-        sort_and_deduplicate_transient_storage_access_entry_point(cs, witness, round_function, config)
+        sort_and_deduplicate_transient_storage_access_entry_point(
+            cs,
+            witness,
+            round_function,
+            config,
+        )
     }
 }

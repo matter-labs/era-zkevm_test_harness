@@ -135,13 +135,12 @@ pub fn read_basic_test_artifact() -> TestArtifact {
         let _ = fs::remove_dir_all("era-system-contracts");
         match result {
             Ok((bytecode, default_account_code, predeployed_contracts)) => {
-                let artifact =
-                    create_artifact(
-                        bytecode,
-                        default_account_code.clone(),
-                        default_account_code, // todo!()
-                        predeployed_contracts
-                    );
+                let artifact = create_artifact(
+                    bytecode,
+                    default_account_code.clone(),
+                    default_account_code, // todo!()
+                    predeployed_contracts,
+                );
                 let artifact_string = serde_json::to_string(&artifact)
                     .expect("should be able to stringify test artifact");
                 fs::write(BASIC_TEST_JSON_LOCATION, artifact_string)

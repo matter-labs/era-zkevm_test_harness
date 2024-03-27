@@ -112,34 +112,30 @@ impl<F: SmallField> OutOfCircuitFixedLengthEncodable<F, EXECUTION_CONTEXT_RECORD
         let v37 = self.callstack_entry.exception_handler_location.into_field();
 
         // pack shard IDs
-        let v38 = linear_combination(
-            &[
-                (self.callstack_entry.this_shard_id.into_field(), F::ONE),
-                (
-                    self.callstack_entry.code_shard_id.into_field(),
-                    F::from_u64_unchecked(1u64 << 8),
-                ),
-                (
-                    self.callstack_entry.caller_shard_id.into_field(),
-                    F::from_u64_unchecked(1u64 << 16),
-                ),
-            ],
-        );
+        let v38 = linear_combination(&[
+            (self.callstack_entry.this_shard_id.into_field(), F::ONE),
+            (
+                self.callstack_entry.code_shard_id.into_field(),
+                F::from_u64_unchecked(1u64 << 8),
+            ),
+            (
+                self.callstack_entry.caller_shard_id.into_field(),
+                F::from_u64_unchecked(1u64 << 16),
+            ),
+        ]);
 
         // pack boolean flags
-        let v39 = linear_combination(
-            &[
-                (self.callstack_entry.is_static.into_field(), F::ONE),
-                (
-                    self.callstack_entry.is_kernel_mode().into_field(),
-                    F::from_u64_unchecked(1u64 << 8),
-                ),
-                (
-                    self.callstack_entry.is_local_frame.into_field(),
-                    F::from_u64_unchecked(1u64 << 16),
-                ),
-            ],
-        );
+        let v39 = linear_combination(&[
+            (self.callstack_entry.is_static.into_field(), F::ONE),
+            (
+                self.callstack_entry.is_kernel_mode().into_field(),
+                F::from_u64_unchecked(1u64 << 8),
+            ),
+            (
+                self.callstack_entry.is_local_frame.into_field(),
+                F::from_u64_unchecked(1u64 << 16),
+            ),
+        ]);
 
         let encoding = [
             v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18,
@@ -160,5 +156,8 @@ pub type CallstackSimulator<F> = FullWidthStackSimulator<
     FULL_SPONGE_QUEUE_STATE_WIDTH,
     CALLSTACK_SIMULATOR_USED_SPONGES,
 >;
-pub type CallstackSimulatorState<F> =
-    FullWidthStackIntermediateStates<F, FULL_SPONGE_QUEUE_STATE_WIDTH, CALLSTACK_SIMULATOR_USED_SPONGES>;
+pub type CallstackSimulatorState<F> = FullWidthStackIntermediateStates<
+    F,
+    FULL_SPONGE_QUEUE_STATE_WIDTH,
+    CALLSTACK_SIMULATOR_USED_SPONGES,
+>;

@@ -1,6 +1,6 @@
 use super::*;
-use circuit_definitions::circuit_definitions::base_layer::EIP4844Circuit;
 use crate::zkevm_circuits::eip_4844::input::*;
+use circuit_definitions::circuit_definitions::base_layer::EIP4844Circuit;
 use circuit_definitions::EIP4844_CYCLE_LIMIT;
 use crossbeam::atomic::AtomicCell;
 use rand::Rng;

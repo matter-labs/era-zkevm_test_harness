@@ -259,7 +259,6 @@ pub fn sort_storage_access_queries<'a, L: LogQueryLike, I: IntoIterator<Item = &
     )
 }
 
-
 pub fn sort_transient_storage_access_queries<'a, L: LogQueryLike, I: IntoIterator<Item = &'a L>>(
     unsorted_storage_queries: I,
 ) -> Vec<LogQueryLikeWithExtendedEnumeration<L>> {
@@ -273,7 +272,11 @@ pub fn sort_transient_storage_access_queries<'a, L: LogQueryLike, I: IntoIterato
         .collect();
 
     sorted_storage_queries_with_extra_timestamp.par_sort_by(|a, b| {
-        match a.raw_query.tx_number_in_block().cmp(&b.raw_query.tx_number_in_block()) {
+        match a
+            .raw_query
+            .tx_number_in_block()
+            .cmp(&b.raw_query.tx_number_in_block())
+        {
             Ordering::Equal => match a.raw_query.shard_id().cmp(&b.raw_query.shard_id()) {
                 Ordering::Equal => match a.raw_query.address().cmp(&b.raw_query.address()) {
                     Ordering::Equal => match a.raw_query.key().cmp(&b.raw_query.key()) {
@@ -283,10 +286,9 @@ pub fn sort_transient_storage_access_queries<'a, L: LogQueryLike, I: IntoIterato
                     r @ _ => r,
                 },
                 r @ _ => r,
-            }
+            },
             r @ _ => r,
         }
-
     });
 
     sorted_storage_queries_with_extra_timestamp

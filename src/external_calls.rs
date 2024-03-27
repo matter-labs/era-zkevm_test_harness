@@ -14,7 +14,9 @@ use crate::witness::oracle::create_artifacts_from_tracer;
 use crate::witness::tree::BinarySparseStorageTree;
 use crate::witness::tree::ZKSyncTestingTree;
 use crate::witness::tree::ZkSyncStorageLeaf;
-use crate::witness::utils::{take_queue_state_from_simulator, take_sponge_like_queue_state_from_simulator};
+use crate::witness::utils::{
+    take_queue_state_from_simulator, take_sponge_like_queue_state_from_simulator,
+};
 use crate::zk_evm::abstractions::Storage;
 use crate::zk_evm::abstractions::*;
 use crate::zk_evm::aux_structures::*;
@@ -31,11 +33,11 @@ use crate::{
     ethereum_types::{Address, U256},
     utils::{calldata_to_aligned_data, u64_as_u32_le},
 };
-use circuit_definitions::zk_evm::zkevm_opcode_defs::VersionedHashLen32;
 use circuit_definitions::boojum::field::Field;
 use circuit_definitions::boojum::implementations::poseidon2::Poseidon2Goldilocks;
 use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit;
 use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
+use circuit_definitions::zk_evm::zkevm_opcode_defs::VersionedHashLen32;
 use circuit_definitions::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
 use circuit_definitions::{Field as MainField, RoundFunction, ZkSyncDefaultRoundFunction};
 use snark_wrapper::boojum::field::goldilocks::GoldilocksExt2;
@@ -139,13 +141,16 @@ pub fn run<
         .decommittment_processor
         .prepare_to_decommit(0, entry_point_decommittment_query)
         .expect("must prepare decommit of entry point");
-    tools.witness_tracer.prepare_for_decommittment(
-        0,
-        entry_point_decommittment_query,
-    );
+    tools
+        .witness_tracer
+        .prepare_for_decommittment(0, entry_point_decommittment_query);
     let entry_point_decommittment_query_witness = tools
         .decommittment_processor
-        .decommit_into_memory(0, prepared_entry_point_decommittment_query, &mut tools.memory)
+        .decommit_into_memory(
+            0,
+            prepared_entry_point_decommittment_query,
+            &mut tools.memory,
+        )
         .expect("must execute decommit of entry point");
     let entry_point_decommittment_query_witness = entry_point_decommittment_query_witness.unwrap();
     tools.witness_tracer.execute_decommittment(
@@ -154,8 +159,11 @@ pub fn run<
         entry_point_decommittment_query_witness.clone(),
     );
 
-    let block_properties =
-        create_out_of_circuit_global_context(zk_porter_is_available, default_aa_code_hash, evm_simulator_code_hash);
+    let block_properties = create_out_of_circuit_global_context(
+        zk_porter_is_available,
+        default_aa_code_hash,
+        evm_simulator_code_hash,
+    );
 
     use crate::toolset::create_out_of_circuit_vm;
 
@@ -359,32 +367,37 @@ pub fn run<
         use crate::witness::full_block_artifact::LogQueue;
         use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 
-        let empty_log_queue_state = take_queue_state_from_simulator(&LogQueue::<GoldilocksField>::default().simulator);
-        let empty_sponge_like_queue_state = take_sponge_like_queue_state_from_simulator(&MemoryQueueSimulator::<GoldilocksField>::empty());
+        let empty_log_queue_state =
+            take_queue_state_from_simulator(&LogQueue::<GoldilocksField>::default().simulator);
+        let empty_sponge_like_queue_state = take_sponge_like_queue_state_from_simulator(
+            &MemoryQueueSimulator::<GoldilocksField>::empty(),
+        );
 
         // decommitter must output empty sequence (unreachable in practice, but still...)
-        let decommits_sorter_observable_output = if let Some(last) = basic_circuits
-            .code_decommittments_sorter_circuits
-            .last {
-                let observable_output = last.clone_witness()
-                    .unwrap()
-                    .closed_form_input
-                    .observable_output;
+        let decommits_sorter_observable_output = if let Some(last) =
+            basic_circuits.code_decommittments_sorter_circuits.last
+        {
+            let observable_output = last
+                .clone_witness()
+                .unwrap()
+                .closed_form_input
+                .observable_output;
 
-                observable_output
-            } else {
-                // form it manually
-                use crate::zkevm_circuits::sort_decommittment_requests::input::CodeDecommittmentsDeduplicatorOutputDataWitness;
-                CodeDecommittmentsDeduplicatorOutputDataWitness::<GoldilocksField> {
-                    final_queue_state: empty_sponge_like_queue_state.clone(),
-                }
-            };
+            observable_output
+        } else {
+            // form it manually
+            use crate::zkevm_circuits::sort_decommittment_requests::input::CodeDecommittmentsDeduplicatorOutputDataWitness;
+            CodeDecommittmentsDeduplicatorOutputDataWitness::<GoldilocksField> {
+                final_queue_state: empty_sponge_like_queue_state.clone(),
+            }
+        };
 
         // decommitter must produce the same memory sequence
-        let code_decommitter_observable_output = if let Some(last) = basic_circuits
-        .code_decommitter_circuits
-        .last {
-            let observable_output = last.clone_witness()
+        let code_decommitter_observable_output = if let Some(last) =
+            basic_circuits.code_decommitter_circuits.last
+        {
+            let observable_output = last
+                .clone_witness()
                 .unwrap()
                 .closed_form_input
                 .observable_output;
@@ -399,30 +412,35 @@ pub fn run<
         };
 
         // demux must produce empty output
-        let log_demuxer_observable_output = if let Some(last) = basic_circuits
-        .log_demux_circuits
-        .last {
-            let observable_output = last.clone_witness()
-                .unwrap()
-                .closed_form_input
-                .observable_output;
+        let log_demuxer_observable_output =
+            if let Some(last) = basic_circuits.log_demux_circuits.last {
+                let observable_output = last
+                    .clone_witness()
+                    .unwrap()
+                    .closed_form_input
+                    .observable_output;
 
-            observable_output
-        } else {
-            // form it manually
-            use crate::zkevm_circuits::demux_log_queue::input::LogDemuxerOutputDataWitness;
-            LogDemuxerOutputDataWitness::<GoldilocksField> {
-                output_queue_states: std::array::from_fn(|_| empty_log_queue_state.clone()),
-            }
-        };
+                observable_output
+            } else {
+                // form it manually
+                use crate::zkevm_circuits::demux_log_queue::input::LogDemuxerOutputDataWitness;
+                LogDemuxerOutputDataWitness::<GoldilocksField> {
+                    output_queue_states: std::array::from_fn(|_| empty_log_queue_state.clone()),
+                }
+            };
 
         // all precompiles must output the same memory sequence
-        use crate::zkevm_circuits::base_structures::precompile_input_outputs::{PrecompileFunctionOutputData, PrecompileFunctionOutputDataWitness};
-        let dummy_precompile_output = PrecompileFunctionOutputData::<GoldilocksField>::placeholder_witness();
+        use crate::zkevm_circuits::base_structures::precompile_input_outputs::{
+            PrecompileFunctionOutputData, PrecompileFunctionOutputDataWitness,
+        };
+        let dummy_precompile_output =
+            PrecompileFunctionOutputData::<GoldilocksField>::placeholder_witness();
         let mut outputs = std::array::from_fn(|_| dummy_precompile_output.clone());
-        let mut previous_memory_state = code_decommitter_observable_output.memory_queue_final_state.clone(); 
+        let mut previous_memory_state = code_decommitter_observable_output
+            .memory_queue_final_state
+            .clone();
         let testsing_locations = [
-                basic_circuits
+            basic_circuits
                 .keccak_precompile_circuits
                 .last
                 .as_ref()
@@ -432,7 +450,7 @@ pub fn run<
                         .closed_form_input
                         .observable_output
                 }),
-                basic_circuits
+            basic_circuits
                 .sha256_precompile_circuits
                 .last
                 .as_ref()
@@ -442,7 +460,7 @@ pub fn run<
                         .closed_form_input
                         .observable_output
                 }),
-                basic_circuits
+            basic_circuits
                 .ecrecover_precompile_circuits
                 .last
                 .as_ref()
@@ -452,7 +470,7 @@ pub fn run<
                         .closed_form_input
                         .observable_output
                 }),
-                basic_circuits
+            basic_circuits
                 .secp256r1_verify_circuits
                 .last
                 .as_ref()
@@ -475,18 +493,15 @@ pub fn run<
             previous_memory_state = dst.final_memory_state.clone();
         }
 
-        let [
-            keccak256_observable_output,
-            sha256_observable_output,
-            ecrecover_observable_output,
-            secp256r1_verify_observable_output
-        ] = outputs;
+        let [keccak256_observable_output, sha256_observable_output, ecrecover_observable_output, secp256r1_verify_observable_output] =
+            outputs;
 
         // storage sorter must produce empty output
-        let storage_sorter_observable_output = if let Some(last) = basic_circuits
-        .storage_sorter_circuits
-        .last {
-            let observable_output = last.clone_witness()
+        let storage_sorter_observable_output = if let Some(last) =
+            basic_circuits.storage_sorter_circuits.last
+        {
+            let observable_output = last
+                .clone_witness()
                 .unwrap()
                 .closed_form_input
                 .observable_output;
@@ -501,10 +516,11 @@ pub fn run<
         };
 
         // storage application must return the same root
-        let storage_application_observable_output = if let Some(last) = basic_circuits
-        .storage_application_circuits
-        .last {
-            let observable_output = last.clone_witness()
+        let storage_application_observable_output = if let Some(last) =
+            basic_circuits.storage_application_circuits.last
+        {
+            let observable_output = last
+                .clone_witness()
                 .unwrap()
                 .closed_form_input
                 .observable_output;
@@ -521,145 +537,133 @@ pub fn run<
         };
 
         // event sorter must produce an empty queue
-        let events_sorter_observable_output = if let Some(last) = basic_circuits
-        .events_sorter_circuits
-        .last {
-            let observable_output = last.clone_witness()
-                .unwrap()
-                .closed_form_input
-                .observable_output;
+        let events_sorter_observable_output =
+            if let Some(last) = basic_circuits.events_sorter_circuits.last {
+                let observable_output = last
+                    .clone_witness()
+                    .unwrap()
+                    .closed_form_input
+                    .observable_output;
 
-            observable_output
-        } else {
-            // form it manually
-            use crate::zkevm_circuits::log_sorter::input::EventsDeduplicatorOutputDataWitness;
-            EventsDeduplicatorOutputDataWitness::<GoldilocksField> {
-                final_queue_state: empty_log_queue_state.clone(),
-            }
-        };
+                observable_output
+            } else {
+                // form it manually
+                use crate::zkevm_circuits::log_sorter::input::EventsDeduplicatorOutputDataWitness;
+                EventsDeduplicatorOutputDataWitness::<GoldilocksField> {
+                    final_queue_state: empty_log_queue_state.clone(),
+                }
+            };
 
         // same for L2 to L1 logs
-        let l1messages_sorter_observable_output = if let Some(last) = basic_circuits
-        .l1_messages_sorter_circuits
-        .last {
-            let observable_output = last.clone_witness()
-                .unwrap()
-                .closed_form_input
-                .observable_output;
+        let l1messages_sorter_observable_output =
+            if let Some(last) = basic_circuits.l1_messages_sorter_circuits.last {
+                let observable_output = last
+                    .clone_witness()
+                    .unwrap()
+                    .closed_form_input
+                    .observable_output;
 
-            observable_output
-        } else {
-            // form it manually
-            use crate::zkevm_circuits::log_sorter::input::EventsDeduplicatorOutputDataWitness;
-            EventsDeduplicatorOutputDataWitness::<GoldilocksField> {
-                final_queue_state: empty_log_queue_state.clone(),
-            }
-        };
+                observable_output
+            } else {
+                // form it manually
+                use crate::zkevm_circuits::log_sorter::input::EventsDeduplicatorOutputDataWitness;
+                EventsDeduplicatorOutputDataWitness::<GoldilocksField> {
+                    final_queue_state: empty_log_queue_state.clone(),
+                }
+            };
 
         // also create intermediate queue states if needed
-        let ram_sorted_queue_state = if let Some(state) =  basic_circuits
-        .ram_permutation_circuits
-        .first
-        .map(|el| {
-            el
-            .clone_witness()
-            .unwrap()
-            .closed_form_input
-            .observable_input
-            .sorted_queue_initial_state 
-        }) {
+        let ram_sorted_queue_state = if let Some(state) =
+            basic_circuits.ram_permutation_circuits.first.map(|el| {
+                el.clone_witness()
+                    .unwrap()
+                    .closed_form_input
+                    .observable_input
+                    .sorted_queue_initial_state
+            }) {
             state.tail
         } else {
             empty_sponge_like_queue_state.clone().tail
         };
 
-        let decommits_sorter_intermediate_queue_state = if let Some(state) =  basic_circuits
-        .code_decommittments_sorter_circuits
-        .first
-        .map(|el| {
-            el
-            .clone_witness()
-            .unwrap()
-            .closed_form_input
-            .observable_input
-            .sorted_queue_initial_state 
-        }) {
+        let decommits_sorter_intermediate_queue_state = if let Some(state) = basic_circuits
+            .code_decommittments_sorter_circuits
+            .first
+            .map(|el| {
+                el.clone_witness()
+                    .unwrap()
+                    .closed_form_input
+                    .observable_input
+                    .sorted_queue_initial_state
+            }) {
             state.tail
         } else {
             empty_sponge_like_queue_state.clone().tail
         };
 
-        let events_sorter_intermediate_queue_state = if let Some(state) =  basic_circuits
-        .events_sorter_circuits
-        .first
-        .map(|el| {
-            el
-            .clone_witness()
-            .unwrap()
-            .closed_form_input
-            .observable_input
-            .intermediate_sorted_queue_state 
-        }) {
+        let events_sorter_intermediate_queue_state = if let Some(state) =
+            basic_circuits.events_sorter_circuits.first.map(|el| {
+                el.clone_witness()
+                    .unwrap()
+                    .closed_form_input
+                    .observable_input
+                    .intermediate_sorted_queue_state
+            }) {
             state.tail
         } else {
             empty_log_queue_state.clone().tail
         };
 
-        let l1messages_sorter_intermediate_queue_state = if let Some(state) =  basic_circuits
-        .l1_messages_sorter_circuits
-        .first
-        .map(|el| {
-            el
-            .clone_witness()
-            .unwrap()
-            .closed_form_input
-            .observable_input
-            .intermediate_sorted_queue_state 
-        }) {
+        let l1messages_sorter_intermediate_queue_state = if let Some(state) =
+            basic_circuits.l1_messages_sorter_circuits.first.map(|el| {
+                el.clone_witness()
+                    .unwrap()
+                    .closed_form_input
+                    .observable_input
+                    .intermediate_sorted_queue_state
+            }) {
             state.tail
         } else {
             empty_log_queue_state.clone().tail
         };
 
-        let rollup_storage_sorter_intermediate_queue_state = if let Some(state) =  basic_circuits
-        .storage_sorter_circuits
-        .first
-        .map(|el| {
-            el
-            .clone_witness()
-            .unwrap()
-            .closed_form_input
-            .observable_input
-            .intermediate_sorted_queue_state 
-        }) {
+        let rollup_storage_sorter_intermediate_queue_state = if let Some(state) =
+            basic_circuits.storage_sorter_circuits.first.map(|el| {
+                el.clone_witness()
+                    .unwrap()
+                    .closed_form_input
+                    .observable_input
+                    .intermediate_sorted_queue_state
+            }) {
             state.tail
         } else {
             empty_log_queue_state.clone().tail
         };
 
-        let transient_storage_sorter_intermediate_queue_state = if let Some(state) =  basic_circuits
-        .transient_storage_sorter_circuits
-        .first
-        .map(|el| {
-            el
-            .clone_witness()
-            .unwrap()
-            .closed_form_input
-            .observable_input
-            .intermediate_sorted_queue_state 
-        }) {
+        let transient_storage_sorter_intermediate_queue_state = if let Some(state) = basic_circuits
+            .transient_storage_sorter_circuits
+            .first
+            .map(|el| {
+                el.clone_witness()
+                    .unwrap()
+                    .closed_form_input
+                    .observable_input
+                    .intermediate_sorted_queue_state
+            }) {
             state.tail
         } else {
             empty_log_queue_state.clone().tail
         };
 
-        let mut eip4844_witnesses : [Option<EIP4844OutputDataWitness<GoldilocksField>>; MAX_4844_BLOBS_PER_BLOCK] = std::array::from_fn(|_| None);
-        for (eip4844_circuit, dst) in eip4844_circuits.into_iter().zip(eip4844_witnesses.iter_mut()) {
-            *dst = Some(
-                eip4844_circuit.closed_form_input.observable_output,
-            )
+        let mut eip4844_witnesses: [Option<EIP4844OutputDataWitness<GoldilocksField>>;
+            MAX_4844_BLOBS_PER_BLOCK] = std::array::from_fn(|_| None);
+        for (eip4844_circuit, dst) in eip4844_circuits
+            .into_iter()
+            .zip(eip4844_witnesses.iter_mut())
+        {
+            *dst = Some(eip4844_circuit.closed_form_input.observable_output)
         }
-        
+
         let scheduler_circuit_witness = SchedulerCircuitInstanceWitness {
             prev_block_data: previous_block_passthrough,
             block_meta_parameters,

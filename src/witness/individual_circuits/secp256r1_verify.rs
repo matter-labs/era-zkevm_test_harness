@@ -47,11 +47,17 @@ pub fn secp256r1_verify_decompose_into_per_circuit_witness<
 
     let mut result = vec![];
 
-    let precompile_calls = std::mem::replace(&mut artifacts.demuxed_secp256r1_verify_queries, vec![]);
+    let precompile_calls =
+        std::mem::replace(&mut artifacts.demuxed_secp256r1_verify_queries, vec![]);
     let precompile_calls_queue_states =
         std::mem::replace(&mut demuxed_secp256r1_verify_queue.states, vec![]);
-    let simulator_witness: Vec<_> = demuxed_secp256r1_verify_queue.simulator.witness.clone().into();
-    let round_function_witness = std::mem::replace(&mut artifacts.secp256r1_verify_witnesses, vec![]);
+    let simulator_witness: Vec<_> = demuxed_secp256r1_verify_queue
+        .simulator
+        .witness
+        .clone()
+        .into();
+    let round_function_witness =
+        std::mem::replace(&mut artifacts.secp256r1_verify_witnesses, vec![]);
 
     // check basic consistency
     assert!(precompile_calls.len() == precompile_calls_queue_states.len());

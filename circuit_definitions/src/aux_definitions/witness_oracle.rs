@@ -3,11 +3,11 @@ use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 use crate::encodings::callstack_entry::*;
 use crate::ethereum_types::U256;
 use derivative::*;
-use zk_evm::aux_structures::PubdataCost;
 use std::collections::VecDeque;
 use zk_evm::aux_structures::DecommittmentQuery;
 use zk_evm::aux_structures::LogQuery;
 use zk_evm::aux_structures::MemoryQuery;
+use zk_evm::aux_structures::PubdataCost;
 use zk_evm::vm_state::CallStackEntry;
 use zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
 
@@ -215,7 +215,8 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
                     query,
                 );
             }
-            let (_cycle, query, refund) = self.storage_access_cold_warm_refunds.pop_front().unwrap();
+            let (_cycle, query, refund) =
+                self.storage_access_cold_warm_refunds.pop_front().unwrap();
             let record = query;
             assert_eq!(record.aux_byte, query.aux_byte);
             assert_eq!(record.address, query.address);
@@ -384,7 +385,10 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
             assert_eq!(entry.code_shard_id, witness.code_shard_id);
 
             assert_eq!(entry.stipend, witness.stipend);
-            assert_eq!(entry.total_pubdata_spent.0 as u32, witness.total_pubdata_spent);
+            assert_eq!(
+                entry.total_pubdata_spent.0 as u32,
+                witness.total_pubdata_spent
+            );
 
             let witness_composite = [
                 (witness.context_u128_value_composite[0] as u64)
@@ -561,9 +565,7 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
         if self.memory_read_witness.is_empty() == false {
             panic!(
                 "Too many memory queries in witness over cycles range {}..={}: have left\n{:?}",
-                self.initial_cycle,
-                self.final_cycle_inclusive,
-                self.memory_read_witness
+                self.initial_cycle, self.final_cycle_inclusive, self.memory_read_witness
             );
         }
 
@@ -581,9 +583,7 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
         if self.storage_queries.is_empty() == false {
             panic!(
                 "Too many storage queries in witness over cycles range {}..={}: have left\n{:?}",
-                self.initial_cycle,
-                self.final_cycle_inclusive,
-                self.storage_queries
+                self.initial_cycle, self.final_cycle_inclusive, self.storage_queries
             );
         }
 
@@ -608,9 +608,7 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
         if self.callstack_values_witnesses.is_empty() == false {
             panic!(
                 "Too many callstack sponge witnesses over cycles range {}..={}: have left\n{:?}",
-                self.initial_cycle,
-                self.final_cycle_inclusive,
-                self.callstack_values_witnesses
+                self.initial_cycle, self.final_cycle_inclusive, self.callstack_values_witnesses
             );
         }
 
