@@ -1,4 +1,7 @@
+use crossbeam::atomic::AtomicCell;
+use std::collections::VecDeque;
 use std::ops::Add;
+use std::sync::Arc;
 
 use crate::boojum::algebraic_props::round_function::AbsorptionModeOverwrite;
 use crate::boojum::config::*;
@@ -8,7 +11,14 @@ use crate::boojum::{algebraic_props::round_function, field::SmallField};
 use crate::kzg::KzgSettings;
 use crate::witness::tree::BinaryHasher;
 use crate::zk_evm::{address_to_u256, ethereum_types::*};
-use circuit_definitions::encodings::{BytesSerializable, QueueSimulator};
+use crate::zkevm_circuits::eip_4844::input::BlobChunkWitness;
+use crate::zkevm_circuits::eip_4844::input::EIP4844CircuitInstanceWitness;
+use crate::zkevm_circuits::eip_4844::input::EIP4844InputOutputWitness;
+use crate::GoldilocksField;
+use circuit_definitions::{
+    encodings::{BytesSerializable, QueueSimulator},
+    ZkSyncDefaultRoundFunction, EIP4844_CYCLE_LIMIT,
+};
 
 pub fn u64_as_u32_le(value: u64) -> [u32; 2] {
     [value as u32, (value >> 32) as u32]
@@ -161,15 +171,21 @@ pub fn finalized_queue_state_as_bytes<F: SmallField>(
 }
 
 use crate::boojum::pairing::bls12_381::fr::{Fr, FrRepr};
-use crate::sha3::{Digest, Keccak256};
+use crate::sha2::{Digest, Sha256};
+use crate::sha3::Keccak256;
 use crate::zkevm_circuits::eip_4844::input::EIP4844OutputDataWitness;
 use crate::zkevm_circuits::eip_4844::input::ELEMENTS_PER_4844_BLOCK;
 use crate::zkevm_circuits::scheduler::block_header::MAX_4844_BLOBS_PER_BLOCK;
 use snark_wrapper::franklin_crypto::bellman::Field;
 use snark_wrapper::franklin_crypto::bellman::PrimeField;
 
+/// Generates eip4844 witness for a given blob and using a trusted setup from a given json path.
+/// Returns blob array, linear hash, versioned hash and output hash.
+/// Blob must have exact length of 31 * 4096
+// Example trusted setup path is in "src/kzg/trusted_setup.json".
 pub fn generate_eip4844_witness<F: SmallField>(
     blob: &[u8],
+    trusted_setup_path: &str,
 ) -> (
     [[u8; 31]; ELEMENTS_PER_4844_BLOCK],
     [u8; 32],
@@ -199,8 +215,8 @@ pub fn generate_eip4844_witness<F: SmallField>(
 
     use crate::kzg::compute_commitment;
     use circuit_definitions::boojum::pairing::CurveAffine;
-    let setup_json: &str = "src/kzg/trusted_setup.json";
-    let settings = KzgSettings::new(setup_json);
+
+    let settings = KzgSettings::new(trusted_setup_path);
 
     let commitment = compute_commitment(&settings, &poly);
     use crate::sha2::Sha256;
@@ -215,7 +231,8 @@ pub fn generate_eip4844_witness<F: SmallField>(
             .try_into()
             .expect("should be able to create an array from a keccak digest");
 
-    // compute output commitment
+    // follow circuit logic to produce FS challenge to later open poly
+    // at this point either from KZG in L1 or compute directly from monomial form in the circuit
     let evaluation_point = &Keccak256::digest(
         &linear_hash
             .iter()

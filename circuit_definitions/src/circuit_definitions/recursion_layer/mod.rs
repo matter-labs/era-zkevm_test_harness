@@ -25,7 +25,10 @@ use self::recursion_tip::*;
 use self::scheduler::*;
 
 pub const RECURSION_ARITY: usize = 32;
-pub const SCHEDULER_CAPACITY: usize = (1 << 14) + (1 << 13);
+// Maximum amount of basic circuits that a scheduler can handle.
+// The value was selected in such a way, that the scheduler circuit
+// fits into 2^20 trace size (currently it uses aroudn 1'043'000)
+pub const SCHEDULER_CAPACITY: usize = 24100;
 
 pub use zkevm_circuits::recursion::recursion_tip::input::RECURSION_TIP_ARITY;
 

@@ -1879,7 +1879,8 @@ pub fn create_artifacts_from_tracer<
             };
             use crate::generate_eip4844_witness;
             let (chunks, linear_hash, versioned_hash, output_hash) = generate_eip4844_witness::<GoldilocksField>(
-                &input_witness[..]
+                &input_witness[..],
+                "src/kzg/trusted_setup.json"
             );
             let data_chunks: VecDeque<_> = chunks.iter().map(|el| BlobChunkWitness {
                 inner: *el,
