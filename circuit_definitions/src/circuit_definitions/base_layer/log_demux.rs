@@ -1,30 +1,29 @@
 use derivative::*;
+use snark_wrapper::boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
+use snark_wrapper::boojum::gadgets::recursion::recursive_transcript::CircuitAlgebraicSpongeBasedTranscript;
+use snark_wrapper::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
 
 use super::*;
 use crate::boojum::cs::traits::circuit::CircuitBuilder;
 
+type F = GoldilocksField;
+type TR = GoldilocksPoisedon2Transcript;
+type R = Poseidon2Goldilocks;
+type CTR = CircuitAlgebraicSpongeBasedTranscript<GoldilocksField, 8, 12, 4, R>;
+type EXT = GoldilocksExt2;
+type H = GoldilocksPoseidon2Sponge<AbsorptionModeOverwrite>;
+type RH = CircuitGoldilocksPoseidon2Sponge;
+
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone, Copy, Debug, Default(bound = ""))]
-pub struct LogDemuxInstanceSynthesisFunction<
-    F: SmallField,
-    R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-        + AlgebraicRoundFunction<F, 8, 12, 4>
-        + serde::Serialize
-        + serde::de::DeserializeOwned,
-> {
+pub struct LogDemuxInstanceSynthesisFunction {
     _marker: std::marker::PhantomData<(F, R)>,
 }
 
 use zkevm_circuits::demux_log_queue::demultiplex_storage_logs_enty_point;
 use zkevm_circuits::demux_log_queue::input::LogDemuxerCircuitInstanceWitness;
 
-impl<
-        F: SmallField,
-        R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-            + AlgebraicRoundFunction<F, 8, 12, 4>
-            + serde::Serialize
-            + serde::de::DeserializeOwned,
-    > CircuitBuilder<F> for LogDemuxInstanceSynthesisFunction<F, R>
+impl CircuitBuilder<F> for LogDemuxInstanceSynthesisFunction
 where
     [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
@@ -107,13 +106,7 @@ where
     }
 }
 
-impl<
-        F: SmallField,
-        R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-            + AlgebraicRoundFunction<F, 8, 12, 4>
-            + serde::Serialize
-            + serde::de::DeserializeOwned,
-    > ZkSyncUniformSynthesisFunction<F> for LogDemuxInstanceSynthesisFunction<F, R>
+impl ZkSyncUniformSynthesisFunction<F> for LogDemuxInstanceSynthesisFunction
 where
     [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,

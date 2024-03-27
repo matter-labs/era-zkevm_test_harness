@@ -53,38 +53,42 @@ pub use self::vm_main::VmMainInstanceSynthesisFunction;
 // Type definitions for circuits, so one can easily form circuits with witness, and their definition
 // will take care of particular synthesis function. There is already an implementation of Circuit<F> for ZkSyncUniformCircuitInstance,
 // so as soon as the structure is instantiated it is ready for proving
-pub type VMMainCircuit<F, W, R> =
-    ZkSyncUniformCircuitInstance<F, VmMainInstanceSynthesisFunction<F, W, R>>;
-pub type CodeDecommittsSorterCircuit<F, R> =
-    ZkSyncUniformCircuitInstance<F, CodeDecommittmentsSorterSynthesisFunction<F, R>>;
-pub type CodeDecommitterCircuit<F, R> =
-    ZkSyncUniformCircuitInstance<F, CodeDecommitterInstanceSynthesisFunction<F, R>>;
-pub type LogDemuxerCircuit<F, R> =
-    ZkSyncUniformCircuitInstance<F, LogDemuxInstanceSynthesisFunction<F, R>>;
-pub type Keccak256RoundFunctionCircuit<F, R> =
-    ZkSyncUniformCircuitInstance<F, Keccak256RoundFunctionInstanceSynthesisFunction<F, R>>;
-pub type Sha256RoundFunctionCircuit<F, R> =
-    ZkSyncUniformCircuitInstance<F, Sha256RoundFunctionInstanceSynthesisFunction<F, R>>;
-pub type ECRecoverFunctionCircuit<F, R> =
-    ZkSyncUniformCircuitInstance<F, ECRecoverFunctionInstanceSynthesisFunction<F, R>>;
-pub type RAMPermutationCircuit<F, R> =
-    ZkSyncUniformCircuitInstance<F, RAMPermutationInstanceSynthesisFunction<F, R>>;
-pub type StorageSorterCircuit<F, R> =
-    ZkSyncUniformCircuitInstance<F, StorageSortAndDedupInstanceSynthesisFunction<F, R>>;
-pub type StorageApplicationCircuit<F, R> =
-    ZkSyncUniformCircuitInstance<F, StorageApplicationInstanceSynthesisFunction<F, R>>;
-pub type EventsSorterCircuit<F, R> =
-    ZkSyncUniformCircuitInstance<F, EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction<F, R>>;
-pub type L1MessagesSorterCircuit<F, R> =
-    ZkSyncUniformCircuitInstance<F, EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction<F, R>>;
-pub type L1MessagesHasherCircuit<F, R> =
-    ZkSyncUniformCircuitInstance<F, LinearHasherInstanceSynthesisFunction<F, R>>;
-pub type TransientStorageSorterCircuit<F, R> =
-    ZkSyncUniformCircuitInstance<F, TransientStorageSortAndDedupInstanceSynthesisFunction<F, R>>;
-pub type Secp256r1VerifyCircuit<F, R> =
-    ZkSyncUniformCircuitInstance<F, Secp256r1VerifyFunctionInstanceSynthesisFunction<F, R>>;
-pub type EIP4844Circuit<F, R> =
-    ZkSyncUniformCircuitInstance<F, EIP4844InstanceSynthesisFunction<F, R>>;
+pub type VMMainCircuit =
+    ZkSyncUniformCircuitInstance<GoldilocksField, VmMainInstanceSynthesisFunction>;
+pub type CodeDecommittsSorterCircuit =
+    ZkSyncUniformCircuitInstance<GoldilocksField, CodeDecommittmentsSorterSynthesisFunction>;
+pub type CodeDecommitterCircuit =
+    ZkSyncUniformCircuitInstance<GoldilocksField, CodeDecommitterInstanceSynthesisFunction>;
+pub type LogDemuxerCircuit =
+    ZkSyncUniformCircuitInstance<GoldilocksField, LogDemuxInstanceSynthesisFunction>;
+pub type Keccak256RoundFunctionCircuit =
+    ZkSyncUniformCircuitInstance<GoldilocksField, Keccak256RoundFunctionInstanceSynthesisFunction>;
+pub type Sha256RoundFunctionCircuit =
+    ZkSyncUniformCircuitInstance<GoldilocksField, Sha256RoundFunctionInstanceSynthesisFunction>;
+pub type ECRecoverFunctionCircuit =
+    ZkSyncUniformCircuitInstance<GoldilocksField, ECRecoverFunctionInstanceSynthesisFunction>;
+pub type RAMPermutationCircuit =
+    ZkSyncUniformCircuitInstance<GoldilocksField, RAMPermutationInstanceSynthesisFunction>;
+pub type StorageSorterCircuit =
+    ZkSyncUniformCircuitInstance<GoldilocksField, StorageSortAndDedupInstanceSynthesisFunction>;
+pub type StorageApplicationCircuit =
+    ZkSyncUniformCircuitInstance<GoldilocksField, StorageApplicationInstanceSynthesisFunction>;
+pub type EventsSorterCircuit = ZkSyncUniformCircuitInstance<
+    GoldilocksField,
+    EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction,
+>;
+pub type L1MessagesSorterCircuit = ZkSyncUniformCircuitInstance<
+    GoldilocksField,
+    EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction,
+>;
+pub type L1MessagesHasherCircuit =
+    ZkSyncUniformCircuitInstance<GoldilocksField, LinearHasherInstanceSynthesisFunction>;
+pub type TransientStorageSorterCircuit =
+    ZkSyncUniformCircuitInstance<GoldilocksField, TransientStorageSortAndDedupInstanceSynthesisFunction>;
+pub type Secp256r1VerifyCircuit =
+    ZkSyncUniformCircuitInstance<GoldilocksField, Secp256r1VerifyFunctionInstanceSynthesisFunction>;
+pub type EIP4844Circuit =
+    ZkSyncUniformCircuitInstance<GoldilocksField, EIP4844InstanceSynthesisFunction>;
 
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone(bound = ""), Debug)]
@@ -235,17 +239,14 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
     }
 }
 
+type F = GoldilocksField;
+type R = Poseidon2Goldilocks;
+
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone(bound = ""))]
 #[serde(bound = "")]
-pub enum ZkSyncBaseLayerCircuit<
-    F: SmallField,
-    W: WitnessOracle<F>,
-    R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-        + AlgebraicRoundFunction<F, 8, 12, 4>
-        + serde::Serialize
-        + serde::de::DeserializeOwned,
-> where
+pub enum ZkSyncBaseLayerCircuit
+where
     [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
@@ -254,32 +255,25 @@ pub enum ZkSyncBaseLayerCircuit<
     [(); <ExecutionContextRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <TimestampedStorageLogRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
 {
-    MainVM(VMMainCircuit<F, W, R>),
-    CodeDecommittmentsSorter(CodeDecommittsSorterCircuit<F, R>),
-    CodeDecommitter(CodeDecommitterCircuit<F, R>),
-    LogDemuxer(LogDemuxerCircuit<F, R>),
-    KeccakRoundFunction(Keccak256RoundFunctionCircuit<F, R>),
-    Sha256RoundFunction(Sha256RoundFunctionCircuit<F, R>),
-    ECRecover(ECRecoverFunctionCircuit<F, R>),
-    RAMPermutation(RAMPermutationCircuit<F, R>),
-    StorageSorter(StorageSorterCircuit<F, R>),
-    StorageApplication(StorageApplicationCircuit<F, R>),
-    EventsSorter(EventsSorterCircuit<F, R>),
-    L1MessagesSorter(L1MessagesSorterCircuit<F, R>),
-    L1MessagesHasher(L1MessagesHasherCircuit<F, R>),
-    TransientStorageSorter(TransientStorageSorterCircuit<F, R>),
-    Secp256r1Verify(Secp256r1VerifyCircuit<F, R>),
-    EIP4844Repack(EIP4844Circuit<F, R>),
+    MainVM(VMMainCircuit),
+    CodeDecommittmentsSorter(CodeDecommittsSorterCircuit),
+    CodeDecommitter(CodeDecommitterCircuit),
+    LogDemuxer(LogDemuxerCircuit),
+    KeccakRoundFunction(Keccak256RoundFunctionCircuit),
+    Sha256RoundFunction(Sha256RoundFunctionCircuit),
+    ECRecover(ECRecoverFunctionCircuit),
+    RAMPermutation(RAMPermutationCircuit),
+    StorageSorter(StorageSorterCircuit),
+    StorageApplication(StorageApplicationCircuit),
+    EventsSorter(EventsSorterCircuit),
+    L1MessagesSorter(L1MessagesSorterCircuit),
+    L1MessagesHasher(L1MessagesHasherCircuit),
+    TransientStorageSorter(TransientStorageSorterCircuit),
+    Secp256r1Verify(Secp256r1VerifyCircuit),
+    EIP4844Repack(EIP4844Circuit),
 }
 
-impl<
-        F: SmallField,
-        W: WitnessOracle<F>,
-        R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-            + AlgebraicRoundFunction<F, 8, 12, 4>
-            + serde::Serialize
-            + serde::de::DeserializeOwned,
-    > ZkSyncBaseLayerCircuit<F, W, R>
+impl ZkSyncBaseLayerCircuit
 where
     [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,

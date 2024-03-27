@@ -137,106 +137,85 @@ where
 }
 
 pub fn main_vm_capacity() -> usize {
-    type SF = VmMainInstanceSynthesisFunction<
-        GoldilocksField,
-        VmWitnessOracle<GoldilocksField>,
-        ZkSyncDefaultRoundFunction,
-    >;
+    type SF = VmMainInstanceSynthesisFunction;
 
     compute_size_inner::<SF, _>(SF::geometry(), 20, Some(5000), |x: usize| x)
 }
 
 pub fn code_decommittments_sorter_capacity() -> usize {
-    type SF =
-        CodeDecommittmentsSorterSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+    type SF = CodeDecommittmentsSorterSynthesisFunction;
 
     compute_size_inner::<SF, _>(SF::geometry(), 20, Some(40000), |x: usize| x)
 }
 
 pub fn code_decommitter_capacity() -> usize {
-    type SF = CodeDecommitterInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+    type SF = CodeDecommitterInstanceSynthesisFunction;
 
     compute_size_inner::<SF, _>(SF::geometry(), 20, Some(2048), |x: usize| x)
 }
 
 pub fn log_demuxer_capacity() -> usize {
-    type SF = LogDemuxInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+    type SF = LogDemuxInstanceSynthesisFunction;
 
     compute_size_inner::<SF, _>(SF::geometry(), 20, Some(20000), |x: usize| x)
 }
 
 pub fn keccak256_rf_capacity() -> usize {
-    type SF = Keccak256RoundFunctionInstanceSynthesisFunction<
-        GoldilocksField,
-        ZkSyncDefaultRoundFunction,
-    >;
+    type SF = Keccak256RoundFunctionInstanceSynthesisFunction;
 
     compute_size_inner::<SF, _>(SF::geometry(), 20, Some(100), |x: usize| x)
 }
 
 pub fn sha256_rf_capacity() -> usize {
-    type SF =
-        Sha256RoundFunctionInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+    type SF = Sha256RoundFunctionInstanceSynthesisFunction;
 
     compute_size_inner::<SF, _>(SF::geometry(), 20, Some(2048), |x: usize| x)
 }
 
 pub fn ecrecover_capacity() -> usize {
-    type SF =
-        ECRecoverFunctionInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+    type SF = ECRecoverFunctionInstanceSynthesisFunction;
 
     compute_size_inner::<SF, _>(SF::geometry(), 20, Some(2), |x: usize| x)
 }
 
 pub fn ram_permutation_capacity() -> usize {
-    type SF = RAMPermutationInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+    type SF = RAMPermutationInstanceSynthesisFunction;
 
     compute_size_inner::<SF, _>(SF::geometry(), 20, Some(70000), |x: usize| x)
 }
 
 pub fn event_sorter_capacity() -> usize {
-    type SF = EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction<
-        GoldilocksField,
-        ZkSyncDefaultRoundFunction,
-    >;
+    type SF = EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction;
 
     compute_size_inner::<SF, _>(SF::geometry(), 20, Some(20000), |x: usize| x)
 }
 
 pub fn storage_sorter_capacity() -> usize {
-    type SF =
-        StorageSortAndDedupInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+    type SF = StorageSortAndDedupInstanceSynthesisFunction;
 
     compute_size_inner::<SF, _>(SF::geometry(), 20, Some(22000), |x: usize| x)
 }
 
 pub fn storage_application_capacity() -> usize {
-    type SF =
-        StorageApplicationInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+    type SF = StorageApplicationInstanceSynthesisFunction;
 
     compute_size_inner::<SF, _>(SF::geometry(), 20, Some(32), |x: usize| x)
 }
 
 pub fn l1_messages_hasher_capacity() -> usize {
-    type SF = LinearHasherInstanceSynthesisFunction<GoldilocksField, ZkSyncDefaultRoundFunction>;
+    type SF = LinearHasherInstanceSynthesisFunction;
 
     compute_size_inner::<SF, _>(SF::geometry(), 20, Some(512), |x: usize| x)
 }
 
 pub fn transient_storage_sorter_capacity() -> usize {
-    type SF = TransientStorageSortAndDedupInstanceSynthesisFunction<
-        GoldilocksField,
-        ZkSyncDefaultRoundFunction,
-    >;
+    type SF = TransientStorageSortAndDedupInstanceSynthesisFunction;
 
     compute_size_inner::<SF, _>(SF::geometry(), 20, Some(22000), |x: usize| x)
 }
 
 pub fn secp256r1_verify_capacity() -> usize {
-    type SF = Secp256r1VerifyFunctionInstanceSynthesisFunction<
-        GoldilocksField,
-        ZkSyncDefaultRoundFunction,
-    >;
+    type SF = Secp256r1VerifyFunctionInstanceSynthesisFunction;
 
     compute_size_inner::<SF, _>(SF::geometry(), 20, Some(2), |x: usize| x)
 }

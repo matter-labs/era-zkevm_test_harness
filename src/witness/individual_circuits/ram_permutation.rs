@@ -24,7 +24,7 @@ use std::sync::Arc;
 use crate::zk_evm::zkevm_opcode_defs::BOOTLOADER_HEAP_PAGE;
 
 pub fn compute_ram_circuit_snapshots<
-    CB: FnMut(ZkSyncBaseLayerCircuit<Field, VmWitnessOracle<Field>, Poseidon2Goldilocks>),
+    CB: FnMut(ZkSyncBaseLayerCircuit),
     QSCB: FnMut(u64, RecursionQueueSimulator<Field>, Vec<ClosedFormInputCompactFormWitness<Field>>),
 >(
     artifacts: &mut FullBlockArtifacts<Field>,
@@ -37,7 +37,7 @@ pub fn compute_ram_circuit_snapshots<
     mut circuit_callback: CB,
     mut recursion_queue_callback: QSCB,
 ) -> (
-    FirstAndLastCircuit<RAMPermutationInstanceSynthesisFunction<Field, RoundFunction>>,
+    FirstAndLastCircuit<RAMPermutationInstanceSynthesisFunction>,
     Vec<ClosedFormInputCompactFormWitness<Field>>,
 ) {
     assert!(

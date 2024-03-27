@@ -18,28 +18,19 @@ use crate::boojum::gadgets::tables::Xor8Table;
 use crate::circuit_definitions::base_layer::TARGET_CIRCUIT_TRACE_LENGTH;
 use crate::circuit_definitions::traits::gate::GatePlacementStrategy;
 
+type F = GoldilocksField;
+type R = Poseidon2Goldilocks;
+
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone, Copy, Debug, Default(bound = ""))]
-pub struct EIP4844InstanceSynthesisFunction<
-    F: SmallField,
-    R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-        + AlgebraicRoundFunction<F, 8, 12, 4>
-        + serde::Serialize
-        + serde::de::DeserializeOwned,
-> {
+pub struct EIP4844InstanceSynthesisFunction {
     _marker: std::marker::PhantomData<(F, R)>,
 }
 
 use zkevm_circuits::eip_4844::eip_4844_entry_point;
 use zkevm_circuits::eip_4844::input::*;
 
-impl<
-        F: SmallField,
-        R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-            + AlgebraicRoundFunction<F, 8, 12, 4>
-            + serde::Serialize
-            + serde::de::DeserializeOwned,
-    > CircuitBuilder<F> for EIP4844InstanceSynthesisFunction<F, R>
+impl CircuitBuilder<F> for EIP4844InstanceSynthesisFunction
 where
     [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN + 1]:,
@@ -113,13 +104,7 @@ where
     }
 }
 
-impl<
-        F: SmallField,
-        R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-            + AlgebraicRoundFunction<F, 8, 12, 4>
-            + serde::Serialize
-            + serde::de::DeserializeOwned,
-    > ZkSyncUniformSynthesisFunction<F> for EIP4844InstanceSynthesisFunction<F, R>
+impl ZkSyncUniformSynthesisFunction<F> for EIP4844InstanceSynthesisFunction
 where
     [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN + 1]:,
@@ -163,17 +148,12 @@ where
     }
 }
 
-pub fn synthesis<F, P, R, CR>(
-    circuit: EIP4844Circuit<F, R>,
+pub fn synthesis<P, CR>(
+    circuit: EIP4844Circuit,
     hint: &FinalizationHintsForProver,
 ) -> CSReferenceAssembly<F, P, ProvingCSConfig>
 where
-    F: SmallField,
     P: PrimeFieldLikeVectorized<Base = F>,
-    R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-        + AlgebraicRoundFunction<F, 8, 12, 4>
-        + serde::Serialize
-        + serde::de::DeserializeOwned,
     CR: CircuitResolver<
         F,
         zkevm_circuits::boojum::config::Resolver<

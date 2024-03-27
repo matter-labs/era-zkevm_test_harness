@@ -8,21 +8,11 @@ mod test {
     use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
     use std::io::Read;
 
-    type BaseLayerCircuit = ZkSyncBaseLayerCircuit<
-        GoldilocksField,
-        VmWitnessOracle<GoldilocksField>,
-        ZkSyncDefaultRoundFunction,
-    >;
+    type BaseLayerCircuit = ZkSyncBaseLayerCircuit;
 
     #[derive(serde::Serialize, serde::Deserialize)]
     pub enum CircuitWrapper {
-        Base(
-            ZkSyncBaseLayerCircuit<
-                GoldilocksField,
-                VmWitnessOracle<GoldilocksField>,
-                ZkSyncDefaultRoundFunction,
-            >,
-        ),
+        Base(ZkSyncBaseLayerCircuit),
         Recursive(ZkSyncRecursiveLayerCircuit),
     }
 

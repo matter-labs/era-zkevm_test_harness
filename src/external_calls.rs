@@ -32,7 +32,6 @@ use crate::{
     utils::{calldata_to_aligned_data, u64_as_u32_le},
 };
 use circuit_definitions::zk_evm::zkevm_opcode_defs::VersionedHashLen32;
-use ::tracing;
 use circuit_definitions::boojum::field::Field;
 use circuit_definitions::boojum::implementations::poseidon2::Poseidon2Goldilocks;
 use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit;
@@ -41,6 +40,7 @@ use circuit_definitions::zkevm_circuits::fsm_input_output::ClosedFormInputCompac
 use circuit_definitions::{Field as MainField, RoundFunction, ZkSyncDefaultRoundFunction};
 use snark_wrapper::boojum::field::goldilocks::GoldilocksExt2;
 use snark_wrapper::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
+use tracing;
 
 pub const SCHEDULER_TIMESTAMP: u32 = 1;
 
@@ -62,7 +62,7 @@ use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 /// This function will setup the environment and will run out-of-circuit and then in-circuit
 pub fn run<
     S: Storage,
-    CB: FnMut(ZkSyncBaseLayerCircuit<MainField, VmWitnessOracle<MainField>, RoundFunction>),
+    CB: FnMut(ZkSyncBaseLayerCircuit),
     QSCB: FnMut(
         u64,
         RecursionQueueSimulator<MainField>,
