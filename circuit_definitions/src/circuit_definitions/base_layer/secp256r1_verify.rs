@@ -12,9 +12,9 @@ pub struct Secp256r1VerifyFunctionInstanceSynthesisFunction {
     _marker: std::marker::PhantomData<(F, R)>,
 }
 
+use zkevm_circuits::secp256r1_verify::fixed_base_mul_table::*;
 use zkevm_circuits::secp256r1_verify::input::*;
 use zkevm_circuits::secp256r1_verify::secp256r1_verify_function_entry_point;
-use zkevm_circuits::secp256r1_verify::fixed_base_mul_table::*;
 
 impl CircuitBuilder<F> for Secp256r1VerifyFunctionInstanceSynthesisFunction
 where
