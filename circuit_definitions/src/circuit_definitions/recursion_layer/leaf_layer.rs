@@ -118,7 +118,7 @@ where
         } = self;
 
         use crate::circuit_definitions::verifier_builder::dyn_recursive_verifier_builder_for_circuit_type;
-        let verifier_builder = dyn_recursive_verifier_builder_for_circuit_type::<F, EXT, CS, R>(
+        let verifier_builder = dyn_recursive_verifier_builder_for_circuit_type::<CS>(
             self.base_layer_circuit_type as u8,
         );
 

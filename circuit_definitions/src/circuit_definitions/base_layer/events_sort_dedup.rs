@@ -3,28 +3,19 @@ use derivative::*;
 use super::*;
 use crate::boojum::cs::traits::circuit::CircuitBuilder;
 
+type F = GoldilocksField;
+type R = Poseidon2Goldilocks;
+
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone, Copy, Debug, Default(bound = ""))]
-pub struct EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction<
-    F: SmallField,
-    R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-        + AlgebraicRoundFunction<F, 8, 12, 4>
-        + serde::Serialize
-        + serde::de::DeserializeOwned,
-> {
+pub struct EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction {
     _marker: std::marker::PhantomData<(F, R)>,
 }
 
 use zkevm_circuits::log_sorter::input::*;
 use zkevm_circuits::log_sorter::sort_and_deduplicate_events_entry_point;
 
-impl<
-        F: SmallField,
-        R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-            + AlgebraicRoundFunction<F, 8, 12, 4>
-            + serde::Serialize
-            + serde::de::DeserializeOwned,
-    > CircuitBuilder<F> for EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction<F, R>
+impl CircuitBuilder<F> for EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction
 where
     [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
@@ -107,14 +98,7 @@ where
     }
 }
 
-impl<
-        F: SmallField,
-        R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-            + AlgebraicRoundFunction<F, 8, 12, 4>
-            + serde::Serialize
-            + serde::de::DeserializeOwned,
-    > ZkSyncUniformSynthesisFunction<F>
-    for EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction<F, R>
+impl ZkSyncUniformSynthesisFunction<F> for EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction
 where
     [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <DecommitQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,

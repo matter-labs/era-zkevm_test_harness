@@ -45,11 +45,7 @@ type RH = CircuitGoldilocksPoseidon2Sponge;
 use crate::boojum::cs::implementations::setup::FinalizationHintsForProver;
 
 pub fn create_base_layer_setup_data(
-    circuit: ZkSyncBaseLayerCircuit<
-        GoldilocksField,
-        VmWitnessOracle<GoldilocksField>,
-        ZkSyncDefaultRoundFunction,
-    >,
+    circuit: ZkSyncBaseLayerCircuit,
     worker: &Worker,
     fri_lde_factor: usize,
     merkle_tree_cap_size: usize,
@@ -230,11 +226,7 @@ use crate::boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcrip
 use crate::boojum::cs::implementations::pow::PoWRunner;
 
 pub fn prove_base_layer_circuit<POW: PoWRunner>(
-    circuit: ZkSyncBaseLayerCircuit<
-        GoldilocksField,
-        VmWitnessOracle<GoldilocksField>,
-        ZkSyncDefaultRoundFunction,
-    >,
+    circuit: ZkSyncBaseLayerCircuit,
     worker: &Worker,
     proof_config: ProofConfig,
     setup_base: &SetupBaseStorage<F, P>,
@@ -404,20 +396,13 @@ pub fn prove_base_layer_circuit<POW: PoWRunner>(
 }
 
 pub fn verify_base_layer_proof<POW: PoWRunner>(
-    circuit: &ZkSyncBaseLayerCircuit<
-        GoldilocksField,
-        VmWitnessOracle<GoldilocksField>,
-        ZkSyncDefaultRoundFunction,
-    >,
+    circuit: &ZkSyncBaseLayerCircuit,
     proof: &Proof<F, H, EXT>,
     vk: &VerificationKey<F, H>,
 ) -> bool {
     use circuit_definitions::circuit_definitions::verifier_builder::dyn_verifier_builder_for_circuit_type;
 
-    let verifier_builder =
-        dyn_verifier_builder_for_circuit_type::<F, EXT, ZkSyncDefaultRoundFunction>(
-            circuit.numeric_circuit_type(),
-        );
+    let verifier_builder = dyn_verifier_builder_for_circuit_type(circuit.numeric_circuit_type());
     let verifier = verifier_builder.create_verifier();
     // let verifier = verifier_builder.create_dyn_verifier();
     verifier.verify::<H, TR, POW>((), vk, proof)
@@ -428,8 +413,7 @@ pub fn verify_base_layer_proof_for_type<POW: PoWRunner>(
     proof: &Proof<F, H, EXT>,
     vk: &VerificationKey<F, H>,
 ) -> bool {
-    let verifier_builder =
-        dyn_verifier_builder_for_circuit_type::<F, EXT, ZkSyncDefaultRoundFunction>(circuit_type);
+    let verifier_builder = dyn_verifier_builder_for_circuit_type(circuit_type);
     let verifier = verifier_builder.create_verifier();
     verifier.verify::<H, TR, POW>((), vk, proof)
 }

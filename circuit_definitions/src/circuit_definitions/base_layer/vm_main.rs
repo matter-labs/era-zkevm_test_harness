@@ -1,33 +1,23 @@
 use derivative::*;
 
 use super::*;
+use crate::aux_definitions::witness_oracle::VmWitnessOracle;
 use crate::boojum::cs::traits::circuit::CircuitBuilder;
+
+type F = GoldilocksField;
+type R = Poseidon2Goldilocks;
 
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone, Copy, Debug, Default(bound = ""))]
 #[serde(bound = "")]
-pub struct VmMainInstanceSynthesisFunction<
-    F: SmallField,
-    W: WitnessOracle<F>,
-    R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-        + AlgebraicRoundFunction<F, 8, 12, 4>
-        + serde::Serialize
-        + serde::de::DeserializeOwned,
-> {
-    _marker: std::marker::PhantomData<(F, W, R)>,
+pub struct VmMainInstanceSynthesisFunction {
+    _marker: std::marker::PhantomData<(F, R)>,
 }
 
 use zkevm_circuits::fsm_input_output::circuit_inputs::main_vm::VmCircuitWitness;
 use zkevm_circuits::main_vm::main_vm_entry_point;
 
-impl<
-        F: SmallField,
-        W: WitnessOracle<F>,
-        R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-            + AlgebraicRoundFunction<F, 8, 12, 4>
-            + serde::Serialize
-            + serde::de::DeserializeOwned,
-    > CircuitBuilder<F> for VmMainInstanceSynthesisFunction<F, W, R>
+impl CircuitBuilder<F> for VmMainInstanceSynthesisFunction
 where
     [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
@@ -128,14 +118,7 @@ where
     }
 }
 
-impl<
-        F: SmallField,
-        W: WitnessOracle<F>,
-        R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-            + AlgebraicRoundFunction<F, 8, 12, 4>
-            + serde::Serialize
-            + serde::de::DeserializeOwned,
-    > ZkSyncUniformSynthesisFunction<F> for VmMainInstanceSynthesisFunction<F, W, R>
+impl ZkSyncUniformSynthesisFunction<F> for VmMainInstanceSynthesisFunction
 where
     [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
@@ -144,7 +127,7 @@ where
     [(); <UInt256<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN + 1]:,
     [(); <ExecutionContextRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
 {
-    type Witness = VmCircuitWitness<F, W>;
+    type Witness = VmCircuitWitness<F, VmWitnessOracle<F>>;
     type Config = usize;
     type RoundFunction = R;
 

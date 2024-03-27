@@ -20,7 +20,7 @@ use circuit_definitions::{encodings::*, Field, RoundFunction};
 
 /// Take a storage log, output logs separately for events, l1 messages, storage, etc
 pub fn compute_logs_demux<
-    CB: FnMut(ZkSyncBaseLayerCircuit<Field, VmWitnessOracle<Field>, Poseidon2Goldilocks>),
+    CB: FnMut(ZkSyncBaseLayerCircuit),
     QSCB: FnMut(u64, RecursionQueueSimulator<Field>, Vec<ClosedFormInputCompactFormWitness<Field>>),
 >(
     artifacts: &mut FullBlockArtifacts<Field>,
@@ -32,7 +32,7 @@ pub fn compute_logs_demux<
     mut circuit_callback: CB,
     mut recursion_queue_callback: QSCB,
 ) -> (
-    FirstAndLastCircuit<LogDemuxInstanceSynthesisFunction<GoldilocksField, Poseidon2Goldilocks>>,
+    FirstAndLastCircuit<LogDemuxInstanceSynthesisFunction>,
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
     [LogQueue<Field>; NUM_DEMUX_OUTPUTS],
 ) {

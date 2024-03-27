@@ -3,28 +3,19 @@ use derivative::*;
 use super::*;
 use crate::boojum::cs::traits::circuit::CircuitBuilder;
 
+type F = GoldilocksField;
+type R = Poseidon2Goldilocks;
+
 #[derive(Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone, Copy, Debug, Default(bound = ""))]
-pub struct Sha256RoundFunctionInstanceSynthesisFunction<
-    F: SmallField,
-    R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-        + AlgebraicRoundFunction<F, 8, 12, 4>
-        + serde::Serialize
-        + serde::de::DeserializeOwned,
-> {
+pub struct Sha256RoundFunctionInstanceSynthesisFunction {
     _marker: std::marker::PhantomData<(F, R)>,
 }
 
 use zkevm_circuits::sha256_round_function::input::*;
 use zkevm_circuits::sha256_round_function::sha256_round_function_entry_point;
 
-impl<
-        F: SmallField,
-        R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-            + AlgebraicRoundFunction<F, 8, 12, 4>
-            + serde::Serialize
-            + serde::de::DeserializeOwned,
-    > CircuitBuilder<F> for Sha256RoundFunctionInstanceSynthesisFunction<F, R>
+impl CircuitBuilder<F> for Sha256RoundFunctionInstanceSynthesisFunction
 where
     [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
@@ -106,13 +97,7 @@ where
     }
 }
 
-impl<
-        F: SmallField,
-        R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-            + AlgebraicRoundFunction<F, 8, 12, 4>
-            + serde::Serialize
-            + serde::de::DeserializeOwned,
-    > ZkSyncUniformSynthesisFunction<F> for Sha256RoundFunctionInstanceSynthesisFunction<F, R>
+impl ZkSyncUniformSynthesisFunction<F> for Sha256RoundFunctionInstanceSynthesisFunction
 where
     [(); <LogQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <MemoryQuery<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,

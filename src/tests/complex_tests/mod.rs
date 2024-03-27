@@ -149,7 +149,7 @@ pub(crate) fn generate_base_layer(
     geometry: GeometryConfig,
     blobs: [Option<Vec<u8>>; MAX_4844_BLOBS_PER_BLOCK],
 ) -> (
-    Vec<ZkSyncBaseLayerCircuit<Field, VmWitnessOracle<Field>, RoundFunction>>,
+    Vec<ZkSyncBaseLayerCircuit>,
     Vec<(
         u64,
         RecursionQueueSimulator<Field>,
