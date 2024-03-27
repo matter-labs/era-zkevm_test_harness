@@ -61,10 +61,6 @@ where
                 share_constants: false,
             },
         );
-        let builder = U8x4FMAGate::configure_builder(
-            builder,
-            GatePlacementStrategy::UseGeneralPurposeColumns,
-        );
         let builder = ZeroCheckGate::configure_builder(
             builder,
             GatePlacementStrategy::UseGeneralPurposeColumns,
