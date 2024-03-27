@@ -286,6 +286,7 @@ fn get_scheduler_circuit(
 ) -> crate::data_source::SourceResult<ZkSyncRecursiveLayerCircuit> {
     use crate::zkevm_circuits::scheduler::SchedulerConfig;
     use circuit_definitions::circuit_definitions::recursion_layer::scheduler::SchedulerCircuit;
+    use crate::zkevm_circuits::eip_4844::input::EIP4844OutputDataWitness;
 
     let node_vk = source.get_recursion_layer_node_vk()?.into_inner();
 
