@@ -24,8 +24,10 @@ pub struct InMemoryDataSource {
     base_layer_finalization_hint: HashMap<u8, ZkSyncBaseLayerFinalizationHint>,
     recursion_layer_vk: HashMap<u8, ZkSyncRecursionLayerVerificationKey>,
     recursion_layer_node_vk: Option<ZkSyncRecursionLayerVerificationKey>,
+    recursion_tip_vk: Option<ZkSyncRecursionLayerVerificationKey>,
     recursion_layer_finalization_hint: HashMap<u8, ZkSyncRecursionLayerFinalizationHint>,
     recursion_layer_node_finalization_hint: Option<ZkSyncRecursionLayerFinalizationHint>,
+    recursion_tip_finalization_hint: Option<ZkSyncRecursionLayerFinalizationHint>,
     compression_vk: HashMap<u8, ZkSyncCompressionLayerVerificationKey>,
     compression_hint: HashMap<u8, ZkSyncCompressionLayerFinalizationHint>,
     compression_for_wrapper_vk: HashMap<u8, ZkSyncCompressionForWrapperVerificationKey>,
@@ -53,8 +55,10 @@ impl InMemoryDataSource {
             base_layer_finalization_hint: HashMap::new(),
             recursion_layer_vk: HashMap::new(),
             recursion_layer_node_vk: None,
+            recursion_tip_vk: None,
             recursion_layer_finalization_hint: HashMap::new(),
             recursion_layer_node_finalization_hint: None,
+            recursion_tip_finalization_hint: None,
             compression_vk: HashMap::new(),
             compression_hint: HashMap::new(),
             compression_for_wrapper_vk: HashMap::new(),
@@ -349,6 +353,37 @@ impl SetupDataSource for InMemoryDataSource {
         hint: FinalizationHintsForProver,
     ) -> SourceResult<()> {
         self.eip_4844_hint = Some(hint);
+        Ok(())
+    }
+
+    fn get_recursion_tip_vk(&self) -> SourceResult<ZkSyncRecursionLayerVerificationKey> {
+        self.recursion_tip_vk.clone().ok_or(Box::new(Error::new(
+            ErrorKind::Other,
+            format!("no data for recursion tip vk"),
+        )))
+    }
+    fn get_recursion_tip_finalization_hint(
+        &self,
+    ) -> SourceResult<ZkSyncRecursionLayerFinalizationHint> {
+        self.recursion_tip_finalization_hint
+            .clone()
+            .ok_or(Box::new(Error::new(
+                ErrorKind::Other,
+                format!("no data for recursion tip finalization hint"),
+            )))
+    }
+    fn set_recursion_tip_vk(
+        &mut self,
+        vk: ZkSyncRecursionLayerVerificationKey,
+    ) -> SourceResult<()> {
+        self.recursion_tip_vk = Some(vk);
+        Ok(())
+    }
+    fn set_recursion_tip_finalization_hint(
+        &mut self,
+        hint: ZkSyncRecursionLayerFinalizationHint,
+    ) -> SourceResult<()> {
+        self.recursion_tip_finalization_hint = Some(hint);
         Ok(())
     }
 }

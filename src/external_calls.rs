@@ -8,6 +8,8 @@ use crate::boojum::{
     field::{goldilocks::GoldilocksField, SmallField},
 };
 use crate::entry_point::*;
+use crate::snark_wrapper::boojum::field::goldilocks::GoldilocksExt2;
+use crate::snark_wrapper::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
 use crate::toolset::create_tools;
 use crate::toolset::GeometryConfig;
 use crate::witness::oracle::create_artifacts_from_tracer;
@@ -40,8 +42,6 @@ use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::zk_evm::zkevm_opcode_defs::VersionedHashLen32;
 use circuit_definitions::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
 use circuit_definitions::{Field as MainField, RoundFunction, ZkSyncDefaultRoundFunction};
-use snark_wrapper::boojum::field::goldilocks::GoldilocksExt2;
-use snark_wrapper::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
 use tracing;
 
 pub const SCHEDULER_TIMESTAMP: u32 = 1;
@@ -730,11 +730,6 @@ pub fn run<
             previous_block_aux_hash: [0u8; 32],
 
             eip4844_witnesses,
-
-            node_layer_vk_witness: VerificationKey::default(),
-            leaf_layer_parameters: std::array::from_fn(|_| {
-                RecursionLeafParameters::placeholder_witness()
-            }),
 
             proof_witnesses: VecDeque::new(),
         };

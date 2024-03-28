@@ -4,6 +4,8 @@ use std::{
     sync::Arc,
 };
 
+use crate::zkevm_circuits::recursion::leaf_layer::input::RecursionLeafParametersWitness;
+use crate::zkevm_circuits::recursion::NUM_BASE_LAYER_CIRCUITS;
 use circuit_definitions::boojum::gadgets::traits::allocatable::CSAllocatable;
 use circuit_definitions::{
     aux_definitions::witness_oracle::VmWitnessOracle,
@@ -171,6 +173,7 @@ fn get_all_recursive_circuits(
     let mut result = get_leaf_circuits(source)?;
 
     result.push(get_node_circuit(source)?);
+    result.push(get_recursion_tip_circuit(source)?);
     result.push(get_scheduler_circuit(source)?);
     return Ok(result);
 }
@@ -181,19 +184,14 @@ fn get_leaf_circuits(
 ) -> crate::data_source::SourceResult<Vec<ZkSyncRecursiveLayerCircuit>> {
     let mut result = vec![];
 
-    for base_circuit_type in
-        ((BaseLayerCircuitType::VM as u8)..=(BaseLayerCircuitType::Secp256r1Verify as u8)).chain(
-            BaseLayerCircuitType::EIP4844Repack as u8..=BaseLayerCircuitType::EIP4844Repack as u8,
-        )
+    for base_circuit_type in ((BaseLayerCircuitType::VM as u8)
+        ..=(BaseLayerCircuitType::Secp256r1Verify as u8))
+        .chain(std::iter::once(BaseLayerCircuitType::EIP4844Repack as u8))
     {
-        let recursive_circuit_type = base_circuit_type_into_recursive_leaf_circuit_type(
+        let _recursive_circuit_type = base_circuit_type_into_recursive_leaf_circuit_type(
             BaseLayerCircuitType::from_numeric_value(base_circuit_type),
         );
 
-        println!(
-            "Computing leaf layer VK for type {:?}",
-            recursive_circuit_type
-        );
         use crate::zkevm_circuits::recursion::leaf_layer::input::*;
         let input = RecursionLeafInput::placeholder_witness();
         let vk = source.get_base_layer_vk(base_circuit_type)?;
@@ -234,7 +232,6 @@ fn get_leaf_circuits(
 }
 
 /// Returns the node circuit.
-/// Source must contain the leaf verification key (for at least one).
 fn get_node_circuit(
     source: &mut dyn SetupDataSource,
 ) -> crate::data_source::SourceResult<ZkSyncRecursiveLayerCircuit> {
@@ -275,8 +272,41 @@ fn get_node_circuit(
     Ok(ZkSyncRecursiveLayerCircuit::NodeLayerCircuit(circuit))
 }
 
+/// Returns the recursion tip circuit
+fn get_recursion_tip_circuit(
+    source: &mut dyn SetupDataSource,
+) -> crate::data_source::SourceResult<ZkSyncRecursiveLayerCircuit> {
+    use crate::zkevm_circuits::recursion::recursion_tip::input::*;
+    let input = RecursionTipInput::placeholder_witness();
+    let vk = source.get_recursion_layer_node_vk()?.into_inner();
+
+    let witness = RecursionTipInstanceWitness {
+        input,
+        vk_witness: vk.clone(),
+        proof_witnesses: VecDeque::new(),
+    };
+
+    use crate::zkevm_circuits::recursion::recursion_tip::*;
+    use circuit_definitions::circuit_definitions::recursion_layer::recursion_tip::*;
+
+    let config = RecursionTipConfig {
+        proof_config: recursion_layer_proof_config(),
+        vk_fixed_parameters: vk.fixed_parameters,
+        _marker: std::marker::PhantomData,
+    };
+
+    let circuit = RecursionTipCircuit {
+        witness,
+        config,
+        transcript_params: (),
+        _marker: std::marker::PhantomData,
+    };
+
+    Ok(ZkSyncRecursiveLayerCircuit::RecursionTipCircuit(circuit))
+}
+
 /// Returns the scheduler circuit.
-/// Source must contain the node verification key.
+/// Source must contain the leafs, node and tip verification keys.
 fn get_scheduler_circuit(
     source: &mut dyn SetupDataSource,
 ) -> crate::data_source::SourceResult<ZkSyncRecursiveLayerCircuit> {
@@ -284,19 +314,33 @@ fn get_scheduler_circuit(
     use crate::zkevm_circuits::scheduler::SchedulerConfig;
     use circuit_definitions::circuit_definitions::recursion_layer::scheduler::SchedulerCircuit;
 
+    println!("Computing leaf params");
+    let leaf_layer_params = compute_leaf_params(source)?;
+    println!("Obtaining node VK");
     let node_vk = source.get_recursion_layer_node_vk()?.into_inner();
+    println!("Obtaining recursion tip VK");
+    let recursion_tip_vk = source.get_recursion_tip_vk()?.into_inner();
+
+    let leaf_layer_params: [RecursionLeafParametersWitness<GoldilocksField>;
+        NUM_BASE_LAYER_CIRCUITS] = leaf_layer_params
+        .into_iter()
+        .map(|el| el.1)
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap();
 
     let config = SchedulerConfig {
         proof_config: recursion_layer_proof_config(),
-        vk_fixed_parameters: node_vk.fixed_parameters.clone(),
+        leaf_layer_parameters: leaf_layer_params,
+        node_layer_vk: node_vk,
+        recursion_tip_vk: recursion_tip_vk.clone(),
+        vk_fixed_parameters: recursion_tip_vk.fixed_parameters.clone(),
         capacity: SCHEDULER_CAPACITY,
         _marker: std::marker::PhantomData,
     };
 
     use crate::zkevm_circuits::scheduler::input::SchedulerCircuitInstanceWitness;
-    let mut scheduler_witness = SchedulerCircuitInstanceWitness::placeholder();
-    // the only thing we need to setup here is a VK
-    scheduler_witness.node_layer_vk_witness = node_vk;
+    let scheduler_witness = SchedulerCircuitInstanceWitness::placeholder();
 
     let scheduler_circuit = SchedulerCircuit {
         witness: scheduler_witness,
@@ -414,7 +458,15 @@ pub fn generate_base_layer_vks(
     Ok(())
 }
 
+/// For backwards compatibility (as zksync-era uses this method).
+/// For new cases please use generate_recursive_layer_vks directly.
 pub fn generate_recursive_layer_vks_and_proofs(
+    source: &mut dyn SetupDataSource,
+) -> crate::data_source::SourceResult<()> {
+    generate_recursive_layer_vks(source)
+}
+
+pub fn generate_recursive_layer_vks(
     source: &mut dyn SetupDataSource,
 ) -> crate::data_source::SourceResult<()> {
     use crate::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
@@ -432,46 +484,23 @@ pub fn generate_recursive_layer_vks_and_proofs(
             circuit.numeric_circuit_type()
         );
 
-        let (setup_base, setup, vk, setup_tree, vars_hint, wits_hint, finalization_hint) =
+        let numeric_circuit_type = circuit.numeric_circuit_type();
+        let (_setup_base, _setup, vk, _setup_tree, _vars_hint, _wits_hint, finalization_hint) =
             create_recursive_layer_setup_data(
-                circuit.clone(),
+                circuit,
                 &worker,
                 RECURSION_LAYER_FRI_LDE_FACTOR,
                 RECURSION_LAYER_CAP_SIZE,
             );
 
         let typed_finalization_hint = ZkSyncRecursionLayerFinalizationHint::from_inner(
-            circuit.numeric_circuit_type(),
+            numeric_circuit_type,
             finalization_hint.clone(),
         );
         source.set_recursion_layer_finalization_hint(typed_finalization_hint)?;
-        let typed_vk = ZkSyncRecursionLayerVerificationKey::from_inner(
-            circuit.numeric_circuit_type(),
-            vk.clone(),
-        );
+        let typed_vk =
+            ZkSyncRecursionLayerVerificationKey::from_inner(numeric_circuit_type, vk.clone());
         source.set_recursion_layer_vk(typed_vk)?;
-
-        println!("Proving!");
-        let now = std::time::Instant::now();
-
-        let proof = prove_recursion_layer_circuit::<NoPow>(
-            circuit.clone(),
-            &worker,
-            recursion_layer_proof_config(),
-            &setup_base,
-            &setup,
-            &setup_tree,
-            &vk,
-            &vars_hint,
-            &wits_hint,
-            &finalization_hint,
-        );
-
-        println!("Proving is DONE, taken {:?}", now.elapsed());
-
-        let is_valid = verify_recursion_layer_proof::<NoPow>(&circuit, &proof, &vk);
-
-        assert!(is_valid);
     }
 
     println!("Computing node vk");
@@ -479,9 +508,9 @@ pub fn generate_recursive_layer_vks_and_proofs(
     {
         let circuit = get_node_circuit(source)?;
 
-        let (setup_base, setup, vk, setup_tree, vars_hint, wits_hint, finalization_hint) =
+        let (_setup_base, _setup, vk, _setup_tree, _vars_hint, _wits_hint, finalization_hint) =
             create_recursive_layer_setup_data(
-                circuit.clone(),
+                circuit,
                 &worker,
                 RECURSION_LAYER_FRI_LDE_FACTOR,
                 RECURSION_LAYER_CAP_SIZE,
@@ -492,28 +521,26 @@ pub fn generate_recursive_layer_vks_and_proofs(
         source.set_recursion_layer_node_finalization_hint(typed_finalization_hint)?;
         let typed_vk = ZkSyncRecursionLayerVerificationKey::NodeLayerCircuit(vk.clone());
         source.set_recursion_layer_node_vk(typed_vk)?;
+    }
 
-        println!("Proving!");
-        let now = std::time::Instant::now();
+    println!("Computing recursion tip vk");
+    {
+        let recursion_tip_circuit = get_recursion_tip_circuit(source)?;
 
-        let proof = prove_recursion_layer_circuit::<NoPow>(
-            circuit.clone(),
-            &worker,
-            recursion_layer_proof_config(),
-            &setup_base,
-            &setup,
-            &setup_tree,
-            &vk,
-            &vars_hint,
-            &wits_hint,
-            &finalization_hint,
-        );
+        let (_setup_base, _setup, vk, _setup_tree, _vars_hint, _wits_hint, finalization_hint) =
+            create_recursive_layer_setup_data(
+                recursion_tip_circuit,
+                &worker,
+                RECURSION_LAYER_FRI_LDE_FACTOR,
+                RECURSION_LAYER_CAP_SIZE,
+            );
 
-        println!("Proving is DONE, taken {:?}", now.elapsed());
-
-        let is_valid = verify_recursion_layer_proof::<NoPow>(&circuit, &proof, &vk);
-
-        assert!(is_valid);
+        source.set_recursion_tip_vk(ZkSyncRecursionLayerVerificationKey::RecursionTipCircuit(
+            vk.clone(),
+        ))?;
+        source.set_recursion_tip_finalization_hint(
+            ZkSyncRecursionLayerFinalizationHint::RecursionTipCircuit(finalization_hint.clone()),
+        )?;
     }
 
     println!("Computing scheduler vk");
@@ -523,7 +550,7 @@ pub fn generate_recursive_layer_vks_and_proofs(
 
         let (_setup_base, _setup, vk, _setup_tree, _vars_hint, _wits_hint, finalization_hint) =
             create_recursive_layer_setup_data(
-                scheduler_circuit.clone(),
+                scheduler_circuit,
                 &worker,
                 RECURSION_LAYER_FRI_LDE_FACTOR,
                 RECURSION_LAYER_CAP_SIZE,
@@ -538,6 +565,29 @@ pub fn generate_recursive_layer_vks_and_proofs(
     }
 
     Ok(())
+}
+
+pub fn compute_leaf_params(
+    source: &mut dyn SetupDataSource,
+) -> crate::data_source::SourceResult<Vec<(u8, RecursionLeafParametersWitness<GoldilocksField>)>> {
+    use crate::witness::recursive_aggregation::compute_leaf_params;
+    use crate::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
+    let mut leaf_vk_commits = vec![];
+
+    for circuit_type in ((BaseLayerCircuitType::VM as u8)
+        ..=(BaseLayerCircuitType::Secp256r1Verify as u8))
+        .chain(std::iter::once(BaseLayerCircuitType::EIP4844Repack as u8))
+    {
+        let recursive_circuit_type = base_circuit_type_into_recursive_leaf_circuit_type(
+            BaseLayerCircuitType::from_numeric_value(circuit_type),
+        );
+        let base_vk = source.get_base_layer_vk(circuit_type)?;
+        let leaf_vk = source.get_recursion_layer_vk(recursive_circuit_type as u8)?;
+        let params = compute_leaf_params(circuit_type, base_vk, leaf_vk);
+        leaf_vk_commits.push((circuit_type, params));
+    }
+
+    Ok(leaf_vk_commits)
 }
 
 #[cfg(test)]
@@ -556,5 +606,38 @@ mod test {
         LocalFileDataSource::create_folders_for_storing_data();
         let mut source = LocalFileDataSource;
         generate_recursive_layer_vks_and_proofs(&mut source).expect("must compute setup");
+    }
+
+    #[test]
+    fn generate_scheduler() {
+        LocalFileDataSource::create_folders_for_storing_data();
+        let mut src = LocalFileDataSource;
+        let source = &mut src;
+
+        {
+            let worker = Worker::new();
+            let scheduler_circuit = get_scheduler_circuit(source).unwrap();
+
+            let (_setup_base, _setup, vk, _setup_tree, _vars_hint, _wits_hint, finalization_hint) =
+                create_recursive_layer_setup_data(
+                    scheduler_circuit,
+                    &worker,
+                    RECURSION_LAYER_FRI_LDE_FACTOR,
+                    RECURSION_LAYER_CAP_SIZE,
+                );
+
+            source
+                .set_recursion_layer_vk(ZkSyncRecursionLayerVerificationKey::SchedulerCircuit(
+                    vk.clone(),
+                ))
+                .unwrap();
+            source
+                .set_recursion_layer_finalization_hint(
+                    ZkSyncRecursionLayerFinalizationHint::SchedulerCircuit(
+                        finalization_hint.clone(),
+                    ),
+                )
+                .unwrap();
+        }
     }
 }

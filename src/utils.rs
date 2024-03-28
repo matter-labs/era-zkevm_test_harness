@@ -109,11 +109,11 @@ pub fn binary_merklize_set<
 use crate::boojum::pairing::bls12_381::fr::{Fr, FrRepr};
 use crate::sha2::{Digest, Sha256};
 use crate::sha3::Keccak256;
+use crate::snark_wrapper::franklin_crypto::bellman::Field;
+use crate::snark_wrapper::franklin_crypto::bellman::PrimeField;
 use crate::zkevm_circuits::eip_4844::input::EIP4844OutputDataWitness;
 use crate::zkevm_circuits::eip_4844::input::ELEMENTS_PER_4844_BLOCK;
 use crate::zkevm_circuits::scheduler::block_header::MAX_4844_BLOBS_PER_BLOCK;
-use snark_wrapper::franklin_crypto::bellman::Field;
-use snark_wrapper::franklin_crypto::bellman::PrimeField;
 
 /// Generates eip4844 witness for a given blob and using a trusted setup from a given json path.
 /// Returns blob array, linear hash, versioned hash and output hash.

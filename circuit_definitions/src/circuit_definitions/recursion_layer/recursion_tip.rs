@@ -61,7 +61,7 @@ where
     >(
         builder: CsBuilder<T, F, GC, TB>,
     ) -> CsBuilder<T, F, impl GateConfigurationHolder<F>, impl StaticToolboxHolder> {
-        configure_builder_recursion_step(builder)
+        configure_builder_recursion_tip(builder)
     }
 }
 

@@ -113,7 +113,6 @@ impl ProofCompressionFunction for CompressionMode2 {
 
     fn previous_step_builder_for_compression<CS: ConstraintSystem<F> + 'static>(
     ) -> Box<dyn ErasedBuilderForRecursiveVerifier<GoldilocksField, EXT, CS>> {
-        use crate::circuit_definitions::aux_layer::compression::CompressionMode1CircuitBuilder;
         CompressionMode1CircuitBuilder::dyn_recursive_verifier_builder::<EXT, CS>()
     }
 }

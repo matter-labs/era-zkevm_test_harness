@@ -137,18 +137,18 @@ mod test {
 
         match &mut circuit {
             ZkSyncRecursiveLayerCircuit::SchedulerCircuit(inner) => {
-                dbg!(&inner.witness.leaf_layer_parameters);
-                for el in inner.witness.proof_witnesses.iter() {
-                    let vk = inner.witness.node_layer_vk_witness.clone();
-                    // let vk = ZkSyncRecursionLayerVerificationKey::from_inner(ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8, vk);
-                    // let proof = ZkSyncRecursionLayerProof::from_inner(ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8, el.clone());
-                    let valid = verify_recursion_layer_proof_for_type::<NoPow>(
-                        ZkSyncRecursionLayerStorageType::NodeLayerCircuit,
-                        el,
-                        &vk,
-                    );
-                    assert!(valid);
-                }
+                // dbg!(&inner.witness.leaf_layer_parameters);
+                // for el in inner.witness.proof_witnesses.iter() {
+                //     let vk = inner.witness.node_layer_vk_witness.clone();
+                //     // let vk = ZkSyncRecursionLayerVerificationKey::from_inner(ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8, vk);
+                //     // let proof = ZkSyncRecursionLayerProof::from_inner(ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8, el.clone());
+                //     let valid = verify_recursion_layer_proof_for_type::<NoPow>(
+                //         ZkSyncRecursionLayerStorageType::NodeLayerCircuit,
+                //         el,
+                //         &vk,
+                //     );
+                //     assert!(valid);
+                // }
             }
             ZkSyncRecursiveLayerCircuit::NodeLayerCircuit(inner) => {
                 let vk = inner.witness.vk_witness.clone();

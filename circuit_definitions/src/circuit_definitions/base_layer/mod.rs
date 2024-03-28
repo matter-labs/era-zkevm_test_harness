@@ -7,8 +7,7 @@ use crate::boojum::gadgets::tables::*;
 use snark_wrapper::boojum::dag::StCircuitResolver;
 use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
 use zkevm_circuits::boojum::config::CSConfig;
-use zkevm_circuits::boojum::dag::{CircuitResolver, DefaultCircuitResolver};
-use zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
+use zkevm_circuits::boojum::dag::CircuitResolver;
 use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord;
 use zkevm_circuits::tables::*;
 

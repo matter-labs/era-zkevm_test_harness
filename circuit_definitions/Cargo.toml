@@ -17,7 +17,7 @@ snark_wrapper = {git = "https://github.com/matter-labs/snark-wrapper.git", branc
 # snark_wrapper = {path = "../../snark_wrapper"}
 
 
-zkevm_circuits = {git = "https://github.com/matter-labs/era-zkevm_circuits.git", branch = "v1.5.0"}
+zkevm_circuits = {git = "https://github.com/matter-labs/zkevm_circuits.git", branch = "v1.5.0"}
 zk_evm = {git = "https://github.com/matter-labs/era-zk_evm.git", branch = "v1.5.0"}
 circuit_encodings = {path = "../circuit_encodings"}
 

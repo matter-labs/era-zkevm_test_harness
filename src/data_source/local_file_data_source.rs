@@ -455,6 +455,53 @@ impl SetupDataSource for LocalFileDataSource {
             hint,
         )
     }
+
+    fn get_recursion_tip_vk(&self) -> SourceResult<ZkSyncRecursionLayerVerificationKey> {
+        let file = File::open(format!(
+            "{}/recursion_layer/vk_recursion_tip.json",
+            Self::SETUP_DATA_LOCATION
+        ))
+        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
+        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
+
+        Ok(result)
+    }
+    fn get_recursion_tip_finalization_hint(
+        &self,
+    ) -> SourceResult<ZkSyncRecursionLayerFinalizationHint> {
+        let file = File::open(format!(
+            "{}/recursion_layer/finalization_hint_recursion_tip.json",
+            Self::SETUP_DATA_LOCATION
+        ))
+        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
+        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
+
+        Ok(result)
+    }
+    fn set_recursion_tip_vk(
+        &mut self,
+        vk: ZkSyncRecursionLayerVerificationKey,
+    ) -> SourceResult<()> {
+        LocalFileDataSource::write_pretty(
+            format!(
+                "{}/recursion_layer/vk_recursion_tip.json",
+                Self::SETUP_DATA_LOCATION
+            ),
+            vk,
+        )
+    }
+    fn set_recursion_tip_finalization_hint(
+        &mut self,
+        hint: ZkSyncRecursionLayerFinalizationHint,
+    ) -> SourceResult<()> {
+        LocalFileDataSource::write_pretty(
+            format!(
+                "{}/recursion_layer/finalization_hint_recursion_tip.json",
+                Self::SETUP_DATA_LOCATION
+            ),
+            hint,
+        )
+    }
 }
 
 impl BlockDataSource for LocalFileDataSource {

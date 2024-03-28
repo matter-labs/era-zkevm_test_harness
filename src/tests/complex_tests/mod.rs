@@ -981,17 +981,16 @@ fn run_and_try_create_witness_inner(
     let mut scheduler_witness = scheduler_partial_input;
     // we need to reassign block specific data, and proofs
 
-    // node VK
-    let node_vk = source.get_recursion_layer_node_vk().unwrap().into_inner();
-    scheduler_witness.node_layer_vk_witness = node_vk.clone();
-    // leaf params
-    let leaf_layer_params = leaf_vk_commits
-        .iter()
-        .map(|el| el.1.clone())
-        .collect::<Vec<_>>()
-        .try_into()
-        .unwrap();
-    scheduler_witness.leaf_layer_parameters = leaf_layer_params;
+    // // node VK
+    // let node_vk = source.get_recursion_layer_node_vk().unwrap().into_inner();
+    // // leaf params
+    // let leaf_layer_params = leaf_vk_commits
+    //     .iter()
+    //     .map(|el| el.1.clone())
+    //     .collect::<Vec<_>>()
+    //     .try_into()
+    //     .unwrap();
+
     // proofs
     scheduler_witness.proof_witnesses = scheduler_proofs.into();
 
@@ -1001,7 +1000,10 @@ fn run_and_try_create_witness_inner(
 
     let config = SchedulerConfig {
         proof_config: recursion_layer_proof_config(),
-        vk_fixed_parameters: node_vk.fixed_parameters,
+        leaf_layer_parameters: todo!(),
+        node_layer_vk: todo!(),
+        recursion_tip_vk: todo!(),
+        vk_fixed_parameters: todo!(),
         capacity: SCHEDULER_CAPACITY,
         _marker: std::marker::PhantomData,
     };

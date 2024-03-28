@@ -3,7 +3,7 @@ use crate::boojum::cs::cs_builder::*;
 use crate::boojum::cs::traits::cs::ConstraintSystem;
 use crate::boojum::cs::CSGeometry;
 use crate::boojum::cs::*;
-use crate::boojum::field::{FieldExtension, SmallField};
+use crate::boojum::field::SmallField;
 use crate::boojum::gadgets::num::Num;
 use crate::boojum::gadgets::traits::allocatable::*;
 use crate::boojum::gadgets::traits::round_function::*;

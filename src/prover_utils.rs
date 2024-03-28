@@ -404,7 +404,6 @@ pub fn verify_base_layer_proof<POW: PoWRunner>(
 
     let verifier_builder = dyn_verifier_builder_for_circuit_type(circuit.numeric_circuit_type());
     let verifier = verifier_builder.create_verifier();
-    // let verifier = verifier_builder.create_dyn_verifier();
     verifier.verify::<H, TR, POW>((), vk, proof)
 }
 

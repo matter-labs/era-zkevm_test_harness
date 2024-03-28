@@ -194,7 +194,7 @@ where
         } = self;
 
         let verifier_builder =
-            NodeLayerCircuitBuilder::<POW>::dyn_recursive_verifier_builder::<EXT, CS>();
+            RecursionTipCircuitBuilder::<POW>::dyn_recursive_verifier_builder::<EXT, CS>();
 
         scheduler_function::<F, CS, R, RH, EXT, TR, CTR, POW, USE_4844>(
             cs,

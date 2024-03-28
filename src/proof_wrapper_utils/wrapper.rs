@@ -10,9 +10,11 @@ pub fn get_wrapper_setup_and_vk_from_compression_vk(
 
     let worker = BellmanWorker::new();
 
+    println!("Computing Bn256 wrapper setup");
     let snark_setup = compute_wrapper_setup_inner(vk, config, &worker);
-
+    println!("Loading CRS");
     let crs_mons = get_trusted_setup();
+    println!("Computing Bn256 wrapper vk");
     let snark_vk = SnarkVK::from_setup(&snark_setup, &worker, &crs_mons).unwrap();
 
     let wrapper_type = config.get_wrapper_type();
@@ -134,13 +136,13 @@ pub(crate) fn compute_wrapper_setup_inner(
         wrapper_function,
     };
 
-    println!("Synthesizing");
+    println!("Synthesizing into Bn256 setup assembly");
     wrapper_circuit.synthesize(&mut assembly).unwrap();
 
     assembly.finalize_to_size_log_2(L1_VERIFIER_DOMAIN_SIZE_LOG);
     assert!(assembly.is_satisfied());
 
-    println!("Creating setup");
+    println!("Creating Bn256 setup");
     let setup =
         assembly
             .create_setup::<WrapperCircuit<

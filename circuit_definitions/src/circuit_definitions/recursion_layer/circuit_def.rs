@@ -81,3 +81,58 @@ pub fn configure_builder_recursion_step<
 
     builder
 }
+
+// recursion tip is simple and doesnt' need integer ops
+pub fn configure_builder_recursion_tip<
+    T: CsBuilderImpl<F, T>,
+    GC: GateConfigurationHolder<F>,
+    TB: StaticToolboxHolder,
+>(
+    builder: CsBuilder<T, F, GC, TB>,
+) -> CsBuilder<T, F, impl GateConfigurationHolder<F>, impl StaticToolboxHolder> {
+    // let builder = builder.allow_lookup(<Self as CircuitBuilder::<F>>::lookup_parameters());
+
+    let builder = ConstantsAllocatorGate::configure_builder(
+        builder,
+        GatePlacementStrategy::UseGeneralPurposeColumns,
+    );
+    let builder = BooleanConstraintGate::configure_builder(
+        builder,
+        GatePlacementStrategy::UseSpecializedColumns {
+            num_repetitions: 1,
+            share_constants: false,
+        },
+    );
+    let builder = R::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
+    let builder = ZeroCheckGate::configure_builder(
+        builder,
+        GatePlacementStrategy::UseGeneralPurposeColumns,
+        false,
+    );
+    let builder = FmaGateInBaseFieldWithoutConstant::configure_builder(
+        builder,
+        GatePlacementStrategy::UseGeneralPurposeColumns,
+    );
+    let builder = FmaGateInExtensionWithoutConstant::<F, EXT>::configure_builder(
+        builder,
+        GatePlacementStrategy::UseGeneralPurposeColumns,
+    );
+    let builder =
+        SelectionGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
+    let builder = ParallelSelectionGate::<4>::configure_builder(
+        builder,
+        GatePlacementStrategy::UseGeneralPurposeColumns,
+    );
+    let builder = PublicInputGate::configure_builder(
+        builder,
+        GatePlacementStrategy::UseGeneralPurposeColumns,
+    );
+    let builder = ReductionGate::<_, 4>::configure_builder(
+        builder,
+        GatePlacementStrategy::UseGeneralPurposeColumns,
+    );
+    let builder =
+        NopGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
+
+    builder
+}

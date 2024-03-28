@@ -29,11 +29,15 @@ pub trait SetupDataSource {
         circuit_type: u8,
     ) -> SourceResult<ZkSyncRecursionLayerVerificationKey>;
     fn get_recursion_layer_node_vk(&self) -> SourceResult<ZkSyncRecursionLayerVerificationKey>;
+    fn get_recursion_tip_vk(&self) -> SourceResult<ZkSyncRecursionLayerVerificationKey>;
     fn get_recursion_layer_finalization_hint(
         &self,
         circuit_type: u8,
     ) -> SourceResult<ZkSyncRecursionLayerFinalizationHint>;
     fn get_recursion_layer_node_finalization_hint(
+        &self,
+    ) -> SourceResult<ZkSyncRecursionLayerFinalizationHint>;
+    fn get_recursion_tip_finalization_hint(
         &self,
     ) -> SourceResult<ZkSyncRecursionLayerFinalizationHint>;
 
@@ -74,15 +78,21 @@ pub trait SetupDataSource {
         &mut self,
         vk: ZkSyncRecursionLayerVerificationKey,
     ) -> SourceResult<()>;
+    fn set_recursion_tip_vk(&mut self, vk: ZkSyncRecursionLayerVerificationKey)
+        -> SourceResult<()>;
     fn set_recursion_layer_finalization_hint(
         &mut self,
         hint: ZkSyncRecursionLayerFinalizationHint,
     ) -> SourceResult<()>;
-
     fn set_recursion_layer_node_finalization_hint(
         &mut self,
         hint: ZkSyncRecursionLayerFinalizationHint,
     ) -> SourceResult<()>;
+    fn set_recursion_tip_finalization_hint(
+        &mut self,
+        hint: ZkSyncRecursionLayerFinalizationHint,
+    ) -> SourceResult<()>;
+
     fn set_compression_vk(&mut self, vk: ZkSyncCompressionLayerVerificationKey)
         -> SourceResult<()>;
     fn set_compression_hint(

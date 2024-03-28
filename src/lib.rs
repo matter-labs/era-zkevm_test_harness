@@ -15,10 +15,9 @@ use crate::boojum::field::goldilocks::GoldilocksField;
 use crate::boojum::implementations::poseidon2::Poseidon2Goldilocks;
 
 pub use circuit_definitions::boojum;
+pub use circuit_definitions::snark_wrapper;
 pub use circuit_definitions::zk_evm;
 pub use circuit_definitions::zkevm_circuits;
-
-pub use circuit_definitions::snark_wrapper;
 pub use rescue_poseidon::franklin_crypto;
 pub use snark_wrapper::rescue_poseidon;
 
