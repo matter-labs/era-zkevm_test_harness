@@ -72,6 +72,7 @@ impl KzgSettings {
             point.into_affine().unwrap().into_projective()
         };
 
+        println!("settings_file = {settings_file}");
         let setup: TrustedSetup =
             serde_json::from_slice(&std::fs::read(settings_file).unwrap()).unwrap();
 
