@@ -51,11 +51,10 @@ use circuit_definitions::{
     BASE_LAYER_FRI_LDE_FACTOR, RECURSION_LAYER_CAP_SIZE, RECURSION_LAYER_FRI_LDE_FACTOR,
 };
 use circuit_definitions::{Field, RoundFunction};
+use kzg::boojum::field::U64Representable;
 use utils::read_basic_test_artifact;
 
 use zkevm_assembly::Assembly;
-
-const EIP4844_CYCLE_LIMIT: usize = 4096;
 
 #[test]
 fn basic_test() {
@@ -328,7 +327,6 @@ fn run_and_try_create_witness_inner(
 
     let mut setup_data = None;
 
-    // let mut source = InMemoryDataSource::new();
     let mut source = LocalFileDataSource;
     LocalFileDataSource::create_folders_for_storing_data();
     use crate::data_source::*;
@@ -451,7 +449,9 @@ fn run_and_try_create_witness_inner(
     println!("Computing leaf vks");
 
     for base_circuit_type in
-        (BaseLayerCircuitType::VM as u8)..=(BaseLayerCircuitType::L1MessagesHasher as u8)
+        ((BaseLayerCircuitType::VM as u8)..=(BaseLayerCircuitType::Secp256r1Verify as u8)).chain(
+            std::iter::once(BaseLayerCircuitType::EIP4844Repack as u8)
+        )
     {
         let recursive_circuit_type = base_circuit_type_into_recursive_leaf_circuit_type(
             BaseLayerCircuitType::from_numeric_value(base_circuit_type),
@@ -523,23 +523,9 @@ fn run_and_try_create_witness_inner(
     }
 
     println!("Computing leaf params");
-    use crate::witness::recursive_aggregation::compute_leaf_params;
+    use crate::compute_setups::compute_leaf_params;
     use crate::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
-    let mut leaf_vk_commits = vec![];
-
-    for circuit_type in
-        (BaseLayerCircuitType::VM as u8)..=(BaseLayerCircuitType::L1MessagesHasher as u8)
-    {
-        let recursive_circuit_type = base_circuit_type_into_recursive_leaf_circuit_type(
-            BaseLayerCircuitType::from_numeric_value(circuit_type),
-        );
-        let base_vk = source.get_base_layer_vk(circuit_type).unwrap();
-        let leaf_vk = source
-            .get_recursion_layer_vk(recursive_circuit_type as u8)
-            .unwrap();
-        let params = compute_leaf_params(circuit_type, base_vk, leaf_vk);
-        leaf_vk_commits.push((circuit_type, params));
-    }
+    let leaf_vk_commits = compute_leaf_params(&mut source).unwrap();
 
     let mut all_leaf_aggregations = vec![];
     use crate::witness::recursive_aggregation::create_leaf_witnesses;
@@ -547,6 +533,9 @@ fn run_and_try_create_witness_inner(
     println!("Creating leaf aggregation circuits");
 
     let mut all_closed_form_inputs_for_scheduler = vec![];
+
+    assert_eq!(recursion_queues.len(), proofs.len());
+    assert_eq!(recursion_queues.len(), verification_keys.len());
 
     for ((subset, proofs), vk) in recursion_queues
         .clone()
@@ -580,7 +569,7 @@ fn run_and_try_create_witness_inner(
             // test_recursive_circuit(el.clone());
             // println!("Circuit is satisfied");
 
-            if let Ok(proof) = source.get_leaf_layer_proof(el.numeric_circuit_type(), instance_idx)
+            if let Ok(_proof) = source.get_leaf_layer_proof(el.numeric_circuit_type(), instance_idx)
             {
                 instance_idx += 1;
                 continue;
@@ -595,34 +584,34 @@ fn run_and_try_create_witness_inner(
                         RECURSION_LAYER_CAP_SIZE,
                     );
 
-                let other_vk = source
-                    .get_recursion_layer_vk(el.numeric_circuit_type())
-                    .unwrap()
-                    .into_inner();
+                // let other_vk = source
+                //     .get_recursion_layer_vk(el.numeric_circuit_type())
+                //     .unwrap()
+                //     .into_inner();
 
-                assert_eq!(&other_vk, &vk);
+                // assert_eq!(&other_vk, &vk);
 
-                let other_finalization_hint = source
-                    .get_recursion_layer_finalization_hint(el.numeric_circuit_type())
-                    .unwrap()
-                    .into_inner();
+                // let other_finalization_hint = source
+                //     .get_recursion_layer_finalization_hint(el.numeric_circuit_type())
+                //     .unwrap()
+                //     .into_inner();
 
-                assert_eq!(&other_finalization_hint, &finalization_hint);
+                // assert_eq!(&other_finalization_hint, &finalization_hint);
 
-                // source
-                //     .set_recursion_layer_vk(ZkSyncRecursionLayerVerificationKey::from_inner(
-                //         el.numeric_circuit_type(),
-                //         vk.clone(),
-                //     ))
-                //     .unwrap();
-                // source
-                //     .set_recursion_layer_finalization_hint(
-                //         ZkSyncRecursionLayerFinalizationHint::from_inner(
-                //             el.numeric_circuit_type(),
-                //             finalization_hint.clone(),
-                //         ),
-                //     )
-                //     .unwrap();
+                source
+                    .set_recursion_layer_vk(ZkSyncRecursionLayerVerificationKey::from_inner(
+                        el.numeric_circuit_type(),
+                        vk.clone(),
+                    ))
+                    .unwrap();
+                source
+                    .set_recursion_layer_finalization_hint(
+                        ZkSyncRecursionLayerFinalizationHint::from_inner(
+                            el.numeric_circuit_type(),
+                            finalization_hint.clone(),
+                        ),
+                    )
+                    .unwrap();
 
                 setup_data = Some((
                     setup_base,
@@ -867,7 +856,7 @@ fn run_and_try_create_witness_inner(
                 // test_recursive_circuit(el.clone());
                 // println!("Circuit is satisfied");
 
-                if let Ok(proof) =
+                if let Ok(_proof) =
                     source.get_node_layer_proof(recursive_circuit_type as u8, depth, idx)
                 {
                     continue;
@@ -965,34 +954,91 @@ fn run_and_try_create_witness_inner(
         }
     }
 
-    // collect for scheduler. We know that is this test depth is 0
-    let mut scheduler_proofs = vec![];
+    // do everything for recursion tip
+    if source.get_recursion_tip_vk().is_err() {
+        use crate::zkevm_circuits::recursion::recursion_tip::input::*;
+        // replicate compute_setups::*
+        todo!();
+
+    }
+
+    // collect for recursion tip. We know that is this test depth is 0
+    let mut recursion_tip_proofs = vec![];
     for recursive_circuit_type in (ZkSyncRecursionLayerStorageType::LeafLayerCircuitForMainVM as u8)
-        ..=(ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesHasher as u8)
+        ..=(ZkSyncRecursionLayerStorageType::LeafLayerCircuitForEIP4844Repack as u8)
     {
         let proof = source
             .get_node_layer_proof(recursive_circuit_type, 0, 0)
             .unwrap();
-        scheduler_proofs.push(proof.into_inner());
+        recursion_tip_proofs.push(proof.into_inner());
     }
 
-    assert_eq!(scheduler_proofs.len(), NUM_CIRCUIT_TYPES_TO_SCHEDULE);
+    assert_eq!(recursion_tip_proofs.len(), NUM_CIRCUIT_TYPES_TO_SCHEDULE);
 
-    let mut scheduler_witness = scheduler_partial_input;
-    // we need to reassign block specific data, and proofs
+    // node VK
+    let node_vk = source.get_recursion_layer_node_vk().unwrap();
+    // leaf params
+    use crate::zkevm_circuits::recursion::leaf_layer::input::RecursionLeafParametersWitness;
+    let leaf_layer_params: [RecursionLeafParametersWitness<GoldilocksField>; 16] = leaf_vk_commits
+        .iter()
+        .map(|el| el.1.clone())
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap();
 
-    // // node VK
-    // let node_vk = source.get_recursion_layer_node_vk().unwrap().into_inner();
-    // // leaf params
-    // let leaf_layer_params = leaf_vk_commits
-    //     .iter()
-    //     .map(|el| el.1.clone())
-    //     .collect::<Vec<_>>()
-    //     .try_into()
-    //     .unwrap();
+    // compute single(for now) recursion tip proof
+    {
+        let node_layer_vk_commitment = compute_node_vk_commitment(node_vk.clone());
+        use crate::zkevm_circuits::recursion::recursion_tip::input::*;
+        use circuit_definitions::boojum::field::Field;
+        use crate::boojum::gadgets::queue::*;
+        let mut branch_circuit_type_set = [GoldilocksField::ZERO; RECURSION_TIP_ARITY];
+        assert!(branch_circuit_type_set.len() >= recursion_queues.len());
+        let mut queue_sets: [_; RECURSION_TIP_ARITY] = std::array::from_fn(|_| QueueState::placeholder_witness());
+        for ((circuit_type, queue_state), (src_type, src_queue, _,)) in branch_circuit_type_set.iter_mut()
+        .zip(queue_sets.iter_mut())
+        .zip(
+            recursion_queues.iter()
+        ) {
+            *circuit_type = GoldilocksField::from_u64_unchecked(*src_type);
+            *queue_state = take_sponge_like_queue_state_from_simulator(src_queue);
+        }
 
-    // proofs
-    scheduler_witness.proof_witnesses = scheduler_proofs.into();
+        let input = RecursionTipInputWitness {
+            leaf_layer_parameters: leaf_layer_params,
+            node_layer_vk_commitment: node_layer_vk_commitment,
+            branch_circuit_type_set: branch_circuit_type_set,
+            queue_set: queue_sets,
+        };
+    
+        let witness = RecursionTipInstanceWitness {
+            input,
+            vk_witness: node_vk.clone().into_inner(),
+            proof_witnesses: recursion_tip_proofs.into(),
+        };
+    
+        use crate::zkevm_circuits::recursion::recursion_tip::*;
+        use circuit_definitions::circuit_definitions::recursion_layer::recursion_tip::*;
+    
+        let config = RecursionTipConfig {
+            proof_config: recursion_layer_proof_config(),
+            vk_fixed_parameters: node_vk.clone().into_inner().fixed_parameters,
+            _marker: std::marker::PhantomData,
+        };
+    
+        let circuit = RecursionTipCircuit {
+            witness,
+            config,
+            transcript_params: (),
+            _marker: std::marker::PhantomData,
+        };
+    
+        let circuit = ZkSyncRecursiveLayerCircuit::RecursionTipCircuit(circuit);
+        // prove it
+        todo!()
+    }
+
+    let recursion_tip_vk = source.get_recursion_tip_vk().unwrap().into_inner();
 
     // ideally we need to fill previous block meta and aux hashes, but here we are fine
 
@@ -1000,13 +1046,45 @@ fn run_and_try_create_witness_inner(
 
     let config = SchedulerConfig {
         proof_config: recursion_layer_proof_config(),
-        leaf_layer_parameters: todo!(),
-        node_layer_vk: todo!(),
-        recursion_tip_vk: todo!(),
-        vk_fixed_parameters: todo!(),
+        leaf_layer_parameters: leaf_layer_params,
+        node_layer_vk: node_vk.into_inner(),
+        recursion_tip_vk: recursion_tip_vk.clone(),
+        vk_fixed_parameters: recursion_tip_vk.fixed_parameters,
         capacity: SCHEDULER_CAPACITY,
         _marker: std::marker::PhantomData,
     };
+
+
+    let mut scheduler_witness = scheduler_partial_input;
+    // we need to reassign block specific data, and proofs
+
+    // proofs
+    let recursion_tip_proof = todo!();
+    scheduler_witness.proof_witnesses = vec![recursion_tip_proof].into();
+
+    // blobs
+    let eip4844_witnesses: [_; MAX_4844_BLOBS_PER_BLOCK] = blobs.map(|blob| {
+        blob.map(|blob| {
+            let (_blob_arr, linear_hash, _versioned_hash, output_hash) =
+                generate_eip4844_witness::<GoldilocksField>(&blob, "src/kzg/trusted_setup.json");
+            use crate::zkevm_circuits::eip_4844::input::BlobChunkWitness;
+            use crate::zkevm_circuits::eip_4844::input::EIP4844CircuitInstanceWitness;
+            use crate::zkevm_circuits::eip_4844::input::EIP4844InputOutputWitness;
+            use crate::zkevm_circuits::eip_4844::input::EIP4844OutputDataWitness;
+            use circuit_definitions::circuit_definitions::base_layer::EIP4844Circuit;
+            use crossbeam::atomic::AtomicCell;
+            use std::collections::VecDeque;
+            use std::sync::Arc;
+
+            let witness = EIP4844OutputDataWitness {
+                linear_hash,
+                output_hash,
+            };
+
+            witness
+        })
+    });
+    scheduler_witness.eip4844_witnesses = eip4844_witnesses;
 
     let mut scheduler_circuit = SchedulerCircuit {
         witness: scheduler_witness.clone(),
@@ -1014,92 +1092,6 @@ fn run_and_try_create_witness_inner(
         transcript_params: (),
         _marker: std::marker::PhantomData,
     };
-
-    todo!();
-
-    // if let Some(blobs) = blobs {
-    //     let mut eip4844_proofs = vec![];
-    //     scheduler_circuit.eip4844_proof_config = Some(eip4844_proof_config());
-    //     let mut eip4844_vk = None;
-    //     let mut witnesses = vec![];
-
-    //     for blob in blobs {
-    //         let (blob_arr, linear_hash, versioned_hash, output_hash) =
-    //             generate_eip4844_witness::<GoldilocksField>(blob, "src/kzg/trusted_setup.json");
-    //         use crate::zkevm_circuits::eip_4844::input::BlobChunkWitness;
-    //         use crate::zkevm_circuits::eip_4844::input::EIP4844CircuitInstanceWitness;
-    //         use crate::zkevm_circuits::eip_4844::input::EIP4844InputOutputWitness;
-    //         use crate::zkevm_circuits::eip_4844::input::EIP4844OutputDataWitness;
-    //         use circuit_definitions::circuit_definitions::eip4844::EIP4844Circuit;
-    //         use crossbeam::atomic::AtomicCell;
-    //         use std::collections::VecDeque;
-    //         use std::sync::Arc;
-
-    //         let eip4844_proof_config = eip4844_proof_config();
-    //         let blob = blob_arr
-    //             .iter()
-    //             .map(|el| BlobChunkWitness { inner: *el })
-    //             .collect::<Vec<BlobChunkWitness<GoldilocksField>>>();
-    //         let witness = EIP4844CircuitInstanceWitness {
-    //             closed_form_input: EIP4844InputOutputWitness {
-    //                 start_flag: true,
-    //                 completion_flag: true,
-    //                 hidden_fsm_input: (),
-    //                 hidden_fsm_output: (),
-    //                 observable_input: (),
-    //                 observable_output: EIP4844OutputDataWitness {
-    //                     linear_hash,
-    //                     output_hash,
-    //                 },
-    //             },
-    //             data_chunks: VecDeque::from(blob),
-    //             linear_hash_output: linear_hash,
-    //             versioned_hash,
-    //         };
-    //         witnesses.push(witness.closed_form_input.observable_output.clone());
-    //         let circuit = EIP4844Circuit {
-    //             witness: AtomicCell::new(Some(witness)),
-    //             config: Arc::new(EIP4844_CYCLE_LIMIT),
-    //             round_function: ZkSyncDefaultRoundFunction::default().into(),
-    //             expected_public_input: None,
-    //         };
-    //         let (setup_base, setup, vk, setup_tree, vars_hint, wits_hint, finalization_hint) =
-    //             create_eip4844_setup_data(
-    //                 circuit.clone(),
-    //                 &worker,
-    //                 eip4844_proof_config.fri_lde_factor,
-    //                 eip4844_proof_config.merkle_tree_cap_size,
-    //             );
-
-    //         if eip4844_vk.is_none() {
-    //             eip4844_vk = Some(vk.clone());
-    //         }
-
-    //         let proof = prove_eip4844_circuit::<NoPow>(
-    //             circuit.clone(),
-    //             &worker,
-    //             eip4844_proof_config,
-    //             &setup_base,
-    //             &setup,
-    //             &setup_tree,
-    //             &vk,
-    //             &vars_hint,
-    //             &wits_hint,
-    //             &finalization_hint,
-    //         );
-
-    //         let is_valid = verify_eip4844_proof::<NoPow>(&circuit, &proof, &vk);
-    //         assert!(is_valid);
-
-    //         eip4844_proofs.push(proof);
-    //     }
-
-    //     scheduler_circuit.eip4844_vk = eip4844_vk.clone();
-    //     scheduler_circuit.eip4844_vk_fixed_parameters = Some(eip4844_vk.unwrap().fixed_parameters);
-    //     scheduler_circuit.witness.eip4844_proofs = eip4844_proofs.into();
-    //     scheduler_circuit.witness.eip4844_witnesses =
-    //         Some([witnesses[0].clone(), witnesses[1].clone()]);
-    //}
 
     println!("Computing scheduler proof");
 
