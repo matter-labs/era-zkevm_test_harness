@@ -1901,7 +1901,7 @@ pub fn create_artifacts_from_tracer<
             let (chunks, linear_hash, versioned_hash, output_hash) =
                 generate_eip4844_witness::<GoldilocksField>(
                     &input_witness[..],
-                    "src/kzg/trusted_setup.json",
+                    "kzg/src/trusted_setup.json",
                 );
             let data_chunks: VecDeque<_> = chunks
                 .iter()
