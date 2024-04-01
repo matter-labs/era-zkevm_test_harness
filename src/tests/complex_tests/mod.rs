@@ -448,10 +448,9 @@ fn run_and_try_create_witness_inner(
 
     println!("Computing leaf vks");
 
-    for base_circuit_type in
-        ((BaseLayerCircuitType::VM as u8)..=(BaseLayerCircuitType::Secp256r1Verify as u8)).chain(
-            std::iter::once(BaseLayerCircuitType::EIP4844Repack as u8)
-        )
+    for base_circuit_type in ((BaseLayerCircuitType::VM as u8)
+        ..=(BaseLayerCircuitType::Secp256r1Verify as u8))
+        .chain(std::iter::once(BaseLayerCircuitType::EIP4844Repack as u8))
     {
         let recursive_circuit_type = base_circuit_type_into_recursive_leaf_circuit_type(
             BaseLayerCircuitType::from_numeric_value(base_circuit_type),
@@ -959,7 +958,6 @@ fn run_and_try_create_witness_inner(
         use crate::zkevm_circuits::recursion::recursion_tip::input::*;
         // replicate compute_setups::*
         todo!();
-
     }
 
     // collect for recursion tip. We know that is this test depth is 0
@@ -989,17 +987,18 @@ fn run_and_try_create_witness_inner(
     // compute single(for now) recursion tip proof
     {
         let node_layer_vk_commitment = compute_node_vk_commitment(node_vk.clone());
+        use crate::boojum::gadgets::queue::*;
         use crate::zkevm_circuits::recursion::recursion_tip::input::*;
         use circuit_definitions::boojum::field::Field;
-        use crate::boojum::gadgets::queue::*;
         let mut branch_circuit_type_set = [GoldilocksField::ZERO; RECURSION_TIP_ARITY];
         assert!(branch_circuit_type_set.len() >= recursion_queues.len());
-        let mut queue_sets: [_; RECURSION_TIP_ARITY] = std::array::from_fn(|_| QueueState::placeholder_witness());
-        for ((circuit_type, queue_state), (src_type, src_queue, _,)) in branch_circuit_type_set.iter_mut()
-        .zip(queue_sets.iter_mut())
-        .zip(
-            recursion_queues.iter()
-        ) {
+        let mut queue_sets: [_; RECURSION_TIP_ARITY] =
+            std::array::from_fn(|_| QueueState::placeholder_witness());
+        for ((circuit_type, queue_state), (src_type, src_queue, _)) in branch_circuit_type_set
+            .iter_mut()
+            .zip(queue_sets.iter_mut())
+            .zip(recursion_queues.iter())
+        {
             *circuit_type = GoldilocksField::from_u64_unchecked(*src_type);
             *queue_state = take_sponge_like_queue_state_from_simulator(src_queue);
         }
@@ -1010,29 +1009,29 @@ fn run_and_try_create_witness_inner(
             branch_circuit_type_set: branch_circuit_type_set,
             queue_set: queue_sets,
         };
-    
+
         let witness = RecursionTipInstanceWitness {
             input,
             vk_witness: node_vk.clone().into_inner(),
             proof_witnesses: recursion_tip_proofs.into(),
         };
-    
+
         use crate::zkevm_circuits::recursion::recursion_tip::*;
         use circuit_definitions::circuit_definitions::recursion_layer::recursion_tip::*;
-    
+
         let config = RecursionTipConfig {
             proof_config: recursion_layer_proof_config(),
             vk_fixed_parameters: node_vk.clone().into_inner().fixed_parameters,
             _marker: std::marker::PhantomData,
         };
-    
+
         let circuit = RecursionTipCircuit {
             witness,
             config,
             transcript_params: (),
             _marker: std::marker::PhantomData,
         };
-    
+
         let circuit = ZkSyncRecursiveLayerCircuit::RecursionTipCircuit(circuit);
         // prove it
         todo!()
@@ -1053,7 +1052,6 @@ fn run_and_try_create_witness_inner(
         capacity: SCHEDULER_CAPACITY,
         _marker: std::marker::PhantomData,
     };
-
 
     let mut scheduler_witness = scheduler_partial_input;
     // we need to reassign block specific data, and proofs
