@@ -66,7 +66,7 @@ fn basic_test() {
             None
         }
     });
-    run_and_try_create_witness_inner(test_artifact, 20000, blobs);
+    run_and_try_create_witness_inner(test_artifact, 40000, blobs);
     // run_and_try_create_witness_inner(test_artifact, 16);
 }
 

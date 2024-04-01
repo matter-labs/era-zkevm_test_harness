@@ -223,6 +223,7 @@ pub fn create_artifacts_from_tracer<
         keccak_round_function_witnesses,
         sha256_round_function_witnesses,
         ecrecover_witnesses,
+        secp256r1_verify_witnesses,
         monotonic_query_counter: _,
         callstack_with_aux_data,
         vm_snapshots,
@@ -893,6 +894,7 @@ pub fn create_artifacts_from_tracer<
         artifacts.keccak_round_function_witnesses = keccak_round_function_witnesses;
         artifacts.sha256_round_function_witnesses = sha256_round_function_witnesses;
         artifacts.ecrecover_witnesses = ecrecover_witnesses;
+        artifacts.secp256r1_verify_witnesses = secp256r1_verify_witnesses;
         artifacts.original_log_queue_simulator =
             original_log_queue_simulator.unwrap_or(LogQueueSimulator::empty());
         artifacts.original_log_queue_states = original_log_queue_states;
@@ -1886,7 +1888,7 @@ pub fn create_artifacts_from_tracer<
         // eip 4844 circuits are basic, but they do not need closed form input commitments
         let circuit_type = BaseLayerCircuitType::EIP4844Repack;
         let mut maker = CircuitMaker::new(
-            1,
+            4096,
             round_function.clone(),
             &mut cs_for_witness_generation,
             &mut cycles_used,
