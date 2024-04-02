@@ -12,6 +12,7 @@ use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 use crate::boojum::gadgets::traits::round_function::*;
 use crate::ethereum_types::U256;
 use crate::toolset::GeometryConfig;
+use crate::witness::advancing_range::AdvancingRange;
 use crate::witness::full_block_artifact::FullBlockArtifacts;
 use crate::witness::postprocessing::{CircuitMaker, FirstAndLastCircuit};
 use crate::witness::tracer::{QueryMarker, WitnessTracer};
@@ -1226,9 +1227,25 @@ pub fn create_artifacts_from_tracer<
     let mut previous_instance_witness: Option<
         VmInstanceWitness<GoldilocksField, VmWitnessOracle<GoldilocksField>>,
     > = None;
+
+    let mut memory_query_cycles_range = AdvancingRange::new(&vm_memory_query_cycles);
+    let mut decommittment_queue_states_range =
+        AdvancingRange::new(&artifacts.all_decommittment_queue_states);
+    let mut callstack_sponge_encoding_ranges_range =
+        AdvancingRange::new(&callstack_sponge_encoding_ranges);
+    let mut storage_queries_range = AdvancingRange::new(&storage_queries);
+    let mut refunds_logs_range = AdvancingRange::new(&refunds_logs);
+    let mut decommittment_queries_range = AdvancingRange::new(&artifacts.all_decommittment_queries);
+    let mut rollback_queue_initial_tails_for_new_frames_range =
+        AdvancingRange::new(&rollback_queue_initial_tails_for_new_frames);
+    let mut callstack_values_witnesses_range = AdvancingRange::new(&callstack_values_witnesses);
+    let mut rollback_queue_head_segments_range = AdvancingRange::new(&rollback_queue_head_segments);
+    let mut flat_new_frames_history_range = AdvancingRange::new(&flat_new_frames_history);
+
     for (_circuit_idx, pair) in vm_snapshots.windows(2).enumerate() {
         let initial_state = &pair[0];
         let final_state = &pair[1];
+        let cycle_range = initial_state.at_cycle..final_state.at_cycle;
 
         // println!("Operating over range {:?}", initial_state.at_cycle..final_state.at_cycle);
 
@@ -1239,35 +1256,27 @@ pub fn create_artifacts_from_tracer<
         // - callstack witnesses
         // - rollback queue witnesses
 
-        // first find the memory witness by scanning all the known states
-        // and finding the latest one with cycle index < current
+        // first find the memory witness by finding the latest one with cycle index < current
 
-        let index_plus_one = vm_memory_query_cycles
-            .iter()
-            .take_while(|cycle| **cycle < initial_state.at_cycle)
-            .count();
+        let memory_query_range = memory_query_cycles_range.get_range(cycle_range.clone());
+
+        let index_plus_one = memory_query_range.start;
         let memory_queue_state_for_entry = if index_plus_one == 0 {
             QueueState::placeholder_witness()
         } else {
             transform_sponge_like_queue_state(artifacts.all_memory_queue_states[index_plus_one - 1])
         };
 
-        let decommittment_queue_state_for_entry = artifacts
-            .all_decommittment_queue_states
-            .iter()
-            .take_while(|el| el.0 < initial_state.at_cycle)
+        let decommittment_queue_state_for_entry = decommittment_queue_states_range
+            .get_slice(0..initial_state.at_cycle)
             .last()
             .map(|el| transform_sponge_like_queue_state(el.1))
             .unwrap_or(QueueState::placeholder_witness());
 
         // and finally we need the callstack current state
 
-        let callstack_state_for_entry = callstack_sponge_encoding_ranges
-            .iter()
-            // .skip_while(
-            //     |el| el.0 < initial_state.at_cycle
-            // )
-            .take_while(|el| el.0 < initial_state.at_cycle)
+        let callstack_state_for_entry = callstack_sponge_encoding_ranges_range
+            .get_slice(0..initial_state.at_cycle)
             .last()
             .map(|el| el.1)
             .unwrap_or([GoldilocksField::ZERO; FULL_SPONGE_QUEUE_STATE_WIDTH]);
@@ -1278,11 +1287,9 @@ pub fn create_artifacts_from_tracer<
         let mut per_instance_memory_read_witnesses = Vec::with_capacity(1 << 16);
         let mut per_instance_memory_write_witnesses = Vec::with_capacity(1 << 16);
 
-        let start = vm_memory_query_cycles.partition_point(|x| *x < initial_state.at_cycle);
-        let end = vm_memory_query_cycles.partition_point(|x| *x < final_state.at_cycle);
-        for (&cycle, &query) in vm_memory_query_cycles[start..end]
+        for (&cycle, &query) in vm_memory_query_cycles[memory_query_range.clone()]
             .iter()
-            .zip(&artifacts.all_memory_queries_accumulated[start..end])
+            .zip(&artifacts.all_memory_queries_accumulated[memory_query_range])
         {
             if query.rw_flag {
                 per_instance_memory_write_witnesses.push((cycle, query));
@@ -1291,63 +1298,45 @@ pub fn create_artifacts_from_tracer<
             }
         }
 
-        let per_instance_storage_queries_witnesses: Vec<_> = storage_queries
+        let per_instance_storage_queries_witnesses = storage_queries_range
+            .get_slice(cycle_range.clone())
+            .to_vec();
+
+        let per_instance_refund_logs = refunds_logs_range.get_slice(cycle_range.clone()).to_vec();
+
+        let decommittment_requests_witness = decommittment_queries_range
+            .get_slice(cycle_range.clone())
             .iter()
-            .skip_while(|el| el.0 < initial_state.at_cycle)
-            .take_while(|el| el.0 < final_state.at_cycle)
             .cloned()
+            .map(|(cycle, query, _)| (cycle, query))
             .collect();
 
-        let per_instance_refund_logs: Vec<_> = refunds_logs
-            .iter()
-            .skip_while(|el| el.0 < initial_state.at_cycle)
-            .take_while(|el| el.0 < final_state.at_cycle)
-            .cloned()
-            .collect();
+        let rollback_queue_initial_tails_for_new_frames =
+            rollback_queue_initial_tails_for_new_frames_range
+                .get_slice(cycle_range.clone())
+                .to_vec();
 
-        let decommittment_requests_witness: Vec<_> = artifacts
-            .all_decommittment_queries
-            .iter()
-            .skip_while(|el| el.0 < initial_state.at_cycle)
-            .take_while(|el| el.0 < final_state.at_cycle)
-            .map(|el| (el.0, el.1))
-            .collect();
+        let callstack_values_witnesses = callstack_values_witnesses_range
+            .get_slice(cycle_range.clone())
+            .to_vec()
+            .into();
 
-        let rollback_queue_initial_tails_for_new_frames: Vec<_> =
-            rollback_queue_initial_tails_for_new_frames
-                .iter()
-                .skip_while(|el| el.0 < initial_state.at_cycle)
-                .take_while(|el| el.0 < final_state.at_cycle)
-                .cloned()
-                .collect();
+        let rollback_queue_head_segments = rollback_queue_head_segments_range
+            .get_slice(cycle_range.clone())
+            .to_vec()
+            .into();
 
-        let callstack_values_witnesses = callstack_values_witnesses
-            .iter()
-            .skip_while(|el| el.0 < initial_state.at_cycle)
-            .take_while(|el| el.0 < final_state.at_cycle)
-            .cloned()
-            .collect();
-
-        let rollback_queue_head_segments = rollback_queue_head_segments
-            .iter()
-            .skip_while(|el| el.0 < initial_state.at_cycle)
-            .take_while(|el| el.0 < final_state.at_cycle)
-            .cloned()
-            .collect();
-
-        let callstack_new_frames_witnesses = flat_new_frames_history
-            .iter()
-            .skip_while(|el| el.0 < initial_state.at_cycle)
-            .take_while(|el| el.0 < final_state.at_cycle)
-            .cloned()
-            .collect();
+        let callstack_new_frames_witnesses = flat_new_frames_history_range
+            .get_slice(cycle_range)
+            .to_vec()
+            .into();
 
         // construct an oracle
         let witness_oracle = VmWitnessOracle {
             memory_read_witness: per_instance_memory_read_witnesses.into(),
             memory_write_witness: Some(per_instance_memory_write_witnesses.into()),
             rollback_queue_head_segments,
-            decommittment_requests_witness: decommittment_requests_witness.into(),
+            decommittment_requests_witness,
             rollback_queue_initial_tails_for_new_frames:
                 rollback_queue_initial_tails_for_new_frames.into(),
             storage_queries: per_instance_storage_queries_witnesses.into(),
