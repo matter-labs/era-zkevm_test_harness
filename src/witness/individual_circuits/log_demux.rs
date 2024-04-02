@@ -9,7 +9,6 @@ use crate::witness::postprocessing::CircuitMaker;
 use crate::zkevm_circuits::base_structures::log_query::*;
 use crate::zkevm_circuits::demux_log_queue::input::*;
 use crate::zkevm_circuits::demux_log_queue::NUM_DEMUX_OUTPUTS;
-use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use circuit_definitions::circuit_definitions::base_layer::{
     LogDemuxInstanceSynthesisFunction, ZkSyncBaseLayerCircuit,
 };
@@ -191,7 +190,6 @@ pub fn compute_logs_demux<
                 }
                 PRECOMPILE_AUX_BYTE => {
                     assert!(!query.rollback);
-                    use crate::zk_evm::zk_evm_abstractions::precompiles::*;
                     match query.address {
                         a if a == *KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
                             let item = demuxed_keccak_precompile_queries_it

@@ -15,7 +15,6 @@ use zkevm_circuits::scheduler::*;
 use super::*;
 
 type F = GoldilocksField;
-type P = GoldilocksField;
 type TR = GoldilocksPoisedon2Transcript;
 type R = Poseidon2Goldilocks;
 type CTR = CircuitAlgebraicSpongeBasedTranscript<GoldilocksField, 8, 12, 4, R>;

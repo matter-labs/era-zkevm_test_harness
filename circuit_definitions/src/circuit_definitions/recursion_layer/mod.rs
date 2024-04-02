@@ -1,6 +1,5 @@
 use super::*;
 use crate::boojum::cs::implementations::proof::Proof;
-use crate::boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
 use crate::boojum::field::goldilocks::{GoldilocksExt2, GoldilocksField};
 use crate::boojum::gadgets::recursion::recursive_transcript::CircuitAlgebraicSpongeBasedTranscript;
 use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
@@ -407,13 +406,7 @@ pub type ZkSyncRecursionLayerLeafParameters =
     ZkSyncRecursionLayerStorage<RecursionLeafParametersWitness<GoldilocksField>>;
 
 type F = GoldilocksField;
-type P = GoldilocksField;
-type TR = GoldilocksPoisedon2Transcript;
-type R = Poseidon2Goldilocks;
-type CTR = CircuitAlgebraicSpongeBasedTranscript<GoldilocksField, 8, 12, 4, R>;
 type EXT = GoldilocksExt2;
-type H = GoldilocksPoseidon2Sponge<AbsorptionModeOverwrite>;
-type RH = CircuitGoldilocksPoseidon2Sponge;
 
 impl ZkSyncRecursiveLayerCircuit {
     pub fn short_description(&self) -> &'static str {
@@ -832,12 +825,6 @@ pub fn base_circuit_type_into_recursive_leaf_circuit_type(
         }
         BaseLayerCircuitType::L1MessagesHasher => {
             ZkSyncRecursionLayerStorageType::LeafLayerCircuitForL1MessagesHasher
-        }
-        BaseLayerCircuitType::TransientStorageChecker => {
-            ZkSyncRecursionLayerStorageType::LeafLayerCircuitForTransientStorageSorter
-        }
-        BaseLayerCircuitType::Secp256r1Verify => {
-            ZkSyncRecursionLayerStorageType::LeafLayerCircuitForSecp256r1Verify
         }
         BaseLayerCircuitType::TransientStorageChecker => {
             ZkSyncRecursionLayerStorageType::LeafLayerCircuitForTransientStorageSorter

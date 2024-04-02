@@ -3,7 +3,6 @@ use crate::sha3::*;
 use crate::zkevm_circuits::base_structures::log_query::*;
 use crate::zkevm_circuits::linear_hasher::input::*;
 use circuit_definitions::encodings::*;
-use derivative::*;
 
 pub fn compute_linear_keccak256<
     F: SmallField,

@@ -5,28 +5,19 @@
 use super::callstack_handler::*;
 use super::postprocessing::BlockFirstAndLastBasicCircuits;
 use super::utils::*;
-use crate::boojum::algebraic_props::round_function::AlgebraicRoundFunction;
 use crate::boojum::field::SmallField;
 use crate::boojum::gadgets::queue::{QueueState, QueueStateWitness, QueueTailStateWitness};
 use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
-use crate::boojum::gadgets::traits::round_function::*;
 use crate::ethereum_types::U256;
 use crate::toolset::GeometryConfig;
 use crate::witness::full_block_artifact::FullBlockArtifacts;
 use crate::witness::postprocessing::{CircuitMaker, FirstAndLastCircuit};
 use crate::witness::tracer::{QueryMarker, WitnessTracer};
 use crate::zk_evm::aux_structures::DecommittmentQuery;
-use crate::zk_evm::aux_structures::{LogQuery, MemoryIndex, MemoryPage, MemoryQuery};
-use crate::zk_evm::reference_impls::event_sink::ApplicationData;
 use crate::zk_evm::vm_state::{CallStackEntry, VmLocalState};
-use crate::zk_evm::zk_evm_abstractions::precompiles::ecrecover::ECRecoverRoundWitness;
-use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::Keccak256RoundWitness;
-use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Sha256RoundWitness;
 use crate::zkevm_circuits::base_structures::vm_state::{
     GlobalContextWitness, FULL_SPONGE_QUEUE_STATE_WIDTH, QUEUE_STATE_WIDTH,
 };
-use crate::zkevm_circuits::eip_4844::input::ENCODABLE_BYTES_PER_BLOB;
-use crate::zkevm_circuits::main_vm::main_vm_entry_point;
 use crate::zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
 use crate::zkevm_circuits::scheduler::block_header::MAX_4844_BLOBS_PER_BLOCK;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
@@ -47,10 +38,7 @@ use circuit_definitions::zkevm_circuits::fsm_input_output::ClosedFormInputCompac
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use crossbeam::atomic::AtomicCell;
 use derivative::Derivative;
-use rayon::slice::ParallelSliceMut;
-use smallvec::SmallVec;
 use std::collections::{BTreeMap, HashMap, VecDeque};
-use std::ops::RangeInclusive;
 use std::sync::Arc;
 
 use crate::zk_evm::zkevm_opcode_defs::system_params::{
@@ -496,7 +484,6 @@ pub fn create_artifacts_from_tracer<
                 }
                 PRECOMPILE_AUX_BYTE => {
                     assert!(!query.rollback);
-                    use crate::zk_evm::zk_evm_abstractions::precompiles::*;
                     match query.address {
                         a if a == *KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
                             demuxed_keccak_precompile_queries.push(query);
@@ -520,7 +507,6 @@ pub fn create_artifacts_from_tracer<
         }
     }
 
-    use super::callstack_handler::CallstackAction;
     use circuit_definitions::encodings::callstack_entry::CallstackSimulator;
     let mut callstack_argebraic_simulator = CallstackSimulator::empty();
     let mut callstack_values_witnesses = vec![]; // index of cycle -> witness for callstack
@@ -1249,7 +1235,6 @@ pub fn create_artifacts_from_tracer<
     let mut queue_simulator = RecursionQueueSimulator::empty();
     let mut observable_input = None;
     let mut process_vm_witness = |vm_instance, is_last| {
-        use crate::witness::utils::vm_instance_witness_to_circuit_formal_input;
         let is_first = observable_input.is_none();
         let mut circuit_input = vm_instance_witness_to_circuit_formal_input(
             vm_instance,
@@ -1986,5 +1971,3 @@ pub fn create_artifacts_from_tracer<
         (basic_circuits, all_compact_forms, eip_4844_circuits)
     }
 }
-
-use crate::INITIAL_MONOTONIC_CYCLE_COUNTER;

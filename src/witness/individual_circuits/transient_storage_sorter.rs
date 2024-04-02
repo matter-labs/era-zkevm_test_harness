@@ -1,14 +1,10 @@
 use super::*;
 use crate::witness::full_block_artifact::LogQueue;
-use crate::zkevm_circuits::base_structures::log_query::{
-    LOG_QUERY_ABSORBTION_ROUNDS, LOG_QUERY_PACKED_WIDTH,
-};
+use crate::zkevm_circuits::base_structures::log_query::LOG_QUERY_PACKED_WIDTH;
 use crate::zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
-use crate::zkevm_circuits::storage_validity_by_grand_product::TIMESTAMPED_STORAGE_LOG_ENCODING_LEN;
 use crate::zkevm_circuits::transient_storage_validity_by_grand_product::input::*;
 use crate::zkevm_circuits::DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS;
 use circuit_definitions::encodings::*;
-use std::cmp::Ordering;
 
 pub fn compute_transient_storage_dedup_and_sort<
     F: SmallField,
@@ -197,18 +193,16 @@ pub fn compute_transient_storage_dedup_and_sort<
     let mut current_lhs_product = [F::ONE; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS];
     let mut current_rhs_product = [F::ONE; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS];
     let mut previous_comparison_key = [0u32; TRANSIENT_STORAGE_VALIDITY_CHECK_PACKED_KEY_LENGTH];
-    let mut previous_key = U256::zero();
+    let previous_key = U256::zero();
     let mut previous_timestamp = 0u32;
-    let mut previous_tx_number = 0u32;
-    let mut previous_shard_id = 0u8;
+    let previous_tx_number = 0u32;
+    let previous_shard_id = 0u8;
     let mut cycle_idx = 0u32;
     use crate::ethereum_types::Address;
-    let mut previous_address = Address::default();
+    let previous_address = Address::default();
 
     use crate::ethereum_types::U256;
 
-    let mut this_cell_tx_number = 0u32;
-    let mut this_cell_shard_id = 0u8;
     let mut this_cell_current_depth = 0u32;
     let mut this_cell_current_value = U256::zero();
 
@@ -287,7 +281,6 @@ pub fn compute_transient_storage_dedup_and_sort<
             .unwrap();
 
         let last_sorted_query = &sorted_states.last().unwrap().2;
-        use circuit_definitions::encodings::log_query::transient_storage_comparison_key;
         let last_comparison_key = transient_storage_comparison_key(&last_sorted_query.raw_query);
         let last_timestamp = last_sorted_query.extended_timestamp;
 
@@ -302,8 +295,6 @@ pub fn compute_transient_storage_dedup_and_sort<
             let mut new_this_cell_current_depth = this_cell_current_depth;
 
             let num_items_in_chunk = sorted_states.len();
-
-            let mut exhausted = false;
 
             for (sub_idx, (_encoding, _previous_tail, item)) in sorted_states.iter().enumerate() {
                 let first_ever = sub_idx == 0 && is_first;

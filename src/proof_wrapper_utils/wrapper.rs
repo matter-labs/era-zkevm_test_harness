@@ -163,6 +163,7 @@ pub(crate) fn compute_wrapper_setup_inner(
     setup
 }
 
+#[allow(dead_code)]
 pub(crate) fn test_wrapper_circuit_inner(
     proof: ZkSyncCompressionForWrapperProof,
     vk: ZkSyncCompressionForWrapperVerificationKey,

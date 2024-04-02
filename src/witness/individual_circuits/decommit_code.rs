@@ -1,6 +1,5 @@
 use super::*;
 use crate::boojum::gadgets::queue::full_state_queue::FullStateCircuitQueueRawWitness;
-use crate::boojum::gadgets::u256::recompose_u256_as_u32x8;
 use crate::witness::full_block_artifact::FullBlockArtifacts;
 use crate::zk_evm::aux_structures::MemoryIndex;
 use crate::zk_evm::aux_structures::MemoryQuery;
@@ -8,15 +7,11 @@ use crate::zk_evm::ethereum_types::U256;
 use crate::zkevm_circuits::base_structures::decommit_query::DecommitQueryWitness;
 use crate::zkevm_circuits::base_structures::decommit_query::DECOMMIT_QUERY_PACKED_WIDTH;
 use crate::zkevm_circuits::code_unpacker_sha256::input::*;
-use crate::zkevm_circuits::code_unpacker_sha256::*;
 use circuit_definitions::encodings::decommittment_request::normalized_preimage_as_u256;
 use circuit_definitions::encodings::decommittment_request::DecommittmentQueueSimulator;
 use circuit_definitions::encodings::decommittment_request::DecommittmentQueueState;
 use circuit_definitions::zk_evm::aux_structures::DecommittmentQuery;
-use rayon::prelude::*;
-use std::cmp::Ordering;
 use std::collections::VecDeque;
-use std::sync::Arc;
 
 pub fn compute_decommitter_circuit_snapshots<
     F: SmallField,
@@ -234,8 +229,6 @@ pub fn compute_decommitter_circuit_snapshots<
                 current_memory_data_it = memory_data.into_iter();
 
                 // fill the witness
-                use crate::zk_evm::aux_structures::DecommittmentQuery;
-
                 let DecommittmentQuery {
                     header,
                     normalized_preimage,

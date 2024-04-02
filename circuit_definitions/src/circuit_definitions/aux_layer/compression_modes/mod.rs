@@ -8,8 +8,6 @@ use crate::boojum::cs::implementations::transcript::Transcript;
 use crate::boojum::field::goldilocks::GoldilocksExt2;
 use crate::boojum::field::goldilocks::GoldilocksField;
 
-use crate::boojum::gadgets::recursion::recursive_transcript::*;
-use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
 use crate::circuit_definitions::gates::*;
 
 use crate::circuit_definitions::recursion_layer::scheduler::SchedulerCircuitBuilder;
@@ -26,13 +24,10 @@ use zkevm_circuits::boojum::cs::implementations::prover::ProofConfig;
 use crate::circuit_definitions::aux_layer::compression::ProofCompressionFunction;
 
 type F = GoldilocksField;
-type P = GoldilocksField;
 type TR = GoldilocksPoisedon2Transcript;
 type R = Poseidon2Goldilocks;
-type CTR = CircuitAlgebraicSpongeBasedTranscript<GoldilocksField, 8, 12, 4, R>;
 type EXT = GoldilocksExt2;
 type H = GoldilocksPoseidon2Sponge<AbsorptionModeOverwrite>;
-type RH = CircuitGoldilocksPoseidon2Sponge;
 
 pub type CompressionTreeHasherForWrapper =
     Poseidon2Sponge<Bn256, F, AbsorptionModeReplacement<Fr>, 2, 3>;

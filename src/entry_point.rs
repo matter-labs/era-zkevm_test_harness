@@ -1,7 +1,6 @@
 use crate::zk_evm::aux_structures::*;
 use crate::zk_evm::ethereum_types::*;
 use crate::zk_evm::vm_state::CallStackEntry;
-use crate::zk_evm::vm_state::VmState;
 use crate::zk_evm::zkevm_opcode_defs::system_params::INITIAL_FRAME_FORMAL_EH_LOCATION;
 use crate::zk_evm::zkevm_opcode_defs::*;
 

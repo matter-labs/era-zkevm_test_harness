@@ -1,45 +1,27 @@
-use super::*;
 use crate::boojum::field::SmallField;
-use crate::boojum::gadgets::traits::allocatable::*;
-use crate::boojum::gadgets::traits::round_function::*;
 use crate::ethereum_types::U256;
-use crate::toolset::GeometryConfig;
 use crate::zk_evm::aux_structures::DecommittmentQuery;
 use crate::zk_evm::aux_structures::LogQuery;
-use crate::zk_evm::aux_structures::MemoryIndex;
 use crate::zk_evm::aux_structures::MemoryQuery;
 use crate::zk_evm::zk_evm_abstractions::precompiles::ecrecover::ECRecoverRoundWitness;
 use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::Keccak256RoundWitness;
 use crate::zk_evm::zk_evm_abstractions::precompiles::secp256r1_verify::Secp256r1VerifyRoundWitness;
 use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Sha256RoundWitness;
 use crate::zkevm_circuits::code_unpacker_sha256::input::CodeDecommitterCircuitInstanceWitness;
-use crate::zkevm_circuits::demux_log_queue::input::LogDemuxerCircuitInstanceWitness;
 use crate::zkevm_circuits::ecrecover::EcrecoverCircuitInstanceWitness;
-use crate::zkevm_circuits::fsm_input_output::circuit_inputs::INPUT_OUTPUT_COMMITMENT_LENGTH;
 use crate::zkevm_circuits::keccak256_round_function::input::Keccak256RoundFunctionCircuitInstanceWitness;
 use crate::zkevm_circuits::linear_hasher::input::LinearHasherCircuitInstanceWitness;
 use crate::zkevm_circuits::log_sorter::input::EventsDeduplicatorInstanceWitness;
-use crate::zkevm_circuits::ram_permutation::input::RamPermutationCircuitInstanceWitness;
-use crate::zkevm_circuits::scheduler::aux::NUM_CIRCUIT_TYPES_TO_SCHEDULE;
 use crate::zkevm_circuits::sha256_round_function::input::Sha256RoundFunctionCircuitInstanceWitness;
 use crate::zkevm_circuits::sort_decommittment_requests::input::CodeDecommittmentsDeduplicatorInstanceWitness;
-use crate::zkevm_circuits::storage_application::input::StorageApplicationCircuitInstanceWitness;
 use crate::zkevm_circuits::storage_validity_by_grand_product::input::StorageDeduplicatorInstanceWitness;
-use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
-use circuit_definitions::circuit_definitions::base_layer::*;
-use circuit_definitions::encodings::decommittment_request::DecommittmentQueueSimulator;
 use circuit_definitions::encodings::decommittment_request::DecommittmentQueueState;
 use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 use circuit_definitions::encodings::memory_query::MemoryQueueState;
-use circuit_definitions::encodings::recursion_request::*;
 use circuit_definitions::encodings::*;
-use circuit_definitions::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
 use circuit_definitions::zkevm_circuits::secp256r1_verify::Secp256r1VerifyCircuitInstanceWitness;
 use circuit_definitions::zkevm_circuits::transient_storage_validity_by_grand_product::input::TransientStorageDeduplicatorInstanceWitness;
 use derivative::Derivative;
-use rayon::slice::ParallelSliceMut;
-use std::cmp::Ordering;
-use tracing;
 
 #[derive(Derivative)]
 #[derivative(Clone, Default(bound = ""))]

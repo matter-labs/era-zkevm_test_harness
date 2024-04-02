@@ -5,24 +5,19 @@ use self::witness::postprocessing::FirstAndLastCircuit;
 
 use super::*;
 use crate::boojum::gadgets::keccak256::{self};
-use crate::boojum::sha3::digest::{FixedOutput, Update};
 use crate::witness::individual_circuits::keccak256_round_function::encode_kecca256_inner_state;
 use crate::witness::postprocessing::CircuitMaker;
 use crate::witness::tree::*;
 use crate::zk_evm::sha3::Keccak256;
-use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::{
-    transmute_state, KECCAK_PRECOMPILE_BUFFER_SIZE,
-};
+use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::transmute_state;
 use crate::zkevm_circuits::base_structures::state_diff_record::NUM_KECCAK256_ROUNDS_PER_RECORD_ACCUMULATION;
 use crate::zkevm_circuits::storage_application::input::*;
 use blake2::Blake2s256;
-use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use circuit_definitions::circuit_definitions::base_layer::{
     StorageApplicationInstanceSynthesisFunction, ZkSyncBaseLayerCircuit,
 };
 use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::encodings::state_diff_record::StateDiffRecord;
-use circuit_definitions::zk_evm::testing::storage;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use tracing;
 
@@ -49,9 +44,6 @@ pub fn decompose_into_storage_application_witnesses<
     FirstAndLastCircuit<StorageApplicationInstanceSynthesisFunction>,
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
 ) {
-    use crate::witness::tree::EnumeratedBinaryLeaf;
-    use crate::witness::tree::ZkSyncStorageLeaf;
-
     const SHARD_ID_TO_PROCEED: u8 = 0; // rollup shard ID
 
     let circuit_type = BaseLayerCircuitType::StorageApplicator;
@@ -108,9 +100,6 @@ pub fn decompose_into_storage_application_witnesses<
     }
 
     // now proceed as FSM over individual circuits
-
-    use crate::bytes_to_u32_le;
-    use crate::witness::tree::BinarySparseStorageTree;
 
     let mut initial_fsm_state = StorageApplicationFSMInputOutput::placeholder_witness();
     // queue states are trivial for a start

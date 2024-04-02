@@ -1,5 +1,3 @@
-use crate::witness::utils::take_queue_state_from_simulator;
-use crate::witness::utils::transform_queue_witness;
 pub trait EnumeratedBinaryLeaf<const LEAF_DATA_WIDTH: usize>: Clone + std::hash::Hash {
     fn empty() -> Self;
     fn empty_index() -> u64 {

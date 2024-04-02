@@ -1,24 +1,8 @@
-use crossbeam::atomic::AtomicCell;
-use std::collections::VecDeque;
-use std::ops::Add;
-use std::sync::Arc;
-
-use crate::boojum::algebraic_props::round_function::AbsorptionModeOverwrite;
-use crate::boojum::config::*;
-use crate::boojum::cs::implementations::setup::FinalizationHintsForProver;
-use crate::boojum::field::goldilocks::GoldilocksExt2;
-use crate::boojum::{algebraic_props::round_function, field::SmallField};
+use crate::boojum::field::SmallField;
 use crate::kzg::KzgSettings;
 use crate::witness::tree::BinaryHasher;
-use crate::zk_evm::{address_to_u256, ethereum_types::*};
-use crate::zkevm_circuits::eip_4844::input::BlobChunkWitness;
-use crate::zkevm_circuits::eip_4844::input::EIP4844CircuitInstanceWitness;
-use crate::zkevm_circuits::eip_4844::input::EIP4844InputOutputWitness;
-use crate::GoldilocksField;
-use circuit_definitions::{
-    encodings::{BytesSerializable, QueueSimulator},
-    ZkSyncDefaultRoundFunction, EIP4844_CYCLE_LIMIT,
-};
+
+use circuit_definitions::encodings::BytesSerializable;
 
 pub fn u64_as_u32_le(value: u64) -> [u32; 2] {
     [value as u32, (value >> 32) as u32]
@@ -107,13 +91,11 @@ pub fn binary_merklize_set<
 }
 
 use crate::boojum::pairing::bls12_381::fr::{Fr, FrRepr};
-use crate::sha2::{Digest, Sha256};
+use crate::sha2::Digest;
 use crate::sha3::Keccak256;
 use crate::snark_wrapper::franklin_crypto::bellman::Field;
 use crate::snark_wrapper::franklin_crypto::bellman::PrimeField;
-use crate::zkevm_circuits::eip_4844::input::EIP4844OutputDataWitness;
 use crate::zkevm_circuits::eip_4844::input::ELEMENTS_PER_4844_BLOCK;
-use crate::zkevm_circuits::scheduler::block_header::MAX_4844_BLOBS_PER_BLOCK;
 
 /// Generates eip4844 witness for a given blob and using a trusted setup from a given json path.
 /// Returns blob array, linear hash, versioned hash and output hash.

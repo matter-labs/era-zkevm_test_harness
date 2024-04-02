@@ -1,12 +1,7 @@
 use std::collections::VecDeque;
 
 use crate::blake2::Blake2s256;
-use crate::boojum::algebraic_props::round_function::AlgebraicRoundFunction;
-use crate::boojum::gadgets::traits::round_function::BuildableCircuitRoundFunction;
-use crate::boojum::{
-    cs::implementations::{prover::ProofConfig, verifier::VerificationKey},
-    field::{goldilocks::GoldilocksField, SmallField},
-};
+use crate::boojum::field::goldilocks::GoldilocksField;
 use crate::entry_point::*;
 use crate::snark_wrapper::boojum::field::goldilocks::GoldilocksExt2;
 use crate::snark_wrapper::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
@@ -14,7 +9,6 @@ use crate::toolset::create_tools;
 use crate::toolset::GeometryConfig;
 use crate::witness::oracle::create_artifacts_from_tracer;
 use crate::witness::tree::BinarySparseStorageTree;
-use crate::witness::tree::ZKSyncTestingTree;
 use crate::witness::tree::ZkSyncStorageLeaf;
 use crate::witness::utils::{
     take_queue_state_from_simulator, take_sponge_like_queue_state_from_simulator,
@@ -36,24 +30,17 @@ use crate::{
     utils::{calldata_to_aligned_data, u64_as_u32_le},
 };
 use circuit_definitions::boojum::field::Field;
-use circuit_definitions::boojum::implementations::poseidon2::Poseidon2Goldilocks;
 use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit;
 use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::zk_evm::zkevm_opcode_defs::VersionedHashLen32;
 use circuit_definitions::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
-use circuit_definitions::{Field as MainField, RoundFunction, ZkSyncDefaultRoundFunction};
-use tracing;
+use circuit_definitions::{Field as MainField, ZkSyncDefaultRoundFunction};
 
 pub const SCHEDULER_TIMESTAMP: u32 = 1;
 
-use crate::boojum::field::FieldExtension;
-use crate::boojum::gadgets::num::Num;
-use crate::boojum::gadgets::recursion::recursive_tree_hasher::RecursiveTreeHasher;
 use crate::boojum::gadgets::traits::allocatable::*;
-use crate::witness::full_block_artifact::FullBlockArtifacts;
-use crate::witness::oracle::VmInstanceWitness;
+
 use crate::zkevm_circuits::scheduler::block_header::BlockAuxilaryOutputWitness;
-use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 
 /// Executes a given set of instructions, and returns things necessary to do the proving:
 /// - all circuits as a callback
@@ -354,10 +341,6 @@ pub fn run<
             eip4844_linear_hashes: [[0u8; 32]; MAX_4844_BLOBS_PER_BLOCK],
             eip4844_output_commitment_hashes: [[0u8; 32]; MAX_4844_BLOBS_PER_BLOCK],
         };
-
-        use crate::zkevm_circuits::recursion::leaf_layer::input::RecursionLeafParameters;
-        use crate::zkevm_circuits::recursion::VK_COMMITMENT_LENGTH;
-        use crate::zkevm_circuits::scheduler::LEAF_LAYER_PARAMETERS_COMMITMENT_LENGTH;
 
         // here we perform a logic that is similar to what is in scheduler when we require of some circuit type is skipped, then
         // we ignore/constraint it's output

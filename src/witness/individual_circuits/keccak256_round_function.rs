@@ -147,7 +147,6 @@ pub fn keccak256_decompose_into_per_circuit_witness<
         // those are refreshed every cycle
         use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::KECCAK_PRECOMPILE_BUFFER_SIZE;
         use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::KECCAK_RATE_BYTES;
-        use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::MEMORY_READS_PER_CYCLE;
 
         let mut input_buffer = zk_evm::zk_evm_abstractions::precompiles::keccak256::ByteBuffer {
             bytes: [0u8; KECCAK_PRECOMPILE_BUFFER_SIZE],
@@ -330,7 +329,6 @@ pub fn keccak256_decompose_into_per_circuit_witness<
                     // internal state is a bit more tricky, it'll be a round over empty input
                     let mut internal_state_over_empty_buffer = Keccak256::default();
                     let empty_block = [0u8; KECCAK_RATE_BYTES];
-                    use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::Digest;
                     internal_state_over_empty_buffer.update(&empty_block);
                     let empty_state_inner =
                         zk_evm::zk_evm_abstractions::precompiles::keccak256::transmute_state(

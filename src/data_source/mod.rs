@@ -1,18 +1,11 @@
-use super::*;
-use std::{error::Error, fs::File};
+use std::error::Error;
 
 use circuit_definitions::boojum::cs::implementations::setup::FinalizationHintsForProver;
 use circuit_definitions::circuit_definitions::aux_layer::*;
 use circuit_definitions::circuit_definitions::base_layer::*;
 use circuit_definitions::circuit_definitions::recursion_layer::*;
 
-use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::proof::Proof as SnarkProof;
-use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::setup::VerificationKey as SnarkVK;
-
 pub type SourceResult<T> = Result<T, Box<dyn Error>>;
-
-use derivative::*;
-
 pub mod in_memory_data_source;
 pub mod local_file_data_source;
 

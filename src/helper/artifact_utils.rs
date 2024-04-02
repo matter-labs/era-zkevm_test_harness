@@ -1,4 +1,3 @@
-use crate::helper::serialize_utils::{deserialize_bytecode, deserialize_bytecodes_with_addresses};
 use crate::zk_evm::aux_structures::LogQuery;
 use crate::zk_evm::ethereum_types::Address;
 use serde::{Deserialize, Serialize};

@@ -241,7 +241,6 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
 }
 
 type F = GoldilocksField;
-type R = Poseidon2Goldilocks;
 
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone(bound = ""))]

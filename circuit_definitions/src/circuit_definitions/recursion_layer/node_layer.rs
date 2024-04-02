@@ -14,7 +14,6 @@ use zkevm_circuits::recursion::node_layer::*;
 use super::*;
 
 type F = GoldilocksField;
-type P = GoldilocksField;
 type TR = GoldilocksPoisedon2Transcript;
 type R = Poseidon2Goldilocks;
 type CTR = CircuitAlgebraicSpongeBasedTranscript<GoldilocksField, 8, 12, 4, R>;

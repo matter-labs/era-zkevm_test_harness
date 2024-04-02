@@ -1,6 +1,5 @@
 use crate::boojum::algebraic_props::round_function::AbsorptionModeOverwrite;
 use crate::boojum::algebraic_props::round_function::AlgebraicRoundFunction;
-use crate::boojum::config::DevCSConfig;
 use crate::boojum::config::ProvingCSConfig;
 use crate::boojum::cs::gates::BooleanConstraintGate;
 use crate::boojum::cs::gates::ConstantsAllocatorGate;
@@ -11,12 +10,8 @@ use crate::boojum::cs::implementations::reference_cs::CSReferenceImplementation;
 use crate::boojum::cs::traits::cs::ConstraintSystem;
 use crate::boojum::cs::traits::gate::GatePlacementStrategy;
 use crate::boojum::cs::CSGeometry;
-use crate::boojum::cs::GateConfigurationHolder;
-use crate::boojum::cs::StaticToolboxHolder;
 use crate::boojum::field::SmallField;
-use crate::boojum::gadgets::queue::QueueState;
 use crate::boojum::gadgets::queue::QueueStateWitness;
-use crate::boojum::gadgets::queue::QueueTailState;
 use crate::boojum::gadgets::queue::QueueTailStateWitness;
 use crate::boojum::gadgets::traits::encodable::CircuitEncodable;
 use crate::boojum::gadgets::traits::round_function::*;
@@ -35,7 +30,6 @@ use circuit_definitions::boojum::cs::GateTypeEntry;
 use circuit_definitions::boojum::cs::Tool;
 use circuit_definitions::boojum::cs::Variable;
 use circuit_definitions::encodings::*;
-use circuit_definitions::ZkSyncDefaultRoundFunction;
 
 use super::*;
 
@@ -150,7 +144,6 @@ pub fn transform_queue_witness<
 use crate::boojum::gadgets::traits::allocatable::*;
 use crate::boojum::gadgets::traits::encodable::CircuitVarLengthEncodable;
 use crate::boojum::gadgets::traits::witnessable::WitnessHookable;
-use crate::zk_evm::aux_structures::MemoryQuery;
 use crate::zkevm_circuits::fsm_input_output::*;
 
 pub type ConstraintSystemImpl<F, R> = CSReferenceImplementation<
@@ -257,7 +250,6 @@ pub fn create_cs_for_witness_generation<
 
     let mut cs = builder.build(num_vars);
 
-    use crate::boojum::cs::traits::cs::ConstraintSystem;
     use crate::boojum::gadgets::tables::*;
 
     let table = create_binop_table();
@@ -311,7 +303,6 @@ pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
     vm_state: &zk_evm::vm_state::VmLocalState,
     aux_params: &VmInCircuitAuxilaryParameters<F>,
 ) -> VmLocalStateWitness<F> {
-    use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
     use crate::zkevm_circuits::base_structures::vm_state::VmLocalState;
 
     let mut hidden_fsm = VmLocalState::placeholder_witness();
@@ -444,15 +435,12 @@ pub fn vm_instance_witness_to_circuit_formal_input<F: SmallField, O: WitnessOrac
         auxilary_final_parameters,
     } = witness;
 
-    use crate::witness::oracle::VmInCircuitAuxilaryParameters;
-
     let hidden_fsm_input =
         vm_instance_witness_to_vm_formal_state(&initial_state, &auxilary_initial_parameters);
 
     let hidden_fsm_output =
         vm_instance_witness_to_vm_formal_state(&final_state, &auxilary_final_parameters);
 
-    use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
     use crate::zkevm_circuits::fsm_input_output::circuit_inputs::main_vm::*;
 
     let mut observable_input = VmInputData::placeholder_witness();

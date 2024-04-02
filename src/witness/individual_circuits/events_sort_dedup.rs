@@ -2,9 +2,7 @@ use super::*;
 use crate::ethereum_types::U256;
 use crate::witness::full_block_artifact::LogQueue;
 use crate::zk_evm::aux_structures::*;
-use crate::zkevm_circuits::base_structures::log_query::{
-    LOG_QUERY_ABSORBTION_ROUNDS, LOG_QUERY_PACKED_WIDTH,
-};
+use crate::zkevm_circuits::base_structures::log_query::LOG_QUERY_PACKED_WIDTH;
 use crate::zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
 use crate::zkevm_circuits::log_sorter::input::*;
 use crate::zkevm_circuits::DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS;
@@ -183,7 +181,6 @@ pub fn compute_events_dedup_and_sort<
     let mut results = vec![];
 
     use crate::ethereum_types::Address;
-    use crate::ethereum_types::U256;
 
     let mut previous_key = 0u32;
     let empty_log_item = LogQuery {
