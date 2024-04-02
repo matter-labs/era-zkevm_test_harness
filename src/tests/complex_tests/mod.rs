@@ -1,10 +1,13 @@
 pub mod utils;
 
 pub mod invididual_debugs;
+#[cfg(test)]
 mod test_synthesis;
 
+#[cfg(test)]
 pub mod testing_wrapper;
-pub mod wrapper_negative_tests;
+#[cfg(test)]
+mod wrapper_negative_tests;
 
 use std::collections::{HashMap, VecDeque};
 
@@ -278,6 +281,7 @@ pub(crate) fn generate_base_layer(
     )
 }
 
+#[allow(dead_code)]
 fn run_and_try_create_witness_inner(
     test_artifact: TestArtifact,
     cycle_limit: usize,

@@ -8,9 +8,7 @@ use crate::proof_wrapper_utils::{
     compute_compression_circuits, compute_compression_for_wrapper_circuit,
     compute_compression_for_wrapper_vk_and_write, compute_compression_vks_and_write, WrapperConfig,
 };
-use crate::snark_wrapper::franklin_crypto::bellman::{
-    worker::Worker as BellmanWorker, Field as BellmanField,
-};
+use crate::snark_wrapper::franklin_crypto::bellman::Field as BellmanField;
 use crate::tests::complex_tests::testing_wrapper::get_testing_wrapper_config;
 use crate::tests::{
     Worker, ZkSyncCompressionForWrapperProof, ZkSyncCompressionForWrapperVerificationKey,

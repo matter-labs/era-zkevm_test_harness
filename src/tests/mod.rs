@@ -1,13 +1,10 @@
 use super::*;
-use crate::boojum::field::SmallField;
 
 pub mod complex_tests;
 pub mod run_manually;
 pub mod simple_tests;
 
 use crate::blake2::Blake2s256;
-use crate::boojum::cs::traits::circuit::Circuit;
-use crate::boojum::field::goldilocks::MixedGL;
 use crate::boojum::worker::Worker;
 use crate::ethereum_types::Address;
 use crate::ethereum_types::H160;
@@ -17,7 +14,6 @@ use crate::witness::tree::ZkSyncStorageLeaf;
 use crate::zk_evm::aux_structures::LogQuery;
 use crate::zk_evm::bytecode_to_code_hash;
 use crate::zk_evm::testing::storage::InMemoryStorage;
-use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit;
 use circuit_definitions::circuit_definitions::recursion_layer::ZkSyncRecursiveLayerCircuit;
 use circuit_definitions::ZkSyncDefaultRoundFunction;

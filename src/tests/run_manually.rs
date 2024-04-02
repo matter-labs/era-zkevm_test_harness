@@ -165,6 +165,7 @@ fn run_pseudo_benchmark() {
     run_and_try_create_witness_inner(asm, 30000);
 }
 
+#[allow(dead_code)]
 pub(crate) fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
     let mut assembly = Assembly::try_from(asm.to_owned()).unwrap();
     let bytecode = assembly.compile_to_bytecode().unwrap();
