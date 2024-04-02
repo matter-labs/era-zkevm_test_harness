@@ -49,7 +49,7 @@ impl<'a, T: GetCycles> AdvancingRange<'a, T> {
     }
 }
 
-trait GetCycles {
+pub trait GetCycles {
     fn cycles(&self) -> u32;
 }
 
