@@ -1,14 +1,16 @@
 use std::ops::Range;
 
 /// Used for finding ranges in an array without having to iterate over the entire array every time.
-pub struct AdvancingRange<'a, T: GetCycles> {
+/// It is assumed that the array contains u32 or tuples where the first element is u32
+/// and that those numbers are in ascending order.
+pub struct AdvancingRange<'a, T: TupleFirst> {
     data: &'a [T],
     start: usize,
     end: usize,
     previous_range: Range<u32>,
 }
 
-impl<'a, T: GetCycles> AdvancingRange<'a, T> {
+impl<'a, T: TupleFirst> AdvancingRange<'a, T> {
     pub fn new(slice: &'a [T]) -> Self {
         Self {
             data: slice,
@@ -28,12 +30,12 @@ impl<'a, T: GetCycles> AdvancingRange<'a, T> {
         self.previous_range = acceptable_range.clone();
 
         for x in self.data[self.start..].iter() {
-            if x.cycles() < acceptable_range.start {
+            if x.first() < acceptable_range.start {
                 self.start += 1;
             }
         }
         for x in self.data[self.end..].iter() {
-            if x.cycles() < acceptable_range.end {
+            if x.first() < acceptable_range.end {
                 self.end += 1;
             }
         }
@@ -50,23 +52,23 @@ impl<'a, T: GetCycles> AdvancingRange<'a, T> {
     }
 }
 
-pub trait GetCycles {
-    fn cycles(&self) -> u32;
+pub trait TupleFirst {
+    fn first(&self) -> u32;
 }
 
-impl GetCycles for u32 {
-    fn cycles(&self) -> u32 {
+impl TupleFirst for u32 {
+    fn first(&self) -> u32 {
         *self
     }
 }
 
-impl<T> GetCycles for (u32, T) {
-    fn cycles(&self) -> u32 {
+impl<T> TupleFirst for (u32, T) {
+    fn first(&self) -> u32 {
         self.0
     }
 }
-impl<T, U> GetCycles for (u32, T, U) {
-    fn cycles(&self) -> u32 {
+impl<T, U> TupleFirst for (u32, T, U) {
+    fn first(&self) -> u32 {
         self.0
     }
 }
