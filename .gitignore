@@ -5,6 +5,6 @@ setup_2^26.key
 .DS_Store
 
 # don't include the results of the testing (as they are 300M)
-test_proofs/base_layer
-test_proofs/recursion_layer
+#test_proofs/base_layer
+#test_proofs/recursion_layer
 

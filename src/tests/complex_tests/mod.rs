@@ -1075,6 +1075,10 @@ fn run_and_try_create_witness_inner(
         {
             *circuit_type = GoldilocksField::from_u64_unchecked(*src_type);
             *queue_state = take_sponge_like_queue_state_from_simulator(src_queue);
+            println!(
+                "Circuit: {:?} num items:{:?}",
+                circuit_type, src_queue.num_items
+            );
         }
 
         let input = RecursionTipInputWitness {
