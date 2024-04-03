@@ -71,7 +71,6 @@ pub fn create_base_layer_setup_data(
         max_trace_len.unwrap(),
     );
 
-    let arg = num_vars.unwrap();
     let builder = new_builder::<_, GoldilocksField>(builder_impl);
 
     let (cs, finalization_hint) = match circuit {
@@ -248,7 +247,6 @@ pub fn prove_base_layer_circuit<POW: PoWRunner>(
         geometry,
         max_trace_len.unwrap(),
     );
-    let arg = num_vars.unwrap();
     let builder = new_builder::<_, GoldilocksField>(builder_impl);
 
     let cs = match circuit {
@@ -453,7 +451,6 @@ pub fn create_recursive_layer_setup_data(
         geometry,
         max_trace_len.unwrap(),
     );
-    let arg = num_vars.unwrap();
     let builder = new_builder::<_, GoldilocksField>(builder_impl);
 
     let (cs, finalization_hint) = match circuit {
