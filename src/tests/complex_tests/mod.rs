@@ -66,7 +66,11 @@ fn basic_test() {
             None
         }
     });
-    run_and_try_create_witness_inner(test_artifact, 40000, blobs);
+    let options = Options {
+        use_production_geometry: true,
+        ..Default::default()
+    };
+    run_and_try_create_witness_inner(test_artifact, 40000, blobs, &options);
     // run_and_try_create_witness_inner(test_artifact, 16);
 }
 
@@ -278,46 +282,74 @@ pub(crate) fn generate_base_layer(
     )
 }
 
+struct Options {
+    // Additional tests over the basic circuits.
+    test_base_circuits: bool,
+    // If true, will use production geometry (less circuits, but more memory).
+    // If false, will use 'testing' geometry (more circuits, but smaller and less memory).
+    use_production_geometry: bool,
+
+    /// If true, then the test will reuse existing artifacts (like proofs etc).
+    /// This allows test to not repeat things that it already did.
+    /// If false, everything will be computed from scratch.
+    reuse_artifacts: bool,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            test_base_circuits: false,
+            use_production_geometry: false,
+            reuse_artifacts: true,
+        }
+    }
+}
+
+/// Running the end-to-end tests, using the bytecodes from test_artifact and blobs.
+/// Please see the Options to adjust the testing behavior.
 fn run_and_try_create_witness_inner(
     test_artifact: TestArtifact,
     cycle_limit: usize,
     blobs: [Option<Vec<u8>>; MAX_4844_BLOBS_PER_BLOCK],
+    options: &Options,
 ) {
     use crate::external_calls::run;
     use crate::toolset::GeometryConfig;
 
-    let geometry = get_testing_geometry_config();
-    // let geometry = crate::geometry_config::get_geometry_config();
+    let geometry = if options.use_production_geometry {
+        crate::geometry_config::get_geometry_config()
+    } else {
+        get_testing_geometry_config()
+    };
 
-    // let (basic_block_circuits, basic_block_circuits_inputs, mut scheduler_partial_input) = run(
     let (basic_block_circuits, recursion_queues, scheduler_partial_input) =
         generate_base_layer(test_artifact, cycle_limit, geometry, blobs);
 
-    for (idx, el) in basic_block_circuits.clone().into_iter().enumerate() {
-        let descr = el.short_description();
-        println!("Doing {}: {}", idx, descr);
+    if options.test_base_circuits {
+        for (idx, el) in basic_block_circuits.clone().into_iter().enumerate() {
+            let descr = el.short_description();
+            println!("Doing {}: {}", idx, descr);
 
-        // if idx < 398  {
-        //     continue;
-        // }
+            // if idx < 398  {
+            //     continue;
+            // }
 
-        // match &el {
-        //     ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {
-        //         dbg!(&*inner.config);
-        //         // let witness = inner.clone_witness().unwrap();
-        //         // dbg!(&witness.closed_form_input);
-        //         // dbg!(witness.closed_form_input.start_flag);
-        //         // dbg!(witness.closed_form_input.completion_flag);
-        //     }
-        //     _ => {
-        //         continue;
-        //     }
-        // }
+            // match &el {
+            //     ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {
+            //         dbg!(&*inner.config);
+            //         // let witness = inner.clone_witness().unwrap();
+            //         // dbg!(&witness.closed_form_input);
+            //         // dbg!(witness.closed_form_input.start_flag);
+            //         // dbg!(witness.closed_form_input.completion_flag);
+            //     }
+            //     _ => {
+            //         continue;
+            //     }
+            // }
 
-        base_test_circuit(el);
+            base_test_circuit(el);
+        }
     }
-
-    return;
 
     let worker = Worker::new_with_num_threads(8);
 
@@ -331,24 +363,34 @@ fn run_and_try_create_witness_inner(
     LocalFileDataSource::create_folders_for_storing_data();
     use crate::data_source::*;
 
+    let circuits_len = basic_block_circuits.len();
+
     for (idx, el) in basic_block_circuits.clone().into_iter().enumerate() {
         let descr = el.short_description();
-        println!("Doing {}: {}", idx, descr);
+        println!("Doing {} / {}: {}", idx, circuits_len, descr);
 
         if el.numeric_circuit_type() != previous_circuit_type {
             instance_idx = 0;
         }
 
-        if let Ok(proof) = source.get_base_layer_proof(el.numeric_circuit_type(), instance_idx) {
-            if instance_idx == 0 {
-                source.set_base_layer_padding_proof(proof).unwrap();
-            }
+        if options.reuse_artifacts {
+            if let Ok(proof) = source.get_base_layer_proof(el.numeric_circuit_type(), instance_idx)
+            {
+                if instance_idx == 0 {
+                    source.set_base_layer_padding_proof(proof).unwrap();
+                }
 
-            instance_idx += 1;
-            continue;
+                instance_idx += 1;
+                continue;
+            }
         }
 
         if el.numeric_circuit_type() != previous_circuit_type || setup_data.is_none() {
+            println!(
+                "Regenerating setup data for {} from {}",
+                el.numeric_circuit_type(),
+                previous_circuit_type,
+            );
             let (setup_base, setup, vk, setup_tree, vars_hint, wits_hint, finalization_hint) =
                 create_base_layer_setup_data(
                     el.clone(),
@@ -436,6 +478,7 @@ fn run_and_try_create_witness_inner(
         let circuit_type = *circuit_id as u8;
         let mut proofs_for_circuit_type = vec![];
         for idx in 0..inputs.len() {
+            println!("Reading base layer proof: {:?} {:?}", circuit_type, idx);
             let proof = source.get_base_layer_proof(circuit_type, idx).unwrap();
             proofs_for_circuit_type.push(proof);
         }
@@ -456,9 +499,10 @@ fn run_and_try_create_witness_inner(
             BaseLayerCircuitType::from_numeric_value(base_circuit_type),
         );
 
-        if source
-            .get_recursion_layer_vk(recursive_circuit_type as u8)
-            .is_err()
+        if !options.reuse_artifacts
+            || source
+                .get_recursion_layer_vk(recursive_circuit_type as u8)
+                .is_err()
         {
             println!(
                 "Computing leaf layer VK for type {:?}",
@@ -568,10 +612,13 @@ fn run_and_try_create_witness_inner(
             // test_recursive_circuit(el.clone());
             // println!("Circuit is satisfied");
 
-            if let Ok(_proof) = source.get_leaf_layer_proof(el.numeric_circuit_type(), instance_idx)
-            {
-                instance_idx += 1;
-                continue;
+            if options.reuse_artifacts {
+                if let Ok(_proof) =
+                    source.get_leaf_layer_proof(el.numeric_circuit_type(), instance_idx)
+                {
+                    instance_idx += 1;
+                    continue;
+                }
             }
 
             if el.numeric_circuit_type() != previous_circuit_type || setup_data.is_none() {

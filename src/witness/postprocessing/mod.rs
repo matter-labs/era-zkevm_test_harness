@@ -460,7 +460,7 @@ where
     ) {
         // if we have NO compact form inputs, we need to create a dummy value for scheduler
         // as scheduler can only skip one type at the time, so we need some meaningless compact form witness
-        let compact_form_witnesses = if self.compact_form_witnesses.is_empty() {
+        /*let compact_form_witnesses = if self.compact_form_witnesses.is_empty() {
             use crate::boojum::field::Field;
             use crate::zkevm_circuits::fsm_input_output::CLOSED_FORM_COMMITTMENT_LENGTH;
 
@@ -478,8 +478,12 @@ where
             }]
         } else {
             self.compact_form_witnesses
-        };
+        };*/
 
-        (self.extremes, self.queue_simulator, compact_form_witnesses)
+        (
+            self.extremes,
+            self.queue_simulator,
+            self.compact_form_witnesses,
+        )
     }
 }
