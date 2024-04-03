@@ -323,7 +323,7 @@ fn run_and_try_create_witness_inner(
     };
 
     let (basic_block_circuits, recursion_queues, scheduler_partial_input) =
-        generate_base_layer(test_artifact, cycle_limit, geometry, blobs);
+        generate_base_layer(test_artifact, cycle_limit, geometry, blobs.clone());
 
     if options.test_base_circuits {
         for (idx, el) in basic_block_circuits.clone().into_iter().enumerate() {
@@ -853,6 +853,11 @@ fn run_and_try_create_witness_inner(
         let mut depth = 0;
         let mut next_aggregations = per_circuit_subtree;
 
+        if next_aggregations.len() == 0 {
+            // There are no leaf circuits of this type.
+            continue;
+        }
+
         let base_circuit_type = next_aggregations[0].0 as u8;
         let circuit_type_enum = BaseLayerCircuitType::from_numeric_value(base_circuit_type);
         println!(
@@ -1012,10 +1017,18 @@ fn run_and_try_create_witness_inner(
     for recursive_circuit_type in (ZkSyncRecursionLayerStorageType::LeafLayerCircuitForMainVM as u8)
         ..=(ZkSyncRecursionLayerStorageType::LeafLayerCircuitForEIP4844Repack as u8)
     {
-        let proof = source
-            .get_node_layer_proof(recursive_circuit_type, 0, 0)
-            .unwrap();
-        recursion_tip_proofs.push(proof.into_inner());
+        match source.get_node_layer_proof(recursive_circuit_type, 0, 0) {
+            Ok(proof) => recursion_tip_proofs.push(proof.into_inner()),
+            Err(_) => {
+                // HACK HACK HACK: reading the 'main VM' proof instead of the 'missing' one.
+                println!(
+                    "!!!! Missing node proof for {} - using MainVM instead",
+                    recursive_circuit_type
+                );
+                recursion_tip_proofs
+                    .push(source.get_node_layer_proof(3, 0, 0).unwrap().into_inner());
+            }
+        };
     }
 
     assert_eq!(recursion_tip_proofs.len(), NUM_CIRCUIT_TYPES_TO_SCHEDULE);
@@ -1032,7 +1045,10 @@ fn run_and_try_create_witness_inner(
         .unwrap();
 
     // compute single(for now) recursion tip proof
-    {
+
+    let tip_proof = if let Ok(proof) = source.get_recursive_tip_proof() {
+        proof
+    } else {
         let node_layer_vk_commitment = compute_node_vk_commitment(node_vk.clone());
         use crate::boojum::gadgets::queue::*;
         use crate::zkevm_circuits::recursion::recursion_tip::input::*;
@@ -1051,7 +1067,7 @@ fn run_and_try_create_witness_inner(
         }
 
         let input = RecursionTipInputWitness {
-            leaf_layer_parameters: leaf_layer_params,
+            leaf_layer_parameters: leaf_layer_params.clone(),
             node_layer_vk_commitment: node_layer_vk_commitment,
             branch_circuit_type_set: branch_circuit_type_set,
             queue_set: queue_sets,
@@ -1081,8 +1097,44 @@ fn run_and_try_create_witness_inner(
 
         let circuit = ZkSyncRecursiveLayerCircuit::RecursionTipCircuit(circuit);
         // prove it
-        todo!()
-    }
+
+        println!("Creating setup data for recursion tip");
+
+        let (setup_base, setup, vk, setup_tree, vars_hint, wits_hint, finalization_hint) =
+            create_recursive_layer_setup_data(
+                circuit.clone(),
+                &worker,
+                RECURSION_LAYER_FRI_LDE_FACTOR,
+                RECURSION_LAYER_CAP_SIZE,
+            );
+
+        println!("Proving recursion tip");
+
+        let proof = prove_recursion_layer_circuit::<NoPow>(
+            circuit.clone(),
+            &worker,
+            recursion_layer_proof_config(),
+            &setup_base,
+            &setup,
+            &setup_tree,
+            &vk,
+            &vars_hint,
+            &wits_hint,
+            &finalization_hint,
+        );
+
+        let is_valid = verify_recursion_layer_proof::<NoPow>(&circuit, &proof, &vk);
+
+        assert!(is_valid);
+
+        source
+            .set_recursive_tip_proof(ZkSyncRecursionLayerProof::RecursionTipCircuit(
+                proof.clone(),
+            ))
+            .unwrap();
+
+        ZkSyncRecursionLayerProof::RecursionTipCircuit(proof)
+    };
 
     let recursion_tip_vk = source.get_recursion_tip_vk().unwrap().into_inner();
 
@@ -1092,7 +1144,7 @@ fn run_and_try_create_witness_inner(
 
     let config = SchedulerConfig {
         proof_config: recursion_layer_proof_config(),
-        leaf_layer_parameters: leaf_layer_params,
+        leaf_layer_parameters: leaf_layer_params.clone(),
         node_layer_vk: node_vk.into_inner(),
         recursion_tip_vk: recursion_tip_vk.clone(),
         vk_fixed_parameters: recursion_tip_vk.fixed_parameters,
@@ -1104,7 +1156,7 @@ fn run_and_try_create_witness_inner(
     // we need to reassign block specific data, and proofs
 
     // proofs
-    let recursion_tip_proof = todo!();
+    let recursion_tip_proof = tip_proof.into_inner();
     scheduler_witness.proof_witnesses = vec![recursion_tip_proof].into();
 
     // blobs
