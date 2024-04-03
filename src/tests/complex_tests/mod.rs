@@ -1118,6 +1118,8 @@ fn run_and_try_create_witness_inner(
         let circuit = ZkSyncRecursiveLayerCircuit::RecursionTipCircuit(circuit);
         // prove it
 
+        // test_recursive_circuit(circuit.clone());
+
         println!("Creating setup data for recursion tip");
 
         let (setup_base, setup, vk, setup_tree, vars_hint, wits_hint, finalization_hint) =
