@@ -330,32 +330,6 @@ impl SetupDataSource for InMemoryDataSource {
         Ok(())
     }
 
-    fn get_eip4844_vk(&self) -> SourceResult<EIP4844VerificationKey> {
-        self.eip_4844_vk
-            .clone()
-            .ok_or(Box::new(Error::new(ErrorKind::Other, "No VK for 4844")))
-    }
-
-    fn set_eip4844_vk(&mut self, vk: EIP4844VerificationKey) -> SourceResult<()> {
-        self.eip_4844_vk = Some(vk);
-        Ok(())
-    }
-
-    fn get_eip4844_finalization_hint(&self) -> SourceResult<FinalizationHintsForProver> {
-        self.eip_4844_hint.clone().ok_or(Box::new(Error::new(
-            ErrorKind::Other,
-            "No finalization hint for 4844",
-        )))
-    }
-
-    fn set_eip4844_finalization_hint(
-        &mut self,
-        hint: FinalizationHintsForProver,
-    ) -> SourceResult<()> {
-        self.eip_4844_hint = Some(hint);
-        Ok(())
-    }
-
     fn get_recursion_tip_vk(&self) -> SourceResult<ZkSyncRecursionLayerVerificationKey> {
         self.recursion_tip_vk.clone().ok_or(Box::new(Error::new(
             ErrorKind::Other,

@@ -41,8 +41,6 @@ pub trait SetupDataSource {
         &self,
     ) -> SourceResult<ZkSyncRecursionLayerFinalizationHint>;
 
-    fn get_eip4844_finalization_hint(&self) -> SourceResult<FinalizationHintsForProver>;
-
     fn get_compression_vk(
         &self,
         circuit_type: u8,
@@ -61,8 +59,6 @@ pub trait SetupDataSource {
     ) -> SourceResult<ZkSyncCompressionForWrapperFinalizationHint>;
     fn get_wrapper_setup(&self, circuit_type: u8) -> SourceResult<ZkSyncSnarkWrapperSetup>;
     fn get_wrapper_vk(&self, circuit_type: u8) -> SourceResult<ZkSyncSnarkWrapperVK>;
-
-    fn get_eip4844_vk(&self) -> SourceResult<EIP4844VerificationKey>;
 
     fn set_base_layer_vk(&mut self, vk: ZkSyncBaseLayerVerificationKey) -> SourceResult<()>;
     fn set_base_layer_padding_proof(&mut self, proof: ZkSyncBaseLayerProof) -> SourceResult<()>;
@@ -109,12 +105,6 @@ pub trait SetupDataSource {
     ) -> SourceResult<()>;
     fn set_wrapper_setup(&mut self, setup: ZkSyncSnarkWrapperSetup) -> SourceResult<()>;
     fn set_wrapper_vk(&mut self, vk: ZkSyncSnarkWrapperVK) -> SourceResult<()>;
-    fn set_eip4844_vk(&mut self, vk: EIP4844VerificationKey) -> SourceResult<()>;
-
-    fn set_eip4844_finalization_hint(
-        &mut self,
-        hint: FinalizationHintsForProver,
-    ) -> SourceResult<()>;
 }
 
 // Object save trait to just get things for BLOCK

@@ -414,48 +414,6 @@ impl SetupDataSource for LocalFileDataSource {
         Ok(())
     }
 
-    fn get_eip4844_vk(&self) -> SourceResult<EIP4844VerificationKey> {
-        let file = File::open(format!(
-            "{}/aux_layer/eip4844_vk.json",
-            Self::SETUP_DATA_LOCATION,
-        ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(result)
-    }
-
-    fn set_eip4844_vk(&mut self, vk: EIP4844VerificationKey) -> SourceResult<()> {
-        LocalFileDataSource::write_pretty(
-            format!("{}/aux_layer/eip4844_vk.json", Self::SETUP_DATA_LOCATION,),
-            vk,
-        )
-    }
-
-    fn get_eip4844_finalization_hint(&self) -> SourceResult<FinalizationHintsForProver> {
-        let file = File::open(format!(
-            "{}/recursion_layer/finalization_hint_node.json",
-            Self::SETUP_DATA_LOCATION
-        ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(result)
-    }
-
-    fn set_eip4844_finalization_hint(
-        &mut self,
-        hint: FinalizationHintsForProver,
-    ) -> SourceResult<()> {
-        LocalFileDataSource::write_pretty(
-            format!(
-                "{}/recursion_layer/finalization_hint_eip4844.json",
-                Self::SETUP_DATA_LOCATION
-            ),
-            hint,
-        )
-    }
-
     fn get_recursion_tip_vk(&self) -> SourceResult<ZkSyncRecursionLayerVerificationKey> {
         let file = File::open(format!(
             "{}/recursion_layer/vk_recursion_tip.json",
