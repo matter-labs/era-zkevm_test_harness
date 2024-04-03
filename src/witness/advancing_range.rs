@@ -1,8 +1,11 @@
 use std::ops::Range;
 
 /// Used for finding ranges in an array without having to iterate over the entire array every time.
-/// It is assumed that the array contains u32 or tuples where the first element is u32
-/// and that those numbers are in ascending order.
+///
+/// It is assumed that the array contains u32 or tuples where the first element is u32. Let's call those
+/// number the keys.
+/// Provided that the keys are in ascending order, [AdvancingRange::get_slice] can be used to get a slice
+/// that contains all the elements with keys within a certain range.
 pub struct AdvancingRange<'a, T: TupleFirst> {
     data: &'a [T],
     start: usize,
@@ -20,7 +23,7 @@ impl<'a, T: TupleFirst> AdvancingRange<'a, T> {
         }
     }
 
-    /// Returns the range of the elements within the acceptable range, assuming
+    /// Returns the range of the elements within `acceptable_range`, assuming
     /// the elements are in nondecreasing order.
     /// # Panics
     /// Panics if `acceptable_range`'s start or end is less than in the previous call.
@@ -43,7 +46,7 @@ impl<'a, T: TupleFirst> AdvancingRange<'a, T> {
         self.start..self.end
     }
 
-    /// Returns a slice to the elements within the acceptable range, assuming
+    /// Returns a slice to the elements within `acceptable_range`, assuming
     /// the elements are in nondecreasing order.
     /// # Panics
     /// Panics if `acceptable_range`'s start or end is less than in the previous call.
