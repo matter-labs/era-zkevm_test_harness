@@ -262,7 +262,8 @@ pub(crate) fn test_recursive_circuit(circuit: ZkSyncRecursiveLayerCircuit) {
     let geometry = circuit.geometry();
     let (max_trace_len, num_vars) = circuit.size_hint();
 
-    let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
+    use crate::boojum::config::CSConfig;
+    let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig, crate::boojum::dag::StCircuitResolver<GoldilocksField, <DevCSConfig as CSConfig>::ResolverConfig>>::new(
         geometry,
         max_trace_len.unwrap(),
     );

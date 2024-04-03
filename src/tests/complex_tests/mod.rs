@@ -1061,6 +1061,41 @@ fn run_and_try_create_witness_inner(
     // compute single(for now) recursion tip proof
 
     let tip_proof = if let Ok(proof) = source.get_recursive_tip_proof() {
+        // temporary
+        {
+            let node_layer_vk_commitment = compute_node_vk_commitment(node_vk.clone());
+            use crate::boojum::gadgets::queue::*;
+            use crate::zkevm_circuits::recursion::recursion_tip::input::*;
+            use circuit_definitions::boojum::field::Field;
+            let mut branch_circuit_type_set = [GoldilocksField::ZERO; RECURSION_TIP_ARITY];
+            assert!(branch_circuit_type_set.len() >= recursion_queues.len());
+            let mut queue_sets: [_; RECURSION_TIP_ARITY] =
+                std::array::from_fn(|_| QueueState::placeholder_witness());
+
+            for ((circuit_type, queue_state), (src_type, src_queue, _)) in branch_circuit_type_set
+                .iter_mut()
+                .zip(queue_sets.iter_mut())
+                .zip(recursion_queues.iter())
+            {
+                *circuit_type = GoldilocksField::from_u64_unchecked(*src_type);
+                *queue_state = take_sponge_like_queue_state_from_simulator(src_queue);
+                // HACK - we should check if the proofs are matching the recursion queue types.
+                println!(
+                    "Circuit: {:?} num items:{:?}",
+                    circuit_type, src_queue.num_items
+                );
+            }
+
+            let input = RecursionTipInputWitness {
+                leaf_layer_parameters: leaf_layer_params.clone(),
+                node_layer_vk_commitment: node_layer_vk_commitment,
+                branch_circuit_type_set: branch_circuit_type_set,
+                queue_set: queue_sets,
+            };
+
+            dbg!(&input);
+        }
+        
         proof
     } else {
         let node_layer_vk_commitment = compute_node_vk_commitment(node_vk.clone());
@@ -1092,6 +1127,8 @@ fn run_and_try_create_witness_inner(
             branch_circuit_type_set: branch_circuit_type_set,
             queue_set: queue_sets,
         };
+
+        dbg!(&input);
 
         let witness = RecursionTipInstanceWitness {
             input,
@@ -1209,7 +1246,7 @@ fn run_and_try_create_witness_inner(
     });
     scheduler_witness.eip4844_witnesses = eip4844_witnesses;
 
-    let mut scheduler_circuit = SchedulerCircuit {
+    let scheduler_circuit = SchedulerCircuit {
         witness: scheduler_witness.clone(),
         config,
         transcript_params: (),
