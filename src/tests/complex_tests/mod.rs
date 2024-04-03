@@ -322,8 +322,11 @@ fn run_and_try_create_witness_inner(
         get_testing_geometry_config()
     };
 
-    let (basic_block_circuits, recursion_queues, scheduler_partial_input) =
+    let (basic_block_circuits, mut recursion_queues, scheduler_partial_input) =
         generate_base_layer(test_artifact, cycle_limit, geometry, blobs.clone());
+
+    // HACK - added sorting.
+    recursion_queues.sort_by_key(|(circuit, _, _)| circuit.clone());
 
     if options.test_base_circuits {
         for (idx, el) in basic_block_circuits.clone().into_iter().enumerate() {
@@ -1068,6 +1071,7 @@ fn run_and_try_create_witness_inner(
         assert!(branch_circuit_type_set.len() >= recursion_queues.len());
         let mut queue_sets: [_; RECURSION_TIP_ARITY] =
             std::array::from_fn(|_| QueueState::placeholder_witness());
+
         for ((circuit_type, queue_state), (src_type, src_queue, _)) in branch_circuit_type_set
             .iter_mut()
             .zip(queue_sets.iter_mut())
@@ -1075,6 +1079,7 @@ fn run_and_try_create_witness_inner(
         {
             *circuit_type = GoldilocksField::from_u64_unchecked(*src_type);
             *queue_state = take_sponge_like_queue_state_from_simulator(src_queue);
+            // HACK - we should check if the proofs are matching the recursion queue types.
             println!(
                 "Circuit: {:?} num items:{:?}",
                 circuit_type, src_queue.num_items
@@ -1122,6 +1127,8 @@ fn run_and_try_create_witness_inner(
                 RECURSION_LAYER_FRI_LDE_FACTOR,
                 RECURSION_LAYER_CAP_SIZE,
             );
+
+        assert_eq!(source.get_recursion_tip_vk().unwrap().into_inner(), vk);
 
         println!("Proving recursion tip");
 
@@ -1180,7 +1187,7 @@ fn run_and_try_create_witness_inner(
     let eip4844_witnesses: [_; MAX_4844_BLOBS_PER_BLOCK] = blobs.map(|blob| {
         blob.map(|blob| {
             let (_blob_arr, linear_hash, _versioned_hash, output_hash) =
-                generate_eip4844_witness::<GoldilocksField>(&blob, "src/kzg/trusted_setup.json");
+                generate_eip4844_witness::<GoldilocksField>(&blob, "kzg/src/trusted_setup.json");
             use crate::zkevm_circuits::eip_4844::input::BlobChunkWitness;
             use crate::zkevm_circuits::eip_4844::input::EIP4844CircuitInstanceWitness;
             use crate::zkevm_circuits::eip_4844::input::EIP4844InputOutputWitness;
