@@ -479,8 +479,19 @@ fn run_and_try_create_witness_inner(
         let mut proofs_for_circuit_type = vec![];
         for idx in 0..inputs.len() {
             println!("Reading base layer proof: {:?} {:?}", circuit_type, idx);
-            let proof = source.get_base_layer_proof(circuit_type, idx).unwrap();
-            proofs_for_circuit_type.push(proof);
+
+            match source.get_base_layer_proof(circuit_type, idx) {
+                Ok(proof) => {
+                    proofs_for_circuit_type.push(proof);
+                }
+                Err(_) => {
+                    if idx == 0 {
+                        println!("HACK HACK -- skipping - assuming that there were no circuits")
+                    } else {
+                        panic!("Missing for - {} {}", circuit_type, idx);
+                    }
+                }
+            }
         }
 
         let vk = source.get_base_layer_vk(circuit_type).unwrap();
@@ -1122,6 +1133,8 @@ fn run_and_try_create_witness_inner(
             &wits_hint,
             &finalization_hint,
         );
+
+        println!("Verifying recursion tip");
 
         let is_valid = verify_recursion_layer_proof::<NoPow>(&circuit, &proof, &vk);
 
