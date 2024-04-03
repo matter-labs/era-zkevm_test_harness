@@ -78,23 +78,25 @@ mod test {
     use super::AdvancingRange;
 
     const EMPTY: &[u32] = &[];
-    const INDICES: &[u32] = &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    const TEST_ARRAY: &[u32] = &[0, 1, 2, 4, 5, 6, 7, 9];
 
     #[test]
     fn correct_usage() {
-        let mut r = AdvancingRange::new(INDICES);
+        let mut r = AdvancingRange::new(TEST_ARRAY);
         assert_eq!(r.get_slice(0..0), EMPTY);
-        assert_eq!(r.get_slice(1..5), &[1, 2, 3, 4]);
-        assert_eq!(r.get_slice(6..11), &[6, 7, 8, 9]);
-        assert_eq!(r.get_slice(7..11), &[7, 8, 9]);
+        assert_eq!(r.get_slice(1..5), &[1, 2, 4]);
+        assert_eq!(r.get_slice(6..11), &[6, 7, 9]);
+        assert_eq!(r.get_slice(7..11), &[7, 9]);
         assert_eq!(r.get_slice(10..100), EMPTY);
-        assert_eq!(r.get_range(10..100), 10..10);
+
+        let len = TEST_ARRAY.len();
+        assert_eq!(r.get_range(10..100), len..len);
     }
 
     #[test]
     #[should_panic]
     fn incorrect_usage() {
-        let mut r = AdvancingRange::new(INDICES);
+        let mut r = AdvancingRange::new(TEST_ARRAY);
         r.get_slice(3..6);
         r.get_slice(1..7);
     }
@@ -102,7 +104,7 @@ mod test {
     #[test]
     #[should_panic]
     fn incorrect_usage2() {
-        let mut r = AdvancingRange::new(INDICES);
+        let mut r = AdvancingRange::new(TEST_ARRAY);
         r.get_slice(3..6);
         r.get_slice(3..5);
     }
