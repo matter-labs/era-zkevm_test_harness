@@ -14,7 +14,7 @@ use circuit_definitions::circuit_definitions::recursion_layer::{
     ZkSyncRecursionLayerFinalizationHint, ZkSyncRecursionLayerProof,
     ZkSyncRecursionLayerVerificationKey,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::proof::Proof as SnarkProof;
 use crate::snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::setup::Setup as SnarkSetup;
@@ -31,6 +31,36 @@ pub struct LocalFileDataSource;
 impl LocalFileDataSource {
     pub const SETUP_DATA_LOCATION: &'static str = "./setup";
     pub const BLOCK_DATA_LOCATION: &'static str = "./test_proofs";
+
+    fn get_proof<T: for<'de> Deserialize<'de>>(&self, file_name: String) -> SourceResult<T> {
+        let file = File::open(format!("{}/{}.json", Self::BLOCK_DATA_LOCATION, file_name))
+            .map_err(|el| Box::new(el) as Box<dyn Error>)?;
+        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
+
+        Ok(result)
+    }
+
+    fn set_proof<T: Serialize>(&self, file_name: String, proof: T) -> SourceResult<()> {
+        let file = File::create(format!("{}/{}.json", Self::BLOCK_DATA_LOCATION, file_name))
+            .map_err(|el| Box::new(el) as Box<dyn Error>)?;
+        serde_json::to_writer(file, &proof).map_err(|el| Box::new(el) as Box<dyn Error>)?;
+        Ok(())
+    }
+
+    fn get_setup_data<T: for<'de> Deserialize<'de>>(&self, file_name: String) -> SourceResult<T> {
+        let file = File::open(format!("{}/{}.json", Self::SETUP_DATA_LOCATION, file_name))
+            .map_err(|el| Box::new(el) as Box<dyn Error>)?;
+        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
+
+        Ok(result)
+    }
+
+    fn set_setup_data<T: Serialize>(&self, file_name: String, data: T) -> SourceResult<()> {
+        LocalFileDataSource::write_pretty(
+            format!("{}/{}.json", Self::SETUP_DATA_LOCATION, file_name),
+            data,
+        )
+    }
 
     /// creates folders if missing
     pub fn create_folders_for_storing_data() {
@@ -53,150 +83,111 @@ impl LocalFileDataSource {
             .map_err(|el| Box::new(el) as Box<dyn Error>)?;
         Ok(())
     }
+
+    pub fn set_base_layer_proof_serialize(
+        &mut self,
+        index: usize,
+        proof: ZkSyncBaseLayerProof,
+    ) -> SourceResult<()> {
+        let circuit_type = proof.numeric_circuit_type();
+        let file = File::create(format!(
+            "{}/base_layer/basic_circuit_proof_{}_{}.bin",
+            Self::BLOCK_DATA_LOCATION,
+            circuit_type,
+            index
+        ))
+        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
+        bincode::serialize_into(file, &proof).unwrap();
+        //    serde_json::to_writer(file, &proof).map_err(|el| Box::new(el) as Box<dyn Error>)?;
+
+        Ok(())
+    }
+
+    pub fn get_base_layer_proof_serialized(
+        &self,
+        circuit_type: u8,
+        index: usize,
+    ) -> SourceResult<ZkSyncBaseLayerProof> {
+        let file = File::open(format!(
+            "{}/base_layer/basic_circuit_proof_{}_{}.bin",
+            Self::BLOCK_DATA_LOCATION,
+            circuit_type,
+            index
+        ))
+        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
+        let result = bincode::deserialize_from(file).unwrap();
+        //let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
+
+        Ok(result)
+    }
 }
 
 impl SetupDataSource for LocalFileDataSource {
     fn get_base_layer_vk(&self, circuit_type: u8) -> SourceResult<ZkSyncBaseLayerVerificationKey> {
-        let file = File::open(format!(
-            "{}/base_layer/vk_{}.json",
-            Self::SETUP_DATA_LOCATION,
-            circuit_type
-        ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(result)
+        self.get_setup_data(format!("base_layer/vk_{}", circuit_type))
     }
     fn get_base_layer_padding_proof(&self, circuit_type: u8) -> SourceResult<ZkSyncBaseLayerProof> {
-        let file = File::open(format!(
-            "{}/base_layer/padding_proof_{}.json",
-            Self::SETUP_DATA_LOCATION,
-            circuit_type
-        ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(result)
+        self.get_setup_data(format!("base_layer/padding_proof_{}", circuit_type))
     }
     fn get_base_layer_finalization_hint(
         &self,
         circuit_type: u8,
     ) -> SourceResult<ZkSyncBaseLayerFinalizationHint> {
-        let file = File::open(format!(
-            "{}/base_layer/finalization_hint_{}.json",
-            Self::SETUP_DATA_LOCATION,
-            circuit_type
-        ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(result)
+        self.get_setup_data(format!("base_layer/finalization_hint_{}", circuit_type))
     }
     fn get_recursion_layer_vk(
         &self,
         circuit_type: u8,
     ) -> SourceResult<ZkSyncRecursionLayerVerificationKey> {
-        let file = File::open(format!(
-            "{}/recursion_layer/vk_{}.json",
-            Self::SETUP_DATA_LOCATION,
-            circuit_type
-        ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(result)
+        self.get_setup_data(format!("recursion_layer/vk_{}", circuit_type))
     }
     fn get_recursion_layer_node_vk(&self) -> SourceResult<ZkSyncRecursionLayerVerificationKey> {
-        let file = File::open(format!(
-            "{}/recursion_layer/vk_node.json",
-            Self::SETUP_DATA_LOCATION
-        ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(result)
+        self.get_setup_data("recursion_layer/vk_node".to_string())
     }
     fn get_recursion_layer_finalization_hint(
         &self,
         circuit_type: u8,
     ) -> SourceResult<ZkSyncRecursionLayerFinalizationHint> {
-        let file = File::open(format!(
-            "{}/recursion_layer/finalization_hint_{}.json",
-            Self::SETUP_DATA_LOCATION,
+        self.get_setup_data(format!(
+            "recursion_layer/finalization_hint_{}",
             circuit_type
         ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(result)
     }
     fn get_recursion_layer_node_finalization_hint(
         &self,
     ) -> SourceResult<ZkSyncRecursionLayerFinalizationHint> {
-        let file = File::open(format!(
-            "{}/recursion_layer/finalization_hint_node.json",
-            Self::SETUP_DATA_LOCATION
-        ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(result)
+        self.get_setup_data("recursion_layer/finalization_hint_node".to_string())
     }
+
     fn get_compression_vk(
         &self,
         circuit_type: u8,
     ) -> SourceResult<ZkSyncCompressionLayerVerificationKey> {
-        let file = File::open(format!(
-            "{}/aux_layer/compression_vk_{}.json",
-            Self::SETUP_DATA_LOCATION,
-            circuit_type
-        ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(result)
+        self.get_setup_data(format!("aux_layer/compression_vk_{}", circuit_type))
     }
     fn get_compression_hint(
         &self,
         circuit_type: u8,
     ) -> SourceResult<ZkSyncCompressionLayerFinalizationHint> {
-        let file = File::open(format!(
-            "{}/aux_layer/compression_hint_{}.json",
-            Self::SETUP_DATA_LOCATION,
-            circuit_type
-        ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(result)
+        self.get_setup_data(format!("aux_layer/compression_hint_{}", circuit_type))
     }
     fn get_compression_for_wrapper_vk(
         &self,
         circuit_type: u8,
     ) -> SourceResult<ZkSyncCompressionForWrapperVerificationKey> {
-        let file = File::open(format!(
-            "{}/aux_layer/compression_for_wrapper_vk_{}.json",
-            Self::SETUP_DATA_LOCATION,
+        self.get_setup_data(format!(
+            "aux_layer/compression_for_wrapper_vk_{}",
             circuit_type
         ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(result)
     }
     fn get_compression_for_wrapper_hint(
         &self,
         circuit_type: u8,
     ) -> SourceResult<ZkSyncCompressionForWrapperFinalizationHint> {
-        let file = File::open(format!(
-            "{}/aux_layer/compression_for_wrapper_hint_{}.json",
-            Self::SETUP_DATA_LOCATION,
+        self.get_setup_data(format!(
+            "aux_layer/compression_for_wrapper_hint_{}",
             circuit_type
         ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(result)
     }
     fn get_wrapper_setup(&self, circuit_type: u8) -> SourceResult<ZkSyncSnarkWrapperSetup> {
         println!("Read wrapper setup from file. Can take a while.");
@@ -236,38 +227,19 @@ impl SetupDataSource for LocalFileDataSource {
 
     fn set_base_layer_vk(&mut self, vk: ZkSyncBaseLayerVerificationKey) -> SourceResult<()> {
         let circuit_type = vk.numeric_circuit_type();
-
-        LocalFileDataSource::write_pretty(
-            format!(
-                "{}/base_layer/vk_{}.json",
-                Self::SETUP_DATA_LOCATION,
-                circuit_type
-            ),
-            vk,
-        )
+        self.set_setup_data(format!("base_layer/vk_{}", circuit_type), vk)
     }
     fn set_base_layer_padding_proof(&mut self, proof: ZkSyncBaseLayerProof) -> SourceResult<()> {
         let circuit_type = proof.numeric_circuit_type();
-        LocalFileDataSource::write_pretty(
-            format!(
-                "{}/base_layer/padding_proof_{}.json",
-                Self::SETUP_DATA_LOCATION,
-                circuit_type
-            ),
-            proof,
-        )
+        self.set_setup_data(format!("base_layer/padding_proof_{}", circuit_type), proof)
     }
     fn set_base_layer_finalization_hint(
         &mut self,
         hint: ZkSyncBaseLayerFinalizationHint,
     ) -> SourceResult<()> {
         let circuit_type = hint.numeric_circuit_type();
-        LocalFileDataSource::write_pretty(
-            format!(
-                "{}/base_layer/finalization_hint_{}.json",
-                Self::SETUP_DATA_LOCATION,
-                circuit_type
-            ),
+        self.set_setup_data(
+            format!("base_layer/finalization_hint_{}", circuit_type),
             hint,
         )
     }
@@ -276,23 +248,13 @@ impl SetupDataSource for LocalFileDataSource {
         vk: ZkSyncRecursionLayerVerificationKey,
     ) -> SourceResult<()> {
         let circuit_type = vk.numeric_circuit_type();
-        LocalFileDataSource::write_pretty(
-            format!(
-                "{}/recursion_layer/vk_{}.json",
-                Self::SETUP_DATA_LOCATION,
-                circuit_type
-            ),
-            vk,
-        )
+        self.set_setup_data(format!("recursion_layer/vk_{}", circuit_type), vk)
     }
     fn set_recursion_layer_node_vk(
         &mut self,
         vk: ZkSyncRecursionLayerVerificationKey,
     ) -> SourceResult<()> {
-        LocalFileDataSource::write_pretty(
-            format!("{}/recursion_layer/vk_node.json", Self::SETUP_DATA_LOCATION),
-            &vk,
-        )
+        self.set_setup_data("recursion_layer/vk_node".to_string(), vk)
     }
 
     fn set_recursion_layer_finalization_hint(
@@ -300,12 +262,8 @@ impl SetupDataSource for LocalFileDataSource {
         hint: ZkSyncRecursionLayerFinalizationHint,
     ) -> SourceResult<()> {
         let circuit_type = hint.numeric_circuit_type();
-        LocalFileDataSource::write_pretty(
-            format!(
-                "{}/recursion_layer/finalization_hint_{}.json",
-                Self::SETUP_DATA_LOCATION,
-                circuit_type
-            ),
+        self.set_setup_data(
+            format!("recursion_layer/finalization_hint_{}", circuit_type),
             hint,
         )
     }
@@ -313,53 +271,29 @@ impl SetupDataSource for LocalFileDataSource {
         &mut self,
         hint: ZkSyncRecursionLayerFinalizationHint,
     ) -> SourceResult<()> {
-        LocalFileDataSource::write_pretty(
-            format!(
-                "{}/recursion_layer/finalization_hint_node.json",
-                Self::SETUP_DATA_LOCATION
-            ),
-            hint,
-        )
+        self.set_setup_data("recursion_layer/finalization_hint_node".to_string(), hint)
     }
     fn set_compression_vk(
         &mut self,
         vk: ZkSyncCompressionLayerVerificationKey,
     ) -> SourceResult<()> {
         let circuit_type = vk.numeric_circuit_type();
-        LocalFileDataSource::write_pretty(
-            format!(
-                "{}/setup/aux_layer/compression_vk_{}.json",
-                Self::SETUP_DATA_LOCATION,
-                circuit_type
-            ),
-            vk,
-        )
+        self.set_setup_data(format!("aux_layer/compression_vk_{}", circuit_type), vk)
     }
     fn set_compression_hint(
         &mut self,
         hint: ZkSyncCompressionLayerFinalizationHint,
     ) -> SourceResult<()> {
         let circuit_type = hint.numeric_circuit_type();
-        LocalFileDataSource::write_pretty(
-            format!(
-                "{}/aux_layer/compression_hint_{}.json",
-                Self::SETUP_DATA_LOCATION,
-                circuit_type
-            ),
-            hint,
-        )
+        self.set_setup_data(format!("aux_layer/compression_hint_{}", circuit_type), hint)
     }
     fn set_compression_for_wrapper_vk(
         &mut self,
         vk: ZkSyncCompressionForWrapperVerificationKey,
     ) -> SourceResult<()> {
         let circuit_type = vk.numeric_circuit_type();
-        LocalFileDataSource::write_pretty(
-            format!(
-                "{}/aux_layer/compression_for_wrapper_vk_{}.json",
-                Self::SETUP_DATA_LOCATION,
-                circuit_type
-            ),
+        self.set_setup_data(
+            format!("aux_layer/compression_for_wrapper_vk_{}", circuit_type),
             vk,
         )
     }
@@ -368,12 +302,8 @@ impl SetupDataSource for LocalFileDataSource {
         hint: ZkSyncCompressionForWrapperFinalizationHint,
     ) -> SourceResult<()> {
         let circuit_type = hint.numeric_circuit_type();
-        LocalFileDataSource::write_pretty(
-            format!(
-                "{}/aux_layer/compression_for_wrapper_hint_{}.json",
-                Self::SETUP_DATA_LOCATION,
-                circuit_type
-            ),
+        self.set_setup_data(
+            format!("aux_layer/compression_for_wrapper_hint_{}", circuit_type),
             hint,
         )
     }
@@ -415,48 +345,25 @@ impl SetupDataSource for LocalFileDataSource {
     }
 
     fn get_recursion_tip_vk(&self) -> SourceResult<ZkSyncRecursionLayerVerificationKey> {
-        let file = File::open(format!(
-            "{}/recursion_layer/vk_recursion_tip.json",
-            Self::SETUP_DATA_LOCATION
-        ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(result)
+        self.get_setup_data("recursion_layer/vk_recursion_tip".to_string())
     }
     fn get_recursion_tip_finalization_hint(
         &self,
     ) -> SourceResult<ZkSyncRecursionLayerFinalizationHint> {
-        let file = File::open(format!(
-            "{}/recursion_layer/finalization_hint_recursion_tip.json",
-            Self::SETUP_DATA_LOCATION
-        ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(result)
+        self.get_setup_data("recursion_layer/finalization_hint_recursion_tip".to_string())
     }
     fn set_recursion_tip_vk(
         &mut self,
         vk: ZkSyncRecursionLayerVerificationKey,
     ) -> SourceResult<()> {
-        LocalFileDataSource::write_pretty(
-            format!(
-                "{}/recursion_layer/vk_recursion_tip.json",
-                Self::SETUP_DATA_LOCATION
-            ),
-            vk,
-        )
+        self.set_setup_data("recursion_layer/vk_recursion_tip".to_string(), vk)
     }
     fn set_recursion_tip_finalization_hint(
         &mut self,
         hint: ZkSyncRecursionLayerFinalizationHint,
     ) -> SourceResult<()> {
-        LocalFileDataSource::write_pretty(
-            format!(
-                "{}/recursion_layer/finalization_hint_recursion_tip.json",
-                Self::SETUP_DATA_LOCATION
-            ),
+        self.set_setup_data(
+            "recursion_layer/finalization_hint_recursion_tip".to_string(),
             hint,
         )
     }
@@ -468,32 +375,21 @@ impl BlockDataSource for LocalFileDataSource {
         circuit_type: u8,
         index: usize,
     ) -> SourceResult<ZkSyncBaseLayerProof> {
-        let file = File::open(format!(
-            "{}/base_layer/basic_circuit_proof_{}_{}.json",
-            Self::BLOCK_DATA_LOCATION,
-            circuit_type,
-            index
+        self.get_proof(format!(
+            "base_layer/basic_circuit_proof_{}_{}",
+            circuit_type, index
         ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(result)
     }
+
     fn get_leaf_layer_proof(
         &self,
         circuit_type: u8,
         index: usize,
     ) -> SourceResult<ZkSyncRecursionLayerProof> {
-        let file = File::open(format!(
-            "{}/recursion_layer/leaf_layer_proof_{}_{}.json",
-            Self::BLOCK_DATA_LOCATION,
-            circuit_type,
-            index
+        self.get_proof(format!(
+            "recursion_layer/leaf_layer_proof_{}_{}",
+            circuit_type, index
         ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(result)
     }
     fn get_node_layer_proof(
         &self,
@@ -501,52 +397,27 @@ impl BlockDataSource for LocalFileDataSource {
         step: usize,
         index: usize,
     ) -> SourceResult<ZkSyncRecursionLayerProof> {
-        let file = File::open(format!(
-            "{}/recursion_layer/node_layer_proof_{}_{}_{}.json",
-            Self::BLOCK_DATA_LOCATION,
-            circuit_type,
-            step,
-            index
+        self.get_proof(format!(
+            "recursion_layer/node_layer_proof_{}_{}_{}",
+            circuit_type, step, index
         ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(result)
     }
-    fn get_scheduler_proof(&self) -> SourceResult<ZkSyncRecursionLayerProof> {
-        let file = File::open(format!(
-            "{}/recursion_layer/scheduler_proof.json",
-            Self::BLOCK_DATA_LOCATION
-        ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
 
-        Ok(result)
+    fn get_scheduler_proof(&self) -> SourceResult<ZkSyncRecursionLayerProof> {
+        self.get_proof("recursion_layer/scheduler_proof".to_string())
     }
     fn get_compression_proof(&self, circuit_type: u8) -> SourceResult<ZkSyncCompressionLayerProof> {
-        let file = File::open(format!(
-            "{}/aux_layer/compression_proof_{}.json",
-            Self::BLOCK_DATA_LOCATION,
-            circuit_type
-        ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(result)
+        self.get_proof(format!("aux_layer/compression_proof_{}", circuit_type))
     }
+
     fn get_compression_for_wrapper_proof(
         &self,
         circuit_type: u8,
     ) -> SourceResult<ZkSyncCompressionForWrapperProof> {
-        let file = File::open(format!(
-            "{}/aux_layer/compression_for_wrapper_proof_{}.json",
-            Self::BLOCK_DATA_LOCATION,
+        self.get_proof(format!(
+            "aux_layer/compression_for_wrapper_proof_{}",
             circuit_type
         ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(result)
     }
     fn get_wrapper_proof(&self, circuit_type: u8) -> SourceResult<ZkSyncSnarkWrapperProof> {
         let mut file = File::open(format!(
@@ -570,33 +441,25 @@ impl BlockDataSource for LocalFileDataSource {
         proof: ZkSyncBaseLayerProof,
     ) -> SourceResult<()> {
         let circuit_type = proof.numeric_circuit_type();
-        let file = File::create(format!(
-            "{}/base_layer/basic_circuit_proof_{}_{}.json",
-            Self::BLOCK_DATA_LOCATION,
-            circuit_type,
-            index
-        ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        serde_json::to_writer(file, &proof).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(())
+        self.set_proof(
+            format!("base_layer/basic_circuit_proof_{}_{}", circuit_type, index),
+            proof,
+        )
     }
+
     fn set_leaf_layer_proof(
         &mut self,
         index: usize,
         proof: ZkSyncRecursionLayerProof,
     ) -> SourceResult<()> {
         let circuit_type = proof.numeric_circuit_type();
-        let file = File::create(format!(
-            "{}/recursion_layer/leaf_layer_proof_{}_{}.json",
-            Self::BLOCK_DATA_LOCATION,
-            circuit_type,
-            index
-        ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        serde_json::to_writer(file, &proof).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(())
+        self.set_proof(
+            format!(
+                "recursion_layer/leaf_layer_proof_{}_{}",
+                circuit_type, index
+            ),
+            proof,
+        )
     }
     fn set_node_layer_proof(
         &mut self,
@@ -605,54 +468,33 @@ impl BlockDataSource for LocalFileDataSource {
         index: usize,
         proof: ZkSyncRecursionLayerProof,
     ) -> SourceResult<()> {
-        let file = File::create(format!(
-            "{}/recursion_layer/node_layer_proof_{}_{}_{}.json",
-            Self::BLOCK_DATA_LOCATION,
-            circuit_type,
-            step,
-            index
-        ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        serde_json::to_writer(file, &proof).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(())
+        self.set_proof(
+            format!(
+                "recursion_layer/node_layer_proof_{}_{}_{}",
+                circuit_type, step, index
+            ),
+            proof,
+        )
     }
     fn set_scheduler_proof(&mut self, proof: ZkSyncRecursionLayerProof) -> SourceResult<()> {
-        let file = File::create(format!(
-            "{}/recursion_layer/scheduler_proof.json",
-            Self::BLOCK_DATA_LOCATION
-        ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        serde_json::to_writer(file, &proof).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(())
+        self.set_proof("recursion_layer/scheduler_proof".to_string(), proof)
     }
     fn set_compression_proof(&mut self, proof: ZkSyncCompressionLayerProof) -> SourceResult<()> {
         let circuit_type = proof.numeric_circuit_type();
-        let file = File::create(format!(
-            "{}/aux_layer/compression_proof_{}.json",
-            Self::BLOCK_DATA_LOCATION,
-            circuit_type
-        ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        serde_json::to_writer(file, &proof).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(())
+        self.set_proof(
+            format!("aux_layer/compression_proof_{}", circuit_type),
+            proof,
+        )
     }
     fn set_compression_for_wrapper_proof(
         &mut self,
         proof: ZkSyncCompressionForWrapperProof,
     ) -> SourceResult<()> {
         let circuit_type = proof.numeric_circuit_type();
-        let file = File::create(format!(
-            "{}/aux_layer/compression_for_wrapper_proof_{}.json",
-            Self::BLOCK_DATA_LOCATION,
-            circuit_type
-        ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        serde_json::to_writer(file, &proof).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(())
+        self.set_proof(
+            format!("aux_layer/compression_for_wrapper_proof_{}", circuit_type),
+            proof,
+        )
     }
     fn set_wrapper_proof(&mut self, proof: ZkSyncSnarkWrapperProof) -> SourceResult<()> {
         let circuit_type = proof.numeric_circuit_type();
