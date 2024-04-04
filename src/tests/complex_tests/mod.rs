@@ -1047,7 +1047,7 @@ fn run_and_try_create_witness_inner(
                     "Missing node proof for {} - using empty one instead",
                     recursive_circuit_type
                 );
-                recursion_tip_proofs.push(empty_node_proof());
+                recursion_tip_proofs.push(empty_node_proof().into_inner());
             }
         };
     }
