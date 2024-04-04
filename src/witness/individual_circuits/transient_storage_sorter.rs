@@ -193,13 +193,13 @@ pub fn compute_transient_storage_dedup_and_sort<
     let mut current_lhs_product = [F::ONE; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS];
     let mut current_rhs_product = [F::ONE; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS];
     let mut previous_comparison_key = [0u32; TRANSIENT_STORAGE_VALIDITY_CHECK_PACKED_KEY_LENGTH];
-    let previous_key = U256::zero();
+    let mut previous_key = U256::zero();
     let mut previous_timestamp = 0u32;
-    let previous_tx_number = 0u32;
-    let previous_shard_id = 0u8;
+    let mut previous_tx_number = 0u32;
+    let mut previous_shard_id = 0u8;
     let mut cycle_idx = 0u32;
     use crate::ethereum_types::Address;
-    let previous_address = Address::default();
+    let mut previous_address = Address::default();
 
     use crate::ethereum_types::U256;
 
