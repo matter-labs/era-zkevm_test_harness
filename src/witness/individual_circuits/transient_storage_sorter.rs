@@ -203,8 +203,6 @@ pub fn compute_transient_storage_dedup_and_sort<
 
     use crate::ethereum_types::U256;
 
-    // let mut this_cell_tx_number = 0u32;
-    // let mut this_cell_shard_id = 0u8;
     let mut this_cell_current_depth = 0u32;
     let mut this_cell_current_value = U256::zero();
 
