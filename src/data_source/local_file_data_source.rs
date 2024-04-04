@@ -53,31 +53,6 @@ impl LocalFileDataSource {
             .map_err(|el| Box::new(el) as Box<dyn Error>)?;
         Ok(())
     }
-
-    pub fn set_recursive_tip_proof(
-        &mut self,
-        proof: ZkSyncRecursionLayerProof,
-    ) -> SourceResult<()> {
-        let file = File::create(format!(
-            "{}/recursion_layer/recursive_tip_proof.json",
-            Self::BLOCK_DATA_LOCATION
-        ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        serde_json::to_writer(file, &proof).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(())
-    }
-
-    pub fn get_recursive_tip_proof(&self) -> SourceResult<ZkSyncRecursionLayerProof> {
-        let file = File::open(format!(
-            "{}/recursion_layer/recursive_tip_proof.json",
-            Self::BLOCK_DATA_LOCATION
-        ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(result)
-    }
 }
 
 impl SetupDataSource for LocalFileDataSource {
@@ -694,5 +669,26 @@ impl BlockDataSource for LocalFileDataSource {
             .map_err(|el| Box::new(el) as Box<dyn Error>)?;
 
         Ok(())
+    }
+    fn set_recursive_tip_proof(&mut self, proof: ZkSyncRecursionLayerProof) -> SourceResult<()> {
+        let file = File::create(format!(
+            "{}/recursion_layer/recursive_tip_proof.json",
+            Self::BLOCK_DATA_LOCATION
+        ))
+        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
+        serde_json::to_writer(file, &proof).map_err(|el| Box::new(el) as Box<dyn Error>)?;
+
+        Ok(())
+    }
+
+    fn get_recursive_tip_proof(&self) -> SourceResult<ZkSyncRecursionLayerProof> {
+        let file = File::open(format!(
+            "{}/recursion_layer/recursive_tip_proof.json",
+            Self::BLOCK_DATA_LOCATION
+        ))
+        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
+        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
+
+        Ok(result)
     }
 }
