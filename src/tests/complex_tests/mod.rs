@@ -23,6 +23,7 @@ use crate::ethereum_types::*;
 use crate::helper::artifact_utils::TestArtifact;
 use crate::proof_wrapper_utils::{WrapperConfig, DEFAULT_WRAPPER_CONFIG};
 use crate::prover_utils::*;
+use crate::tests::complex_tests::utils::empty_node_proof;
 use crate::toolset::{create_tools, GeometryConfig};
 use crate::witness::oracle::create_artifacts_from_tracer;
 use crate::witness::tree::{BinarySparseStorageTree, ZKSyncTestingTree};
@@ -292,10 +293,10 @@ struct Options {
     // If false, will use 'testing' geometry (more circuits, but smaller and less memory).
     use_production_geometry: bool,
 
-    /// If true, then the test will reuse existing artifacts (like proofs etc).
+    /// If true, then the test will try to reuse existing artifacts (like proofs etc).
     /// This allows test to not repeat things that it already did.
     /// If false, everything will be computed from scratch.
-    reuse_artifacts: bool,
+    try_reuse_artifacts: bool,
 }
 
 impl Default for Options {
@@ -303,7 +304,7 @@ impl Default for Options {
         Self {
             test_base_circuits: false,
             use_production_geometry: false,
-            reuse_artifacts: true,
+            try_reuse_artifacts: true,
         }
     }
 }
@@ -329,7 +330,7 @@ fn run_and_try_create_witness_inner(
     let (basic_block_circuits, mut recursion_queues, scheduler_partial_input) =
         generate_base_layer(test_artifact, cycle_limit, geometry, blobs.clone());
 
-    // HACK - added sorting.
+    // It is important that recursion queries are in sorted order - as we later match them with respective proofs.
     recursion_queues.sort_by_key(|(circuit, _, _)| circuit.clone());
 
     if options.test_base_circuits {
@@ -380,7 +381,7 @@ fn run_and_try_create_witness_inner(
             instance_idx = 0;
         }
 
-        if options.reuse_artifacts {
+        if options.try_reuse_artifacts {
             if let Ok(proof) = source.get_base_layer_proof(el.numeric_circuit_type(), instance_idx)
             {
                 if instance_idx == 0 {
@@ -481,7 +482,7 @@ fn run_and_try_create_witness_inner(
     let mut proofs = vec![];
     let mut verification_keys = vec![];
 
-    for (circuit_id, _, inputs) in recursion_queues.iter() {
+    for (circuit_id, queue_simulator, inputs) in recursion_queues.iter() {
         let circuit_type = *circuit_id as u8;
         let mut proofs_for_circuit_type = vec![];
         for idx in 0..inputs.len() {
@@ -492,8 +493,8 @@ fn run_and_try_create_witness_inner(
                     proofs_for_circuit_type.push(proof);
                 }
                 Err(_) => {
-                    if idx == 0 {
-                        println!("HACK HACK -- skipping - assuming that there were no circuits")
+                    if idx == 0 && queue_simulator.num_items == 0 {
+                        println!("Skipping - assuming that there were no circuits")
                     } else {
                         panic!("Missing for - {} {}", circuit_type, idx);
                     }
@@ -517,7 +518,7 @@ fn run_and_try_create_witness_inner(
             BaseLayerCircuitType::from_numeric_value(base_circuit_type),
         );
 
-        if !options.reuse_artifacts
+        if !options.try_reuse_artifacts
             || source
                 .get_recursion_layer_vk(recursive_circuit_type as u8)
                 .is_err()
@@ -634,7 +635,7 @@ fn run_and_try_create_witness_inner(
             // test_recursive_circuit(el.clone());
             // println!("Circuit is satisfied");
 
-            if options.reuse_artifacts {
+            if options.try_reuse_artifacts {
                 if let Ok(_proof) =
                     source.get_leaf_layer_proof(el.numeric_circuit_type(), instance_idx)
                 {
@@ -1042,13 +1043,11 @@ fn run_and_try_create_witness_inner(
         match source.get_node_layer_proof(recursive_circuit_type, 0, 0) {
             Ok(proof) => recursion_tip_proofs.push(proof.into_inner()),
             Err(_) => {
-                // HACK HACK HACK: reading the 'main VM' proof instead of the 'missing' one.
                 println!(
-                    "!!!! Missing node proof for {} - using MainVM instead",
+                    "Missing node proof for {} - using empty one instead",
                     recursive_circuit_type
                 );
-                recursion_tip_proofs
-                    .push(source.get_node_layer_proof(3, 0, 0).unwrap().into_inner());
+                recursion_tip_proofs.push(empty_node_proof());
             }
         };
     }
@@ -1068,9 +1067,7 @@ fn run_and_try_create_witness_inner(
 
     // compute single(for now) recursion tip proof
 
-    let tip_proof = if let Ok(proof) = source.get_recursive_tip_proof() {
-        proof
-    } else {
+    let tip_proof = if source.get_recursive_tip_proof().is_err() || !options.try_reuse_artifacts {
         let node_layer_vk_commitment = compute_node_vk_commitment(node_vk.clone());
         use crate::boojum::gadgets::queue::*;
         use crate::zkevm_circuits::recursion::recursion_tip::input::*;
@@ -1087,7 +1084,6 @@ fn run_and_try_create_witness_inner(
         {
             *circuit_type = GoldilocksField::from_u64_unchecked(*src_type);
             *queue_state = take_sponge_like_queue_state_from_simulator(src_queue);
-            // HACK - we should check if the proofs are matching the recursion queue types.
             println!(
                 "Circuit: {:?} num items:{:?}",
                 circuit_type, src_queue.num_items
@@ -1170,6 +1166,8 @@ fn run_and_try_create_witness_inner(
             .unwrap();
 
         ZkSyncRecursionLayerProof::RecursionTipCircuit(proof)
+    } else {
+        source.get_recursive_tip_proof().unwrap()
     };
 
     let recursion_tip_vk = source.get_recursion_tip_vk().unwrap().into_inner();
@@ -1230,10 +1228,7 @@ fn run_and_try_create_witness_inner(
 
     let scheduler_circuit = ZkSyncRecursiveLayerCircuit::SchedulerCircuit(scheduler_circuit);
 
-    if source.get_scheduler_proof().is_err() {
-        let f = std::fs::File::create("tmp.json").unwrap();
-        serde_json::to_writer(f, &scheduler_circuit).unwrap();
-
+    if source.get_scheduler_proof().is_err() || !options.try_reuse_artifacts {
         test_recursive_circuit(scheduler_circuit.clone());
         println!("Circuit is satisfied");
 
