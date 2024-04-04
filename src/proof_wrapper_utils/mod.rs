@@ -1,14 +1,10 @@
-use circuit_definitions::recursion_layer_proof_config;
 use circuit_definitions::boojum::cs::implementations::pow::NoPow;
 use circuit_definitions::boojum::cs::implementations::setup::FinalizationHintsForProver;
 use circuit_definitions::boojum::field::goldilocks::GoldilocksField;
 use circuit_definitions::boojum::field::{PrimeField as BoojumPrimeField, U64Representable};
-use circuit_definitions::circuit_definitions::aux_layer::compression::{CompressionMode1Circuit, CompressionMode1ForWrapperCircuit, CompressionMode2Circuit, CompressionMode2ForWrapperCircuit, CompressionMode3Circuit, CompressionMode3ForWrapperCircuit, CompressionMode4Circuit, CompressionMode4ForWrapperCircuit, CompressionMode5Circuit, CompressionMode5ForWrapperCircuit, ProofCompressionFunction};
-use circuit_definitions::circuit_definitions::aux_layer::compression_modes::{CompressionMode1, CompressionMode1ForWrapper, CompressionMode2, CompressionMode2ForWrapper, CompressionMode3, CompressionMode3ForWrapper, CompressionMode4, CompressionMode4ForWrapper};
 use circuit_definitions::circuit_definitions::aux_layer::{ZkSyncCompressionForWrapperCircuit, ZkSyncCompressionLayerCircuit, ZkSyncCompressionLayerStorage, ZkSyncCompressionProof, ZkSyncCompressionProofForWrapper, ZkSyncCompressionVerificationKey, ZkSyncCompressionVerificationKeyForWrapper, ZkSyncSnarkWrapperCircuit, ZkSyncSnarkWrapperProof, ZkSyncSnarkWrapperVK, ZkSyncSnarkWrapperSetup};
 use circuit_definitions::circuit_definitions::aux_layer::wrapper::ZkSyncCompressionWrapper;
 use circuit_definitions::circuit_definitions::recursion_layer::{ZkSyncRecursionLayerProof, ZkSyncRecursionLayerStorageType, ZkSyncRecursionLayerVerificationKey};
-use circuit_definitions::zkevm_circuits::recursion::compression::CompressionRecursionConfig;
 use circuit_definitions::zkevm_circuits::scheduler::NUM_SCHEDULER_PUBLIC_INPUTS;
 use crate::snark_wrapper::franklin_crypto::bellman::kate_commitment::{Crs, CrsForMonomialForm};
 use crate::snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::cs::{Circuit, PlonkCsWidth4WithNextStepAndCustomGatesParams, TrivialAssembly, SetupAssembly, ProvingAssembly};
@@ -21,7 +17,6 @@ use crate::snark_wrapper::franklin_crypto::bellman::worker::Worker as BellmanWor
 use crate::snark_wrapper::implementations::poseidon2::CircuitPoseidon2Sponge;
 use crate::snark_wrapper::implementations::poseidon2::transcript::CircuitPoseidon2Transcript;
 use crate::snark_wrapper::verifier::WrapperCircuit;
-use crate::snark_wrapper::verifier_structs::allocated_vk::AllocatedVerificationKey;
 use crate::franklin_crypto::bellman::pairing::bn256::{Bn256, Fr};
 use crate::franklin_crypto::bellman::{Field, PrimeField, PrimeFieldRepr};
 use circuit_definitions::circuit_definitions::aux_layer::*;
@@ -40,7 +35,7 @@ use crate::prover_utils::{
     create_compression_for_wrapper_setup_data, create_compression_layer_setup_data,
     prove_compression_for_wrapper_circuit, prove_compression_layer_circuit,
     verify_compression_for_wrapper_proof, verify_compression_layer_proof,
-    verify_recursion_layer_proof, verify_recursion_layer_proof_for_type,
+    verify_recursion_layer_proof_for_type,
 };
 use crate::tests::{test_compression_circuit, test_compression_for_wrapper_circuit};
 

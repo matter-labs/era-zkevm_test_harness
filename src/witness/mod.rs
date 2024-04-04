@@ -1,5 +1,6 @@
 use super::*;
 
+mod advancing_range;
 pub mod callstack_handler;
 pub mod full_block_artifact;
 pub mod individual_circuits;

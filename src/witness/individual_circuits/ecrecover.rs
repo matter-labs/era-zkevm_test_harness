@@ -1,6 +1,5 @@
 use super::*;
 use crate::witness::full_block_artifact::LogQueue;
-use crate::zk_evm::zkevm_opcode_defs::ethereum_types::U256;
 use crate::zkevm_circuits::base_structures::log_query::*;
 use crate::zkevm_circuits::ecrecover::*;
 use circuit_definitions::encodings::*;

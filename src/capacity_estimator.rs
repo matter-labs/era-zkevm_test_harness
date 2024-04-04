@@ -1,11 +1,9 @@
-use std::alloc::Global;
 use std::panic;
 
 use crate::boojum::cs::CSGeometry;
 use crate::boojum::field::goldilocks::GoldilocksField;
 
 use crate::boojum::cs::traits::circuit::CircuitBuilder;
-use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use circuit_definitions::circuit_definitions::base_layer::*;
 use circuit_definitions::circuit_definitions::ZkSyncUniformSynthesisFunction;
 use circuit_definitions::ZkSyncDefaultRoundFunction;

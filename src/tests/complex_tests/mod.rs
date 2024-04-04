@@ -1,10 +1,13 @@
 pub mod utils;
 
 pub mod invididual_debugs;
+#[cfg(test)]
 mod test_synthesis;
 
+#[cfg(test)]
 pub mod testing_wrapper;
-pub mod wrapper_negative_tests;
+#[cfg(test)]
+mod wrapper_negative_tests;
 
 use std::collections::{HashMap, VecDeque};
 
@@ -307,6 +310,7 @@ impl Default for Options {
 
 /// Running the end-to-end tests, using the bytecodes from test_artifact and blobs.
 /// Please see the Options to adjust the testing behavior.
+#[allow(dead_code)]
 fn run_and_try_create_witness_inner(
     test_artifact: TestArtifact,
     cycle_limit: usize,
@@ -1065,7 +1069,6 @@ fn run_and_try_create_witness_inner(
     // compute single(for now) recursion tip proof
 
     let tip_proof = if let Ok(proof) = source.get_recursive_tip_proof() {
-
         proof
     } else {
         let node_layer_vk_commitment = compute_node_vk_commitment(node_vk.clone());

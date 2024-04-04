@@ -1,25 +1,19 @@
-use std::{
-    collections::{HashMap, HashSet},
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use crate::zkevm_circuits::recursion::leaf_layer::input::RecursionLeafParametersWitness;
 use crate::zkevm_circuits::recursion::NUM_BASE_LAYER_CIRCUITS;
 use circuit_definitions::boojum::gadgets::traits::allocatable::CSAllocatable;
 use circuit_definitions::{
-    aux_definitions::witness_oracle::VmWitnessOracle,
     circuit_definitions::{
         base_layer::{
-            ZkSyncBaseLayerCircuit, ZkSyncBaseLayerFinalizationHint, ZkSyncBaseLayerProof,
-            ZkSyncBaseLayerVerificationKey,
+            ZkSyncBaseLayerCircuit, ZkSyncBaseLayerFinalizationHint, ZkSyncBaseLayerVerificationKey,
         },
         ZkSyncUniformCircuitInstance,
     },
     recursion_layer_proof_config,
-    zkevm_circuits::eip_4844::input::{ELEMENTS_PER_4844_BLOCK, ENCODABLE_BYTES_PER_BLOB},
+    zkevm_circuits::eip_4844::input::ELEMENTS_PER_4844_BLOCK,
     zkevm_circuits::scheduler::aux::BaseLayerCircuitType,
-    EIP4844_CYCLE_LIMIT, RECURSION_LAYER_CAP_SIZE, RECURSION_LAYER_FRI_LDE_FACTOR,
+    RECURSION_LAYER_CAP_SIZE, RECURSION_LAYER_FRI_LDE_FACTOR,
 };
 
 use crossbeam::atomic::AtomicCell;
@@ -33,8 +27,6 @@ use crate::boojum::{
         implementations::{
             hints::{DenseVariablesCopyHint, DenseWitnessCopyHint},
             polynomial_storage::{SetupBaseStorage, SetupStorage},
-            pow::NoPow,
-            prover::ProofConfig,
             setup::FinalizationHintsForProver,
             verifier::VerificationKey,
         },
@@ -44,19 +36,11 @@ use crate::boojum::{
 };
 
 use crate::data_source::SetupDataSource;
-use crate::tests::complex_tests::generate_base_layer;
-use crate::zkevm_circuits::base_structures::vm_state::{
-    FULL_SPONGE_QUEUE_STATE_WIDTH, QUEUE_STATE_WIDTH,
-};
-use crate::{
-    data_source::local_file_data_source::LocalFileDataSource, tests::complex_tests::utils::*,
-};
+use crate::zkevm_circuits::base_structures::vm_state::FULL_SPONGE_QUEUE_STATE_WIDTH;
+
 use circuit_definitions::circuit_definitions::recursion_layer::leaf_layer::*;
-use circuit_definitions::circuit_definitions::recursion_layer::node_layer::*;
 use circuit_definitions::circuit_definitions::recursion_layer::*;
-use circuit_definitions::{
-    base_layer_proof_config, BASE_LAYER_CAP_SIZE, BASE_LAYER_FRI_LDE_FACTOR,
-};
+use circuit_definitions::{BASE_LAYER_CAP_SIZE, BASE_LAYER_FRI_LDE_FACTOR};
 use std::collections::VecDeque;
 
 use crate::prover_utils::*;
@@ -310,7 +294,6 @@ fn get_recursion_tip_circuit(
 fn get_scheduler_circuit(
     source: &mut dyn SetupDataSource,
 ) -> crate::data_source::SourceResult<ZkSyncRecursiveLayerCircuit> {
-    use crate::zkevm_circuits::eip_4844::input::EIP4844OutputDataWitness;
     use crate::zkevm_circuits::scheduler::SchedulerConfig;
     use circuit_definitions::circuit_definitions::recursion_layer::scheduler::SchedulerCircuit;
 
@@ -469,10 +452,6 @@ pub fn generate_recursive_layer_vks_and_proofs(
 pub fn generate_recursive_layer_vks(
     source: &mut dyn SetupDataSource,
 ) -> crate::data_source::SourceResult<()> {
-    use crate::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
-    use circuit_definitions::boojum::gadgets::traits::allocatable::CSAllocatable;
-    use circuit_definitions::circuit_definitions::recursion_layer::base_circuit_type_into_recursive_leaf_circuit_type;
-
     // here we rely ONLY on VKs and proofs from the setup, so we keep the geometries and circuits
     // via padding proofs
     let worker = Worker::new();
@@ -571,7 +550,6 @@ pub fn compute_leaf_params(
     source: &mut dyn SetupDataSource,
 ) -> crate::data_source::SourceResult<Vec<(u8, RecursionLeafParametersWitness<GoldilocksField>)>> {
     use crate::witness::recursive_aggregation::compute_leaf_params;
-    use crate::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
     let mut leaf_vk_commits = vec![];
 
     for circuit_type in ((BaseLayerCircuitType::VM as u8)
@@ -592,6 +570,8 @@ pub fn compute_leaf_params(
 
 #[cfg(test)]
 mod test {
+    use self::data_source::local_file_data_source::LocalFileDataSource;
+
     use super::*;
 
     #[test]

@@ -1,12 +1,7 @@
 use std::collections::VecDeque;
 
 use crate::blake2::Blake2s256;
-use crate::boojum::algebraic_props::round_function::AlgebraicRoundFunction;
-use crate::boojum::gadgets::traits::round_function::BuildableCircuitRoundFunction;
-use crate::boojum::{
-    cs::implementations::{prover::ProofConfig, verifier::VerificationKey},
-    field::{goldilocks::GoldilocksField, SmallField},
-};
+use crate::boojum::field::goldilocks::GoldilocksField;
 use crate::entry_point::*;
 use crate::snark_wrapper::boojum::field::goldilocks::GoldilocksExt2;
 use crate::snark_wrapper::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
@@ -14,7 +9,6 @@ use crate::toolset::create_tools;
 use crate::toolset::GeometryConfig;
 use crate::witness::oracle::create_artifacts_from_tracer;
 use crate::witness::tree::BinarySparseStorageTree;
-use crate::witness::tree::ZKSyncTestingTree;
 use crate::witness::tree::ZkSyncStorageLeaf;
 use crate::witness::utils::{
     take_queue_state_from_simulator, take_sponge_like_queue_state_from_simulator,
@@ -36,25 +30,18 @@ use crate::{
     utils::{calldata_to_aligned_data, u64_as_u32_le},
 };
 use circuit_definitions::boojum::field::Field;
-use circuit_definitions::boojum::implementations::poseidon2::Poseidon2Goldilocks;
 use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit;
 use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::zk_evm::zkevm_opcode_defs::VersionedHashLen32;
 use circuit_definitions::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
-use circuit_definitions::{Field as MainField, RoundFunction, ZkSyncDefaultRoundFunction};
+use circuit_definitions::{Field as MainField, ZkSyncDefaultRoundFunction};
 use kzg::zkevm_circuits::linear_hasher::input::LinearHasherOutputDataWitness;
-use tracing;
 
 pub const SCHEDULER_TIMESTAMP: u32 = 1;
 
-use crate::boojum::field::FieldExtension;
-use crate::boojum::gadgets::num::Num;
-use crate::boojum::gadgets::recursion::recursive_tree_hasher::RecursiveTreeHasher;
 use crate::boojum::gadgets::traits::allocatable::*;
-use crate::witness::full_block_artifact::FullBlockArtifacts;
-use crate::witness::oracle::VmInstanceWitness;
+
 use crate::zkevm_circuits::scheduler::block_header::BlockAuxilaryOutputWitness;
-use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 
 /// Executes a given set of instructions, and returns things necessary to do the proving:
 /// - all circuits as a callback
@@ -356,10 +343,6 @@ pub fn run<
             eip4844_output_commitment_hashes: [[0u8; 32]; MAX_4844_BLOBS_PER_BLOCK],
         };
 
-        use crate::zkevm_circuits::recursion::leaf_layer::input::RecursionLeafParameters;
-        use crate::zkevm_circuits::recursion::VK_COMMITMENT_LENGTH;
-        use crate::zkevm_circuits::scheduler::LEAF_LAYER_PARAMETERS_COMMITMENT_LENGTH;
-
         // here we perform a logic that is similar to what is in scheduler when we require of some circuit type is skipped, then
         // we ignore/constraint it's output
 
@@ -656,26 +639,23 @@ pub fn run<
             empty_log_queue_state.clone().tail
         };
 
-        let l1messages_linear_hasher_observable_output = if let Some(last) = basic_circuits
-            .l1_messages_hasher_circuits
-            .last
-        {
-            last
-                .clone_witness()
-                .unwrap()
-                .closed_form_input
-                .observable_output
-        } else {
-            let mut empty_digest = [0u8; 32];
-            use crate::zk_evm::zkevm_opcode_defs::sha3::{Keccak256, Digest};
-            let mut hasher = Keccak256::new();
-            hasher.update(&[]);
-            let digest = hasher.finalize();
-            empty_digest.copy_from_slice(digest.as_slice());
-            LinearHasherOutputDataWitness {
-                keccak256_hash: empty_digest,
-            }
-        };
+        let l1messages_linear_hasher_observable_output =
+            if let Some(last) = basic_circuits.l1_messages_hasher_circuits.last {
+                last.clone_witness()
+                    .unwrap()
+                    .closed_form_input
+                    .observable_output
+            } else {
+                let mut empty_digest = [0u8; 32];
+                use crate::zk_evm::zkevm_opcode_defs::sha3::{Digest, Keccak256};
+                let mut hasher = Keccak256::new();
+                hasher.update(&[]);
+                let digest = hasher.finalize();
+                empty_digest.copy_from_slice(digest.as_slice());
+                LinearHasherOutputDataWitness {
+                    keccak256_hash: empty_digest,
+                }
+            };
 
         let mut eip4844_witnesses: [Option<EIP4844OutputDataWitness<GoldilocksField>>;
             MAX_4844_BLOBS_PER_BLOCK] = std::array::from_fn(|_| None);

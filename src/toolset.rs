@@ -4,7 +4,6 @@ use crate::zk_evm::reference_impls::decommitter::SimpleDecommitter;
 use crate::zk_evm::reference_impls::event_sink::InMemoryEventSink;
 use crate::zk_evm::zk_evm_abstractions::precompiles::DefaultPrecompilesProcessor;
 use crate::zk_evm::zkevm_opcode_defs::system_params::VM_INITIAL_FRAME_ERGS;
-use std::hash::Hash;
 
 /// Set should only differ due to another storage that would be sustituted from outside,
 /// and all other tools can be as simple as possible

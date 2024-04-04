@@ -1,25 +1,18 @@
 #[cfg(test)]
 mod test {
-    use crate::boojum::cs::implementations::verifier::*;
-    use crate::snark_wrapper::franklin_crypto::bellman::pairing::bn256::{Bn256, Fr};
+    use crate::snark_wrapper::franklin_crypto::bellman::pairing::bn256::Bn256;
     use crate::snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::cs::*;
     use crate::snark_wrapper::franklin_crypto::plonk::circuit::bigint_new::BITWISE_LOGICAL_OPS_TABLE_NAME;
-    use crate::snark_wrapper::franklin_crypto::plonk::circuit::goldilocks::GoldilocksField;
     use crate::snark_wrapper::implementations::poseidon2::transcript::CircuitPoseidon2Transcript;
     use crate::snark_wrapper::implementations::poseidon2::CircuitPoseidon2Sponge;
 
     use crate::boojum::cs::implementations::proof::Proof;
-    use crate::boojum::cs::implementations::prover::ProofConfig;
-    use crate::boojum::cs::implementations::verifier::VerificationKeyCircuitGeometry;
+
     use crate::boojum::field::goldilocks::{GoldilocksExt2 as GLExt2, GoldilocksField as GL};
-    use crate::boojum::field::Field;
-    use crate::boojum::field::SmallField;
-    use crate::boojum::field::U64Representable;
 
     // use crate::snark_wrapper;
     use crate::snark_wrapper::verifier_structs::allocated_proof::AllocatedProof;
     use crate::snark_wrapper::verifier_structs::allocated_vk::AllocatedVerificationKey;
-    use crate::snark_wrapper::verifier_structs::WrapperVerifier;
 
     use circuit_definitions::circuit_definitions::aux_layer::compression::CompressionMode2ForWrapperCircuitBuilder;
     use circuit_definitions::circuit_definitions::aux_layer::compression::ProofCompressionFunction;

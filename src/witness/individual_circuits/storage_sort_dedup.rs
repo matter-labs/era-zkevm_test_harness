@@ -1,14 +1,10 @@
 use super::*;
 use crate::witness::full_block_artifact::LogQueue;
-use crate::zkevm_circuits::base_structures::log_query::{
-    LOG_QUERY_ABSORBTION_ROUNDS, LOG_QUERY_PACKED_WIDTH,
-};
+use crate::zkevm_circuits::base_structures::log_query::LOG_QUERY_PACKED_WIDTH;
 use crate::zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
 use crate::zkevm_circuits::storage_validity_by_grand_product::input::*;
-use crate::zkevm_circuits::storage_validity_by_grand_product::TIMESTAMPED_STORAGE_LOG_ENCODING_LEN;
 use crate::zkevm_circuits::DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS;
 use circuit_definitions::encodings::*;
-use std::cmp::Ordering;
 
 pub fn compute_storage_dedup_and_sort<
     F: SmallField,
@@ -289,7 +285,6 @@ pub fn compute_storage_dedup_and_sort<
             .unwrap();
 
         let last_sorted_query = &sorted_states.last().unwrap().2;
-        use circuit_definitions::encodings::log_query::comparison_key;
         let last_comparison_key = comparison_key(&last_sorted_query.raw_query);
         let last_key = last_sorted_query.raw_query.key;
         let last_address = last_sorted_query.raw_query.address;

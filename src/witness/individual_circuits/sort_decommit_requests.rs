@@ -3,8 +3,6 @@ use crate::boojum::gadgets::queue::full_state_queue::FullStateCircuitQueueRawWit
 use crate::boojum::gadgets::u256::decompose_u256_as_u32x8;
 use crate::ethereum_types::U256;
 use crate::witness::utils::produce_fs_challenges;
-use crate::zk_evm::aux_structures::MemoryIndex;
-use crate::zk_evm::aux_structures::MemoryQuery;
 use crate::zkevm_circuits::base_structures::decommit_query::DecommitQuery;
 use crate::zkevm_circuits::base_structures::decommit_query::DecommitQueryWitness;
 use crate::zkevm_circuits::base_structures::decommit_query::DECOMMIT_QUERY_PACKED_WIDTH;

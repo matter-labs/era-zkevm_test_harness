@@ -6,8 +6,6 @@ use crate::proof_wrapper_utils::{
     compute_compression_for_wrapper_circuit, compute_wrapper_proof_and_vk,
 };
 
-use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::proof::Proof as SnarkProof;
-use snark_wrapper::franklin_crypto::bellman::plonk::better_better_cs::setup::VerificationKey as SnarkVK;
 use snark_wrapper::franklin_crypto::bellman::worker::Worker as BellmanWorker;
 
 pub(crate) fn test_compression_for_compression_num(config: WrapperConfig) {

@@ -3,7 +3,6 @@ use crate::zk_evm::abstractions::PrecompileCyclesWitness;
 use crate::zk_evm::aux_structures::LogQuery;
 use crate::zk_evm::aux_structures::*;
 use crate::zk_evm::ethereum_types::U256;
-use crate::zk_evm::reference_impls::event_sink::ApplicationData;
 use crate::zk_evm::vm_state::CallStackEntry;
 
 use crate::zk_evm::zk_evm_abstractions::precompiles::ecrecover::ECRecoverRoundWitness;
@@ -109,7 +108,6 @@ impl<T> NumberedApplicationData<T> {
     }
 }
 
-use std::collections::HashSet;
 use std::ops::Range;
 
 #[derive(Clone, Debug)]

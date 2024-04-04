@@ -1,4 +1,3 @@
-use super::oracle::*;
 use super::*;
 use crate::witness::utils::*;
 
@@ -9,9 +8,7 @@ use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 use crate::boojum::gadgets::traits::round_function::*;
 use crate::witness::full_block_artifact::FullBlockArtifacts;
 use crate::zkevm_circuits::base_structures::precompile_input_outputs::*;
-use crate::zkevm_circuits::base_structures::vm_state::{
-    FULL_SPONGE_QUEUE_STATE_WIDTH, QUEUE_STATE_WIDTH,
-};
+use crate::zkevm_circuits::base_structures::vm_state::FULL_SPONGE_QUEUE_STATE_WIDTH;
 use crate::zkevm_circuits::fsm_input_output::*;
 use crate::zkevm_circuits::DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS;
 use std::collections::VecDeque;

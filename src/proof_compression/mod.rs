@@ -1,38 +1,22 @@
-use super::*;
-use crate::boojum::algebraic_props::round_function::AbsorptionModeOverwrite;
-use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
-use crate::boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
-use crate::boojum::field::goldilocks::GoldilocksExt2;
-use crate::boojum::gadgets::recursion::recursive_transcript::CircuitAlgebraicSpongeBasedTranscript;
-use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
-use crate::zkevm_circuits::recursion::compression::CompressionRecursionConfig;
-use circuit_definitions::circuit_definitions::aux_layer::compression::*;
-use circuit_definitions::circuit_definitions::recursion_layer::verifier_builder::*;
-
-type F = GoldilocksField;
-type P = GoldilocksField;
-type TR = GoldilocksPoisedon2Transcript;
-type R = Poseidon2Goldilocks;
-type CTR = CircuitAlgebraicSpongeBasedTranscript<GoldilocksField, 8, 12, 4, R>;
-type EXT = GoldilocksExt2;
-type H = GoldilocksPoseidon2Sponge<AbsorptionModeOverwrite>;
-type RH = CircuitGoldilocksPoseidon2Sponge;
-
 #[cfg(test)]
 mod test {
     use std::alloc::Global;
 
+    use crate::boojum::field::goldilocks::GoldilocksField;
     use circuit_definitions::boojum::cs::implementations::pow::NoPow;
     use circuit_definitions::boojum::cs::implementations::proof::Proof;
     use circuit_definitions::boojum::cs::implementations::verifier::VerificationKey;
     use circuit_definitions::circuit_definitions::aux_layer::compression_modes::*;
-    use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit;
     use circuit_definitions::{
         circuit_definitions::recursion_layer::ZkSyncRecursionLayerStorageType,
         recursion_layer_proof_config,
     };
 
-    use super::*;
+    use crate::boojum::algebraic_props::round_function::AbsorptionModeOverwrite;
+    use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
+    use crate::boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
+    use crate::boojum::field::goldilocks::GoldilocksExt2;
+
     use crate::boojum::config::DevCSConfig;
     use crate::boojum::cs::cs_builder::new_builder;
     use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
@@ -41,6 +25,15 @@ mod test {
     use crate::data_source::{
         local_file_data_source::LocalFileDataSource, BlockDataSource, SetupDataSource,
     };
+    use crate::zkevm_circuits::recursion::compression::CompressionRecursionConfig;
+    use circuit_definitions::circuit_definitions::aux_layer::compression::*;
+    use circuit_definitions::circuit_definitions::recursion_layer::verifier_builder::*;
+
+    type F = GoldilocksField;
+    type P = GoldilocksField;
+    type TR = GoldilocksPoisedon2Transcript;
+    type EXT = GoldilocksExt2;
+    type H = GoldilocksPoseidon2Sponge<AbsorptionModeOverwrite>;
 
     fn prove_and_save<CF: ProofCompressionFunction>(
         circuit: CompressionLayerCircuit<CF>,

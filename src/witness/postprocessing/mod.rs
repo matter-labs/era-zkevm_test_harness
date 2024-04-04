@@ -1,30 +1,11 @@
 use super::*;
 
-use crate::boojum::algebraic_props::round_function;
-use crate::boojum::config::ProvingCSConfig;
-use crate::ethereum_types::U256;
-use crate::toolset::GeometryConfig;
-use crate::witness::full_block_artifact::FullBlockArtifacts;
-use crate::witness::oracle::VmInstanceWitness;
 use crate::witness::utils::*;
 use crate::zkevm_circuits::eip_4844::input::EIP4844OutputData;
-use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
-use circuit_definitions::boojum::cs::gates::lookup_marker::LookupFormalGate;
-use circuit_definitions::boojum::cs::gates::{
-    BooleanConstraintGate, ConstantToVariableMappingToolMarker, ConstantsAllocatorGate,
-    FmaGateInBaseFieldWithoutConstant, FmaGateInBaseWithoutConstantParams, ReductionGate,
-    ReductionGateParams, SelectionGate,
-};
-use circuit_definitions::boojum::cs::implementations::reference_cs::CSReferenceImplementation;
-use circuit_definitions::boojum::cs::traits::circuit::Circuit;
-use circuit_definitions::boojum::cs::traits::cs::ConstraintSystem;
-use circuit_definitions::boojum::cs::{GateTypeEntry, Tool, Variable};
 use circuit_definitions::boojum::field::U64Representable;
-use circuit_definitions::boojum::gadgets::queue;
 use circuit_definitions::boojum::gadgets::traits::allocatable::CSAllocatable;
 use circuit_definitions::boojum::gadgets::traits::encodable::CircuitVarLengthEncodable;
 use circuit_definitions::boojum::gadgets::traits::witnessable::WitnessHookable;
-use circuit_definitions::boojum::pairing::Engine;
 use circuit_definitions::circuit_definitions::{
     base_layer::*, ZkSyncUniformCircuitInstance, ZkSyncUniformSynthesisFunction,
 };
@@ -42,19 +23,15 @@ use circuit_definitions::zkevm_circuits::demux_log_queue::input::LogDemuxerFSMIn
 use circuit_definitions::zkevm_circuits::demux_log_queue::input::LogDemuxerInputData;
 use circuit_definitions::zkevm_circuits::demux_log_queue::input::LogDemuxerOutputData;
 use circuit_definitions::zkevm_circuits::ecrecover::EcrecoverCircuitFSMInputOutput;
-use circuit_definitions::zkevm_circuits::ecrecover::EcrecoverCircuitInputOutput;
 use circuit_definitions::zkevm_circuits::ecrecover::EcrecoverCircuitInstanceWitness;
 use circuit_definitions::zkevm_circuits::eip_4844::input::EIP4844CircuitInstanceWitness;
-use circuit_definitions::zkevm_circuits::fsm_input_output::circuit_inputs::main_vm;
-use circuit_definitions::zkevm_circuits::fsm_input_output::circuit_inputs::INPUT_OUTPUT_COMMITMENT_LENGTH;
 use circuit_definitions::zkevm_circuits::fsm_input_output::{
     ClosedFormInputCompactFormWitness, ClosedFormInputWitness,
 };
 use circuit_definitions::zkevm_circuits::keccak256_round_function::input::Keccak256RoundFunctionCircuitInstanceWitness;
 use circuit_definitions::zkevm_circuits::keccak256_round_function::input::Keccak256RoundFunctionFSMInputOutput;
 use circuit_definitions::zkevm_circuits::linear_hasher::input::{
-    LinearHasherCircuitInstanceWitness, LinearHasherInputData, LinearHasherInputDataWitness,
-    LinearHasherOutputData,
+    LinearHasherCircuitInstanceWitness, LinearHasherInputData, LinearHasherOutputData,
 };
 use circuit_definitions::zkevm_circuits::log_sorter::input::EventsDeduplicatorFSMInputOutput;
 use circuit_definitions::zkevm_circuits::log_sorter::input::EventsDeduplicatorInputData;
@@ -82,21 +59,13 @@ use circuit_definitions::zkevm_circuits::storage_validity_by_grand_product::inpu
 use circuit_definitions::zkevm_circuits::storage_validity_by_grand_product::input::StorageDeduplicatorOutputData;
 use circuit_definitions::zkevm_circuits::transient_storage_validity_by_grand_product::input::TransientStorageDeduplicatorInstanceWitness;
 use circuit_definitions::zkevm_circuits::transient_storage_validity_by_grand_product::input::*;
-use circuit_definitions::{Field, RoundFunction};
+use circuit_definitions::Field;
 use crossbeam::atomic::AtomicCell;
-use derivative::Derivative;
-use std::collections::HashMap;
-use std::default;
-use std::fmt::Debug;
-use std::marker::PhantomData;
 use std::sync::Arc;
 
 pub const L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH: bool = false;
 
-use crate::boojum::algebraic_props::round_function::AlgebraicRoundFunction;
 use crate::boojum::field::SmallField;
-use crate::boojum::gadgets::traits::allocatable::CSAllocatableExt;
-use crate::boojum::gadgets::traits::round_function::*;
 
 pub struct BlockFirstAndLastBasicCircuits {
     pub main_vm_circuits: FirstAndLastCircuit<VmMainInstanceSynthesisFunction>,

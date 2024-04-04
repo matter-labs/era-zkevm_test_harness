@@ -4,11 +4,10 @@ use self::witness::postprocessing::FirstAndLastCircuit;
 use super::*;
 use crate::boojum::gadgets::queue::full_state_queue::FullStateCircuitQueueRawWitness;
 use crate::witness::postprocessing::CircuitMaker;
-use crate::zk_evm::{abstractions::MemoryType, ethereum_types::U256};
+use crate::zk_evm::ethereum_types::U256;
 use crate::zkevm_circuits::{
     base_structures::memory_query::MEMORY_QUERY_PACKED_WIDTH, ram_permutation::input::*,
 };
-use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use circuit_definitions::circuit_definitions::base_layer::{
     RAMPermutationInstanceSynthesisFunction, ZkSyncBaseLayerCircuit,
 };

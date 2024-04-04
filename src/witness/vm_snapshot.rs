@@ -1,6 +1,3 @@
-use std::ops::RangeInclusive;
-
-use super::*;
 use crate::zk_evm::vm_state::VmLocalState;
 
 use derivative::Derivative;

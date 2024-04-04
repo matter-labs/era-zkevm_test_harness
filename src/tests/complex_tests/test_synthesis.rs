@@ -1,4 +1,3 @@
-use crate::boojum::config::ProvingCSConfig;
 use crate::boojum::worker::Worker;
 use crate::prover_utils::create_base_layer_setup_data;
 use crate::tests::complex_tests::generate_base_layer;

@@ -1,5 +1,5 @@
 use crate::zk_evm::ethereum_types::Address;
-use serde::{de, Deserialize, Deserializer};
+use serde::{de, Deserialize};
 use std::{collections::HashMap, str::FromStr};
 
 pub fn hex_string_to_bytecode<'de, D>(deserialized_string: &str) -> Result<Vec<[u8; 32]>, D::Error>

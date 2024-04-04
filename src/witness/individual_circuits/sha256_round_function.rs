@@ -223,7 +223,6 @@ pub fn sha256_decompose_into_per_circuit_witness<
                     // internal state is a bit more tricky, it'll be a round over empty input
                     let mut internal_state_over_empty_buffer = Sha256::default();
                     let empty_block = [0u8; 64];
-                    use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Digest;
                     internal_state_over_empty_buffer.update(&empty_block);
                     let sha256_internal_state_over_empty_buffer =
                         zk_evm::zk_evm_abstractions::precompiles::sha256::transmute_state(

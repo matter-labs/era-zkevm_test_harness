@@ -1,11 +1,8 @@
-use super::*;
-
 #[cfg(test)]
 mod test {
     use crate::proof_wrapper_utils::wrap_proof;
 
-    use super::*;
-    use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
+    use super::super::*;
     use std::io::Read;
 
     type BaseLayerCircuit = ZkSyncBaseLayerCircuit;
