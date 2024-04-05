@@ -343,11 +343,7 @@ fn run_and_try_create_witness_inner(
             instance_idx = 0;
         }
 
-        if let Ok(proof) = source.get_base_layer_proof(el.numeric_circuit_type(), instance_idx) {
-            if instance_idx == 0 {
-                source.set_base_layer_padding_proof(proof).unwrap();
-            }
-
+        if let Ok(_) = source.get_base_layer_proof(el.numeric_circuit_type(), instance_idx) {
             instance_idx += 1;
             continue;
         }
@@ -411,15 +407,6 @@ fn run_and_try_create_witness_inner(
         let is_valid = verify_base_layer_proof::<NoPow>(&el, &proof, &vk);
 
         assert!(is_valid);
-
-        if instance_idx == 0 {
-            source
-                .set_base_layer_padding_proof(ZkSyncBaseLayerProof::from_inner(
-                    el.numeric_circuit_type(),
-                    proof.clone(),
-                ))
-                .unwrap();
-        }
 
         source
             .set_base_layer_proof(
