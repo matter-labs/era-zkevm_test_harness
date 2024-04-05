@@ -24,26 +24,26 @@ jobs:
           cd kzg && cargo build --verbose
 
 
-    test:
-      name: cargo test
-      runs-on: [ubuntu-22.04-github-hosted-32core]
-      needs: build
-      steps:
-        - uses: actions/checkout@v3
-        - uses: actions-rust-lang/setup-rust-toolchain@v1
-          with:
-            rustflags: ""
-        - name: Setup rust
-          run: |
-            rustup set profile minimal
-            rustup toolchain install nightly-2023-08-23
-            rustup default nightly-2023-08-23
-            cargo install cargo-nextest 
-            cargo nextest run --release
-            cd circuit_definitions && cargo nextest run --release
-            cd circuit_encodings && cargo nextest run --release
-            cd circuit_sequencer_api && cargo nextest run --release
-            cd kzg && cargo nextest run --release
+  test:
+    name: cargo test
+    runs-on: [ubuntu-22.04-github-hosted-32core]
+    needs: build
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          rustflags: ""
+      - name: Setup rust
+        run: |
+          rustup set profile minimal
+          rustup toolchain install nightly-2023-08-23
+          rustup default nightly-2023-08-23
+          cargo install cargo-nextest 
+          cargo nextest run --release
+          cd circuit_definitions && cargo nextest run --release
+          cd circuit_encodings && cargo nextest run --release
+          cd circuit_sequencer_api && cargo nextest run --release
+          cd kzg && cargo nextest run --release
 
   formatting:
     name: cargo fmt
