@@ -29,7 +29,6 @@ pub mod data_source;
 pub mod entry_point;
 pub use circuit_sequencer_api::geometry_config;
 pub use kzg;
-pub mod proof_compression;
 pub mod prover_utils;
 pub mod snark_wrapper_test;
 pub mod utils;

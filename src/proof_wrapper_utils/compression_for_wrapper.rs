@@ -104,7 +104,7 @@ fn compute_compression_for_wrapper_circuit_inner(
     let circuit_type = circuit.numeric_circuit_type();
 
     test_compression_for_wrapper_circuit(circuit.clone());
-    println!("Circuit is satisfied");
+    println!("Input Circuit for compression wrapper is satisfied");
 
     let proof_config = circuit.proof_config_for_compression_step();
 
@@ -118,7 +118,7 @@ fn compute_compression_for_wrapper_circuit_inner(
         );
 
     // prove
-    println!("Proving!");
+    println!("Proving compression wrapper circuit.");
     let now = std::time::Instant::now();
 
     let proof = prove_compression_for_wrapper_circuit::<NoPow>(
@@ -134,7 +134,10 @@ fn compute_compression_for_wrapper_circuit_inner(
         &finalization_hint,
     );
 
-    println!("Proving is DONE, taken {:?}", now.elapsed());
+    println!(
+        "Proving compression wrapper is DONE, taken {:?}",
+        now.elapsed()
+    );
 
     let is_valid = verify_compression_for_wrapper_proof::<NoPow>(&setup_circuit, &proof, &vk);
 

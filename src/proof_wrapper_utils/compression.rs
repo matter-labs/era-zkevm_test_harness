@@ -97,7 +97,10 @@ fn compute_compression_circuit_inner(
     let circuit_type = circuit.numeric_circuit_type();
 
     test_compression_circuit(circuit.clone());
-    println!("Circuit is satisfied");
+    println!(
+        "Input circuit for compression {} is satisfied",
+        circuit_type
+    );
 
     let proof_config = circuit.proof_config_for_compression_step();
 
@@ -111,7 +114,7 @@ fn compute_compression_circuit_inner(
         );
 
     // prove
-    println!("Proving!");
+    println!("Proving compression level {} !", circuit_type);
 
     let proof = prove_compression_layer_circuit::<NoPow>(
         circuit,

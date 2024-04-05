@@ -41,6 +41,9 @@ use crate::tests::{test_compression_circuit, test_compression_for_wrapper_circui
 
 use std::sync::Arc;
 
+#[cfg(test)]
+mod proof_compression_test;
+
 mod compression;
 mod compression_for_wrapper;
 mod utils;
@@ -96,12 +99,13 @@ pub fn wrap_proof(
     vk: ZkSyncRecursionLayerVerificationKey,
     config: WrapperConfig,
 ) -> (ZkSyncSnarkWrapperProof, ZkSyncSnarkWrapperVK) {
-    // Check trusted setup file for later
+    // Check trusted setup exitance early, so that we fail quickly if it is not present.
     check_trusted_setup_file_existace();
     let worker = Worker::new();
     let bellman_worker = BellmanWorker::new();
 
-    // Check circuit type correctness
+    // Check circuit type correctness.
+    // We only support wrapping of the scheduler circuit.
     assert_eq!(
         vk.numeric_circuit_type(),
         ZkSyncRecursionLayerStorageType::SchedulerCircuit as u8
@@ -116,7 +120,7 @@ pub fn wrap_proof(
         &proof.clone().into_inner(),
         &vk.clone().into_inner(),
     );
-    assert!(valid);
+    assert!(valid, "Provided scheduler proof is not valid.");
 
     // Initialize RAM storage and upload scheduler proof and vk
     let mut source = InMemoryDataSource::new();
