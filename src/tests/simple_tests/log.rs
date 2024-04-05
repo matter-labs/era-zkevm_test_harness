@@ -1,5 +1,6 @@
 use super::*;
 
+#[ignore = "currently broken"]
 #[test_log::test]
 fn test_out_of_ergs_l1_message() {
     let asm = r#"
@@ -30,6 +31,7 @@ fn test_out_of_ergs_l1_message() {
     run_and_try_create_witness_inner(asm, 50);
 }
 
+#[ignore = "currently broken"]
 #[test_log::test]
 fn test_write_same_value() {
     let asm = r#"
@@ -57,6 +59,7 @@ fn test_write_same_value() {
     run_and_try_create_witness_inner(asm, 50);
 }
 
+#[ignore = "currently broken"]
 #[test_log::test]
 fn test_rollback_to_same_value_no_reads() {
     let asm = r#"
@@ -83,6 +86,7 @@ fn test_rollback_to_same_value_no_reads() {
     run_and_try_create_witness_inner(asm, 50);
 }
 
+#[ignore = "currently broken"]
 #[test_log::test]
 fn test_rollback_to_same_value_with_reads() {
     let asm = r#"

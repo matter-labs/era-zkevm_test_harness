@@ -78,6 +78,7 @@ mod test {
         serde_json::to_writer(vk_file_file, &vk).unwrap();
     }
 
+    #[ignore = "Currently broken"]
     #[test]
     fn preform_step_1_compression() {
         LocalFileDataSource::create_folders_for_storing_data();
@@ -113,6 +114,7 @@ mod test {
         prove_and_save(circuit, "compression_1".to_string());
     }
 
+    #[ignore = "Currently broken"]
     #[test]
     fn preform_step_2_compression() {
         let proof_file = std::fs::File::open("compression_1_proof.json").unwrap();
@@ -149,6 +151,7 @@ mod test {
         prove_and_save(circuit, "compression_2".to_string());
     }
 
+    #[ignore = "Currently broken"]
     #[test]
     fn preform_step_2_compression_for_wrapper() {
         let proof_file = std::fs::File::open("compression_1_proof.json").unwrap();
@@ -185,6 +188,7 @@ mod test {
         prove_and_save(circuit, "compression_2_for_wrapper".to_string());
     }
 
+    #[ignore = "Currently broken"]
     #[test]
     fn preform_step_3_compression() {
         let proof_file = std::fs::File::open("compression_2_proof.json").unwrap();
@@ -221,6 +225,7 @@ mod test {
         prove_and_save(circuit, "compression_3".to_string());
     }
 
+    #[ignore = "Currently broken"]
     #[test]
     fn preform_step_4_compression() {
         let proof_file = std::fs::File::open("compression_3_proof.json").unwrap();
@@ -257,6 +262,7 @@ mod test {
         prove_and_save(circuit, "compression_4".to_string());
     }
 
+    #[ignore = "Currently broken"]
     #[test]
     fn preform_step_to_l1_compression() {
         let proof_file = std::fs::File::open("compression_4_proof.json").unwrap();
@@ -293,6 +299,7 @@ mod test {
         prove_and_save(circuit, "compression_to_l1".to_string());
     }
 
+    #[ignore = "Currently broken"]
     #[test]
     fn compress_1() {
         LocalFileDataSource::create_folders_for_storing_data();

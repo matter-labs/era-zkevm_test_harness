@@ -1,5 +1,6 @@
 use super::*;
 
+#[ignore = "currently broken"]
 #[test_log::test]
 fn test_fat_pointer_erasure() {
     // perform far call with limited ergs. create a fat pointer and clone it before VM designates

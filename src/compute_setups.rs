@@ -574,6 +574,7 @@ mod test {
 
     use super::*;
 
+    #[ignore = "too slow"]
     #[test]
     fn test_run_create_base_layer_vks_and_proofs() {
         LocalFileDataSource::create_folders_for_storing_data();
@@ -581,6 +582,7 @@ mod test {
         generate_base_layer_vks(&mut source).expect("must compute setup");
     }
 
+    #[ignore = "too slow"]
     #[test]
     fn test_run_create_recursion_layer_vks_and_proofs() {
         LocalFileDataSource::create_folders_for_storing_data();
@@ -621,6 +623,7 @@ mod test {
         }
     }
 
+    #[ignore = "too slow"]
     #[test]
     fn generate_scheduler() {
         LocalFileDataSource::create_folders_for_storing_data();

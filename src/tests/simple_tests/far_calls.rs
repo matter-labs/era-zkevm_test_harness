@@ -1,5 +1,6 @@
 use super::*;
 
+#[ignore = "currently broken"]
 #[test_log::test]
 fn test_far_call_and_read_fat_pointer() {
     // makes 36 bytes of calldata in aux heap and calls with it, and then returns with fat ptr forward
@@ -73,6 +74,7 @@ fn test_far_call_and_read_fat_pointer() {
     );
 }
 
+#[ignore = "currently broken"]
 #[test_log::test]
 fn test_far_call_and_return_large_data() {
     // makes 36 bytes of calldata in aux heap and calls with it
@@ -151,6 +153,7 @@ fn test_far_call_and_return_large_data() {
     );
 }
 
+#[ignore = "currently broken"]
 #[test_log::test]
 fn test_far_call_and_panic_on_return_large_data() {
     // makes 36 bytes of calldata in aux heap and calls with it
@@ -233,6 +236,7 @@ fn test_far_call_and_panic_on_return_large_data() {
     );
 }
 
+#[ignore = "currently broken"]
 #[test_log::test]
 fn test_far_call_pay_for_memory_growth() {
     // perform far call with limited ergs

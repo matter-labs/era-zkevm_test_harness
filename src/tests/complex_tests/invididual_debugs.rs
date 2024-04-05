@@ -26,6 +26,7 @@ mod test {
         circuit
     }
 
+    #[ignore = "For manual running only"]
     #[test]
     fn read_and_run() {
         let circuit_file_name = "1_51_5_BasicCircuits_0.bin";
@@ -113,6 +114,7 @@ mod test {
         base_test_circuit(circuit);
     }
 
+    #[ignore = "For manual running only"]
     #[test]
     fn test_and_run_recursive() {
         // let file_name = "closed_form_inputs_35828_1_raw.bin";
@@ -133,7 +135,7 @@ mod test {
         // circuit.debug_witness();
 
         match &mut circuit {
-            ZkSyncRecursiveLayerCircuit::SchedulerCircuit(inner) => {
+            ZkSyncRecursiveLayerCircuit::SchedulerCircuit(_) => {
                 // dbg!(&inner.witness.leaf_layer_parameters);
                 // for el in inner.witness.proof_witnesses.iter() {
                 //     let vk = inner.witness.node_layer_vk_witness.clone();
@@ -172,6 +174,7 @@ mod test {
         Recursive(ZkSyncRecursionLayerProof),
     }
 
+    #[ignore = "For manual running only"]
     #[test]
     fn test_wrapper_layer() {
         let proof_file_name = "proofs_fri_proof_33908687.bin";

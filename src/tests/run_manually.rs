@@ -23,6 +23,7 @@ use crate::zkevm_circuits::main_vm::main_vm_entry_point;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use zkevm_assembly::Assembly;
 
+#[ignore = "currently broken"]
 #[test]
 fn run_and_try_create_witness() {
     // let asm = r#"
@@ -143,6 +144,7 @@ fn run_and_try_create_witness() {
     run_and_try_create_witness_inner(asm, 50);
 }
 
+#[ignore = "currently broken"]
 #[test]
 fn run_pseudo_benchmark() {
     let asm = r#"

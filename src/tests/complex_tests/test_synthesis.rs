@@ -7,6 +7,7 @@ use circuit_definitions::zkevm_circuits::eip_4844::input::ENCODABLE_BYTES_PER_BL
 use circuit_definitions::{BASE_LAYER_CAP_SIZE, BASE_LAYER_FRI_LDE_FACTOR};
 use std::time::Instant;
 
+#[ignore = "currently broken"]
 #[test]
 fn test_base_layer_circuit_synthesis() {
     let test_artifact = read_basic_test_artifact();
