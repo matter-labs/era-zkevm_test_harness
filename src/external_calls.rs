@@ -35,6 +35,7 @@ use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::zk_evm::zkevm_opcode_defs::VersionedHashLen32;
 use circuit_definitions::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
 use circuit_definitions::{Field as MainField, ZkSyncDefaultRoundFunction};
+use kzg::zkevm_circuits::linear_hasher::input::LinearHasherOutputDataWitness;
 
 pub const SCHEDULER_TIMESTAMP: u32 = 1;
 
@@ -638,6 +639,24 @@ pub fn run<
             empty_log_queue_state.clone().tail
         };
 
+        let l1messages_linear_hasher_observable_output =
+            if let Some(last) = basic_circuits.l1_messages_hasher_circuits.last {
+                last.clone_witness()
+                    .unwrap()
+                    .closed_form_input
+                    .observable_output
+            } else {
+                let mut empty_digest = [0u8; 32];
+                use crate::zk_evm::zkevm_opcode_defs::sha3::{Digest, Keccak256};
+                let mut hasher = Keccak256::new();
+                hasher.update(&[]);
+                let digest = hasher.finalize();
+                empty_digest.copy_from_slice(digest.as_slice());
+                LinearHasherOutputDataWitness {
+                    keccak256_hash: empty_digest,
+                }
+            };
+
         let mut eip4844_witnesses: [Option<EIP4844OutputDataWitness<GoldilocksField>>;
             MAX_4844_BLOBS_PER_BLOCK] = std::array::from_fn(|_| None);
         for (eip4844_circuit, dst) in eip4844_circuits
@@ -670,15 +689,7 @@ pub fn run<
             storage_application_observable_output,
             events_sorter_observable_output,
             l1messages_sorter_observable_output,
-            // always exists
-            l1messages_linear_hasher_observable_output: basic_circuits
-                .l1_messages_hasher_circuits
-                .last
-                .unwrap()
-                .clone_witness()
-                .unwrap()
-                .closed_form_input
-                .observable_output,
+            l1messages_linear_hasher_observable_output,
             // global value
             storage_log_tail: basic_circuits
                 .main_vm_circuits

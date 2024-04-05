@@ -12,6 +12,11 @@ pub fn compute_linear_keccak256<
     capacity: usize,
     _round_function: &R,
 ) -> Vec<LinearHasherCircuitInstanceWitness<F>> {
+    if simulator.num_items == 0 {
+        // now we can skip circuits
+        return vec![];
+    }
+
     // dbg!(&simulator.num_items);
     assert!(capacity <= u32::MAX as usize);
     let mut full_bytestring = vec![];

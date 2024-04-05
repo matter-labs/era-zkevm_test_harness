@@ -3,3 +3,8 @@ Cargo.lock
 setup_2^26.key
 .idea
 .DS_Store
+
+# don't include the results of the testing (as they are 100M)
+test_proofs/base_layer
+test_proofs/recursion_layer
+

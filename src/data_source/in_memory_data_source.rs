@@ -38,6 +38,7 @@ pub struct InMemoryDataSource {
     base_layer_proofs: HashMap<(u8, usize), ZkSyncBaseLayerProof>,
     leaf_layer_proofs: HashMap<(u8, usize), ZkSyncRecursionLayerProof>,
     node_layer_proofs: HashMap<(u8, usize, usize), ZkSyncRecursionLayerProof>,
+    recursion_tip_proof: Option<ZkSyncRecursionLayerProof>,
     scheduler_proof: Option<ZkSyncRecursionLayerProof>,
     compression_proof: HashMap<u8, ZkSyncCompressionLayerProof>,
     compression_for_wrapper_proof: HashMap<u8, ZkSyncCompressionForWrapperProof>,
@@ -65,6 +66,7 @@ impl InMemoryDataSource {
             leaf_layer_proofs: HashMap::new(),
             node_layer_proofs: HashMap::new(),
             scheduler_proof: None,
+            recursion_tip_proof: None,
             compression_proof: HashMap::new(),
             compression_for_wrapper_proof: HashMap::new(),
             wrapper_proof: HashMap::new(),
@@ -489,5 +491,17 @@ impl BlockDataSource for InMemoryDataSource {
         self.wrapper_proof
             .insert(proof.numeric_circuit_type(), proof);
         Ok(())
+    }
+
+    fn set_recursive_tip_proof(&mut self, proof: ZkSyncRecursionLayerProof) -> SourceResult<()> {
+        self.recursion_tip_proof = Some(proof);
+        Ok(())
+    }
+
+    fn get_recursive_tip_proof(&self) -> SourceResult<ZkSyncRecursionLayerProof> {
+        self.recursion_tip_proof.clone().ok_or(Box::new(Error::new(
+            ErrorKind::Other,
+            format!("no recursion tip proof"),
+        )))
     }
 }

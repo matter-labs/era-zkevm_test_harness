@@ -512,10 +512,16 @@ pub fn prove_recursion_layer_circuit<POW: PoWRunner>(
     let geometry = circuit.geometry();
     let (max_trace_len, num_vars) = circuit.size_hint();
 
-    let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, ProvingCSConfig>::new(
-        geometry,
-        max_trace_len.unwrap(),
-    );
+    use crate::boojum::config::CSConfig;
+    let builder_impl = CsReferenceImplementationBuilder::<
+        GoldilocksField,
+        P,
+        ProvingCSConfig,
+        crate::boojum::dag::StCircuitResolver<
+            GoldilocksField,
+            <ProvingCSConfig as CSConfig>::ResolverConfig,
+        >,
+    >::new(geometry, max_trace_len.unwrap());
     let builder = new_builder::<_, GoldilocksField>(builder_impl);
 
     let cs = match circuit {

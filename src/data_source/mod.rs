@@ -148,4 +148,7 @@ pub trait BlockDataSource {
         proof: ZkSyncCompressionForWrapperProof,
     ) -> SourceResult<()>;
     fn set_wrapper_proof(&mut self, proof: ZkSyncSnarkWrapperProof) -> SourceResult<()>;
+
+    fn set_recursive_tip_proof(&mut self, proof: ZkSyncRecursionLayerProof) -> SourceResult<()>;
+    fn get_recursive_tip_proof(&self) -> SourceResult<ZkSyncRecursionLayerProof>;
 }

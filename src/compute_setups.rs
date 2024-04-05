@@ -589,6 +589,39 @@ mod test {
     }
 
     #[test]
+    fn generate_recursion_tip() {
+        LocalFileDataSource::create_folders_for_storing_data();
+        let mut src = LocalFileDataSource;
+        let source = &mut src;
+
+        {
+            let worker = Worker::new();
+            let circuit = get_recursion_tip_circuit(source).unwrap();
+
+            let (_setup_base, _setup, vk, _setup_tree, _vars_hint, _wits_hint, finalization_hint) =
+                create_recursive_layer_setup_data(
+                    circuit,
+                    &worker,
+                    RECURSION_LAYER_FRI_LDE_FACTOR,
+                    RECURSION_LAYER_CAP_SIZE,
+                );
+
+            source
+                .set_recursion_tip_vk(ZkSyncRecursionLayerVerificationKey::RecursionTipCircuit(
+                    vk.clone(),
+                ))
+                .unwrap();
+            source
+                .set_recursion_tip_finalization_hint(
+                    ZkSyncRecursionLayerFinalizationHint::RecursionTipCircuit(
+                        finalization_hint.clone(),
+                    ),
+                )
+                .unwrap();
+        }
+    }
+
+    #[test]
     fn generate_scheduler() {
         LocalFileDataSource::create_folders_for_storing_data();
         let mut src = LocalFileDataSource;

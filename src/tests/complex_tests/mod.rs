@@ -23,6 +23,7 @@ use crate::ethereum_types::*;
 use crate::helper::artifact_utils::TestArtifact;
 use crate::proof_wrapper_utils::{WrapperConfig, DEFAULT_WRAPPER_CONFIG};
 use crate::prover_utils::*;
+use crate::tests::complex_tests::utils::empty_node_proof;
 use crate::toolset::{create_tools, GeometryConfig};
 use crate::witness::oracle::create_artifacts_from_tracer;
 use crate::witness::tree::{BinarySparseStorageTree, ZKSyncTestingTree};
@@ -69,7 +70,11 @@ fn basic_test() {
             None
         }
     });
-    run_and_try_create_witness_inner(test_artifact, 40000, blobs);
+    let options = Options {
+        use_production_geometry: true,
+        ..Default::default()
+    };
+    run_and_try_create_witness_inner(test_artifact, 40000, blobs, &options);
     // run_and_try_create_witness_inner(test_artifact, 16);
 }
 
@@ -281,47 +286,78 @@ pub(crate) fn generate_base_layer(
     )
 }
 
+struct Options {
+    // Additional tests over the basic circuits.
+    test_base_circuits: bool,
+    // If true, will use production geometry (less circuits, but more memory).
+    // If false, will use 'testing' geometry (more circuits, but smaller and less memory).
+    use_production_geometry: bool,
+
+    /// If true, then the test will try to reuse existing artifacts (like proofs etc).
+    /// This allows test to not repeat things that it already did.
+    /// If false, everything will be computed from scratch.
+    try_reuse_artifacts: bool,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            test_base_circuits: false,
+            use_production_geometry: false,
+            try_reuse_artifacts: true,
+        }
+    }
+}
+
+/// Running the end-to-end tests, using the bytecodes from test_artifact and blobs.
+/// Please see the Options to adjust the testing behavior.
 #[allow(dead_code)]
 fn run_and_try_create_witness_inner(
     test_artifact: TestArtifact,
     cycle_limit: usize,
     blobs: [Option<Vec<u8>>; MAX_4844_BLOBS_PER_BLOCK],
+    options: &Options,
 ) {
     use crate::external_calls::run;
     use crate::toolset::GeometryConfig;
 
-    let geometry = get_testing_geometry_config();
-    // let geometry = crate::geometry_config::get_geometry_config();
+    let geometry = if options.use_production_geometry {
+        crate::geometry_config::get_geometry_config()
+    } else {
+        get_testing_geometry_config()
+    };
 
-    // let (basic_block_circuits, basic_block_circuits_inputs, mut scheduler_partial_input) = run(
-    let (basic_block_circuits, recursion_queues, scheduler_partial_input) =
-        generate_base_layer(test_artifact, cycle_limit, geometry, blobs);
+    let (basic_block_circuits, mut recursion_queues, scheduler_partial_input) =
+        generate_base_layer(test_artifact, cycle_limit, geometry, blobs.clone());
 
-    for (idx, el) in basic_block_circuits.clone().into_iter().enumerate() {
-        let descr = el.short_description();
-        println!("Doing {}: {}", idx, descr);
+    // It is important that recursion queries are in sorted order - as we later match them with respective proofs.
+    recursion_queues.sort_by_key(|(circuit, _, _)| circuit.clone());
 
-        // if idx < 398  {
-        //     continue;
-        // }
+    if options.test_base_circuits {
+        for (idx, el) in basic_block_circuits.clone().into_iter().enumerate() {
+            let descr = el.short_description();
+            println!("Doing {}: {}", idx, descr);
 
-        // match &el {
-        //     ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {
-        //         dbg!(&*inner.config);
-        //         // let witness = inner.clone_witness().unwrap();
-        //         // dbg!(&witness.closed_form_input);
-        //         // dbg!(witness.closed_form_input.start_flag);
-        //         // dbg!(witness.closed_form_input.completion_flag);
-        //     }
-        //     _ => {
-        //         continue;
-        //     }
-        // }
+            // if idx < 398  {
+            //     continue;
+            // }
 
-        base_test_circuit(el);
+            // match &el {
+            //     ZkSyncBaseLayerCircuit::LogDemuxer(inner) => {
+            //         dbg!(&*inner.config);
+            //         // let witness = inner.clone_witness().unwrap();
+            //         // dbg!(&witness.closed_form_input);
+            //         // dbg!(witness.closed_form_input.start_flag);
+            //         // dbg!(witness.closed_form_input.completion_flag);
+            //     }
+            //     _ => {
+            //         continue;
+            //     }
+            // }
+
+            base_test_circuit(el);
+        }
     }
-
-    return;
 
     let worker = Worker::new_with_num_threads(8);
 
@@ -335,20 +371,29 @@ fn run_and_try_create_witness_inner(
     LocalFileDataSource::create_folders_for_storing_data();
     use crate::data_source::*;
 
+    let circuits_len = basic_block_circuits.len();
+
     for (idx, el) in basic_block_circuits.clone().into_iter().enumerate() {
         let descr = el.short_description();
-        println!("Doing {}: {}", idx, descr);
+        println!("Doing {} / {}: {}", idx, circuits_len, descr);
 
         if el.numeric_circuit_type() != previous_circuit_type {
             instance_idx = 0;
         }
 
-        if let Ok(_) = source.get_base_layer_proof(el.numeric_circuit_type(), instance_idx) {
-            instance_idx += 1;
-            continue;
+        if options.try_reuse_artifacts {
+            if let Ok(_) = source.get_base_layer_proof(el.numeric_circuit_type(), instance_idx) {
+                instance_idx += 1;
+                continue;
+            }
         }
 
         if el.numeric_circuit_type() != previous_circuit_type || setup_data.is_none() {
+            println!(
+                "Regenerating setup data for {} from {}",
+                el.numeric_circuit_type(),
+                previous_circuit_type,
+            );
             let (setup_base, setup, vk, setup_tree, vars_hint, wits_hint, finalization_hint) =
                 create_base_layer_setup_data(
                     el.clone(),
@@ -423,12 +468,24 @@ fn run_and_try_create_witness_inner(
     let mut proofs = vec![];
     let mut verification_keys = vec![];
 
-    for (circuit_id, _, inputs) in recursion_queues.iter() {
+    for (circuit_id, queue_simulator, inputs) in recursion_queues.iter() {
         let circuit_type = *circuit_id as u8;
         let mut proofs_for_circuit_type = vec![];
         for idx in 0..inputs.len() {
-            let proof = source.get_base_layer_proof(circuit_type, idx).unwrap();
-            proofs_for_circuit_type.push(proof);
+            println!("Reading base layer proof: {:?} {:?}", circuit_type, idx);
+
+            match source.get_base_layer_proof(circuit_type, idx) {
+                Ok(proof) => {
+                    proofs_for_circuit_type.push(proof);
+                }
+                Err(_) => {
+                    if idx == 0 && queue_simulator.num_items == 0 {
+                        println!("Skipping - assuming that there were no circuits")
+                    } else {
+                        panic!("Missing for - {} {}", circuit_type, idx);
+                    }
+                }
+            }
         }
 
         let vk = source.get_base_layer_vk(circuit_type).unwrap();
@@ -447,9 +504,10 @@ fn run_and_try_create_witness_inner(
             BaseLayerCircuitType::from_numeric_value(base_circuit_type),
         );
 
-        if source
-            .get_recursion_layer_vk(recursive_circuit_type as u8)
-            .is_err()
+        if !options.try_reuse_artifacts
+            || source
+                .get_recursion_layer_vk(recursive_circuit_type as u8)
+                .is_err()
         {
             println!(
                 "Computing leaf layer VK for type {:?}",
@@ -550,6 +608,10 @@ fn run_and_try_create_witness_inner(
     use circuit_definitions::circuit_definitions::recursion_layer::*;
 
     for aggregations_for_circuit_type in all_leaf_aggregations.iter() {
+        if aggregations_for_circuit_type.is_empty() {
+            continue;
+        }
+
         let mut instance_idx = 0;
         let mut setup_data = None;
         for (idx, (_, _, el)) in aggregations_for_circuit_type.iter().enumerate() {
@@ -559,10 +621,13 @@ fn run_and_try_create_witness_inner(
             // test_recursive_circuit(el.clone());
             // println!("Circuit is satisfied");
 
-            if let Ok(_proof) = source.get_leaf_layer_proof(el.numeric_circuit_type(), instance_idx)
-            {
-                instance_idx += 1;
-                continue;
+            if options.try_reuse_artifacts {
+                if let Ok(_proof) =
+                    source.get_leaf_layer_proof(el.numeric_circuit_type(), instance_idx)
+                {
+                    instance_idx += 1;
+                    continue;
+                }
             }
 
             if el.numeric_circuit_type() != previous_circuit_type || setup_data.is_none() {
@@ -797,6 +862,11 @@ fn run_and_try_create_witness_inner(
         let mut depth = 0;
         let mut next_aggregations = per_circuit_subtree;
 
+        if next_aggregations.len() == 0 {
+            // There are no leaf circuits of this type.
+            continue;
+        }
+
         let base_circuit_type = next_aggregations[0].0 as u8;
         let circuit_type_enum = BaseLayerCircuitType::from_numeric_value(base_circuit_type);
         println!(
@@ -956,10 +1026,16 @@ fn run_and_try_create_witness_inner(
     for recursive_circuit_type in (ZkSyncRecursionLayerStorageType::LeafLayerCircuitForMainVM as u8)
         ..=(ZkSyncRecursionLayerStorageType::LeafLayerCircuitForEIP4844Repack as u8)
     {
-        let proof = source
-            .get_node_layer_proof(recursive_circuit_type, 0, 0)
-            .unwrap();
-        recursion_tip_proofs.push(proof.into_inner());
+        match source.get_node_layer_proof(recursive_circuit_type, 0, 0) {
+            Ok(proof) => recursion_tip_proofs.push(proof.into_inner()),
+            Err(_) => {
+                println!(
+                    "Missing node proof for {} - using empty one instead",
+                    recursive_circuit_type
+                );
+                recursion_tip_proofs.push(empty_node_proof().into_inner());
+            }
+        };
     }
 
     assert_eq!(recursion_tip_proofs.len(), NUM_CIRCUIT_TYPES_TO_SCHEDULE);
@@ -976,7 +1052,8 @@ fn run_and_try_create_witness_inner(
         .unwrap();
 
     // compute single(for now) recursion tip proof
-    {
+
+    let tip_proof = if source.get_recursive_tip_proof().is_err() || !options.try_reuse_artifacts {
         let node_layer_vk_commitment = compute_node_vk_commitment(node_vk.clone());
         use crate::boojum::gadgets::queue::*;
         use crate::zkevm_circuits::recursion::recursion_tip::input::*;
@@ -985,6 +1062,7 @@ fn run_and_try_create_witness_inner(
         assert!(branch_circuit_type_set.len() >= recursion_queues.len());
         let mut queue_sets: [_; RECURSION_TIP_ARITY] =
             std::array::from_fn(|_| QueueState::placeholder_witness());
+
         for ((circuit_type, queue_state), (src_type, src_queue, _)) in branch_circuit_type_set
             .iter_mut()
             .zip(queue_sets.iter_mut())
@@ -992,14 +1070,20 @@ fn run_and_try_create_witness_inner(
         {
             *circuit_type = GoldilocksField::from_u64_unchecked(*src_type);
             *queue_state = take_sponge_like_queue_state_from_simulator(src_queue);
+            println!(
+                "Circuit: {:?} num items:{:?}",
+                circuit_type, src_queue.num_items
+            );
         }
 
         let input = RecursionTipInputWitness {
-            leaf_layer_parameters: leaf_layer_params,
+            leaf_layer_parameters: leaf_layer_params.clone(),
             node_layer_vk_commitment: node_layer_vk_commitment,
             branch_circuit_type_set: branch_circuit_type_set,
             queue_set: queue_sets,
         };
+
+        dbg!(&input);
 
         let witness = RecursionTipInstanceWitness {
             input,
@@ -1025,8 +1109,52 @@ fn run_and_try_create_witness_inner(
 
         let circuit = ZkSyncRecursiveLayerCircuit::RecursionTipCircuit(circuit);
         // prove it
-        todo!()
-    }
+
+        // test_recursive_circuit(circuit.clone());
+
+        println!("Creating setup data for recursion tip");
+
+        let (setup_base, setup, vk, setup_tree, vars_hint, wits_hint, finalization_hint) =
+            create_recursive_layer_setup_data(
+                circuit.clone(),
+                &worker,
+                RECURSION_LAYER_FRI_LDE_FACTOR,
+                RECURSION_LAYER_CAP_SIZE,
+            );
+
+        assert_eq!(source.get_recursion_tip_vk().unwrap().into_inner(), vk);
+
+        println!("Proving recursion tip");
+
+        let proof = prove_recursion_layer_circuit::<NoPow>(
+            circuit.clone(),
+            &worker,
+            recursion_layer_proof_config(),
+            &setup_base,
+            &setup,
+            &setup_tree,
+            &vk,
+            &vars_hint,
+            &wits_hint,
+            &finalization_hint,
+        );
+
+        println!("Verifying recursion tip");
+
+        let is_valid = verify_recursion_layer_proof::<NoPow>(&circuit, &proof, &vk);
+
+        assert!(is_valid);
+
+        source
+            .set_recursive_tip_proof(ZkSyncRecursionLayerProof::RecursionTipCircuit(
+                proof.clone(),
+            ))
+            .unwrap();
+
+        ZkSyncRecursionLayerProof::RecursionTipCircuit(proof)
+    } else {
+        source.get_recursive_tip_proof().unwrap()
+    };
 
     let recursion_tip_vk = source.get_recursion_tip_vk().unwrap().into_inner();
 
@@ -1036,7 +1164,7 @@ fn run_and_try_create_witness_inner(
 
     let config = SchedulerConfig {
         proof_config: recursion_layer_proof_config(),
-        leaf_layer_parameters: leaf_layer_params,
+        leaf_layer_parameters: leaf_layer_params.clone(),
         node_layer_vk: node_vk.into_inner(),
         recursion_tip_vk: recursion_tip_vk.clone(),
         vk_fixed_parameters: recursion_tip_vk.fixed_parameters,
@@ -1048,14 +1176,14 @@ fn run_and_try_create_witness_inner(
     // we need to reassign block specific data, and proofs
 
     // proofs
-    let recursion_tip_proof = todo!();
+    let recursion_tip_proof = tip_proof.into_inner();
     scheduler_witness.proof_witnesses = vec![recursion_tip_proof].into();
 
     // blobs
     let eip4844_witnesses: [_; MAX_4844_BLOBS_PER_BLOCK] = blobs.map(|blob| {
         blob.map(|blob| {
             let (_blob_arr, linear_hash, _versioned_hash, output_hash) =
-                generate_eip4844_witness::<GoldilocksField>(&blob, "src/kzg/trusted_setup.json");
+                generate_eip4844_witness::<GoldilocksField>(&blob, "kzg/src/trusted_setup.json");
             use crate::zkevm_circuits::eip_4844::input::BlobChunkWitness;
             use crate::zkevm_circuits::eip_4844::input::EIP4844CircuitInstanceWitness;
             use crate::zkevm_circuits::eip_4844::input::EIP4844InputOutputWitness;
@@ -1075,7 +1203,7 @@ fn run_and_try_create_witness_inner(
     });
     scheduler_witness.eip4844_witnesses = eip4844_witnesses;
 
-    let mut scheduler_circuit = SchedulerCircuit {
+    let scheduler_circuit = SchedulerCircuit {
         witness: scheduler_witness.clone(),
         config,
         transcript_params: (),
@@ -1086,10 +1214,7 @@ fn run_and_try_create_witness_inner(
 
     let scheduler_circuit = ZkSyncRecursiveLayerCircuit::SchedulerCircuit(scheduler_circuit);
 
-    if source.get_scheduler_proof().is_err() {
-        let f = std::fs::File::create("tmp.json").unwrap();
-        serde_json::to_writer(f, &scheduler_circuit).unwrap();
-
+    if source.get_scheduler_proof().is_err() || !options.try_reuse_artifacts {
         test_recursive_circuit(scheduler_circuit.clone());
         println!("Circuit is satisfied");
 

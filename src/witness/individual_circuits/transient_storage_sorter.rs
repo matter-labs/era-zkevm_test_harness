@@ -193,13 +193,13 @@ pub fn compute_transient_storage_dedup_and_sort<
     let mut current_lhs_product = [F::ONE; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS];
     let mut current_rhs_product = [F::ONE; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS];
     let mut previous_comparison_key = [0u32; TRANSIENT_STORAGE_VALIDITY_CHECK_PACKED_KEY_LENGTH];
-    let previous_key = U256::zero();
+    let mut previous_key = U256::zero();
     let mut previous_timestamp = 0u32;
-    let previous_tx_number = 0u32;
-    let previous_shard_id = 0u8;
+    let mut previous_tx_number = 0u32;
+    let mut previous_shard_id = 0u8;
     let mut cycle_idx = 0u32;
     use crate::ethereum_types::Address;
-    let previous_address = Address::default();
+    let mut previous_address = Address::default();
 
     use crate::ethereum_types::U256;
 
@@ -283,6 +283,10 @@ pub fn compute_transient_storage_dedup_and_sort<
         let last_sorted_query = &sorted_states.last().unwrap().2;
         let last_comparison_key = transient_storage_comparison_key(&last_sorted_query.raw_query);
         let last_timestamp = last_sorted_query.extended_timestamp;
+        let last_key = last_sorted_query.raw_query.key;
+        let last_address = last_sorted_query.raw_query.address;
+        let last_tx_number = last_sorted_query.raw_query.tx_number_in_block;
+        let last_shard_id = last_sorted_query.raw_query.shard_id;
 
         // simulate the logic
         let (new_this_cell_current_value, new_this_cell_current_depth) = {
@@ -472,7 +476,11 @@ pub fn compute_transient_storage_dedup_and_sort<
         current_rhs_product = accumulated_rhs;
 
         previous_comparison_key = last_comparison_key.0;
+        previous_key = last_key;
         previous_timestamp = last_timestamp;
+        previous_address = last_address;
+        previous_shard_id = last_shard_id;
+        previous_tx_number = last_tx_number as u32;
 
         this_cell_current_value = new_this_cell_current_value;
         this_cell_current_depth = new_this_cell_current_depth;
