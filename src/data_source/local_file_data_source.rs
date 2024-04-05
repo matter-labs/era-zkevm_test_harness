@@ -470,24 +470,10 @@ impl BlockDataSource for LocalFileDataSource {
         Ok(())
     }
     fn set_recursive_tip_proof(&mut self, proof: ZkSyncRecursionLayerProof) -> SourceResult<()> {
-        let file = File::create(format!(
-            "{}/recursion_layer/recursive_tip_proof.json",
-            Self::BLOCK_DATA_LOCATION
-        ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        serde_json::to_writer(file, &proof).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(())
+        self.set_proof("recursion_layer/recursive_tip_proof".to_string(), proof)
     }
 
     fn get_recursive_tip_proof(&self) -> SourceResult<ZkSyncRecursionLayerProof> {
-        let file = File::open(format!(
-            "{}/recursion_layer/recursive_tip_proof.json",
-            Self::BLOCK_DATA_LOCATION
-        ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(result)
+        self.get_proof("recursion_layer/recursive_tip_proof".to_string())
     }
 }
