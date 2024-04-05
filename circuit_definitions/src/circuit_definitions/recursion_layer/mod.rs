@@ -26,8 +26,12 @@ use self::scheduler::*;
 pub const RECURSION_ARITY: usize = 32;
 // Maximum amount of basic circuits that a scheduler can handle.
 // The value was selected in such a way, that the scheduler circuit
-// fits into 2^20 trace size (currently it uses aroudn 1'043'000)
-pub const SCHEDULER_CAPACITY: usize = 24100;
+// fits into 2^20 trace size (currently it uses around 1'043'000)
+// The quick approximate way to see how many locations are used, is to look at the public_input_locations
+// in the recursion_layer/vk_1.json (which is a VK for this circuit).
+// This value must be below the domain size (which is currently 1048576).
+// And with the current scheduler code, and SCHEDULER_CAPACITY set to 34100, the value is 1043851.
+pub const SCHEDULER_CAPACITY: usize = 34100;
 
 pub use zkevm_circuits::recursion::recursion_tip::input::RECURSION_TIP_ARITY;
 

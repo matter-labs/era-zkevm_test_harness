@@ -67,17 +67,6 @@ impl SetupDataSource for LocalFileDataSource {
 
         Ok(result)
     }
-    fn get_base_layer_padding_proof(&self, circuit_type: u8) -> SourceResult<ZkSyncBaseLayerProof> {
-        let file = File::open(format!(
-            "{}/base_layer/padding_proof_{}.json",
-            Self::SETUP_DATA_LOCATION,
-            circuit_type
-        ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(result)
-    }
     fn get_base_layer_finalization_hint(
         &self,
         circuit_type: u8,
@@ -244,17 +233,6 @@ impl SetupDataSource for LocalFileDataSource {
                 circuit_type
             ),
             vk,
-        )
-    }
-    fn set_base_layer_padding_proof(&mut self, proof: ZkSyncBaseLayerProof) -> SourceResult<()> {
-        let circuit_type = proof.numeric_circuit_type();
-        LocalFileDataSource::write_pretty(
-            format!(
-                "{}/base_layer/padding_proof_{}.json",
-                Self::SETUP_DATA_LOCATION,
-                circuit_type
-            ),
-            proof,
         )
     }
     fn set_base_layer_finalization_hint(
