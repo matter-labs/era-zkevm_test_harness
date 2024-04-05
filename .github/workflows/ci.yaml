@@ -4,7 +4,7 @@ on:
 
 jobs:
   build:
-    name: cargo build and test
+    name: cargo build
     runs-on: [ubuntu-22.04-github-hosted-32core]
     steps:
       - uses: actions/checkout@v3
@@ -17,7 +17,8 @@ jobs:
           rustup toolchain install nightly-2023-08-23
           rustup default nightly-2023-08-23
           cargo install cargo-nextest 
-      - run: |
+      - name: Build
+          run: | 
           cargo build --verbose
           cd circuit_definitions && cargo build --verbose
           cd circuit_encodings && cargo build --verbose
@@ -40,7 +41,8 @@ jobs:
             rustup toolchain install nightly-2023-08-23
             rustup default nightly-2023-08-23
             cargo install cargo-nextest 
-        - run: |
+        - name: Test
+          run: |
             cargo nextest run --release
             cd circuit_definitions && cargo nextest run --release
             cd circuit_encodings && cargo nextest run --release
