@@ -17,7 +17,7 @@ use crate::tests::{
 fn get_compression_for_wrapper_vk_for_testing(
     config: WrapperConfig,
 ) -> ZkSyncCompressionForWrapperVerificationKey {
-    let mut source = LocalFileDataSource;
+    let mut source = LocalFileDataSource::default();
 
     let compression_for_wrapper_type = config.get_compression_for_wrapper_type();
     if source
@@ -40,7 +40,7 @@ fn get_compression_for_wrapper_vk_for_testing(
 fn get_compression_for_wrapper_proof_for_testing(
     config: WrapperConfig,
 ) -> ZkSyncCompressionForWrapperProof {
-    let mut source = LocalFileDataSource;
+    let mut source = LocalFileDataSource::default();
 
     let compression_for_wrapper_type = config.get_compression_for_wrapper_type();
     if source

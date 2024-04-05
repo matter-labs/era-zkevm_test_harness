@@ -576,22 +576,23 @@ mod test {
 
     #[test]
     fn test_run_create_base_layer_vks_and_proofs() {
-        LocalFileDataSource::create_folders_for_storing_data();
-        let mut source = LocalFileDataSource;
+        let mut source = LocalFileDataSource::default();
+        source.create_folders_for_storing_data();
+
         generate_base_layer_vks(&mut source).expect("must compute setup");
     }
 
     #[test]
     fn test_run_create_recursion_layer_vks_and_proofs() {
-        LocalFileDataSource::create_folders_for_storing_data();
-        let mut source = LocalFileDataSource;
+        let mut source = LocalFileDataSource::default();
+        source.create_folders_for_storing_data();
         generate_recursive_layer_vks_and_proofs(&mut source).expect("must compute setup");
     }
 
     #[test]
     fn generate_recursion_tip() {
-        LocalFileDataSource::create_folders_for_storing_data();
-        let mut src = LocalFileDataSource;
+        let mut src = LocalFileDataSource::default();
+        src.create_folders_for_storing_data();
         let source = &mut src;
 
         {
@@ -623,8 +624,8 @@ mod test {
 
     #[test]
     fn generate_scheduler() {
-        LocalFileDataSource::create_folders_for_storing_data();
-        let mut src = LocalFileDataSource;
+        let mut src = LocalFileDataSource::default();
+        src.create_folders_for_storing_data();
         let source = &mut src;
 
         {

@@ -25,15 +25,24 @@ use std::sync::Arc;
 use std::{error::Error, fs::File};
 
 #[derive(Derivative)]
-#[derivative(Clone, Copy, Debug)]
-pub struct LocalFileDataSource;
+#[derivative(Clone, Debug)]
+pub struct LocalFileDataSource {
+    pub setup_data_location: String,
+    pub block_data_location: String,
+}
+
+impl Default for LocalFileDataSource {
+    fn default() -> Self {
+        Self {
+            setup_data_location: "./setup".to_string(),
+            block_data_location: "./test_proofs".to_string(),
+        }
+    }
+}
 
 impl LocalFileDataSource {
-    pub const SETUP_DATA_LOCATION: &'static str = "./setup";
-    pub const BLOCK_DATA_LOCATION: &'static str = "./test_proofs";
-
     fn get_proof<T: for<'de> Deserialize<'de>>(&self, file_name: String) -> SourceResult<T> {
-        let file = File::open(format!("{}/{}.json", Self::BLOCK_DATA_LOCATION, file_name))
+        let file = File::open(format!("{}/{}.json", self.block_data_location, file_name))
             .map_err(|el| Box::new(el) as Box<dyn Error>)?;
         let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
 
@@ -41,14 +50,14 @@ impl LocalFileDataSource {
     }
 
     fn set_proof<T: Serialize>(&self, file_name: String, proof: T) -> SourceResult<()> {
-        let file = File::create(format!("{}/{}.json", Self::BLOCK_DATA_LOCATION, file_name))
+        let file = File::create(format!("{}/{}.json", self.block_data_location, file_name))
             .map_err(|el| Box::new(el) as Box<dyn Error>)?;
         serde_json::to_writer(file, &proof).map_err(|el| Box::new(el) as Box<dyn Error>)?;
         Ok(())
     }
 
     fn get_setup_data<T: for<'de> Deserialize<'de>>(&self, file_name: String) -> SourceResult<T> {
-        let file = File::open(format!("{}/{}.json", Self::SETUP_DATA_LOCATION, file_name))
+        let file = File::open(format!("{}/{}.json", self.setup_data_location, file_name))
             .map_err(|el| Box::new(el) as Box<dyn Error>)?;
         let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
 
@@ -57,22 +66,22 @@ impl LocalFileDataSource {
 
     fn set_setup_data<T: Serialize>(&self, file_name: String, data: T) -> SourceResult<()> {
         LocalFileDataSource::write_pretty(
-            format!("{}/{}.json", Self::SETUP_DATA_LOCATION, file_name),
+            format!("{}/{}.json", self.setup_data_location, file_name),
             data,
         )
     }
 
     /// creates folders if missing
-    pub fn create_folders_for_storing_data() {
+    pub fn create_folders_for_storing_data(&self) {
         let subfolders = ["/base_layer", "/recursion_layer", "/aux_layer"];
 
         for subfolder in subfolders.iter() {
-            let dir_location = format!("{}{}", Self::SETUP_DATA_LOCATION, subfolder);
+            let dir_location = format!("{}{}", self.setup_data_location, subfolder);
             if std::fs::read_dir(&dir_location).is_err() {
                 std::fs::create_dir_all(dir_location).unwrap();
             }
 
-            let dir_location = format!("{}{}", Self::BLOCK_DATA_LOCATION, subfolder);
+            let dir_location = format!("{}{}", self.block_data_location, subfolder);
             if std::fs::read_dir(&dir_location).is_err() {
                 std::fs::create_dir_all(dir_location).unwrap();
             }
@@ -155,8 +164,7 @@ impl SetupDataSource for LocalFileDataSource {
 
         let mut file = File::open(format!(
             "{}/aux_layer/wrapper_setup_{}.setup",
-            Self::SETUP_DATA_LOCATION,
-            circuit_type
+            self.setup_data_location, circuit_type
         ))
         .map_err(|el| Box::new(el) as Box<dyn Error>)?;
 
@@ -172,8 +180,7 @@ impl SetupDataSource for LocalFileDataSource {
     fn get_wrapper_vk(&self, circuit_type: u8) -> SourceResult<ZkSyncSnarkWrapperVK> {
         let mut file = File::open(format!(
             "{}/aux_layer/wrapper_vk_{}.key",
-            Self::SETUP_DATA_LOCATION,
-            circuit_type
+            self.setup_data_location, circuit_type
         ))
         .map_err(|el| Box::new(el) as Box<dyn Error>)?;
 
@@ -271,8 +278,7 @@ impl SetupDataSource for LocalFileDataSource {
         let circuit_type = setup.numeric_circuit_type();
         let mut file = File::create(format!(
             "{}/aux_layer/wrapper_setup_{}.setup",
-            Self::SETUP_DATA_LOCATION,
-            circuit_type
+            self.setup_data_location, circuit_type
         ))
         .map_err(|el| Box::new(el) as Box<dyn Error>)?;
 
@@ -289,8 +295,7 @@ impl SetupDataSource for LocalFileDataSource {
         let circuit_type = vk.numeric_circuit_type();
         let mut file = File::create(format!(
             "{}/aux_layer/wrapper_vk_{}.key",
-            Self::SETUP_DATA_LOCATION,
-            circuit_type
+            self.setup_data_location, circuit_type
         ))
         .map_err(|el| Box::new(el) as Box<dyn Error>)?;
 
@@ -379,8 +384,7 @@ impl BlockDataSource for LocalFileDataSource {
     fn get_wrapper_proof(&self, circuit_type: u8) -> SourceResult<ZkSyncSnarkWrapperProof> {
         let mut file = File::open(format!(
             "{}/aux_layer/wrapper_proof_{}.proof",
-            Self::BLOCK_DATA_LOCATION,
-            circuit_type
+            self.block_data_location, circuit_type
         ))
         .map_err(|el| Box::new(el) as Box<dyn Error>)?;
 
@@ -457,8 +461,7 @@ impl BlockDataSource for LocalFileDataSource {
         let circuit_type = proof.numeric_circuit_type();
         let mut file = File::create(format!(
             "{}/aux_layer/wrapper_proof_{}.proof",
-            Self::BLOCK_DATA_LOCATION,
-            circuit_type
+            self.block_data_location, circuit_type
         ))
         .map_err(|el| Box::new(el) as Box<dyn Error>)?;
 
