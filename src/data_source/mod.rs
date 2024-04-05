@@ -12,7 +12,6 @@ pub mod local_file_data_source;
 // Object save trait to just get things for SYSTEM
 pub trait SetupDataSource {
     fn get_base_layer_vk(&self, circuit_type: u8) -> SourceResult<ZkSyncBaseLayerVerificationKey>;
-    fn get_base_layer_padding_proof(&self, circuit_type: u8) -> SourceResult<ZkSyncBaseLayerProof>;
     fn get_base_layer_finalization_hint(
         &self,
         circuit_type: u8,
@@ -54,7 +53,6 @@ pub trait SetupDataSource {
     fn get_wrapper_vk(&self, circuit_type: u8) -> SourceResult<ZkSyncSnarkWrapperVK>;
 
     fn set_base_layer_vk(&mut self, vk: ZkSyncBaseLayerVerificationKey) -> SourceResult<()>;
-    fn set_base_layer_padding_proof(&mut self, proof: ZkSyncBaseLayerProof) -> SourceResult<()>;
     fn set_base_layer_finalization_hint(
         &mut self,
         hint: ZkSyncBaseLayerFinalizationHint,

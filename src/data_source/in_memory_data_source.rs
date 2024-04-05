@@ -20,7 +20,6 @@ use std::io::{Error, ErrorKind};
 pub struct InMemoryDataSource {
     ///data structures required for holding [`SetupDataSource`] result
     base_layer_vk: HashMap<u8, ZkSyncBaseLayerVerificationKey>,
-    base_layer_padding_proof: HashMap<u8, ZkSyncBaseLayerProof>,
     base_layer_finalization_hint: HashMap<u8, ZkSyncBaseLayerFinalizationHint>,
     recursion_layer_vk: HashMap<u8, ZkSyncRecursionLayerVerificationKey>,
     recursion_layer_node_vk: Option<ZkSyncRecursionLayerVerificationKey>,
@@ -34,8 +33,6 @@ pub struct InMemoryDataSource {
     compression_for_wrapper_hint: HashMap<u8, ZkSyncCompressionForWrapperFinalizationHint>,
     wrapper_setup: HashMap<u8, ZkSyncSnarkWrapperSetup>,
     wrapper_vk: HashMap<u8, ZkSyncSnarkWrapperVK>,
-    eip_4844_vk: Option<EIP4844VerificationKey>,
-    eip_4844_hint: Option<FinalizationHintsForProver>,
 
     ///data structures required for holding [`BlockDataSource`] result
     base_layer_proofs: HashMap<(u8, usize), ZkSyncBaseLayerProof>,
@@ -51,7 +48,6 @@ impl InMemoryDataSource {
     pub fn new() -> Self {
         InMemoryDataSource {
             base_layer_vk: HashMap::new(),
-            base_layer_padding_proof: HashMap::new(),
             base_layer_finalization_hint: HashMap::new(),
             recursion_layer_vk: HashMap::new(),
             recursion_layer_node_vk: None,
@@ -65,8 +61,6 @@ impl InMemoryDataSource {
             compression_for_wrapper_hint: HashMap::new(),
             wrapper_setup: HashMap::new(),
             wrapper_vk: HashMap::new(),
-            eip_4844_vk: None,
-            eip_4844_hint: None,
             base_layer_proofs: HashMap::new(),
             leaf_layer_proofs: HashMap::new(),
             node_layer_proofs: HashMap::new(),
@@ -81,16 +75,6 @@ impl InMemoryDataSource {
 impl SetupDataSource for InMemoryDataSource {
     fn get_base_layer_vk(&self, circuit_type: u8) -> SourceResult<ZkSyncBaseLayerVerificationKey> {
         self.base_layer_vk
-            .get(&circuit_type)
-            .cloned()
-            .ok_or(Box::new(Error::new(
-                ErrorKind::Other,
-                format!("no data for circuit type {}", circuit_type),
-            )))
-    }
-
-    fn get_base_layer_padding_proof(&self, circuit_type: u8) -> SourceResult<ZkSyncBaseLayerProof> {
-        self.base_layer_padding_proof
             .get(&circuit_type)
             .cloned()
             .ok_or(Box::new(Error::new(
@@ -232,12 +216,6 @@ impl SetupDataSource for InMemoryDataSource {
 
     fn set_base_layer_vk(&mut self, vk: ZkSyncBaseLayerVerificationKey) -> SourceResult<()> {
         self.base_layer_vk.insert(vk.numeric_circuit_type(), vk);
-        Ok(())
-    }
-
-    fn set_base_layer_padding_proof(&mut self, proof: ZkSyncBaseLayerProof) -> SourceResult<()> {
-        self.base_layer_padding_proof
-            .insert(proof.numeric_circuit_type(), proof);
         Ok(())
     }
 

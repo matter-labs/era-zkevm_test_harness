@@ -83,51 +83,11 @@ impl LocalFileDataSource {
             .map_err(|el| Box::new(el) as Box<dyn Error>)?;
         Ok(())
     }
-
-    pub fn set_base_layer_proof_serialize(
-        &mut self,
-        index: usize,
-        proof: ZkSyncBaseLayerProof,
-    ) -> SourceResult<()> {
-        let circuit_type = proof.numeric_circuit_type();
-        let file = File::create(format!(
-            "{}/base_layer/basic_circuit_proof_{}_{}.bin",
-            Self::BLOCK_DATA_LOCATION,
-            circuit_type,
-            index
-        ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        bincode::serialize_into(file, &proof).unwrap();
-        //    serde_json::to_writer(file, &proof).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(())
-    }
-
-    pub fn get_base_layer_proof_serialized(
-        &self,
-        circuit_type: u8,
-        index: usize,
-    ) -> SourceResult<ZkSyncBaseLayerProof> {
-        let file = File::open(format!(
-            "{}/base_layer/basic_circuit_proof_{}_{}.bin",
-            Self::BLOCK_DATA_LOCATION,
-            circuit_type,
-            index
-        ))
-        .map_err(|el| Box::new(el) as Box<dyn Error>)?;
-        let result = bincode::deserialize_from(file).unwrap();
-        //let result = serde_json::from_reader(file).map_err(|el| Box::new(el) as Box<dyn Error>)?;
-
-        Ok(result)
-    }
 }
 
 impl SetupDataSource for LocalFileDataSource {
     fn get_base_layer_vk(&self, circuit_type: u8) -> SourceResult<ZkSyncBaseLayerVerificationKey> {
         self.get_setup_data(format!("base_layer/vk_{}", circuit_type))
-    }
-    fn get_base_layer_padding_proof(&self, circuit_type: u8) -> SourceResult<ZkSyncBaseLayerProof> {
-        self.get_setup_data(format!("base_layer/padding_proof_{}", circuit_type))
     }
     fn get_base_layer_finalization_hint(
         &self,
@@ -229,10 +189,7 @@ impl SetupDataSource for LocalFileDataSource {
         let circuit_type = vk.numeric_circuit_type();
         self.set_setup_data(format!("base_layer/vk_{}", circuit_type), vk)
     }
-    fn set_base_layer_padding_proof(&mut self, proof: ZkSyncBaseLayerProof) -> SourceResult<()> {
-        let circuit_type = proof.numeric_circuit_type();
-        self.set_setup_data(format!("base_layer/padding_proof_{}", circuit_type), proof)
-    }
+
     fn set_base_layer_finalization_hint(
         &mut self,
         hint: ZkSyncBaseLayerFinalizationHint,
