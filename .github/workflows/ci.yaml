@@ -13,16 +13,20 @@ jobs:
           rustflags: ""
       - name: Setup rust
         run: |
-          ls
           rustup set profile minimal
           rustup toolchain install nightly-2023-08-23
           rustup default nightly-2023-08-23
-          cargo install cargo-nextest 
-          cargo build --manifest-path circuit_definitions/Cargo.toml --verbose
-          cargo build --verbose
-          cargo build --manifest-path circuit_encodings/Cargo.toml --verbose
-          cargo build --manifest-path circuit_sequencer_api/Cargo.toml --verbose
-          cargo build --manifest-path kzg/Cargo.toml --verbose
+          cargo install cargo-nextest
+      - name: Compile main
+        run: cargo build --verbose
+      - name: Compile encodings
+        run: cargo build --manifest-path circuit_encodings/Cargo.toml --verbose
+      - name: compile api
+        run: cargo build --manifest-path circuit_sequencer_api/Cargo.toml --verbose
+      - name: compile definitions
+        run: cargo build --manifest-path circuit_definitions/Cargo.toml --verbose
+      - name: Compile kzg
+        run: cargo build --manifest-path kzg/Cargo.toml --verbose
           
 
 
@@ -40,12 +44,17 @@ jobs:
           rustup set profile minimal
           rustup toolchain install nightly-2023-08-23
           rustup default nightly-2023-08-23
-          cargo install cargo-nextest 
-          cargo nextest run --release
-          cd circuit_definitions && cargo nextest run --release
-          cd circuit_encodings && cargo nextest run --release
-          cd circuit_sequencer_api && cargo nextest run --release
-          cd kzg && cargo nextest run --release
+          cargo install cargo-nextest
+      - name: Main test 
+        run: cargo nextest run --release
+      - name: Encodings test
+        run: cargo nextest run --release --manifest-path circuit_encodings/Cargo.toml
+      - name: Api tests
+        run: cargo nextest run --release --manifest-path circuit_sequencer_api/Cargo.toml
+      - name: Definitions test
+        run: cargo nextest run --release --manifest-path circuit_definitions/Cargo.toml
+      - name: Kzg tests
+        run: cargo nextest run --release --manifest-path kzg/Cargo.toml
 
   formatting:
     name: cargo fmt
