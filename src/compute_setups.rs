@@ -1,3 +1,5 @@
+//! Functions to compute setup and verification keys for different circuit types.
+
 use std::sync::Arc;
 
 use crate::zkevm_circuits::recursion::leaf_layer::input::RecursionLeafParametersWitness;
@@ -503,45 +505,57 @@ pub fn generate_recursive_layer_vks(
     }
 
     println!("Computing recursion tip vk");
-    {
-        let recursion_tip_circuit = get_recursion_tip_circuit(source)?;
-
-        let (_setup_base, _setup, vk, _setup_tree, _vars_hint, _wits_hint, finalization_hint) =
-            create_recursive_layer_setup_data(
-                recursion_tip_circuit,
-                &worker,
-                RECURSION_LAYER_FRI_LDE_FACTOR,
-                RECURSION_LAYER_CAP_SIZE,
-            );
-
-        source.set_recursion_tip_vk(ZkSyncRecursionLayerVerificationKey::RecursionTipCircuit(
-            vk.clone(),
-        ))?;
-        source.set_recursion_tip_finalization_hint(
-            ZkSyncRecursionLayerFinalizationHint::RecursionTipCircuit(finalization_hint.clone()),
-        )?;
-    }
+    generate_recursion_tip_vk(source)?;
 
     println!("Computing scheduler vk");
+    generate_scheduler_vk(source)?;
 
-    {
-        let scheduler_circuit = get_scheduler_circuit(source)?;
+    Ok(())
+}
 
-        let (_setup_base, _setup, vk, _setup_tree, _vars_hint, _wits_hint, finalization_hint) =
-            create_recursive_layer_setup_data(
-                scheduler_circuit,
-                &worker,
-                RECURSION_LAYER_FRI_LDE_FACTOR,
-                RECURSION_LAYER_CAP_SIZE,
-            );
+pub fn generate_recursion_tip_vk(
+    source: &mut dyn SetupDataSource,
+) -> crate::data_source::SourceResult<()> {
+    let worker = Worker::new();
+    let recursion_tip_circuit = get_recursion_tip_circuit(source)?;
 
-        source.set_recursion_layer_vk(ZkSyncRecursionLayerVerificationKey::SchedulerCircuit(
-            vk.clone(),
-        ))?;
-        source.set_recursion_layer_finalization_hint(
-            ZkSyncRecursionLayerFinalizationHint::SchedulerCircuit(finalization_hint.clone()),
-        )?;
-    }
+    let (_setup_base, _setup, vk, _setup_tree, _vars_hint, _wits_hint, finalization_hint) =
+        create_recursive_layer_setup_data(
+            recursion_tip_circuit,
+            &worker,
+            RECURSION_LAYER_FRI_LDE_FACTOR,
+            RECURSION_LAYER_CAP_SIZE,
+        );
+
+    source.set_recursion_tip_vk(ZkSyncRecursionLayerVerificationKey::RecursionTipCircuit(
+        vk.clone(),
+    ))?;
+    source.set_recursion_tip_finalization_hint(
+        ZkSyncRecursionLayerFinalizationHint::RecursionTipCircuit(finalization_hint.clone()),
+    )?;
+    Ok(())
+}
+
+pub fn generate_scheduler_vk(
+    source: &mut dyn SetupDataSource,
+) -> crate::data_source::SourceResult<()> {
+    let worker = Worker::new();
+    let scheduler_circuit = get_scheduler_circuit(source)?;
+
+    let (_setup_base, _setup, vk, _setup_tree, _vars_hint, _wits_hint, finalization_hint) =
+        create_recursive_layer_setup_data(
+            scheduler_circuit,
+            &worker,
+            RECURSION_LAYER_FRI_LDE_FACTOR,
+            RECURSION_LAYER_CAP_SIZE,
+        );
+
+    source.set_recursion_layer_vk(ZkSyncRecursionLayerVerificationKey::SchedulerCircuit(
+        vk.clone(),
+    ))?;
+    source.set_recursion_layer_finalization_hint(
+        ZkSyncRecursionLayerFinalizationHint::SchedulerCircuit(finalization_hint.clone()),
+    )?;
 
     Ok(())
 }
@@ -589,68 +603,20 @@ mod test {
     }
 
     #[test]
-    fn generate_recursion_tip() {
+    fn test_generate_recursion_tip() {
         LocalFileDataSource::create_folders_for_storing_data();
         let mut src = LocalFileDataSource;
         let source = &mut src;
 
-        {
-            let worker = Worker::new();
-            let circuit = get_recursion_tip_circuit(source).unwrap();
-
-            let (_setup_base, _setup, vk, _setup_tree, _vars_hint, _wits_hint, finalization_hint) =
-                create_recursive_layer_setup_data(
-                    circuit,
-                    &worker,
-                    RECURSION_LAYER_FRI_LDE_FACTOR,
-                    RECURSION_LAYER_CAP_SIZE,
-                );
-
-            source
-                .set_recursion_tip_vk(ZkSyncRecursionLayerVerificationKey::RecursionTipCircuit(
-                    vk.clone(),
-                ))
-                .unwrap();
-            source
-                .set_recursion_tip_finalization_hint(
-                    ZkSyncRecursionLayerFinalizationHint::RecursionTipCircuit(
-                        finalization_hint.clone(),
-                    ),
-                )
-                .unwrap();
-        }
+        generate_recursion_tip_vk(source).unwrap();
     }
 
     #[test]
-    fn generate_scheduler() {
+    fn test_generate_scheduler() {
         LocalFileDataSource::create_folders_for_storing_data();
         let mut src = LocalFileDataSource;
         let source = &mut src;
 
-        {
-            let worker = Worker::new();
-            let scheduler_circuit = get_scheduler_circuit(source).unwrap();
-
-            let (_setup_base, _setup, vk, _setup_tree, _vars_hint, _wits_hint, finalization_hint) =
-                create_recursive_layer_setup_data(
-                    scheduler_circuit,
-                    &worker,
-                    RECURSION_LAYER_FRI_LDE_FACTOR,
-                    RECURSION_LAYER_CAP_SIZE,
-                );
-
-            source
-                .set_recursion_layer_vk(ZkSyncRecursionLayerVerificationKey::SchedulerCircuit(
-                    vk.clone(),
-                ))
-                .unwrap();
-            source
-                .set_recursion_layer_finalization_hint(
-                    ZkSyncRecursionLayerFinalizationHint::SchedulerCircuit(
-                        finalization_hint.clone(),
-                    ),
-                )
-                .unwrap();
-        }
+        generate_scheduler_vk(source).unwrap();
     }
 }
