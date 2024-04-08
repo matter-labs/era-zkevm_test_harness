@@ -1,6 +1,5 @@
 use super::*;
 
-#[ignore = "currently broken"]
 #[test_log::test]
 fn test_ptr_on_valid_input() {
     let asm = r#"
@@ -51,7 +50,6 @@ fn test_ptr_add_invalid_0() {
     run_and_try_create_witness_inner(asm, 50);
 }
 
-#[ignore = "currently broken"]
 #[test_log::test]
 fn test_ptr_to_global() {
     let asm = r#"

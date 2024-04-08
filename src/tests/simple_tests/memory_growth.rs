@@ -2,7 +2,6 @@ use super::*;
 
 // todo: move calls to another contract, so upper bound is not max value
 
-#[ignore = "currently broken"]
 #[test_log::test]
 fn test_memory_growth() {
     let asm = r#"
@@ -29,7 +28,6 @@ fn test_memory_growth() {
     run_and_try_create_witness_inner(asm, 50);
 }
 
-#[ignore = "currently broken"]
 #[test_log::test]
 fn test_ret_memory_growth() {
     let asm = r#"
@@ -52,7 +50,6 @@ fn test_ret_memory_growth() {
     run_and_try_create_witness_inner(asm, 50);
 }
 
-#[ignore = "currently broken"]
 #[test_log::test]
 fn test_ret_memory_growth_out_of_ergs() {
     let asm = r#"
@@ -77,7 +74,6 @@ fn test_ret_memory_growth_out_of_ergs() {
     run_and_try_create_witness_inner(asm, 50);
 }
 
-#[ignore = "currently broken"]
 #[test_log::test]
 fn test_new_uma_store() {
     let asm = r#"

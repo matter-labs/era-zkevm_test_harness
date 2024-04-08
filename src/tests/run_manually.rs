@@ -23,7 +23,6 @@ use crate::zkevm_circuits::main_vm::main_vm_entry_point;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use zkevm_assembly::Assembly;
 
-#[ignore = "currently broken"]
 #[test]
 fn run_and_try_create_witness() {
     // let asm = r#"
@@ -144,7 +143,6 @@ fn run_and_try_create_witness() {
     run_and_try_create_witness_inner(asm, 50);
 }
 
-#[ignore = "currently broken"]
 #[test]
 fn run_pseudo_benchmark() {
     let asm = r#"
@@ -214,6 +212,9 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         (U256::from_big_endian(&code_hash), code)
     }));
 
+    // We must pass a correct empty code hash (with proper version) into the run method.
+    let empty_code_hash = U256::from_big_endian(&bytecode_to_code_hash(&[[0; 32]]).unwrap());
+
     let mut storage_impl = InMemoryStorage::new();
     let mut tree = ZKSyncTestingTree::empty();
 
@@ -229,8 +230,8 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         entry_point_bytecode,
         vec![],
         false,
-        U256::zero(),
-        U256::zero(),
+        empty_code_hash,
+        empty_code_hash,
         used_bytecodes_and_hashes,
         vec![],
         cycle_limit,
