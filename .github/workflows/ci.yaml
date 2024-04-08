@@ -13,6 +13,7 @@ jobs:
           rustflags: ""
       - name: Setup rust
         run: |
+          ls
           rustup set profile minimal
           rustup toolchain install nightly-2023-08-23
           rustup default nightly-2023-08-23
