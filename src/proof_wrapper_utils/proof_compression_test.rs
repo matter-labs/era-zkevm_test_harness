@@ -343,6 +343,7 @@ mod test {
     }
 
     // Note - this a large test.
+    #[ignore = "Test too large (too much RAM) for CI"]
     #[test]
     fn perform_step_4_compression() {
         let source = LocalFileDataSource {
