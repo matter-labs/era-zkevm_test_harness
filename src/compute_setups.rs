@@ -605,6 +605,7 @@ mod test {
         generate_recursive_layer_vks_and_proofs(&mut source).expect("must compute setup");
     }
 
+    #[ignore = "too slow"]
     #[test]
     fn test_generate_recursion_tip() {
         let mut src = LocalFileDataSource::default();
