@@ -18,7 +18,7 @@ fn test_base_layer_circuit_synthesis() {
             None
         }
     });
-    let (base_layer_circuit, _, _) = generate_base_layer(test_artifact, 20000, geometry, blobs);
+    let (base_layer_circuit, _, _) = generate_base_layer(test_artifact, 40000, geometry, blobs);
     let circuit = base_layer_circuit
         .into_iter()
         .next()

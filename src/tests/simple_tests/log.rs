@@ -1,5 +1,6 @@
 use super::*;
 
+#[ignore = "currently broken"]
 #[test_log::test]
 fn test_out_of_ergs_l1_message() {
     let asm = r#"

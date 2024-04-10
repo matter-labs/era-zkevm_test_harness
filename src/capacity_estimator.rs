@@ -222,6 +222,7 @@ pub fn secp256r1_verify_capacity() -> usize {
 mod test {
     use super::*;
 
+    #[ignore = "too slow"]
     #[test_log::test]
     fn test_size_estimation() {
         println!("Size of main_vm_capacity: {}", main_vm_capacity());

@@ -4,7 +4,7 @@ on:
 
 jobs:
   build:
-    name: cargo build and test
+    name: cargo build
     runs-on: [ubuntu-22.04-github-hosted-32core]
     steps:
       - uses: actions/checkout@v3
@@ -16,8 +16,45 @@ jobs:
           rustup set profile minimal
           rustup toolchain install nightly-2023-08-23
           rustup default nightly-2023-08-23
-      - run: cargo build --verbose
-      - run: cargo test --verbose --all --no-run
+          cargo install cargo-nextest
+      - name: Compile main
+        run: cargo build --verbose
+      - name: Compile encodings
+        run: cargo build --manifest-path circuit_encodings/Cargo.toml --verbose
+      - name: compile api
+        run: cargo build --manifest-path circuit_sequencer_api/Cargo.toml --verbose
+      - name: compile definitions
+        run: cargo build --manifest-path circuit_definitions/Cargo.toml --verbose
+      - name: Compile kzg
+        run: cargo build --manifest-path kzg/Cargo.toml --verbose
+          
+
+
+  test:
+    name: cargo test
+    runs-on: [ubuntu-22.04-github-hosted-32core]
+    needs: build
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          rustflags: ""
+      - name: Setup rust
+        run: |
+          rustup set profile minimal
+          rustup toolchain install nightly-2023-08-23
+          rustup default nightly-2023-08-23
+          cargo install cargo-nextest
+      - name: Main test 
+        run: cargo nextest run --release
+      - name: Encodings test
+        run: cargo nextest run --release --manifest-path circuit_encodings/Cargo.toml
+      - name: Api tests
+        run: cargo nextest run --release --manifest-path circuit_sequencer_api/Cargo.toml
+      - name: Definitions test
+        run: cargo nextest run --release --manifest-path circuit_definitions/Cargo.toml
+      - name: Kzg tests
+        run: cargo nextest run --release --manifest-path kzg/Cargo.toml
 
   formatting:
     name: cargo fmt

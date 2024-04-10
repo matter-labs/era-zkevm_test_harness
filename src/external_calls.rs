@@ -72,6 +72,7 @@ pub fn run<
     geometry: GeometryConfig,
     storage: S,
     tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
+    trusted_setup_path: &str,
     eip_4844_repack_inputs: [Option<Vec<u8>>; MAX_4844_BLOBS_PER_BLOCK],
     circuit_callback: CB,
     queue_simulator_callback: QSCB,
@@ -240,6 +241,7 @@ pub fn run<
         default_aa_code_hash,
         evm_simulator_code_hash,
         eip_4844_repack_inputs.clone(),
+        trusted_setup_path,
         circuit_callback,
         queue_simulator_callback,
     );

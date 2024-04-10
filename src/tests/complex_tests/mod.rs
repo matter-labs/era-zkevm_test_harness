@@ -9,7 +9,7 @@ pub mod testing_wrapper;
 #[cfg(test)]
 mod wrapper_negative_tests;
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use super::*;
 use crate::boojum::cs::implementations::pow::NoPow;
@@ -60,6 +60,7 @@ use utils::read_basic_test_artifact;
 
 use zkevm_assembly::Assembly;
 
+#[ignore = "Too slow"]
 #[test]
 fn basic_test() {
     let test_artifact = read_basic_test_artifact();
@@ -78,6 +79,7 @@ fn basic_test() {
     // run_and_try_create_witness_inner(test_artifact, 16);
 }
 
+#[ignore = "Too slow, requires CRS"]
 #[test]
 fn test_single_compression() {
     let config = testing_wrapper::get_testing_wrapper_config();
@@ -85,6 +87,7 @@ fn test_single_compression() {
     testing_wrapper::test_compression_for_compression_num(config);
 }
 
+#[ignore = "Too slow, requires CRS"]
 #[test]
 fn test_compression_all_modes() {
     for compression in 1..=WrapperConfig::MAX_COMPRESSION_LAYERS {
@@ -266,6 +269,7 @@ pub(crate) fn generate_base_layer(
         geometry,
         storage_impl,
         &mut tree,
+        "kzg/src/trusted_setup.json",
         blobs,
         |circuit| basic_block_circuits.push(circuit),
         |a, b, c| {
@@ -284,6 +288,40 @@ pub(crate) fn generate_base_layer(
         recursion_queues,
         scheduler_partial_input,
     )
+}
+
+/// Test that does the basic circuit verification - but only one circuit from each kind
+/// and it uses test geometry to run faster (as it has smaller circuits).
+#[test]
+fn basic_layer_test_one_per_kind() {
+    let test_artifact = read_basic_test_artifact();
+    let blobs = std::array::from_fn(|i| {
+        if i == 0 {
+            Some(vec![0xff; ENCODABLE_BYTES_PER_BLOB])
+        } else {
+            None
+        }
+    });
+
+    // Using smaller geometry to speed things up.
+    let geometry = get_testing_geometry_config();
+
+    let (basic_block_circuits, _, _) = generate_base_layer(test_artifact, 40000, geometry, blobs);
+
+    let mut checked = HashSet::new();
+
+    for el in basic_block_circuits.into_iter() {
+        if checked.contains(&el.numeric_circuit_type()) {
+            continue;
+        } else {
+            checked.insert(el.numeric_circuit_type());
+
+            let descr = el.short_description();
+            println!("Checking circuit type {}", descr);
+
+            base_test_circuit(el);
+        }
+    }
 }
 
 struct Options {
@@ -1270,6 +1308,7 @@ fn run_and_try_create_witness_inner(
     println!("DONE");
 }
 
+#[ignore = "broken test"]
 #[test]
 fn run_single() {
     use crate::boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;

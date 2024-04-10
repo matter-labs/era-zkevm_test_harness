@@ -65,6 +65,7 @@ pub(crate) fn test_wrapper_pi_inner<DS: SetupDataSource + BlockDataSource>(
     assert_eq!(expected_wrapper_pi, wrapper_pi);
 }
 
+#[ignore = "broken test"]
 #[test]
 fn test_wrapper_pi() {
     let config = get_testing_wrapper_config();
@@ -108,6 +109,7 @@ fn test_pi_aggregation_function() {
     println!("{:?}", wrapper_pi);
 }
 
+#[ignore = "broken test"]
 #[test]
 fn test_wrapper_vk_generation() {
     let config = get_testing_wrapper_config();

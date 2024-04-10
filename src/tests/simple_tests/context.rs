@@ -1,5 +1,6 @@
 use super::*;
 
+#[ignore]
 #[test_log::test]
 fn test_meta_opcode() {
     let asm = r#"

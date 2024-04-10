@@ -195,6 +195,7 @@ pub fn create_artifacts_from_tracer<
     default_aa_code_hash: U256,
     evm_simulator_code_hash: U256,
     eip_4844_repack_inputs: [Option<Vec<u8>>; MAX_4844_BLOBS_PER_BLOCK],
+    trusted_setup_path: &str,
     mut circuit_callback: CB,
     mut recursion_queue_callback: QSCB,
 ) -> (
@@ -1873,10 +1874,7 @@ pub fn create_artifacts_from_tracer<
             };
             use crate::generate_eip4844_witness;
             let (chunks, linear_hash, versioned_hash, output_hash) =
-                generate_eip4844_witness::<GoldilocksField>(
-                    &input_witness[..],
-                    "kzg/src/trusted_setup.json",
-                );
+                generate_eip4844_witness::<GoldilocksField>(&input_witness[..], trusted_setup_path);
             let data_chunks: VecDeque<_> = chunks
                 .iter()
                 .map(|el| BlobChunkWitness { inner: *el })

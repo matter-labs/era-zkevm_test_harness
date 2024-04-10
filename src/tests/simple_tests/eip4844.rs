@@ -14,7 +14,7 @@ fn test_eip4844() {
         .for_each(|byte| *byte = rand::thread_rng().gen());
 
     let (blob_arr, linear_hash, versioned_hash, output_hash) =
-        generate_eip4844_witness::<GoldilocksField>(&blob, "src/kzg/trusted_setup.json");
+        generate_eip4844_witness::<GoldilocksField>(&blob, "kzg/src/trusted_setup.json");
     let blob = blob_arr
         .iter()
         .map(|el| BlobChunkWitness { inner: *el })
