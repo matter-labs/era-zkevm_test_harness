@@ -29,7 +29,7 @@ mod test {
     #[ignore = "For manual running only"]
     #[test]
     fn read_and_run() {
-        let circuit_file_name = "1_51_5_BasicCircuits_0.bin";
+        let circuit_file_name = "1_329_1_BasicCircuits_0.bin";
         let mut circuit = read_basic_circuit(circuit_file_name);
 
         // let mut circuit: BaseLayerCircuit = bincode::deserialize(&buffer).unwrap();
@@ -125,50 +125,70 @@ mod test {
         // let t: RecursionQueueSimulator<GoldilocksField> = bincode::deserialize(&buffer).unwrap();
         // dbg!(&t);
 
-        let circuit_file_name = "prover_jobs_fri_38142_0_3_NodeAggregation_1_raw.bin";
+        //let circuit_file_name = "prover_jobs_fri_38142_0_3_NodeAggregation_1_raw.bin";
+        let circuit_file_name = "1_0_1_Scheduler_0.bin";
+        //let circuit_file_name = "1_0_1_RecursionTip_0.bin";
 
         let mut content = std::fs::File::open(circuit_file_name).unwrap();
         let mut buffer = vec![];
         content.read_to_end(&mut buffer).unwrap();
 
-        let mut circuit: ZkSyncRecursiveLayerCircuit = bincode::deserialize(&buffer).unwrap();
-        // circuit.debug_witness();
+        let foo: CircuitWrapper = bincode::deserialize(&buffer).unwrap();
+        match foo {
+            CircuitWrapper::Base(_) => todo!(),
+            CircuitWrapper::Recursive(circuit) => {
+                match circuit.clone() {
+                    ZkSyncRecursiveLayerCircuit::SchedulerCircuit(inner) => {
+                        //dbg!(inner.witness);
 
-        match &mut circuit {
-            ZkSyncRecursiveLayerCircuit::SchedulerCircuit(_) => {
-                // dbg!(&inner.witness.leaf_layer_parameters);
-                // for el in inner.witness.proof_witnesses.iter() {
-                //     let vk = inner.witness.node_layer_vk_witness.clone();
-                //     // let vk = ZkSyncRecursionLayerVerificationKey::from_inner(ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8, vk);
-                //     // let proof = ZkSyncRecursionLayerProof::from_inner(ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8, el.clone());
-                //     let valid = verify_recursion_layer_proof_for_type::<NoPow>(
-                //         ZkSyncRecursionLayerStorageType::NodeLayerCircuit,
-                //         el,
-                //         &vk,
-                //     );
-                //     assert!(valid);
-                // }
-            }
-            ZkSyncRecursiveLayerCircuit::NodeLayerCircuit(inner) => {
-                let vk = inner.witness.vk_witness.clone();
-                for el in inner.witness.proof_witnesses.iter() {
-                    // let vk = ZkSyncRecursionLayerVerificationKey::from_inner(ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8, vk);
-                    // let proof = ZkSyncRecursionLayerProof::from_inner(ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8, el.clone());
-                    let valid = verify_recursion_layer_proof_for_type::<NoPow>(
-                        ZkSyncRecursionLayerStorageType::NodeLayerCircuit,
-                        el,
-                        &vk,
-                    );
-                    assert!(valid);
+                        let proof = inner.witness.proof_witnesses.back().unwrap();
+
+                        let mut source = LocalFileDataSource::default();
+                        let circuit = get_recursion_tip_circuit(&mut source).unwrap();
+                        let vk = source.get_recursion_tip_vk().unwrap().into_inner();
+
+                        let is_valid = verify_recursion_layer_proof::<NoPow>(&circuit, &proof, &vk);
+
+                        assert!(is_valid);
+                        println!("CRAZY -- Proof is valid !!");
+
+                        // dbg!(&inner.witness.leaf_layer_parameters);
+                        // for el in inner.witness.proof_witnesses.iter() {
+                        //     let vk = inner.witness.node_layer_vk_witness.clone();
+                        //     // let vk = ZkSyncRecursionLayerVerificationKey::from_inner(ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8, vk);
+                        //     // let proof = ZkSyncRecursionLayerProof::from_inner(ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8, el.clone());
+                        //     let valid = verify_recursion_layer_proof_for_type::<NoPow>(
+                        //         ZkSyncRecursionLayerStorageType::NodeLayerCircuit,
+                        //         el,
+                        //         &vk,
+                        //     );
+                        //     assert!(valid);
+                        // }
+                    }
+                    ZkSyncRecursiveLayerCircuit::NodeLayerCircuit(inner) => {
+                        let vk = inner.witness.vk_witness.clone();
+                        for el in inner.witness.proof_witnesses.iter() {
+                            // let vk = ZkSyncRecursionLayerVerificationKey::from_inner(ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8, vk);
+                            // let proof = ZkSyncRecursionLayerProof::from_inner(ZkSyncRecursionLayerStorageType::NodeLayerCircuit as u8, el.clone());
+                            let valid = verify_recursion_layer_proof_for_type::<NoPow>(
+                                ZkSyncRecursionLayerStorageType::NodeLayerCircuit,
+                                el,
+                                &vk,
+                            );
+                            assert!(valid);
+                        }
+                    }
+                    _ => {}
                 }
-            }
-            _ => {}
-        }
 
-        test_recursive_circuit(circuit);
+                test_recursive_circuit(circuit);
+            }
+        }
+        //let mut circuit: ZkSyncRecursiveLayerCircuit = bincode::deserialize(&buffer).unwrap();
+        // circuit.debug_witness();
     }
 
-    #[derive(serde::Serialize, serde::Deserialize)]
+    #[derive(serde::Serialize, serde::Deserialize, Debug)]
     pub enum FriProofWrapper {
         Base(ZkSyncBaseLayerProof),
         Recursive(ZkSyncRecursionLayerProof),
@@ -177,13 +197,28 @@ mod test {
     #[ignore = "For manual running only"]
     #[test]
     fn test_wrapper_layer() {
-        let proof_file_name = "proofs_fri_proof_33908687.bin";
+        let proof_file_name = "proof_471.bin"; //"proofs_fri_proof_33908687.bin";
 
         let mut content = std::fs::File::open(proof_file_name).unwrap();
         let mut buffer = vec![];
         content.read_to_end(&mut buffer).unwrap();
         let proof: FriProofWrapper = bincode::deserialize(&buffer).unwrap();
 
+        //dbg!(proof.clone());
+
+        let mut source = LocalFileDataSource::default();
+        let circuit = get_recursion_tip_circuit(&mut source).unwrap();
+        let vk = source.get_recursion_tip_vk().unwrap().into_inner();
+        if let FriProofWrapper::Recursive(proof) = &proof {
+            let inner = proof.clone().into_inner();
+            let is_valid = verify_recursion_layer_proof::<NoPow>(&circuit, &inner, &vk);
+
+            assert!(is_valid);
+            println!("Proof is valid !!");
+        }
+
+        return;
+        /*
         let vk_file_name = "scheduler_vk.json";
 
         let mut content = std::fs::File::open(vk_file_name).unwrap();
@@ -196,6 +231,6 @@ mod test {
         };
 
         let config = WrapperConfig::new(1);
-        let _ = wrap_proof(proof, vk, config);
+        let _ = wrap_proof(proof, vk, config);*/
     }
 }

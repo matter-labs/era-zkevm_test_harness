@@ -259,7 +259,7 @@ fn get_node_circuit(
 }
 
 /// Returns the recursion tip circuit
-fn get_recursion_tip_circuit(
+pub fn get_recursion_tip_circuit(
     source: &mut dyn SetupDataSource,
 ) -> crate::data_source::SourceResult<ZkSyncRecursiveLayerCircuit> {
     use crate::zkevm_circuits::recursion::recursion_tip::input::*;
