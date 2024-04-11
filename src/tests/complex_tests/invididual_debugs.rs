@@ -152,6 +152,11 @@ mod test {
                         assert!(is_valid);
                         println!("CRAZY -- Proof is valid !!");
 
+                        assert_eq!(
+                            inner.config.recursion_tip_vk,
+                            source.get_recursion_tip_vk().unwrap().into_inner()
+                        );
+
                         // dbg!(&inner.witness.leaf_layer_parameters);
                         // for el in inner.witness.proof_witnesses.iter() {
                         //     let vk = inner.witness.node_layer_vk_witness.clone();
