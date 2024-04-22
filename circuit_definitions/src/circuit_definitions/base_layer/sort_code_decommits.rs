@@ -12,8 +12,8 @@ pub struct CodeDecommittmentsSorterSynthesisFunction {
     _marker: std::marker::PhantomData<(F, R)>,
 }
 
-use zkevm_circuits::sort_decommittment_requests::input::*;
-use zkevm_circuits::sort_decommittment_requests::sort_and_deduplicate_code_decommittments_entry_point;
+use crate::zkevm_circuits::sort_decommittment_requests::input::*;
+use crate::zkevm_circuits::sort_decommittment_requests::sort_and_deduplicate_code_decommittments_entry_point;
 
 impl CircuitBuilder<F> for CodeDecommittmentsSorterSynthesisFunction
 where

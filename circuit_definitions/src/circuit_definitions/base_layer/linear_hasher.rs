@@ -12,8 +12,8 @@ pub struct LinearHasherInstanceSynthesisFunction {
     _marker: std::marker::PhantomData<(F, R)>,
 }
 
-use zkevm_circuits::linear_hasher::input::LinearHasherCircuitInstanceWitness;
-use zkevm_circuits::linear_hasher::linear_hasher_entry_point;
+use crate::zkevm_circuits::linear_hasher::input::LinearHasherCircuitInstanceWitness;
+use crate::zkevm_circuits::linear_hasher::linear_hasher_entry_point;
 
 impl CircuitBuilder<F> for LinearHasherInstanceSynthesisFunction
 where

@@ -12,8 +12,8 @@ pub struct LogDemuxInstanceSynthesisFunction {
     _marker: std::marker::PhantomData<(F, R)>,
 }
 
-use zkevm_circuits::demux_log_queue::demultiplex_storage_logs_enty_point;
-use zkevm_circuits::demux_log_queue::input::LogDemuxerCircuitInstanceWitness;
+use crate::zkevm_circuits::demux_log_queue::demultiplex_storage_logs_enty_point;
+use crate::zkevm_circuits::demux_log_queue::input::LogDemuxerCircuitInstanceWitness;
 
 impl CircuitBuilder<F> for LogDemuxInstanceSynthesisFunction
 where

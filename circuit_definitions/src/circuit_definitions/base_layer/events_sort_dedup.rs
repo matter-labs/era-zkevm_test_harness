@@ -12,8 +12,8 @@ pub struct EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction {
     _marker: std::marker::PhantomData<(F, R)>,
 }
 
-use zkevm_circuits::log_sorter::input::*;
-use zkevm_circuits::log_sorter::sort_and_deduplicate_events_entry_point;
+use crate::zkevm_circuits::log_sorter::input::*;
+use crate::zkevm_circuits::log_sorter::sort_and_deduplicate_events_entry_point;
 
 impl CircuitBuilder<F> for EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction
 where

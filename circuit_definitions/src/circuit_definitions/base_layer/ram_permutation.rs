@@ -12,8 +12,8 @@ pub struct RAMPermutationInstanceSynthesisFunction {
     _marker: std::marker::PhantomData<(F, R)>,
 }
 
-use zkevm_circuits::ram_permutation::input::*;
-use zkevm_circuits::ram_permutation::ram_permutation_entry_point;
+use crate::zkevm_circuits::ram_permutation::input::*;
+use crate::zkevm_circuits::ram_permutation::ram_permutation_entry_point;
 
 impl CircuitBuilder<F> for RAMPermutationInstanceSynthesisFunction
 where

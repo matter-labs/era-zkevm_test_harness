@@ -12,8 +12,8 @@ pub struct StorageSortAndDedupInstanceSynthesisFunction {
     _marker: std::marker::PhantomData<(F, R)>,
 }
 
-use zkevm_circuits::storage_validity_by_grand_product::input::*;
-use zkevm_circuits::storage_validity_by_grand_product::sort_and_deduplicate_storage_access_entry_point;
+use crate::zkevm_circuits::storage_validity_by_grand_product::input::*;
+use crate::zkevm_circuits::storage_validity_by_grand_product::sort_and_deduplicate_storage_access_entry_point;
 
 impl CircuitBuilder<F> for StorageSortAndDedupInstanceSynthesisFunction
 where

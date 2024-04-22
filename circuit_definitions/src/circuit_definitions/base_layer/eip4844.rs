@@ -27,8 +27,8 @@ pub struct EIP4844InstanceSynthesisFunction {
     _marker: std::marker::PhantomData<(F, R)>,
 }
 
-use zkevm_circuits::eip_4844::eip_4844_entry_point;
-use zkevm_circuits::eip_4844::input::*;
+use crate::zkevm_circuits::eip_4844::eip_4844_entry_point;
+use crate::zkevm_circuits::eip_4844::input::*;
 
 impl CircuitBuilder<F> for EIP4844InstanceSynthesisFunction
 where
@@ -156,9 +156,7 @@ where
     P: PrimeFieldLikeVectorized<Base = F>,
     CR: CircuitResolver<
         F,
-        zkevm_circuits::boojum::config::Resolver<
-            zkevm_circuits::boojum::config::DontPerformRuntimeAsserts,
-        >,
+        crate::boojum::config::Resolver<crate::boojum::config::DontPerformRuntimeAsserts>,
     >,
     usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>,
 

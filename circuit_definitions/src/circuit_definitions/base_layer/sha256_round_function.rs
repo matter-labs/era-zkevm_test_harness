@@ -12,8 +12,8 @@ pub struct Sha256RoundFunctionInstanceSynthesisFunction {
     _marker: std::marker::PhantomData<(F, R)>,
 }
 
-use zkevm_circuits::sha256_round_function::input::*;
-use zkevm_circuits::sha256_round_function::sha256_round_function_entry_point;
+use crate::zkevm_circuits::sha256_round_function::input::*;
+use crate::zkevm_circuits::sha256_round_function::sha256_round_function_entry_point;
 
 impl CircuitBuilder<F> for Sha256RoundFunctionInstanceSynthesisFunction
 where

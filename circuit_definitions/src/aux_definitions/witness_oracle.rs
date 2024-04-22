@@ -2,14 +2,13 @@ use crate::boojum::field::SmallField;
 use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 use crate::encodings::callstack_entry::*;
 use crate::ethereum_types::U256;
+use crate::zk_evm::{
+    aux_structures::{DecommittmentQuery, LogQuery, MemoryQuery, PubdataCost},
+    vm_state::CallStackEntry,
+};
+use crate::zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
 use derivative::*;
 use std::collections::VecDeque;
-use zk_evm::aux_structures::DecommittmentQuery;
-use zk_evm::aux_structures::LogQuery;
-use zk_evm::aux_structures::MemoryQuery;
-use zk_evm::aux_structures::PubdataCost;
-use zk_evm::vm_state::CallStackEntry;
-use zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
 
 pub fn u128_as_u32_le(value: u128) -> [u32; 4] {
     [
@@ -39,12 +38,12 @@ pub struct VmWitnessOracle<F: SmallField> {
         VecDeque<(u32, (ExtendedCallstackEntry<F>, CallstackSimulatorState<F>))>,
 }
 
-use zkevm_circuits::base_structures::decommit_query::DecommitQueryWitness;
-use zkevm_circuits::base_structures::log_query::LogQueryWitness;
-use zkevm_circuits::base_structures::memory_query::MemoryQueryWitness;
-use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecordWitness;
-use zkevm_circuits::main_vm::witness_oracle::MemoryWitness;
-use zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
+use crate::zkevm_circuits::base_structures::decommit_query::DecommitQueryWitness;
+use crate::zkevm_circuits::base_structures::log_query::LogQueryWitness;
+use crate::zkevm_circuits::base_structures::memory_query::MemoryQueryWitness;
+use crate::zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecordWitness;
+use crate::zkevm_circuits::main_vm::witness_oracle::MemoryWitness;
+use crate::zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
 
 impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
     fn get_memory_witness_for_read(
@@ -476,7 +475,7 @@ impl<F: SmallField> WitnessOracle<F> for VmWitnessOracle<F> {
 
             (witness, new_state)
         } else {
-            use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
+            use crate::zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
 
             (ExecutionContextRecord::placeholder_witness(), [F::ZERO; 12])
         }

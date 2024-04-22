@@ -14,10 +14,10 @@ use crate::circuit_definitions::implementations::proof::Proof;
 
 use crate::circuit_definitions::traits::circuit::ErasedBuilderForRecursiveVerifier;
 
+use crate::zkevm_circuits::boojum::cs::implementations::prover::ProofConfig;
+use crate::zkevm_circuits::boojum::cs::oracle::TreeHasher;
 use crate::zkevm_circuits::recursion::compression::*;
 use derivative::*;
-use zkevm_circuits::boojum::cs::implementations::prover::ProofConfig;
-use zkevm_circuits::boojum::cs::oracle::TreeHasher;
 
 use super::compression_modes::*;
 

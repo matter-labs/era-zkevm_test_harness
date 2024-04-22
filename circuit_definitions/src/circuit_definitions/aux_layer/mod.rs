@@ -12,10 +12,10 @@ use crate::circuit_definitions::cs_builder_reference::CsReferenceImplementationB
 use crate::circuit_definitions::implementations::reference_cs::CSReferenceAssembly;
 
 use crate::recursion_layer_proof_config;
+use crate::zkevm_circuits::recursion::compression::CompressionRecursionConfig;
 use snark_wrapper::boojum::config::CSConfig;
 use snark_wrapper::boojum::dag::CircuitResolver;
 use snark_wrapper::boojum::dag::StCircuitResolver;
-use zkevm_circuits::recursion::compression::CompressionRecursionConfig;
 
 use crate::ProofConfig;
 
@@ -147,9 +147,7 @@ impl ZkSyncCompressionLayerCircuit {
         CF: ProofCompressionFunction,
         CR: CircuitResolver<
             F,
-            zkevm_circuits::boojum::config::Resolver<
-                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts,
-            >,
+            crate::boojum::config::Resolver<crate::boojum::config::DontPerformRuntimeAsserts>,
         >,
         usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>,
     {
@@ -187,9 +185,7 @@ impl ZkSyncCompressionLayerCircuit {
         P: PrimeFieldLikeVectorized<Base = F>,
         CR: CircuitResolver<
             F,
-            zkevm_circuits::boojum::config::Resolver<
-                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts,
-            >,
+            crate::boojum::config::Resolver<crate::boojum::config::DontPerformRuntimeAsserts>,
         >,
         usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>,
     {
@@ -601,7 +597,7 @@ impl ZkSyncCompressionForWrapperCircuit {
 pub type ZkSyncCompressionLayerCircuitInput<F> =
     ZkSyncCompressionLayerStorage<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>;
 
-use zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
+use crate::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
 
 pub type ZkSyncCompressionLayerClosedFormInput<F> =
     ZkSyncCompressionLayerStorage<ClosedFormInputCompactFormWitness<F>>;

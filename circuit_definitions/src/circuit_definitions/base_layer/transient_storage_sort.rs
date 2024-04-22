@@ -12,8 +12,8 @@ pub struct TransientStorageSortAndDedupInstanceSynthesisFunction {
     _marker: std::marker::PhantomData<(F, R)>,
 }
 
-use zkevm_circuits::transient_storage_validity_by_grand_product::input::*;
-use zkevm_circuits::transient_storage_validity_by_grand_product::sort_and_deduplicate_transient_storage_access_entry_point;
+use crate::zkevm_circuits::transient_storage_validity_by_grand_product::input::*;
+use crate::zkevm_circuits::transient_storage_validity_by_grand_product::sort_and_deduplicate_transient_storage_access_entry_point;
 
 impl CircuitBuilder<F> for TransientStorageSortAndDedupInstanceSynthesisFunction
 where

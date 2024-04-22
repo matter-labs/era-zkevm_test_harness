@@ -14,8 +14,8 @@ pub struct VmMainInstanceSynthesisFunction {
     _marker: std::marker::PhantomData<(F, R)>,
 }
 
-use zkevm_circuits::fsm_input_output::circuit_inputs::main_vm::VmCircuitWitness;
-use zkevm_circuits::main_vm::main_vm_entry_point;
+use crate::zkevm_circuits::fsm_input_output::circuit_inputs::main_vm::VmCircuitWitness;
+use crate::zkevm_circuits::main_vm::main_vm_entry_point;
 
 impl CircuitBuilder<F> for VmMainInstanceSynthesisFunction
 where

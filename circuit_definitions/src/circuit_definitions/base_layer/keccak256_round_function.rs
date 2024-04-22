@@ -12,8 +12,8 @@ pub struct Keccak256RoundFunctionInstanceSynthesisFunction {
     _marker: std::marker::PhantomData<(F, R)>,
 }
 
-use zkevm_circuits::keccak256_round_function::input::Keccak256RoundFunctionCircuitInstanceWitness;
-use zkevm_circuits::keccak256_round_function::keccak256_round_function_entry_point;
+use crate::zkevm_circuits::keccak256_round_function::input::Keccak256RoundFunctionCircuitInstanceWitness;
+use crate::zkevm_circuits::keccak256_round_function::keccak256_round_function_entry_point;
 
 impl CircuitBuilder<F> for Keccak256RoundFunctionInstanceSynthesisFunction
 where

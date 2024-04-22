@@ -4,12 +4,12 @@ use crate::boojum::cs::implementations::setup::FinalizationHintsForProver;
 use crate::boojum::cs::traits::gate::GatePlacementStrategy;
 use crate::boojum::field::goldilocks::{GoldilocksExt2, GoldilocksField};
 use crate::boojum::gadgets::tables::*;
+use crate::zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
+use crate::zkevm_circuits::boojum::config::CSConfig;
+use crate::zkevm_circuits::boojum::dag::CircuitResolver;
+use crate::zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord;
+use crate::zkevm_circuits::tables::*;
 use snark_wrapper::boojum::dag::StCircuitResolver;
-use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
-use zkevm_circuits::boojum::config::CSConfig;
-use zkevm_circuits::boojum::dag::CircuitResolver;
-use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord;
-use zkevm_circuits::tables::*;
 
 use super::*;
 
@@ -140,7 +140,7 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
     }
 
     pub fn numeric_circuit_type(&self) -> u8 {
-        use zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
+        use crate::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 
         match &self {
             ZkSyncBaseLayerStorage::MainVM(..) => BaseLayerCircuitType::VM as u8,
@@ -204,7 +204,7 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
     }
 
     pub fn from_inner(numeric_type: u8, inner: T) -> Self {
-        use zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
+        use crate::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 
         match numeric_type {
             a if a == BaseLayerCircuitType::VM as u8 => Self::MainVM(inner),
@@ -333,9 +333,7 @@ where
         P: PrimeFieldLikeVectorized<Base = F>,
         CR: CircuitResolver<
             F,
-            zkevm_circuits::boojum::config::Resolver<
-                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts,
-            >,
+            crate::boojum::config::Resolver<crate::boojum::config::DontPerformRuntimeAsserts>,
         >,
         usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>,
     {
@@ -372,9 +370,7 @@ where
         P: PrimeFieldLikeVectorized<Base = F>,
         CR: CircuitResolver<
             F,
-            zkevm_circuits::boojum::config::Resolver<
-                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts,
-            >,
+            crate::boojum::config::Resolver<crate::boojum::config::DontPerformRuntimeAsserts>,
         >,
         usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>,
     {
@@ -503,7 +499,7 @@ where
     }
 
     pub fn numeric_circuit_type(&self) -> u8 {
-        use zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
+        use crate::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 
         match &self {
             ZkSyncBaseLayerCircuit::MainVM(..) => BaseLayerCircuitType::VM as u8,
@@ -549,7 +545,7 @@ where
 pub type ZkSyncBaseLayerCircuitInput<F> =
     ZkSyncBaseLayerStorage<[F; INPUT_OUTPUT_COMMITMENT_LENGTH]>;
 
-use zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
+use crate::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
 
 pub type ZkSyncBaseLayerClosedFormInput<F> =
     ZkSyncBaseLayerStorage<ClosedFormInputCompactFormWitness<F>>;

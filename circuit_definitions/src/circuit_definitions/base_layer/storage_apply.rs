@@ -12,8 +12,8 @@ pub struct StorageApplicationInstanceSynthesisFunction {
     _marker: std::marker::PhantomData<(F, R)>,
 }
 
-use zkevm_circuits::storage_application::input::StorageApplicationCircuitInstanceWitness;
-use zkevm_circuits::storage_application::storage_applicator_entry_point;
+use crate::zkevm_circuits::storage_application::input::StorageApplicationCircuitInstanceWitness;
+use crate::zkevm_circuits::storage_application::storage_applicator_entry_point;
 
 impl CircuitBuilder<F> for StorageApplicationInstanceSynthesisFunction
 where

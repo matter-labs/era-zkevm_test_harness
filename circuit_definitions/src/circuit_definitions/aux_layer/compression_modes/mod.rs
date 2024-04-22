@@ -19,7 +19,7 @@ use snark_wrapper::implementations::poseidon2::tree_hasher::AbsorptionModeReplac
 use snark_wrapper::rescue_poseidon::poseidon2::transcript::Poseidon2Transcript;
 use snark_wrapper::rescue_poseidon::poseidon2::*;
 
-use zkevm_circuits::boojum::cs::implementations::prover::ProofConfig;
+use crate::zkevm_circuits::boojum::cs::implementations::prover::ProofConfig;
 
 use crate::circuit_definitions::aux_layer::compression::ProofCompressionFunction;
 
