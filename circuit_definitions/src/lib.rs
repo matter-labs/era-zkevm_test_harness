@@ -54,6 +54,6 @@ pub use zk_evm::ethereum_types;
 
 pub type ZkSyncDefaultRoundFunction = Poseidon2Goldilocks;
 
-pub use zk_evm;
-pub use zkevm_circuits;
+pub use circuit_encodings::zk_evm;
+pub use circuit_encodings::zkevm_circuits;
 pub use zkevm_circuits::boojum;

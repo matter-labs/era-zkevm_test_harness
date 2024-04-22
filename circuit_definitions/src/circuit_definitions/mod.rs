@@ -10,13 +10,15 @@ use crate::boojum::gadgets::traits::round_function::*;
 use crate::boojum::gadgets::traits::witnessable::WitnessHookable;
 use crate::boojum::gadgets::u256::UInt256;
 use crate::boojum::implementations::poseidon2::Poseidon2Goldilocks;
+use circuit_encodings::zkevm_circuits::{
+    base_structures::{
+        decommit_query::DecommitQuery, log_query::LogQuery, memory_query::MemoryQuery,
+        vm_state::saved_context::ExecutionContextRecord,
+    },
+    fsm_input_output::circuit_inputs::INPUT_OUTPUT_COMMITMENT_LENGTH,
+    storage_validity_by_grand_product::TimestampedStorageLogRecord,
+};
 use crossbeam::atomic::AtomicCell;
-use zkevm_circuits::base_structures::decommit_query::DecommitQuery;
-use zkevm_circuits::base_structures::log_query::LogQuery;
-use zkevm_circuits::base_structures::memory_query::MemoryQuery;
-use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
-use zkevm_circuits::fsm_input_output::circuit_inputs::INPUT_OUTPUT_COMMITMENT_LENGTH;
-use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord;
 
 pub mod aux_layer;
 pub mod base_layer;

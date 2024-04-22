@@ -12,8 +12,8 @@ pub struct CodeDecommitterInstanceSynthesisFunction {
     _marker: std::marker::PhantomData<(F, R)>,
 }
 
-use zkevm_circuits::code_unpacker_sha256::input::*;
-use zkevm_circuits::code_unpacker_sha256::unpack_code_into_memory_entry_point;
+use crate::zkevm_circuits::code_unpacker_sha256::input::*;
+use crate::zkevm_circuits::code_unpacker_sha256::unpack_code_into_memory_entry_point;
 
 impl CircuitBuilder<F> for CodeDecommitterInstanceSynthesisFunction
 where

@@ -53,7 +53,7 @@ where
     [(); <ExecutionContextRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <TimestampedStorageLogRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
 {
-    use zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
+    use circuit_encodings::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 
     match circuit_type {
         i if i == BaseLayerCircuitType::VM as u8 => {
@@ -124,7 +124,7 @@ where
     [(); <ExecutionContextRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
     [(); <TimestampedStorageLogRecord<F> as CSAllocatableExt<F>>::INTERNAL_STRUCT_LEN]:,
 {
-    use zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
+    use circuit_encodings::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 
     match circuit_type {
         i if i == BaseLayerCircuitType::VM as u8 => {

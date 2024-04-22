@@ -8,9 +8,10 @@ use crate::boojum::cs::traits::gate::GatePlacementStrategy;
 use crate::boojum::gadgets::recursion::circuit_pow::*;
 use crate::boojum::gadgets::tables::*;
 use crate::circuit_definitions::base_layer::TARGET_CIRCUIT_TRACE_LENGTH;
-use zkevm_circuits::base_structures::recursion_query::RecursionQuery;
-use zkevm_circuits::scheduler::input::SchedulerCircuitInstanceWitness;
-use zkevm_circuits::scheduler::*;
+use crate::zkevm_circuits::{
+    base_structures::recursion_query::RecursionQuery,
+    scheduler::{input::SchedulerCircuitInstanceWitness, *},
+};
 
 use super::*;
 

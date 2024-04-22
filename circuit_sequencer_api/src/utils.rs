@@ -4,9 +4,9 @@ use crate::boojum::{
 };
 use circuit_encodings::{
     boojum::{algebraic_props::round_function::AbsorptionModeOverwrite, field::SmallField},
+    zk_evm::ethereum_types::U256,
     zkevm_circuits::scheduler::QUEUE_FINAL_STATE_COMMITMENT_LENGTH,
 };
-use zk_evm::ethereum_types::U256;
 
 pub fn calldata_to_aligned_data(calldata: &Vec<u8>) -> Vec<U256> {
     if calldata.len() == 0 {

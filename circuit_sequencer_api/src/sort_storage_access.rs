@@ -1,11 +1,10 @@
+use circuit_encodings::{
+    zk_evm::ethereum_types::U256, LogQueryLike, LogQueryLikeWithExtendedEnumeration,
+};
 use derivative::Derivative;
 use rayon::prelude::*;
 use std::cmp::Ordering;
 use std::iter::IntoIterator;
-use zk_evm::ethereum_types::U256;
-
-use circuit_encodings::LogQueryLike;
-use circuit_encodings::LogQueryLikeWithExtendedEnumeration;
 
 #[derive(Derivative)]
 #[derivative(Default(bound = ""), Debug)]

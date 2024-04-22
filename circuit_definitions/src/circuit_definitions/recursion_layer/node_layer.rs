@@ -1,15 +1,16 @@
 use crate::boojum::cs::implementations::pow::NoPow;
+use crate::zkevm_circuits::boojum::cs::gates::PublicInputGate;
 use derivative::*;
-use zkevm_circuits::boojum::cs::gates::PublicInputGate;
 
 use super::circuit_def::*;
 use crate::boojum::cs::implementations::transcript::GoldilocksPoisedon2Transcript;
 use crate::boojum::cs::implementations::transcript::Transcript;
 use crate::boojum::gadgets::recursion::circuit_pow::*;
 use crate::circuit_definitions::base_layer::TARGET_CIRCUIT_TRACE_LENGTH;
-use zkevm_circuits::base_structures::recursion_query::RecursionQuery;
-use zkevm_circuits::recursion::node_layer::input::*;
-use zkevm_circuits::recursion::node_layer::*;
+use crate::zkevm_circuits::{
+    base_structures::recursion_query::RecursionQuery,
+    recursion::node_layer::{input::*, *},
+};
 
 use super::*;
 

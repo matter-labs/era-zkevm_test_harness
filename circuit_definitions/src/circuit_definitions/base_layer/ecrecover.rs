@@ -12,8 +12,8 @@ pub struct ECRecoverFunctionInstanceSynthesisFunction {
     _marker: std::marker::PhantomData<(F, R)>,
 }
 
-use zkevm_circuits::ecrecover::input::*;
-use zkevm_circuits::ecrecover::{
+use crate::zkevm_circuits::ecrecover::input::*;
+use crate::zkevm_circuits::ecrecover::{
     ecrecover_function_entry_point, secp256k1::fixed_base_mul_table::*,
 };
 

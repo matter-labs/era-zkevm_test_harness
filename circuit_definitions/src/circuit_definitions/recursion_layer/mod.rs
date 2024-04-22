@@ -5,13 +5,15 @@ use crate::boojum::cs::implementations::proof::Proof;
 use crate::boojum::field::goldilocks::{GoldilocksExt2, GoldilocksField};
 use crate::boojum::gadgets::recursion::recursive_transcript::CircuitAlgebraicSpongeBasedTranscript;
 use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
+use crate::zkevm_circuits::{
+    base_structures::vm_state::saved_context::ExecutionContextRecord,
+    boojum::cs::traits::circuit::CircuitBuilder,
+    recursion::leaf_layer::input::RecursionLeafParametersWitness,
+    scheduler::aux::BaseLayerCircuitType,
+    storage_validity_by_grand_product::TimestampedStorageLogRecord,
+};
 use snark_wrapper::boojum::config::CSConfig;
 use snark_wrapper::boojum::dag::{CircuitResolver, StCircuitResolver};
-use zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
-use zkevm_circuits::boojum::cs::traits::circuit::CircuitBuilder;
-use zkevm_circuits::recursion::leaf_layer::input::RecursionLeafParametersWitness;
-use zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
-use zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord;
 
 pub mod circuit_def;
 pub mod leaf_layer;
@@ -35,7 +37,7 @@ pub const RECURSION_ARITY: usize = 32;
 // And with the current scheduler code, and SCHEDULER_CAPACITY set to 34100, the value is 1043851.
 pub const SCHEDULER_CAPACITY: usize = 34100;
 
-pub use zkevm_circuits::recursion::recursion_tip::input::RECURSION_TIP_ARITY;
+pub use crate::zkevm_circuits::recursion::recursion_tip::input::RECURSION_TIP_ARITY;
 
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone(bound = ""))]
@@ -630,8 +632,8 @@ impl ZkSyncRecursiveLayerCircuit {
         P: PrimeFieldLikeVectorized<Base = F>,
         CR: CircuitResolver<
             F,
-            zkevm_circuits::boojum::config::Resolver<
-                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts,
+            crate::zkevm_circuits::boojum::config::Resolver<
+                crate::zkevm_circuits::boojum::config::DontPerformRuntimeAsserts,
             >,
         >,
         usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>,
@@ -670,9 +672,7 @@ impl ZkSyncRecursiveLayerCircuit {
         P: PrimeFieldLikeVectorized<Base = F>,
         CR: CircuitResolver<
             F,
-            zkevm_circuits::boojum::config::Resolver<
-                zkevm_circuits::boojum::config::DontPerformRuntimeAsserts,
-            >,
+            crate::boojum::config::Resolver<crate::boojum::config::DontPerformRuntimeAsserts>,
         >,
         usize: Into<<CR as CircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>>::Arg>,
     {
