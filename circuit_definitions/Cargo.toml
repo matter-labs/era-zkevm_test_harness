@@ -19,3 +19,4 @@ seq-macro = "0.3.5"
 
 [features]
 default = []
+log_tracing = ["circuit_encodings/log_tracing"]
