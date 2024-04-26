@@ -44,6 +44,7 @@ use std::sync::Arc;
 
 use crate::zk_evm::zkevm_opcode_defs::system_params::{
     ECRECOVER_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
+    FRI_PROOF_VERIFY_ORACLE_PRECOMPILE_FORMAL_ADDRESS,
     KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
     SHA256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
 };
@@ -261,6 +262,7 @@ pub fn create_artifacts_from_tracer<
     let mut demuxed_sha256_precompile_queries = vec![];
     let mut demuxed_ecrecover_queries = vec![];
     let mut demuxed_secp256r1_verify_queries = vec![];
+    let mut demuxed_fri_proof_precompile_queries = vec![];
     let mut demuxed_transient_storage_queries = vec![];
 
     let mut original_log_queue_states = vec![];
@@ -498,6 +500,9 @@ pub fn create_artifacts_from_tracer<
                         }
                         a if a == *SECP256R1_VERIFY_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
                             demuxed_secp256r1_verify_queries.push(query);
+                        }
+                        a if a == *FRI_PROOF_VERIFY_ORACLE_PRECOMPILE_FORMAL_ADDRESS => {
+                            demuxed_fri_proof_precompile_queries.push(query);
                         }
                         _ => {
                             // just burn ergs
@@ -894,6 +899,7 @@ pub fn create_artifacts_from_tracer<
         artifacts.demuxed_sha256_precompile_queries = demuxed_sha256_precompile_queries;
         artifacts.demuxed_ecrecover_queries = demuxed_ecrecover_queries;
         artifacts.demuxed_secp256r1_verify_queries = demuxed_secp256r1_verify_queries;
+        artifacts.demuxed_fri_proof_precompile_queries = demuxed_fri_proof_precompile_queries;
         artifacts.demuxed_transient_storage_queries = demuxed_transient_storage_queries;
 
         tracing::debug!("Processing artifacts queue");

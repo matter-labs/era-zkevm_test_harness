@@ -114,6 +114,8 @@ pub fn compute_logs_demux<
         artifacts.demuxed_sha256_precompile_queries.iter();
     let mut demuxed_ecrecover_queries_it = artifacts.demuxed_ecrecover_queries.iter();
     let mut demuxed_secp256r1_verify_queries_it = artifacts.demuxed_secp256r1_verify_queries.iter();
+    let mut demuxed_fri_proof_precompile_queries_it =
+        artifacts.demuxed_fri_proof_precompile_queries.iter();
     let mut demuxed_transient_storage_it = artifacts.demuxed_transient_storage_queries.iter();
 
     let mut input_passthrough_data = LogDemuxerInputData::placeholder_witness();
@@ -242,6 +244,20 @@ pub fn compute_logs_demux<
                                 .states
                                 .push(intermediate_info);
                         }
+                        a if a == *FRI_PROOF_VERIFY_ORACLE_PRECOMPILE_FORMAL_ADDRESS => {
+                            let item = demuxed_fri_proof_precompile_queries_it
+                                .next()
+                                .copied()
+                                .unwrap();
+                            let (_old_tail, intermediate_info) = output_queues
+                                [DemuxOutput::FRIProofVerify as usize]
+                                .simulator
+                                .push_and_output_intermediate_data(item, round_function);
+
+                            output_queues[DemuxOutput::FRIProofVerify as usize]
+                                .states
+                                .push(intermediate_info);
+                        }
                         _ => {
                             // just burn ergs
                         }
@@ -330,6 +346,7 @@ pub fn compute_logs_demux<
     assert!(demuxed_sha256_precompile_queries_it.next().is_none());
     assert!(demuxed_ecrecover_queries_it.next().is_none());
     assert!(demuxed_secp256r1_verify_queries_it.next().is_none());
+    assert!(demuxed_fri_proof_precompile_queries_it.next().is_none());
     assert!(demuxed_transient_storage_it.next().is_none());
 
     (
