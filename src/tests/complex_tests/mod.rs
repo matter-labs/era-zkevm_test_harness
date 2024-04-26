@@ -36,6 +36,7 @@ use crate::zk_evm::utils::{bytecode_to_code_hash, contract_bytecode_to_words};
 use crate::zk_evm::witness_trace::VmWitnessTracer;
 use crate::zk_evm::GenericNoopTracer;
 use crate::zkevm_circuits::eip_4844::input::*;
+use crate::zkevm_circuits::recursion::NUM_BASE_LAYER_CIRCUITS;
 use crate::zkevm_circuits::scheduler::block_header::MAX_4844_BLOBS_PER_BLOCK;
 use crate::zkevm_circuits::scheduler::input::SchedulerCircuitInstanceWitness;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
@@ -148,7 +149,7 @@ fn get_testing_geometry_config() -> GeometryConfig {
         cycles_per_events_or_l1_messages_sorter: 4,
         cycles_per_secp256r1_verify_circuit: 2,
         cycles_per_transient_storage_sorter: 16,
-
+        cycles_per_fri_precompile_circuit: 1,
         limit_for_l1_messages_pudata_hasher: 32,
     }
 }
@@ -1083,7 +1084,8 @@ fn run_and_try_create_witness_inner(
     let node_vk = source.get_recursion_layer_node_vk().unwrap();
     // leaf params
     use crate::zkevm_circuits::recursion::leaf_layer::input::RecursionLeafParametersWitness;
-    let leaf_layer_params: [RecursionLeafParametersWitness<GoldilocksField>; 16] = leaf_vk_commits
+    let leaf_layer_params: [RecursionLeafParametersWitness<GoldilocksField>;
+        NUM_BASE_LAYER_CIRCUITS] = leaf_vk_commits
         .iter()
         .map(|el| el.1.clone())
         .collect::<Vec<_>>()

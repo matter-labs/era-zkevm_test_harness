@@ -1558,6 +1558,7 @@ pub fn create_artifacts_from_tracer<
             l1_messages_linear_hash_data,
             transient_storage_sorter_circuit_data,
             secp256r1_verify_circuits_data,
+            fri_proof_precompile_circuits_data,
             ..
         } = artifacts;
 
@@ -1858,6 +1859,33 @@ pub fn create_artifacts_from_tracer<
             secp256r1_verify_circuits_compact_forms_witnesses.clone(),
         );
 
+        // fri proof precompile
+        let circuit_type = BaseLayerCircuitType::FRIProofVerify;
+
+        let mut maker = CircuitMaker::new(
+            geometry.cycles_per_fri_precompile_circuit,
+            round_function.clone(),
+            &mut cs_for_witness_generation,
+            &mut cycles_used,
+        );
+
+        for circuit_input in fri_proof_precompile_circuits_data.into_iter() {
+            circuit_callback(ZkSyncBaseLayerCircuit::FRIProofVerificationPrecompile(
+                maker.process(circuit_input, circuit_type),
+            ));
+        }
+
+        let (
+            fri_proof_precompile_circuits,
+            queue_simulator,
+            fri_proof_precompile_circuits_compact_form_witness,
+        ) = maker.into_results();
+        recursion_queue_callback(
+            circuit_type as u64,
+            queue_simulator,
+            fri_proof_precompile_circuits_compact_form_witness.clone(),
+        );
+
         // eip 4844 circuits are basic, but they do not need closed form input commitments
         let circuit_type = BaseLayerCircuitType::EIP4844Repack;
         let mut maker = CircuitMaker::new(
@@ -1931,6 +1959,7 @@ pub fn create_artifacts_from_tracer<
             l1_messages_hasher_circuits,
             transient_storage_sorter_circuits,
             secp256r1_verify_circuits,
+            fri_proof_precompile_circuits,
         };
 
         // NOTE: this should follow in a sequence same as scheduler's work and `SEQUENCE_OF_CIRCUIT_TYPES`
@@ -1951,6 +1980,7 @@ pub fn create_artifacts_from_tracer<
             .chain(l1_messages_hasher_circuits_compact_forms_witnesses)
             .chain(transient_storage_sorter_circuits_compact_forms_witnesses)
             .chain(secp256r1_verify_circuits_compact_forms_witnesses)
+            .chain(fri_proof_precompile_circuits_compact_form_witness)
             .collect();
 
         (basic_circuits, all_compact_forms, eip_4844_circuits)

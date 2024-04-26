@@ -182,6 +182,14 @@ pub fn create_base_layer_setup_data(
             let (_, finalization_hint) = cs.pad_and_shrink();
             (cs.into_assembly::<std::alloc::Global>(), finalization_hint)
         }
+        ZkSyncBaseLayerCircuit::FRIProofVerificationPrecompile(inner) => {
+            let builder = inner.configure_builder_proxy(builder);
+            let mut cs = builder.build(num_vars.unwrap());
+            inner.add_tables_proxy(&mut cs);
+            inner.synthesize_proxy(&mut cs);
+            let (_, finalization_hint) = cs.pad_and_shrink();
+            (cs.into_assembly::<std::alloc::Global>(), finalization_hint)
+        }
         ZkSyncBaseLayerCircuit::EIP4844Repack(inner) => {
             let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(num_vars.unwrap());
@@ -357,6 +365,14 @@ pub fn prove_base_layer_circuit<POW: PoWRunner>(
             cs.pad_and_shrink_using_hint(finalization_hint);
             cs.into_assembly::<std::alloc::Global>()
         }
+        ZkSyncBaseLayerCircuit::FRIProofVerificationPrecompile(inner) => {
+            let builder = inner.configure_builder_proxy(builder);
+            let mut cs = builder.build(num_vars.unwrap());
+            inner.add_tables_proxy(&mut cs);
+            inner.synthesize_proxy(&mut cs);
+            cs.pad_and_shrink_using_hint(finalization_hint);
+            cs.into_assembly::<std::alloc::Global>()
+        }
         ZkSyncBaseLayerCircuit::EIP4844Repack(inner) => {
             let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(num_vars.unwrap());
@@ -460,7 +476,8 @@ pub fn create_recursive_layer_setup_data(
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForL1MessagesHasher(inner)
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForTransientStorageSorter(inner)
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForSecp256r1Verify(inner)
-        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForEIP4844Repack(inner) => {
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForEIP4844Repack(inner)
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForFRIProofVerificationPrecompile(inner) => {
             let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(num_vars.unwrap());
             inner.add_tables(&mut cs);
@@ -556,7 +573,8 @@ pub fn prove_recursion_layer_circuit<POW: PoWRunner>(
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForL1MessagesHasher(inner)
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForTransientStorageSorter(inner)
         | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForSecp256r1Verify(inner)
-        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForEIP4844Repack(inner) => {
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForEIP4844Repack(inner)
+        | ZkSyncRecursiveLayerCircuit::LeafLayerCircuitForFRIProofVerificationPrecompile(inner) => {
             let builder = inner.configure_builder_proxy(builder);
             let mut cs = builder.build(num_vars.unwrap());
             inner.add_tables(&mut cs);

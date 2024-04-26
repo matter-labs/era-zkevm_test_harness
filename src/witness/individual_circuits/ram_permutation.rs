@@ -26,7 +26,7 @@ pub fn compute_ram_circuit_snapshots<
     CB: FnMut(ZkSyncBaseLayerCircuit),
     QSCB: FnMut(u64, RecursionQueueSimulator<Field>, Vec<ClosedFormInputCompactFormWitness<Field>>),
 >(
-    artifacts: &mut FullBlockArtifacts<Field>,
+    artifacts: &mut FullBlockArtifacts<Field, H, EXT>,
     round_function: &RoundFunction,
     num_non_deterministic_heap_queries: usize,
     per_circuit_capacity: usize,

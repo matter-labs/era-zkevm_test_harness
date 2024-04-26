@@ -2,6 +2,7 @@ use super::*;
 
 pub mod compression;
 pub mod compression_modes;
+pub mod fri_proof_verification;
 pub mod wrapper;
 
 use crate::boojum::config::ProvingCSConfig;

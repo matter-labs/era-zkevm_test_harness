@@ -51,7 +51,7 @@ pub trait ZkSyncUniformSynthesisFunction<F: SmallField>:
 
     fn add_tables<CS: ConstraintSystem<F>>(cs: &mut CS);
 
-    fn synthesize_into_cs_inner<CS: ConstraintSystem<F>>(
+    fn synthesize_into_cs_inner<CS: ConstraintSystem<F> + 'static>(
         cs: &mut CS,
         witness: Self::Witness,
         round_function: &Self::RoundFunction,
@@ -126,7 +126,7 @@ impl<F: SmallField, S: ZkSyncUniformSynthesisFunction<F>> ZkSyncUniformCircuitIn
         S::size_hint()
     }
 
-    pub fn synthesize_proxy<CS: ConstraintSystem<F>>(self, cs: &mut CS) {
+    pub fn synthesize_proxy<CS: ConstraintSystem<F> + 'static>(self, cs: &mut CS) {
         let Self {
             witness,
             config,

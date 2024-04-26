@@ -2,6 +2,7 @@ use super::*;
 
 use crate::witness::utils::*;
 use crate::zkevm_circuits::eip_4844::input::EIP4844OutputData;
+use crate::zkevm_circuits::fri_proof_verification_precompile::FRIProofVerificationCircuitFSMInputOutput;
 use circuit_definitions::boojum::field::U64Representable;
 use circuit_definitions::boojum::gadgets::traits::allocatable::CSAllocatable;
 use circuit_definitions::boojum::gadgets::traits::encodable::CircuitVarLengthEncodable;
@@ -25,6 +26,7 @@ use circuit_definitions::zkevm_circuits::demux_log_queue::input::LogDemuxerOutpu
 use circuit_definitions::zkevm_circuits::ecrecover::EcrecoverCircuitFSMInputOutput;
 use circuit_definitions::zkevm_circuits::ecrecover::EcrecoverCircuitInstanceWitness;
 use circuit_definitions::zkevm_circuits::eip_4844::input::EIP4844CircuitInstanceWitness;
+use circuit_definitions::zkevm_circuits::fri_proof_verification_precompile::FRIProofVerificationCircuitInstanceWitness;
 use circuit_definitions::zkevm_circuits::fsm_input_output::{
     ClosedFormInputCompactFormWitness, ClosedFormInputWitness,
 };
@@ -59,6 +61,7 @@ use circuit_definitions::zkevm_circuits::storage_validity_by_grand_product::inpu
 use circuit_definitions::zkevm_circuits::storage_validity_by_grand_product::input::StorageDeduplicatorOutputData;
 use circuit_definitions::zkevm_circuits::transient_storage_validity_by_grand_product::input::TransientStorageDeduplicatorInstanceWitness;
 use circuit_definitions::zkevm_circuits::transient_storage_validity_by_grand_product::input::*;
+
 use circuit_definitions::Field;
 use crossbeam::atomic::AtomicCell;
 use std::sync::Arc;
@@ -92,6 +95,8 @@ pub struct BlockFirstAndLastBasicCircuits {
         FirstAndLastCircuit<TransientStorageSortAndDedupInstanceSynthesisFunction>,
     pub secp256r1_verify_circuits:
         FirstAndLastCircuit<Secp256r1VerifyFunctionInstanceSynthesisFunction>,
+    pub fri_proof_precompile_circuits:
+        FirstAndLastCircuit<FRIProofVerificationFunctionInstanceSynthesisFunction>,
 }
 
 pub struct FirstAndLastCircuit<S>
@@ -287,6 +292,23 @@ impl<F: SmallField> ClosedFormInputField<F> for TransientStorageDeduplicatorInst
 
 impl<F: SmallField> ClosedFormInputField<F> for Secp256r1VerifyCircuitInstanceWitness<F> {
     type T = Secp256r1VerifyCircuitFSMInputOutput<F>;
+    type IN = PrecompileFunctionInputData<F>;
+    type OUT = PrecompileFunctionOutputData<F>;
+
+    fn closed_form_input(
+        &mut self,
+    ) -> &mut ClosedFormInputWitness<F, Self::T, Self::IN, Self::OUT> {
+        &mut self.closed_form_input
+    }
+}
+
+use crate::boojum::cs::oracle::TreeHasher;
+use crate::boojum::field::FieldExtension;
+
+impl<F: SmallField, H: TreeHasher<F>, EXT: FieldExtension<2, BaseField = F>> ClosedFormInputField<F>
+    for FRIProofVerificationCircuitInstanceWitness<F, H, EXT>
+{
+    type T = FRIProofVerificationCircuitFSMInputOutput<F>;
     type IN = PrecompileFunctionInputData<F>;
     type OUT = PrecompileFunctionOutputData<F>;
 

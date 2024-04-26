@@ -18,8 +18,10 @@ use std::cmp::Ordering;
 pub fn compute_decommitts_sorter_circuit_snapshots<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+    H: TreeHasher<F>,
+    EXT: FieldExtension<2, BaseField = F>,
 >(
-    artifacts: &mut FullBlockArtifacts<F>,
+    artifacts: &mut FullBlockArtifacts<F, H, EXT>,
     deduplicated_decommittment_queue_simulator: &mut DecommittmentQueueSimulator<F>,
     deduplicated_decommittment_queue_states: &mut Vec<DecommittmentQueueState<F>>,
     deduplicated_decommit_requests_with_data: &mut Vec<(DecommittmentQuery, Vec<U256>)>,

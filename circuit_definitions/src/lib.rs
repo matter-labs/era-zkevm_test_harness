@@ -5,6 +5,7 @@
 #![feature(iter_array_chunks)]
 #![feature(iter_next_chunk)]
 #![feature(associated_type_defaults)]
+#![feature(allocator_api)]
 
 pub type Field = GoldilocksField;
 pub type RoundFunction = Poseidon2Goldilocks;

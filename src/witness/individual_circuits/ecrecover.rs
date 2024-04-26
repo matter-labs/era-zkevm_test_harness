@@ -11,8 +11,10 @@ use circuit_definitions::encodings::*;
 pub fn ecrecover_decompose_into_per_circuit_witness<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+    H: TreeHasher<F>,
+    EXT: FieldExtension<2, BaseField = F>,
 >(
-    artifacts: &mut FullBlockArtifacts<F>,
+    artifacts: &mut FullBlockArtifacts<F, H, EXT>,
     mut demuxed_ecrecover_queue: LogQueue<F>,
     num_rounds_per_circuit: usize,
     round_function: &R,

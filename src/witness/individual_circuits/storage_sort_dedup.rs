@@ -9,8 +9,10 @@ use circuit_definitions::encodings::*;
 pub fn compute_storage_dedup_and_sort<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
+    H: TreeHasher<F>,
+    EXT: FieldExtension<2, BaseField = F>,
 >(
-    artifacts: &mut FullBlockArtifacts<F>,
+    artifacts: &mut FullBlockArtifacts<F, H, EXT>,
     demuxed_rollup_storage_queue: LogQueue<F>,
     per_circuit_capacity: usize,
     round_function: &R,

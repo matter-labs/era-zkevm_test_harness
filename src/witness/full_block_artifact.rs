@@ -1,3 +1,5 @@
+use crate::boojum::cs::oracle::TreeHasher;
+use crate::boojum::field::FieldExtension;
 use crate::boojum::field::SmallField;
 use crate::ethereum_types::U256;
 use crate::zk_evm::aux_structures::DecommittmentQuery;
@@ -22,10 +24,15 @@ use circuit_definitions::encodings::*;
 use circuit_definitions::zkevm_circuits::secp256r1_verify::Secp256r1VerifyCircuitInstanceWitness;
 use circuit_definitions::zkevm_circuits::transient_storage_validity_by_grand_product::input::TransientStorageDeduplicatorInstanceWitness;
 use derivative::Derivative;
+use kzg::zkevm_circuits::fri_proof_verification_precompile::FRIProofVerificationCircuitInstanceWitness;
 
 #[derive(Derivative)]
 #[derivative(Clone, Default(bound = ""))]
-pub struct FullBlockArtifacts<F: SmallField> {
+pub struct FullBlockArtifacts<
+    F: SmallField,
+    H: TreeHasher<F>,
+    EXT: FieldExtension<2, BaseField = F>,
+> {
     pub is_processed: bool,
     pub memory_queue_simulator: MemoryQueueSimulator<F>,
     //
@@ -50,6 +57,7 @@ pub struct FullBlockArtifacts<F: SmallField> {
     pub demuxed_ecrecover_queries: Vec<LogQuery>,
     pub demuxed_transient_storage_queries: Vec<LogQuery>,
     pub demuxed_secp256r1_verify_queries: Vec<LogQuery>,
+    pub demuxed_fri_proof_precompile_queries: Vec<LogQuery>,
 
     // deduplicated
     pub deduplicated_rollup_storage_queries: Vec<LogQuery>,
@@ -61,6 +69,7 @@ pub struct FullBlockArtifacts<F: SmallField> {
     pub sha256_round_function_witnesses: Vec<(u32, LogQuery, Vec<Sha256RoundWitness>)>,
     pub ecrecover_witnesses: Vec<(u32, LogQuery, ECRecoverRoundWitness)>,
     pub secp256r1_verify_witnesses: Vec<(u32, LogQuery, Secp256r1VerifyRoundWitness)>,
+    pub fri_proof_precompile_witnesses: Vec<(u32, LogQuery, ())>,
 
     // processed code decommitter circuits, as well as sorting circuit
     pub code_decommitter_circuits_data: Vec<CodeDecommitterCircuitInstanceWitness<F>>,
@@ -79,6 +88,9 @@ pub struct FullBlockArtifacts<F: SmallField> {
     pub ecrecover_circuits_data: Vec<EcrecoverCircuitInstanceWitness<F>>,
     //
     pub secp256r1_verify_circuits_data: Vec<Secp256r1VerifyCircuitInstanceWitness<F>>,
+    //
+    pub fri_proof_precompile_circuits_data:
+        Vec<FRIProofVerificationCircuitInstanceWitness<F, H, EXT>>,
     //
     pub l1_messages_linear_hash_data: Vec<LinearHasherCircuitInstanceWitness<F>>,
 }

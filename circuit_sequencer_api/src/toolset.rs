@@ -15,6 +15,7 @@ pub struct GeometryConfig {
     pub cycles_per_sha256_circuit: u32,
     pub cycles_per_ecrecover_circuit: u32,
     pub cycles_per_secp256r1_verify_circuit: u32,
+    pub cycles_per_fri_precompile_circuit: u32,
     pub cycles_per_transient_storage_sorter: u32,
 
     pub limit_for_l1_messages_pudata_hasher: u32,

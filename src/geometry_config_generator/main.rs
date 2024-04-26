@@ -81,6 +81,7 @@ pub fn compute_config() -> GeometryConfig {
         cycles_per_ecrecover_circuit,
         cycles_per_secp256r1_verify_circuit,
         cycles_per_transient_storage_sorter,
+        cycles_per_fri_precompile_circuit: todo!(),
         limit_for_l1_messages_pudata_hasher,
     };
     config

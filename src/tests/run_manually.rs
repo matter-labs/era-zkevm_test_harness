@@ -198,6 +198,7 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         cycles_per_ecrecover_circuit: 1,
         cycles_per_secp256r1_verify_circuit: 1,
         cycles_per_transient_storage_sorter: 4,
+        cycles_per_fri_precompile_circuit: 1,
 
         limit_for_l1_messages_pudata_hasher: 8,
     };

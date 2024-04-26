@@ -2,6 +2,7 @@ use crate::boojum::cs::gates::*;
 use crate::boojum::cs::implementations::proof::Proof;
 use crate::boojum::cs::implementations::setup::FinalizationHintsForProver;
 use crate::boojum::cs::traits::gate::GatePlacementStrategy;
+use crate::boojum::dag::StCircuitResolver;
 use crate::boojum::field::goldilocks::{GoldilocksExt2, GoldilocksField};
 use crate::boojum::gadgets::tables::*;
 use crate::zkevm_circuits::base_structures::vm_state::saved_context::ExecutionContextRecord;
@@ -9,7 +10,6 @@ use crate::zkevm_circuits::boojum::config::CSConfig;
 use crate::zkevm_circuits::boojum::dag::CircuitResolver;
 use crate::zkevm_circuits::storage_validity_by_grand_product::TimestampedStorageLogRecord;
 use crate::zkevm_circuits::tables::*;
-use snark_wrapper::boojum::dag::StCircuitResolver;
 
 use super::*;
 
@@ -31,12 +31,14 @@ pub mod transient_storage_sort;
 pub mod vm_main;
 // pub mod l1_messages_sort_dedup; // equal to one above
 pub mod eip4844;
+pub mod fri_proof_verification;
 pub mod linear_hasher;
 
 pub use self::code_decommitter::CodeDecommitterInstanceSynthesisFunction;
 pub use self::ecrecover::ECRecoverFunctionInstanceSynthesisFunction;
 pub use self::eip4844::EIP4844InstanceSynthesisFunction;
 pub use self::events_sort_dedup::EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction;
+pub use self::fri_proof_verification::FRIProofVerificationFunctionInstanceSynthesisFunction;
 pub use self::keccak256_round_function::Keccak256RoundFunctionInstanceSynthesisFunction;
 pub use self::linear_hasher::LinearHasherInstanceSynthesisFunction;
 pub use self::log_demux::LogDemuxInstanceSynthesisFunction;
@@ -90,6 +92,10 @@ pub type Secp256r1VerifyCircuit =
     ZkSyncUniformCircuitInstance<GoldilocksField, Secp256r1VerifyFunctionInstanceSynthesisFunction>;
 pub type EIP4844Circuit =
     ZkSyncUniformCircuitInstance<GoldilocksField, EIP4844InstanceSynthesisFunction>;
+pub type FRIProofVerificationCircuit = ZkSyncUniformCircuitInstance<
+    GoldilocksField,
+    FRIProofVerificationFunctionInstanceSynthesisFunction,
+>;
 
 #[derive(derivative::Derivative, serde::Serialize, serde::Deserialize)]
 #[derivative(Clone(bound = ""), Debug)]
@@ -113,6 +119,7 @@ pub enum ZkSyncBaseLayerStorage<
     TransientStorageSorter(T),
     Secp256r1Verify(T),
     EIP4844Repack(T),
+    FRIProofVerificationPrecompile(T),
 }
 
 impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned>
@@ -136,6 +143,7 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             ZkSyncBaseLayerStorage::TransientStorageSorter(..) => "Transient storage sorter",
             ZkSyncBaseLayerStorage::Secp256r1Verify(..) => "Secp256r1 signature verifier",
             ZkSyncBaseLayerStorage::EIP4844Repack(..) => "EIP4844 repacker",
+            ZkSyncBaseLayerStorage::FRIProofVerificationPrecompile(..) => "FRI proof precompile",
         }
     }
 
@@ -179,6 +187,9 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
                 BaseLayerCircuitType::Secp256r1Verify as u8
             }
             ZkSyncBaseLayerStorage::EIP4844Repack(..) => BaseLayerCircuitType::EIP4844Repack as u8,
+            ZkSyncBaseLayerStorage::FRIProofVerificationPrecompile(..) => {
+                BaseLayerCircuitType::FRIProofVerify as u8
+            }
         }
     }
 
@@ -200,6 +211,7 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             ZkSyncBaseLayerStorage::TransientStorageSorter(inner) => inner,
             ZkSyncBaseLayerStorage::Secp256r1Verify(inner) => inner,
             ZkSyncBaseLayerStorage::EIP4844Repack(inner) => inner,
+            ZkSyncBaseLayerStorage::FRIProofVerificationPrecompile(inner) => inner,
         }
     }
 
@@ -235,6 +247,9 @@ impl<T: Clone + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned
             }
             a if a == BaseLayerCircuitType::Secp256r1Verify as u8 => Self::Secp256r1Verify(inner),
             a if a == BaseLayerCircuitType::EIP4844Repack as u8 => Self::EIP4844Repack(inner),
+            a if a == BaseLayerCircuitType::FRIProofVerify as u8 => {
+                Self::FRIProofVerificationPrecompile(inner)
+            }
             a @ _ => panic!("unknown numeric type {}", a),
         }
     }
@@ -271,6 +286,7 @@ where
     TransientStorageSorter(TransientStorageSorterCircuit),
     Secp256r1Verify(Secp256r1VerifyCircuit),
     EIP4844Repack(EIP4844Circuit),
+    FRIProofVerificationPrecompile(FRIProofVerificationCircuit),
 }
 
 impl ZkSyncBaseLayerCircuit
@@ -301,6 +317,7 @@ where
             ZkSyncBaseLayerCircuit::TransientStorageSorter(..) => "Transient storage sorter",
             ZkSyncBaseLayerCircuit::Secp256r1Verify(..) => "Secp256r1 verify",
             ZkSyncBaseLayerCircuit::EIP4844Repack(..) => "EIP4844 repacker",
+            ZkSyncBaseLayerCircuit::FRIProofVerificationPrecompile(..) => "FRI proof precompile",
         }
     }
 
@@ -322,6 +339,7 @@ where
             ZkSyncBaseLayerCircuit::TransientStorageSorter(inner) => inner.size_hint(),
             ZkSyncBaseLayerCircuit::Secp256r1Verify(inner) => inner.size_hint(),
             ZkSyncBaseLayerCircuit::EIP4844Repack(inner) => inner.size_hint(),
+            ZkSyncBaseLayerCircuit::FRIProofVerificationPrecompile(inner) => inner.size_hint(),
         }
     }
 
@@ -419,6 +437,9 @@ where
             ZkSyncBaseLayerCircuit::EIP4844Repack(inner) => {
                 Self::synthesis_inner::<_, CR>(inner, hint)
             }
+            ZkSyncBaseLayerCircuit::FRIProofVerificationPrecompile(inner) => {
+                Self::synthesis_inner::<_, CR>(inner, hint)
+            }
         }
     }
 
@@ -440,6 +461,7 @@ where
             ZkSyncBaseLayerCircuit::TransientStorageSorter(inner) => inner.geometry_proxy(),
             ZkSyncBaseLayerCircuit::Secp256r1Verify(inner) => inner.geometry_proxy(),
             ZkSyncBaseLayerCircuit::EIP4844Repack(inner) => inner.geometry_proxy(),
+            ZkSyncBaseLayerCircuit::FRIProofVerificationPrecompile(inner) => inner.geometry_proxy(),
         }
     }
 
@@ -493,6 +515,9 @@ where
             ZkSyncBaseLayerCircuit::EIP4844Repack(inner) => {
                 inner.debug_witness();
             }
+            ZkSyncBaseLayerCircuit::FRIProofVerificationPrecompile(inner) => {
+                inner.debug_witness();
+            }
         };
 
         ()
@@ -538,6 +563,9 @@ where
                 BaseLayerCircuitType::Secp256r1Verify as u8
             }
             ZkSyncBaseLayerCircuit::EIP4844Repack(..) => BaseLayerCircuitType::EIP4844Repack as u8,
+            ZkSyncBaseLayerCircuit::FRIProofVerificationPrecompile(..) => {
+                BaseLayerCircuitType::FRIProofVerify as u8
+            }
         }
     }
 }

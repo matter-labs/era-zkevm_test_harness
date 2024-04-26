@@ -1,7 +1,12 @@
 use super::*;
 use crate::witness::utils::*;
 
+use crate::boojum::algebraic_props::round_function::AbsorptionModeOverwrite;
 use crate::boojum::algebraic_props::round_function::AlgebraicRoundFunction;
+use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
+use crate::boojum::cs::oracle::TreeHasher;
+use crate::boojum::field::goldilocks::GoldilocksExt2;
+use crate::boojum::field::FieldExtension;
 use crate::boojum::field::SmallField;
 use crate::boojum::gadgets::queue::CircuitQueueRawWitness;
 use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
@@ -12,6 +17,9 @@ use crate::zkevm_circuits::base_structures::vm_state::FULL_SPONGE_QUEUE_STATE_WI
 use crate::zkevm_circuits::fsm_input_output::*;
 use crate::zkevm_circuits::DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS;
 use std::collections::VecDeque;
+
+type EXT = GoldilocksExt2;
+type H = GoldilocksPoseidon2Sponge<AbsorptionModeOverwrite>;
 
 pub mod data_hasher_and_merklizer;
 pub mod decommit_code;

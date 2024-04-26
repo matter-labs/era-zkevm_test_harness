@@ -31,7 +31,7 @@ pub fn decompose_into_storage_application_witnesses<
         Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
     ),
 >(
-    artifacts: &mut FullBlockArtifacts<GoldilocksField>,
+    artifacts: &mut FullBlockArtifacts<GoldilocksField, H, EXT>,
     tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
     round_function: &Poseidon2Goldilocks,
     num_rounds_per_circuit: usize,

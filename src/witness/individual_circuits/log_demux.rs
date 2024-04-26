@@ -22,7 +22,7 @@ pub fn compute_logs_demux<
     CB: FnMut(ZkSyncBaseLayerCircuit),
     QSCB: FnMut(u64, RecursionQueueSimulator<Field>, Vec<ClosedFormInputCompactFormWitness<Field>>),
 >(
-    artifacts: &mut FullBlockArtifacts<Field>,
+    artifacts: &mut FullBlockArtifacts<Field, H, EXT>,
     per_circuit_capacity: usize,
     round_function: &RoundFunction,
     geometry: &GeometryConfig,
@@ -94,6 +94,7 @@ pub fn compute_logs_demux<
 
     use crate::zk_evm::zkevm_opcode_defs::system_params::{
         ECRECOVER_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
+        FRI_PROOF_VERIFY_ORACLE_PRECOMPILE_FORMAL_ADDRESS,
         KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
         SECP256R1_VERIFY_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
         SHA256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
