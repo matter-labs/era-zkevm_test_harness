@@ -1,6 +1,5 @@
 use super::*;
 
-#[ignore = "currently broken"]
 #[test_log::test]
 fn test_near_call_memory_growth_ret_ok() {
     // far call with 0 bytes of heap memory allocated and 10000 ergs
