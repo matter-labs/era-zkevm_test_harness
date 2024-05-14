@@ -396,8 +396,8 @@ fn test_far_call_with_decommit() {
     .main:
         add 1, r0, r1
         ; run with 8k gas.
-        shl.s 14, r1, r1
-        near_call r1, @limited, @catch_all
+        shl.s 13, r1, r1
+        near_call r1, @limited, @all_good
         ret.ok r0
     limited:
         ; put data from CPI0_0 into 64 bytes on AUX heap (st.2) 
@@ -428,6 +428,8 @@ fn test_far_call_with_decommit() {
         ret.ok r0
     catch_all:
         ret.panic r0
+    all_good:
+        ret.ok r0
     "#;
 
     // this one reads some calldata, including partially beyond the bound,
