@@ -91,7 +91,6 @@ fn test_far_call_and_read_fat_pointer() {
     );
 }
 
-#[ignore = "currently broken"]
 #[test_log::test]
 fn test_far_call_and_return_large_data() {
     // makes 36 bytes of calldata in aux heap and calls with it
@@ -109,18 +108,26 @@ fn test_far_call_and_return_large_data() {
         .globl	__entry
     __entry:
     .main:
+        ; put data from CPI0_0 into 64 bytes on AUX heap (st.2) 
         add 64, r0, r2
         add @CPI0_0[0], r0, r3
         st.2.inc r2, r3, r2
         add @CPI0_0[1], r0, r3
         st.2 r2, r3
+        ; create ABI for far_call
+        ; use 2 for forwarding mode (Aux heap)
         add 2, r0, r1
-        shl.s 136, r1, r1
+        shl.s 32, r1, r1
+        ; give 10k gas
+        add 100000, r1, r1
+        shl.s 96, r1, r1
+        ;shl.s 128, r1, r1
         add 36, r1, r1
         shl.s 32, r1, r1
         add 64, r1, r1
         shl.s 64, r1, r1
         add @CPI0_1[0], r0, r2
+        ; call the other_asm contract
         far_call r1, r2, @catch_all
         add 1, r0, r2
         shl.s 224, r2, r2
@@ -141,12 +148,14 @@ fn test_far_call_and_return_large_data() {
     __entry:
     .main:
         sstore r1, r1
-        event.first r1, r0
-        to_l1.first r0, r1
+        ; creating fat pointer for the return
+        ; forwarding byte 2 (aux heap)
         add 2, r0, r1
         shl.s 136, r1, r1
+        ; length 2048
         add 2048, r1, r1
         shl.s 32, r1, r1
+        ; offset 128
         add 128, r1, r1
         shl.s 64, r1, r1
         ret.ok r1
