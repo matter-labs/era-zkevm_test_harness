@@ -3,6 +3,7 @@ use super::*;
 
 use zkevm_assembly::Assembly;
 
+mod asm_tests;
 mod context;
 mod eip4844;
 mod far_calls;

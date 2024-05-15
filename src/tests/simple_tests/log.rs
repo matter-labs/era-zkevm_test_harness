@@ -1,6 +1,5 @@
 use super::*;
 
-#[ignore = "currently broken"]
 #[test_log::test]
 fn test_out_of_ergs_l1_message() {
     let asm = r#"
@@ -29,6 +28,26 @@ fn test_out_of_ergs_l1_message() {
     "#;
 
     run_and_try_create_witness_inner(asm, 50);
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::tests::simple_tests::asm_tests::run_asm_based_test;
+    use crate::tests::simple_tests::run_manually::Options;
+
+    #[test_log::test]
+    /// Tests the case where we run out of gas during the precompile execution.
+    fn test_precompile_out_of_gas() {
+        run_asm_based_test(
+            "src/tests/simple_tests/testdata/log_precompile",
+            &[],
+            Options {
+                // Do only 1 cycle per VM snapshot to really test all the boundary conditions.
+                cycles_per_vm_snapshot: Some(1),
+                ..Default::default()
+            },
+        )
+    }
 }
 
 #[test_log::test]

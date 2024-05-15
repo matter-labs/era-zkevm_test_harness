@@ -21,6 +21,7 @@ use crate::zk_evm::GenericNoopTracer;
 use crate::zkevm_circuits::base_structures::vm_state::GlobalContextWitness;
 use crate::zkevm_circuits::main_vm::main_vm_entry_point;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
+use circuit_definitions::zk_evm::vm_state::cycle;
 use zkevm_assembly::Assembly;
 
 #[test]
@@ -173,18 +174,40 @@ pub(crate) fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
     run_and_try_create_witness_for_extended_state(bytecode, vec![], cycle_limit)
 }
 
+#[derive(Default, Clone)]
+pub struct Options {
+    // How many cycles shoudl the main VM run for.
+    // If not set - default is 50.
+    pub cycle_limit: Option<usize>,
+    // Additional contracts that should be deployed (pairs 'address, bytecode')
+    pub other_contracts: Vec<(H160, Vec<[u8; 32]>)>,
+    // How many cycles should a single VM handle (default is 5)
+    pub cycles_per_vm_snapshot: Option<u32>,
+}
+
 pub(crate) fn run_and_try_create_witness_for_extended_state(
     entry_point_bytecode: Vec<[u8; 32]>,
     other_contracts: Vec<(H160, Vec<[u8; 32]>)>,
     cycle_limit: usize,
 ) {
+    run_with_options(
+        entry_point_bytecode,
+        Options {
+            cycle_limit: Some(cycle_limit),
+            other_contracts,
+            ..Default::default()
+        },
+    )
+}
+
+pub(crate) fn run_with_options(entry_point_bytecode: Vec<[u8; 32]>, options: Options) {
     use crate::external_calls::run;
     use crate::zk_evm::zkevm_opcode_defs::system_params::BOOTLOADER_FORMAL_ADDRESS;
 
     use crate::toolset::GeometryConfig;
 
     let geometry = GeometryConfig {
-        cycles_per_vm_snapshot: 5,
+        cycles_per_vm_snapshot: options.cycles_per_vm_snapshot.unwrap_or(5),
         // cycles_per_vm_snapshot: 5000,
         cycles_code_decommitter_sorter: 16,
         cycles_per_log_demuxer: 8,
@@ -206,7 +229,7 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
     use crate::witness::tree::ZKSyncTestingTree;
 
     let mut used_bytecodes_and_hashes = HashMap::new();
-    used_bytecodes_and_hashes.extend(other_contracts.iter().cloned().map(|(_, code)| {
+    used_bytecodes_and_hashes.extend(options.other_contracts.iter().cloned().map(|(_, code)| {
         let code_hash = bytecode_to_code_hash(&code).unwrap();
 
         (U256::from_big_endian(&code_hash), code)
@@ -219,7 +242,7 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
     let mut tree = ZKSyncTestingTree::empty();
 
     let mut known_contracts = HashMap::new();
-    known_contracts.extend(other_contracts.iter().cloned());
+    known_contracts.extend(options.other_contracts.iter().cloned());
 
     save_predeployed_contracts(&mut storage_impl, &mut tree, &known_contracts);
 
@@ -234,7 +257,7 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
         empty_code_hash,
         used_bytecodes_and_hashes,
         vec![],
-        cycle_limit,
+        options.cycle_limit.unwrap_or(50),
         geometry,
         storage_impl,
         &mut tree,
