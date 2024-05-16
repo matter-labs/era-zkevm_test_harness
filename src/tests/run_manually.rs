@@ -176,7 +176,7 @@ pub(crate) fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
 
 #[derive(Default, Clone)]
 pub struct Options {
-    // How many cycles shoudl the main VM run for.
+    // How many cycles should the main VM run for.
     // If not set - default is 50.
     pub cycle_limit: Option<usize>,
     // Additional contracts that should be deployed (pairs 'address, bytecode')

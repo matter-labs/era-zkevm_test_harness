@@ -121,7 +121,6 @@ fn test_far_call_and_return_large_data() {
         ; give 10k gas
         add 100000, r1, r1
         shl.s 96, r1, r1
-        ;shl.s 128, r1, r1
         add 36, r1, r1
         shl.s 32, r1, r1
         add 64, r1, r1
