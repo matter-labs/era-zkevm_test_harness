@@ -48,6 +48,43 @@ mod tests {
             },
         )
     }
+
+    fn test_common(dir: &str) {
+        run_asm_based_test(
+            &format!("src/tests/simple_tests/testdata/{}", dir),
+            &[800000],
+            Options {
+                cycles_per_vm_snapshot: Some(1),
+                ..Default::default()
+            },
+        )
+    }
+
+    #[test_log::test]
+    fn test_log_custom() {
+        run_asm_based_test(
+            "src/tests/simple_tests/testdata/log_custom",
+            &[800000],
+            Options {
+                cycles_per_vm_snapshot: Some(1),
+                ..Default::default()
+            },
+        )
+    }
+
+    #[test_log::test]
+    fn test_bug1() {
+        test_common("bug1_decommit")
+    }
+    #[test_log::test]
+    fn test_bug2() {
+        test_common("bug2_decommit")
+    }
+    #[test_log::test]
+    fn test_decommit_ok() {
+        test_common("decommit_ok");
+        test_common("decommit_ok_with_panic");
+    }
 }
 
 #[test_log::test]
