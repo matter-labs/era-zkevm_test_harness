@@ -43,7 +43,7 @@ mod tests {
             &[],
             Options {
                 // Do only 1 cycle per VM snapshot to really test all the boundary conditions.
-                cycles_per_vm_snapshot: Some(1),
+                cycles_per_vm_snapshot: 1,
                 ..Default::default()
             },
         )

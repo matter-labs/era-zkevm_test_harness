@@ -174,15 +174,27 @@ pub(crate) fn run_and_try_create_witness_inner(asm: &str, cycle_limit: usize) {
     run_and_try_create_witness_for_extended_state(bytecode, vec![], cycle_limit)
 }
 
-#[derive(Default, Clone)]
+const DEFAULT_CYCLE_LIMIT: usize = 50;
+const DEFAULT_CYCLES_PER_VM_SNAPSHOT: u32 = 5;
+#[derive(Clone)]
 pub struct Options {
     // How many cycles should the main VM run for.
-    // If not set - default is 50.
-    pub cycle_limit: Option<usize>,
+    // If not set - default is DEFAULT_CYCLE_LIMIT (50).
+    pub cycle_limit: usize,
     // Additional contracts that should be deployed (pairs 'address, bytecode')
     pub other_contracts: Vec<(H160, Vec<[u8; 32]>)>,
-    // How many cycles should a single VM handle (default is 5)
-    pub cycles_per_vm_snapshot: Option<u32>,
+    // How many cycles should a single VM handle (default is DEFAULT_CYCLES_PER_VM_SNAPSHOT = 5)
+    pub cycles_per_vm_snapshot: u32,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            cycle_limit: DEFAULT_CYCLE_LIMIT,
+            other_contracts: Default::default(),
+            cycles_per_vm_snapshot: DEFAULT_CYCLES_PER_VM_SNAPSHOT,
+        }
+    }
 }
 
 pub(crate) fn run_and_try_create_witness_for_extended_state(
@@ -193,7 +205,7 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
     run_with_options(
         entry_point_bytecode,
         Options {
-            cycle_limit: Some(cycle_limit),
+            cycle_limit,
             other_contracts,
             ..Default::default()
         },
@@ -207,8 +219,7 @@ pub(crate) fn run_with_options(entry_point_bytecode: Vec<[u8; 32]>, options: Opt
     use crate::toolset::GeometryConfig;
 
     let geometry = GeometryConfig {
-        cycles_per_vm_snapshot: options.cycles_per_vm_snapshot.unwrap_or(5),
-        // cycles_per_vm_snapshot: 5000,
+        cycles_per_vm_snapshot: options.cycles_per_vm_snapshot,
         cycles_code_decommitter_sorter: 16,
         cycles_per_log_demuxer: 8,
         cycles_per_storage_sorter: 4,
@@ -257,7 +268,7 @@ pub(crate) fn run_with_options(entry_point_bytecode: Vec<[u8; 32]>, options: Opt
         empty_code_hash,
         used_bytecodes_and_hashes,
         vec![],
-        options.cycle_limit.unwrap_or(50),
+        options.cycle_limit,
         geometry,
         storage_impl,
         &mut tree,
