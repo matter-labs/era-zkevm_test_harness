@@ -8,8 +8,6 @@
     .main:
         add 10000, r0, r1
         add 1000, r0, r10
-        ; put 2 in r2 (sha)
-        add 2, r0, r2
         ; precompile call - address 0x1, AuxData (additional costs - 0 for now)
         log.precompile r2, r3, r4
 
@@ -18,13 +16,10 @@
         ret.panic r0
     inner:
         to_l1 r0, r1
-        ; put 2 in r2 (sha)
-        add 2, r0, r2
 
         ; Add extra 16k cost (more than this near call has)
         add 1, r0, r3
-        shl.s 14, r3, r3
-        shl.s 18, r3, r3
+        shl.s 32, r3, r3
         add 1, r3, r3
         shl.s 14, r3, r3
 

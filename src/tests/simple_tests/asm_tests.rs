@@ -9,7 +9,7 @@ use super::*;
 use crate::tests::run_manually::run_and_try_create_witness_inner;
 
 /// Runs the tests based on the ASM files from a given directory.
-/// The main assembly shoudl be in `entry.asm` file, while additional
+/// The main assembly should be in `entry.asm` file, while additional
 /// contracts should be in `ADDRESS.asm` files, where `ADDRESS` is the numerical
 /// address at which they should be deployed.
 #[cfg(test)]
@@ -38,7 +38,6 @@ pub fn run_asm_based_test(test_dir: &str, additional_contracts: &[i32], options:
         })
         .collect();
 
-    //run_and_try_create_witness_for_extended_state(entry_bytecode, contracts, 500);
     let mut options = options.clone();
     options.other_contracts = contracts;
     run_with_options(entry_bytecode, options);

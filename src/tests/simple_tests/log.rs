@@ -43,12 +43,11 @@ mod tests {
             &[],
             Options {
                 // Do only 1 cycle per VM snapshot to really test all the boundary conditions.
-                cycles_per_vm_snapshot: Some(1),
+                cycles_per_vm_snapshot: 1,
                 ..Default::default()
             },
         )
     }
-
     fn test_common(dir: &str) {
         run_asm_based_test(
             &format!("src/tests/simple_tests/testdata/{}", dir),

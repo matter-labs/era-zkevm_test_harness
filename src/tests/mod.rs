@@ -103,10 +103,16 @@ pub(crate) fn base_test_circuit(circuit: ZkSyncBaseLayerCircuit) {
     let geometry = circuit.geometry();
     let (max_trace_len, num_vars) = circuit.size_hint();
 
-    let builder_impl = CsReferenceImplementationBuilder::<GoldilocksField, P, DevCSConfig>::new(
-        geometry,
-        max_trace_len.unwrap(),
-    );
+    use crate::boojum::config::CSConfig;
+    let builder_impl = CsReferenceImplementationBuilder::<
+        GoldilocksField,
+        P,
+        DevCSConfig,
+        crate::boojum::dag::StCircuitResolver<
+            GoldilocksField,
+            <DevCSConfig as CSConfig>::ResolverConfig,
+        >,
+    >::new(geometry, max_trace_len.unwrap());
     let arg = num_vars.unwrap();
     let builder = new_builder::<_, GoldilocksField>(builder_impl);
 
