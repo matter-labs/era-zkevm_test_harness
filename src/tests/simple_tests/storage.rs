@@ -8,7 +8,7 @@ mod tests {
             "src/tests/simple_tests/testdata/storage_writes",
             &[],
             Options {
-                cycles_per_vm_snapshot: Some(1),
+                cycles_per_vm_snapshot: 1,
                 ..Default::default()
             },
         );
@@ -21,7 +21,7 @@ mod tests {
             &[],
             Options {
                 // Do only 1 cycle per VM snapshot to really test all the boundary conditions.
-                cycles_per_vm_snapshot: Some(1),
+                cycles_per_vm_snapshot: 1,
                 ..Default::default()
             },
         )

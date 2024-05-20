@@ -7,7 +7,7 @@
     __entry:
     .main:
         add 10000, r0, r1
-        ; this decommit is invalid - but it passes the Rust VM, and fails in circuits.
+        ; this decommit is invalid
         log.decommit r1, r2, r3
         ret.ok r0
         
