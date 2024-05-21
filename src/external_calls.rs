@@ -20,6 +20,7 @@ use crate::zk_evm::bytecode_to_code_hash;
 use crate::zk_evm::contract_bytecode_to_words;
 use crate::zk_evm::witness_trace::VmWitnessTracer;
 use crate::zk_evm::GenericNoopTracer;
+use crate::zkevm_circuits::linear_hasher::input::LinearHasherOutputDataWitness;
 use crate::zkevm_circuits::{
     base_structures::vm_state::FULL_SPONGE_QUEUE_STATE_WIDTH,
     eip_4844::input::*,
@@ -35,7 +36,6 @@ use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::zk_evm::zkevm_opcode_defs::VersionedHashLen32;
 use circuit_definitions::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
 use circuit_definitions::{Field as MainField, ZkSyncDefaultRoundFunction};
-use kzg::zkevm_circuits::linear_hasher::input::LinearHasherOutputDataWitness;
 
 pub const SCHEDULER_TIMESTAMP: u32 = 1;
 
