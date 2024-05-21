@@ -81,7 +81,6 @@ fn test_ptr_add_overflow_offset() {
     run_and_try_create_witness_inner(&asm, 50);
 }
 
-// TODO FAILS
 #[test_log::test]
 fn test_ptr_add_invalid_0_number() {
     let asm = asm_with_default_config(
@@ -92,11 +91,10 @@ fn test_ptr_add_invalid_0_number() {
         add 8, r0, r3
         shl.s 128, r3, r3
         near_call r0, @should_panic, @handler
-        add 404, r0, r14
         ret.panic r0
     should_panic:
         ; trying to use number as first input for ptr.add
-        ptr.add r1, r2, r3
+        ptr.add r3, r2, r3
         ret.ok r0
     handler:
         ret.ok r0
