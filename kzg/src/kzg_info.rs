@@ -2,20 +2,17 @@ use std::convert::TryInto;
 
 use crate::trusted_setup::KZG_SETTINGS;
 
-pub use super::KzgSettings;
-use super::{
-    compute_commitment, compute_proof, compute_proof_poly,
-    zkevm_circuits::{
-        boojum::pairing::{
-            bls12_381::{Fr, FrRepr, G1Affine},
-            ff::{PrimeField, PrimeFieldRepr},
-            CurveAffine,
-        },
-        eip_4844::{
-            bitreverse, fft,
-            input::{BLOB_CHUNK_SIZE, ELEMENTS_PER_4844_BLOCK},
-            zksync_pubdata_into_ethereum_4844_data, zksync_pubdata_into_monomial_form_poly,
-        },
+use super::{compute_commitment, compute_proof, compute_proof_poly};
+use zkevm_circuits::{
+    boojum::pairing::{
+        bls12_381::{Fr, FrRepr, G1Affine},
+        ff::{PrimeField, PrimeFieldRepr},
+        CurveAffine,
+    },
+    eip_4844::{
+        bitreverse, fft,
+        input::{BLOB_CHUNK_SIZE, ELEMENTS_PER_4844_BLOCK},
+        zksync_pubdata_into_ethereum_4844_data, zksync_pubdata_into_monomial_form_poly,
     },
 };
 
@@ -89,7 +86,7 @@ impl KzgInfo {
     /// Here we use the size of the blob expected for 4844 (4096 elements * 32 bytes per element) and not
     /// `BYTES_PER_BLOB_ZK_SYNC` which is (4096 elements * 31 bytes per element)
     /// The zksync interpretation of the blob uses 31 byte fields so we can ensure they fit into a field element.
-    const SERIALIZED_SIZE: usize = EIP_4844_BYTES_PER_BLOB + 48 + 32 + 32 + 48 + 32 + 48;
+    pub const SERIALIZED_SIZE: usize = EIP_4844_BYTES_PER_BLOB + 48 + 32 + 32 + 48 + 32 + 48;
 
     /// Returns the bytes necessary for pubdata commitment part of batch commitments when blobs are used.
     /// Return format: opening point (16 bytes) || claimed value (32 bytes) || commitment (48 bytes)

@@ -1,11 +1,13 @@
 //! Tests for KZG commitments.
 
-use kzg::{
-    boojum::pairing::{bls12_381::G1Compressed, EncodedPoint},
-    verify_kzg_proof, verify_proof_poly,
-    zkevm_circuits::eip_4844::ethereum_4844_data_into_zksync_pubdata,
-};
+use crate::trusted_setup::KZG_SETTINGS;
+
+use super::{verify_kzg_proof, verify_proof_poly};
+use boojum::pairing::{bls12_381::G1Compressed, EncodedPoint};
 use serde::{Deserialize, Serialize};
+use zkevm_circuits::eip_4844::{
+    bitreverse, ethereum_4844_data_into_zksync_pubdata, fft, zksync_pubdata_into_monomial_form_poly,
+};
 
 use super::*;
 
