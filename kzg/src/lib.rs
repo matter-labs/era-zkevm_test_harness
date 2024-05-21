@@ -20,6 +20,11 @@ use rayon::prelude::*;
 // Remove these, once we move all kzg logic from zksync-era crate.
 pub use boojum;
 pub use zkevm_circuits;
+pub mod kzg_info;
+pub mod trusted_setup;
+
+#[cfg(test)]
+mod tests;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 struct TrustedSetup {
