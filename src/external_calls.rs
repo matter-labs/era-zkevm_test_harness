@@ -178,7 +178,9 @@ pub fn run<
         out_of_circuit_vm.memory.execute_partial_query(0, query);
     }
 
+    // we are using TestingTracer to track prints and exceptions inside out_of_circuit_vm cycles
     let mut tracer = TestingTracer::new();
+
     // tracing::debug!("Running out of circuit for {} cycles", cycle_limit);
     println!("Running out of circuit for {} cycles", cycle_limit);
     let mut next_snapshot_will_capture_end_of_execution = false;
