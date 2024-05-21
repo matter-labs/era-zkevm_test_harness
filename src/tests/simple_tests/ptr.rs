@@ -22,7 +22,8 @@ fn test_ptr_add_invalid_1_pointer() {
 
 #[test_log::test]
 fn test_ptr_add_max_offset() {
-    let asm = asm_with_default_config(r#"
+    let asm = asm_with_default_config(
+        r#"
     __entry:
     .main:
         add 1, r0, r2
@@ -34,14 +35,16 @@ fn test_ptr_add_max_offset() {
         ptr.add r1, r2, r3
     handler:
         ret.ok r0
-    "#);
+    "#,
+    );
 
     run_and_try_create_witness_inner(&asm, 50);
 }
 
 #[test_log::test]
 fn test_ptr_add_max_offset_minus_one() {
-    let asm = asm_with_default_config(r#"
+    let asm = asm_with_default_config(
+        r#"
     __entry:
     .main:
         add 1, r0, r2
@@ -50,14 +53,16 @@ fn test_ptr_add_max_offset_minus_one() {
         ; trying to use MAX_OFFSET - 1 as second input for ptr.add
         ptr.add r1, r2, r3
         ret.ok r0
-    "#);
+    "#,
+    );
 
     run_and_try_create_witness_inner(&asm, 50);
 }
 
 #[test_log::test]
 fn test_ptr_add_overflow_offset() {
-    let asm = asm_with_default_config(r#"
+    let asm = asm_with_default_config(
+        r#"
     __entry:
     .main:
         add 1, r0, r2
@@ -70,7 +75,8 @@ fn test_ptr_add_overflow_offset() {
         ptr.add r1, r2, r1
     handler:
         ret.ok r0
-    "#);
+    "#,
+    );
 
     run_and_try_create_witness_inner(&asm, 50);
 }
@@ -78,7 +84,8 @@ fn test_ptr_add_overflow_offset() {
 // TODO FAILS
 #[test_log::test]
 fn test_ptr_add_invalid_0_number() {
-    let asm = asm_with_default_config(r#"
+    let asm = asm_with_default_config(
+        r#"
     __entry:
     .main:
         add 4, r0, r2
@@ -93,14 +100,16 @@ fn test_ptr_add_invalid_0_number() {
         ret.ok r0
     handler:
         ret.ok r0
-    "#);
+    "#,
+    );
 
     run_and_try_create_witness_inner(&asm, 50);
 }
 
 #[test_log::test]
 fn test_ptr_sub_valid_input() {
-    let asm = asm_with_default_config(r#"
+    let asm = asm_with_default_config(
+        r#"
     __entry:
     .main:
         sstore r0, r0
@@ -113,14 +122,16 @@ fn test_ptr_sub_valid_input() {
         ptr.sub r1, r2, r1
         ptr.pack r1, r3, r4
         ret.ok r0
-    "#);
+    "#,
+    );
 
     run_and_try_create_witness_inner(&asm, 50);
 }
 
 #[test_log::test]
 fn test_ptr_sub_invalid_1_pointer() {
-    let asm = asm_with_default_config(r#"
+    let asm = asm_with_default_config(
+        r#"
     __entry:
     .main:
         sstore r0, r0
@@ -136,14 +147,16 @@ fn test_ptr_sub_invalid_1_pointer() {
         ptr.sub r1, r1, r1
     handler:
         ret.ok r0
-    "#);
+    "#,
+    );
 
     run_and_try_create_witness_inner(&asm, 50);
 }
 
 #[test_log::test]
 fn test_ptr_sub_invalid_0_number() {
-    let asm = asm_with_default_config(r#"
+    let asm = asm_with_default_config(
+        r#"
     __entry:
     .main:
         add 4, r0, r2
@@ -156,14 +169,16 @@ fn test_ptr_sub_invalid_0_number() {
         ptr.sub r3, r2, r3
     handler:
         ret.ok r0
-    "#);
+    "#,
+    );
 
     run_and_try_create_witness_inner(&asm, 50);
 }
 
 #[test_log::test]
 fn test_ptr_sub_overflow_offset() {
-    let asm = asm_with_default_config(r#"
+    let asm = asm_with_default_config(
+        r#"
     __entry:
     .main:
         add 1, r0, r2
@@ -175,14 +190,16 @@ fn test_ptr_sub_overflow_offset() {
         ptr.sub r1, r2, r1
     handler:
         ret.ok r0
-    "#);
+    "#,
+    );
 
     run_and_try_create_witness_inner(&asm, 50);
 }
 
 #[test_log::test]
 fn test_ptr_to_global() {
-    let asm = asm_with_default_config(r#"
+    let asm = asm_with_default_config(
+        r#"
         .data
         .globl    val                             ; @val
     val:
@@ -202,7 +219,8 @@ fn test_ptr_to_global() {
         ptr.sub r1, r0, r1
         ptr.pack r1, r3, r4
         ret.ok r0
-    "#);
+    "#,
+    );
 
     run_and_try_create_witness_inner(&asm, 50);
 }

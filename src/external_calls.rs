@@ -1,10 +1,9 @@
-use std::collections::VecDeque;
-use crate::testing_tracer::TestingTracer;
 use crate::blake2::Blake2s256;
 use crate::boojum::field::goldilocks::GoldilocksField;
 use crate::entry_point::*;
 use crate::snark_wrapper::boojum::field::goldilocks::GoldilocksExt2;
 use crate::snark_wrapper::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
+use crate::testing_tracer::TestingTracer;
 use crate::toolset::create_tools;
 use crate::toolset::GeometryConfig;
 use crate::witness::oracle::create_artifacts_from_tracer;
@@ -36,6 +35,7 @@ use circuit_definitions::zk_evm::zkevm_opcode_defs::VersionedHashLen32;
 use circuit_definitions::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
 use circuit_definitions::{Field as MainField, ZkSyncDefaultRoundFunction};
 use kzg::zkevm_circuits::linear_hasher::input::LinearHasherOutputDataWitness;
+use std::collections::VecDeque;
 
 pub const SCHEDULER_TIMESTAMP: u32 = 1;
 
@@ -208,16 +208,14 @@ pub fn run<
 
     if out_of_circuit_vm.local_state.callstack.current.pc != 0 {
         if tracer.has_exception {
-            panic!("root frame ended up with panic: {}",
+            panic!(
+                "root frame ended up with panic: {}",
                 tracer.exception_message
             );
         } else {
-            panic!(
-                "root frame ended up with unexpected panic"
-            );
+            panic!("root frame ended up with unexpected panic");
         }
     }
-
 
     println!("Out of circuit tracing is complete, now running witness generation");
 

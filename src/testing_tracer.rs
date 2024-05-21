@@ -5,23 +5,21 @@ use zkevm_assembly::zkevm_opcode_defs::Opcode;
 use zkevm_assembly::zkevm_opcode_defs::PtrOpcode;
 use zkevm_assembly::zkevm_opcode_defs::RetOpcode;
 
-
-use crate::zk_evm::tracing::*;
+use crate::ethereum_types::U256;
 use crate::zk_evm::opcodes::DecodedOpcode;
 use crate::zk_evm::reference_impls::memory::SimpleMemory;
-use crate::ethereum_types::U256;
+use crate::zk_evm::tracing::*;
 
 use crate::asm_templates::EXCEPTION_PREFIX;
 use crate::asm_templates::PRINT_PREFIX;
 use crate::asm_templates::PRINT_REG_PREFIX;
-
 
 #[derive(Debug, Clone)]
 pub struct TestingTracer {
     expecting_register_value: bool,
 
     pub has_exception: bool,
-    pub exception_message: String
+    pub exception_message: String,
 }
 
 impl TestingTracer {
@@ -29,7 +27,7 @@ impl TestingTracer {
         Self {
             expecting_register_value: false,
             has_exception: false,
-            exception_message: "".to_owned()
+            exception_message: "".to_owned(),
         }
     }
 
@@ -75,19 +73,34 @@ impl Tracer for TestingTracer {
 
         self.has_exception = true;
 
-        if _data.error_flags_accumulated.contains(ErrorFlags::NOT_ENOUGH_ERGS) {
+        if _data
+            .error_flags_accumulated
+            .contains(ErrorFlags::NOT_ENOUGH_ERGS)
+        {
             self.exception_message = "NOT_ENOUGH_ERGS".to_owned();
         }
-        if _data.error_flags_accumulated.contains(ErrorFlags::INVALID_OPCODE) {
+        if _data
+            .error_flags_accumulated
+            .contains(ErrorFlags::INVALID_OPCODE)
+        {
             self.exception_message = "INVALID OPCODE".to_owned();
         }
-        if _data.error_flags_accumulated.contains(ErrorFlags::PRIVILAGED_ACCESS_NOT_FROM_KERNEL) {
+        if _data
+            .error_flags_accumulated
+            .contains(ErrorFlags::PRIVILAGED_ACCESS_NOT_FROM_KERNEL)
+        {
             self.exception_message = "PRIVILAGED_ACCESS_NOT_FROM_KERNEL".to_owned();
         }
-        if _data.error_flags_accumulated.contains(ErrorFlags::WRITE_IN_STATIC_CONTEXT) {
+        if _data
+            .error_flags_accumulated
+            .contains(ErrorFlags::WRITE_IN_STATIC_CONTEXT)
+        {
             self.exception_message = "WRITE_IN_STATIC_CONTEXT".to_owned();
         }
-        if _data.error_flags_accumulated.contains(ErrorFlags::CALLSTACK_IS_FULL) {
+        if _data
+            .error_flags_accumulated
+            .contains(ErrorFlags::CALLSTACK_IS_FULL)
+        {
             self.exception_message = "CALLSTACK_IS_FULL".to_owned();
         }
     }
@@ -98,7 +111,6 @@ impl Tracer for TestingTracer {
         _data: BeforeExecutionData,
         _memory: &Self::SupportedMemory,
     ) {
-
         /*
         println!("{}", _data.opcode);
         println!("New pc: {}", _data.new_pc);
@@ -112,7 +124,7 @@ impl Tracer for TestingTracer {
                 if self.exception_message != "" {
                     self.has_exception = true;
                 }
-            },
+            }
             Opcode::Add(AddOpcode::Add) => {
                 // `add x r0 r0` is used as "print" statement
                 if _data.opcode.dst0_reg_idx == 0 {
@@ -125,7 +137,7 @@ impl Tracer for TestingTracer {
                         self.update_expecting_register_value(&message); // try to parse "expect_register" command
                     }
                 }
-            },
+            }
             Opcode::Ptr(PtrOpcode::Add) => {
                 // `ptr.add x r0 r0` is used as "print" statement for pointers
                 if _data.opcode.dst0_reg_idx == 0 {
@@ -134,14 +146,16 @@ impl Tracer for TestingTracer {
                     }
                 }
                 self.reset_exception();
-            },
-            Opcode::Nop(NopOpcode) => {},
+            }
+            Opcode::Nop(NopOpcode) => {}
             _ => {
                 self.reset_exception();
             }
         };
 
-        if inner_opcode != Opcode::Add(AddOpcode::Add) && inner_opcode != Opcode::Ptr(PtrOpcode::Add) {
+        if inner_opcode != Opcode::Add(AddOpcode::Add)
+            && inner_opcode != Opcode::Ptr(PtrOpcode::Add)
+        {
             self.expecting_register_value = false;
         }
 
@@ -175,17 +189,20 @@ fn decode_message_from_register(val: U256) -> String {
         return "".to_owned();
     }
 
-    let bytes: &mut[u8; 32] = &mut [0; 32];
+    let bytes: &mut [u8; 32] = &mut [0; 32];
     val.to_big_endian(bytes);
 
     match std::str::from_utf8(bytes) {
         Ok(message) => {
             let message_trimed = message.trim_matches(char::from(0));
 
-            if [EXCEPTION_PREFIX, PRINT_PREFIX, PRINT_REG_PREFIX].iter().any(|s| message_trimed.starts_with(*s)) {
+            if [EXCEPTION_PREFIX, PRINT_PREFIX, PRINT_REG_PREFIX]
+                .iter()
+                .any(|s| message_trimed.starts_with(*s))
+            {
                 return message_trimed.to_owned();
             }
-        },
+        }
         Err(_) => {}
     };
     return "".to_owned();
