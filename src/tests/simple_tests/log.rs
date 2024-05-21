@@ -81,6 +81,29 @@ mod tests {
         test_common("decommit_ok");
         test_common("decommit_ok_with_panic");
     }
+
+    #[test_log::test]
+    fn test_bug3() {
+        run_asm_based_test(
+            "src/tests/simple_tests/testdata/bug3",
+            &[8000, 32777, 180000, 200000],
+            Options {
+                cycles_per_vm_snapshot: 1,
+                ..Default::default()
+            },
+        )
+    }
+    #[test_log::test]
+    fn test_bug4() {
+        run_asm_based_test(
+            "src/tests/simple_tests/testdata/bug4",
+            &[],
+            Options {
+                cycles_per_vm_snapshot: 1,
+                ..Default::default()
+            },
+        )
+    }
 }
 
 #[test_log::test]
