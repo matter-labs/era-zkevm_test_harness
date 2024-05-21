@@ -8,16 +8,18 @@ use super::*;
 
 use crate::tests::run_manually::run_and_try_create_witness_inner;
 
+use crate::asm_templates::preprocess_asm;
+
 /// Runs the tests based on the ASM files from a given directory.
 /// The main assembly should be in `entry.asm` file, while additional
 /// contracts should be in `ADDRESS.asm` files, where `ADDRESS` is the numerical
 /// address at which they should be deployed.
-#[cfg(test)]
 pub fn run_asm_based_test(test_dir: &str, additional_contracts: &[i32], options: Options) {
     let data_path = Path::new(test_dir);
     let entry_asm = fs::read_to_string(data_path.join("entry.asm"))
         .expect("Should have been able to read the file");
-    let entry_bytecode = Assembly::try_from(entry_asm.to_owned())
+    let entry_asm_preprocessed = preprocess_asm(&entry_asm);
+    let entry_bytecode = Assembly::try_from(entry_asm_preprocessed.to_owned())
         .unwrap()
         .compile_to_bytecode()
         .unwrap();
@@ -30,7 +32,8 @@ pub fn run_asm_based_test(test_dir: &str, additional_contracts: &[i32], options:
                 "Should have been able to read the file {:?}",
                 file_path
             ));
-            let bytecode = Assembly::try_from(asm.to_owned())
+            let asm_preprocessed = preprocess_asm(&asm);
+            let bytecode = Assembly::try_from(asm_preprocessed.to_owned())
                 .unwrap()
                 .compile_to_bytecode()
                 .expect(&format!("Failed to compile {:?}", file_path));

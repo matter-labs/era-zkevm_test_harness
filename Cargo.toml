@@ -43,6 +43,7 @@ lazy_static = "1.4"
 reqwest = { version = "0.11", features = ["blocking"] }
 curl = "0.4"
 walkdir = "2.4"
+regex = { version = "1.10.4", features = ["pattern"] }
 
 [dev-dependencies]
 rand = "0.4"

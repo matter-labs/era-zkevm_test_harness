@@ -1,5 +1,5 @@
 use std::collections::VecDeque;
-
+use crate::testing_tracer::TestingTracer;
 use crate::blake2::Blake2s256;
 use crate::boojum::field::goldilocks::GoldilocksField;
 use crate::entry_point::*;
@@ -178,7 +178,7 @@ pub fn run<
         out_of_circuit_vm.memory.execute_partial_query(0, query);
     }
 
-    let mut tracer = GenericNoopTracer::<_>::new();
+    let mut tracer = TestingTracer::new();
     // tracing::debug!("Running out of circuit for {} cycles", cycle_limit);
     println!("Running out of circuit for {} cycles", cycle_limit);
     let mut next_snapshot_will_capture_end_of_execution = false;
@@ -205,10 +205,19 @@ pub fn run<
         out_of_circuit_vm.execution_has_ended(),
         "VM execution didn't finish"
     );
-    assert_eq!(
-        out_of_circuit_vm.local_state.callstack.current.pc, 0,
-        "root frame ended up with panic"
-    );
+
+    if out_of_circuit_vm.local_state.callstack.current.pc != 0 {
+        if tracer.has_exception {
+            panic!("root frame ended up with panic: {}",
+                tracer.exception_message
+            );
+        } else {
+            panic!(
+                "root frame ended up with unexpected panic"
+            );
+        }
+    }
+
 
     println!("Out of circuit tracing is complete, now running witness generation");
 
