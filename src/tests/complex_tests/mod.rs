@@ -16,6 +16,7 @@ use crate::boojum::cs::implementations::pow::NoPow;
 use crate::boojum::cs::implementations::prover::ProofConfig;
 use crate::boojum::cs::implementations::setup::FinalizationHintsForProver;
 use crate::boojum::field::goldilocks::GoldilocksExt2;
+use crate::boojum::field::U64Representable;
 use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 use crate::compute_setups::*;
 use crate::entry_point::create_out_of_circuit_global_context;
@@ -55,7 +56,6 @@ use circuit_definitions::{
     BASE_LAYER_FRI_LDE_FACTOR, RECURSION_LAYER_CAP_SIZE, RECURSION_LAYER_FRI_LDE_FACTOR,
 };
 use circuit_definitions::{Field, RoundFunction};
-use kzg::boojum::field::U64Representable;
 use utils::read_basic_test_artifact;
 
 use zkevm_assembly::Assembly;
