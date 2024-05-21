@@ -207,11 +207,8 @@ pub fn run<
     );
 
     if out_of_circuit_vm.local_state.callstack.current.pc != 0 {
-        if tracer.has_exception {
-            panic!(
-                "root frame ended up with panic: {}",
-                tracer.exception_message
-            );
+        if let Some(exception_message) = tracer.exception_message {
+            panic!("root frame ended up with panic: {}", exception_message);
         } else {
             panic!("root frame ended up with unexpected panic");
         }

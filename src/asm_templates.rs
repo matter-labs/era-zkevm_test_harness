@@ -24,14 +24,23 @@ enum Directives {
 }
 
 pub const EXCEPTION_PREFIX: &str = "E:";
-pub const PRINT_PREFIX: &str = "P:";
-pub const PRINT_REG_PREFIX: &str = "R:PRINT";
+pub const PRINT_PREFIX: &str = "L:";
+pub const PRINT_REG_PREFIX: &str = "R:";
+pub const PRINT_PTR_PREFIX: &str = "P:";
 
+/// Replaces special directives in asm with TestingTracer compatible "commands"
 pub fn preprocess_asm(asm: &str) -> String {
-    let mut result = preprocess_directive(asm, Directives::Print);
-    result = preprocess_directive(&result, Directives::Revert);
-    result = preprocess_directive(&result, Directives::PrintRegister);
-    result = preprocess_directive(&result, Directives::PrintPointer);
+    let mut result = asm.to_owned().clone();
+    for directive in [
+        Directives::Print,
+        Directives::Revert,
+        Directives::PrintRegister,
+        Directives::PrintPointer,
+    ]
+    .iter()
+    {
+        result = preprocess_directive(&result, directive.clone());
+    }
     result
 }
 
@@ -41,67 +50,95 @@ fn preprocess_directive(asm: &str, directive: Directives) -> String {
     result
 }
 
+/// replace all occurrences of the directive with the corresponding assembly code
 fn replace_directives(asm: &str, directive: Directives) -> (String, Vec<String>) {
     let mut result = asm.to_owned().clone();
     let mut prints: Vec<String> = Vec::new();
 
-    let (regex, directive_line, prefix, suffix) = match directive.clone() {
+    let (command_prefix, regex, cell_name, prefix, suffix) = match directive.clone() {
         Directives::Print => {
+            // regex: print("<message>")
             let print_regex = Regex::new(r#"print\("[^"]*"\)"#).expect("Invalid regex");
-            (print_regex, "PRINT", r#"print(""#, r#"")"#)
+            (PRINT_PREFIX, print_regex, "PRINT", r#"print(""#, r#"")"#)
         }
         Directives::Revert => {
+            // regex: revert("<message>")
             let revert_regex = Regex::new(r#"revert\("[^"]*"\)"#).expect("Invalid regex");
-            (revert_regex, "REVERT", r#"revert(""#, r#"")"#)
+            (
+                EXCEPTION_PREFIX,
+                revert_regex,
+                "REVERT",
+                r#"revert(""#,
+                r#"")"#,
+            )
         }
         Directives::PrintRegister => {
+            // regex: print(<src>)
             let print_reg_regex = Regex::new(r#"print\([^"\))]+\)"#).expect("Invalid regex");
-            (print_reg_regex, "PRINT_REG", r#"print("#, r#")"#)
+            (
+                PRINT_REG_PREFIX,
+                print_reg_regex,
+                "PRINT_REG",
+                r#"print("#,
+                r#")"#,
+            )
         }
         Directives::PrintPointer => {
+            // regex: printPtr(<src>)
             let print_ptr_regex = Regex::new(r#"printPtr\([^"\)]+\)"#).expect("Invalid regex");
-            (print_ptr_regex, "PRINT_PTR", r#"printPtr("#, r#")"#)
+            (
+                PRINT_PTR_PREFIX,
+                print_ptr_regex,
+                "PRINT_PTR",
+                r#"printPtr("#,
+                r#")"#,
+            )
         }
     };
 
     for (_, matched) in asm.match_indices(&regex) {
-        let text = matched
+        let arg = matched
             .strip_prefix(&prefix)
             .expect("Invalid text in directive")
             .strip_suffix(&suffix)
             .expect("Invalid text in directive");
 
         if directive == Directives::PrintRegister || directive == Directives::PrintPointer {
-            prints.push("".to_owned());
-        } else {
-            if text.len() > 30 {
-                panic!("Message insinde directive is too long: {}", text);
+            // ignore any args
+            if prints.is_empty() {
+                prints.push("".to_owned());
             }
-            prints.push(text.to_owned());
+        } else {
+            if arg.len() > 32 - command_prefix.len() {
+                panic!("Message inside directive is too long: {}", arg);
+            }
+            prints.push(arg.to_owned());
         }
 
         let reference_var =
-            "@".to_owned() + directive_line + "_" + &(prints.len() - 1).to_string() + "_STRING";
+            "@".to_owned() + cell_name + "_" + &(prints.len() - 1).to_string() + "_STRING";
         let mut line = "add ".to_owned() + &reference_var + ", r0, r0";
 
-        if directive == Directives::Revert {
-            line = line + "\n" + "ret.panic r0";
+        // additional lines
+        match directive {
+            Directives::Revert => {
+                line = line + "\n" + "ret.panic r0";
+            }
+            Directives::PrintRegister => {
+                line = line + "\n" + "add " + arg + ", r0, r0";
+            }
+            Directives::PrintPointer => {
+                line = line + "\n" + "ptr.add " + arg + ", r0, r0";
+            }
+            _ => {}
         }
-
-        if directive == Directives::PrintRegister {
-            line = line + "\n" + "add " + text + ", r0, r0";
-        }
-
-        if directive == Directives::PrintPointer {
-            line = line + "\n" + "ptr.add " + text + ", r0, r0";
-        }
-
         result = result.replace(matched, &line);
     }
 
     return (result, prints);
 }
 
+/// add .rodata section with messages from directives
 fn add_data_section_for_directive(
     asm: &str,
     directive: Directives,
@@ -116,7 +153,7 @@ fn add_data_section_for_directive(
         Directives::Print => (PRINT_PREFIX, "PRINT"),
         Directives::Revert => (EXCEPTION_PREFIX, "REVERT"),
         Directives::PrintRegister => (PRINT_REG_PREFIX, "PRINT_REG"),
-        Directives::PrintPointer => (PRINT_REG_PREFIX, "PRINT_PTR"),
+        Directives::PrintPointer => (PRINT_PTR_PREFIX, "PRINT_PTR"),
     };
 
     let mut data_section = ".rodata\n".to_owned();
