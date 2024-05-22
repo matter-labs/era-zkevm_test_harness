@@ -14,7 +14,7 @@
 
         near_call r4, @inner, @handler
         ; We should never get here - as the near_call should panic due to out of gas.
-        ret.ok r0
+        ret.panic r0
         
     inner:
         add @CPI0_0[0], r0, r1
@@ -23,7 +23,7 @@
         add 20000, r0, r2
         log.decommit r1, r2, r3
         
-        ret.panic r0
+        ret.ok r0
 
     handler:
         ; we expect the near_call to panic

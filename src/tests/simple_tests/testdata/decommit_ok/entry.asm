@@ -13,7 +13,6 @@
         add 10000, r0, r4
 
         near_call r4, @inner, @handler
-        ; We should never get here - as the near_call should panic due to out of gas.
         ret.ok r0
         
     inner:
@@ -36,7 +35,6 @@
         ret.ok r0
 
     handler:
-        ; we expect the near_call to panic
         ret.panic r0
 
     .panic:

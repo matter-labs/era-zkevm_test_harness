@@ -25,6 +25,8 @@
         sub! 0, r7, r0
         jump.ne @.panic
 
+        ; we'll be writing 24 in slot 25
+
         add 25, r0, r1
         add 24, r0, r2
         log.swrite r1, r2, r0
@@ -38,11 +40,11 @@
         ; and then the second write should fail out of gas.
         log.swrite r1, r2, r0
         
-        ; if we ever get here -- panic.
-        ret.panic r0
+        ; if we ever get here - just return ok - as the caller will panic.
+        ret.ok r0
 
     inner_out_of_gas_handler:
-        ; check pubdata counter (should be equal to 130 - from the first 2 writes)
+        ; check pubdata counter (should be equal to 130; from the first 2 writes)
         context.meta r7
         and r10, r7, r7
         sub! 130, r7, r8

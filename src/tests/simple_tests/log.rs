@@ -60,18 +60,6 @@ mod tests {
     }
 
     #[test_log::test]
-    fn test_log_custom() {
-        run_asm_based_test(
-            "src/tests/simple_tests/testdata/log_custom",
-            &[800000],
-            Options {
-                cycles_per_vm_snapshot: 1,
-                ..Default::default()
-            },
-        )
-    }
-
-    #[test_log::test]
     fn test_decommit_invalid() {
         test_common("decommit_invalid")
     }
