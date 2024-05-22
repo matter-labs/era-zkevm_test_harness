@@ -151,17 +151,21 @@ fn add_data_section_for_directive(asm: &str, directive: Directive, args: Vec<Str
         Directive::PrintPointer => (PRINT_PTR_PREFIX, "PRINT_PTR"),
     };
 
-    let mut data_section = ".rodata\n".to_owned();
-    for (index, arg) in args.iter().enumerate() {
-        let mut data_line = format!("{arg_label_prefix}_{index}_STRING:\n");
-
-        let command = format! {"{command_prefix}{arg}"};
-        let value = U256::from(command.as_bytes());
-
-        data_line = format!("{data_line} .cell {value}\n");
-        data_section = data_section + &data_line;
-    }
-    data_section = data_section + ".text\n";
+    let data_section: String = args
+        .iter()
+        .enumerate()
+        .map(|(index, arg)| {
+            let data_line = format!(
+                "{arg_label_prefix}_{index}_STRING:\n .cell {}\n",
+                U256::from(format!("{command_prefix}{arg}").as_bytes())
+            );
+            data_line
+        })
+        .chain(Some(".text\n".to_owned()).into_iter())
+        .fold(".rodata\n".to_owned(), |mut acc, line| {
+            acc.push_str(&line);
+            acc
+        });
 
     let position = result.find("__entry:").expect("Invalid asm");
     result.insert_str(position, &data_section);

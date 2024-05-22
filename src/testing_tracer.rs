@@ -60,7 +60,7 @@ impl TestingTracer {
         if let TracerState::ExpectingCommand = self.tracer_state {
             panic!("Unexpected execute_print_from_register command");
         }
-        
+
         println!("{}", val.value);
     }
 
