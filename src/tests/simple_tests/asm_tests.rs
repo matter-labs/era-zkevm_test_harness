@@ -47,7 +47,7 @@ pub fn run_asm_based_test(test_dir: &str, additional_contracts: &[i32], options:
 fn test_meta_opcode_asm() {
     run_asm_based_test(
         "src/tests/simple_tests/testdata/meta_opcode",
-        &[800000],
+        &[],
         Default::default(),
     )
 }

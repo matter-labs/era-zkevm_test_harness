@@ -119,8 +119,9 @@ fn replace_directives(asm: &str, directive: Directive) -> (String, Vec<String>) 
             )
         }
         Directive::PrintRegister => {
-            // regex: print(<src>)
-            let print_reg_regex = Regex::new(r#"print\([^"\))]+\)"#).expect("Invalid regex");
+            // regex: print(<src>) or print("<message", <src>)
+            let print_reg_regex =
+                Regex::new(r#"print\(("[^"\)]+"\s*\,\s*)?([^"\)]+)\)"#).expect("Invalid regex");
             (
                 PRINT_REG_PREFIX,
                 print_reg_regex,
@@ -143,22 +144,16 @@ fn replace_directives(asm: &str, directive: Directive) -> (String, Vec<String>) 
     };
 
     for (_, matched) in asm.match_indices(&regex) {
-        let arg = matched
-            .strip_prefix(&prefix)
-            .expect("Invalid text in directive")
-            .strip_suffix(&suffix)
-            .expect("Invalid text in directive");
+        let matched_args = parse_args(matched, prefix, suffix);
 
         if directive == Directive::PrintRegister || directive == Directive::PrintPointer {
-            // ignore any args
-            if args.is_empty() {
+            if matched_args.len() > 1 {
+                push_text_arg(matched_args[0], command_prefix, &mut args);
+            } else {
                 args.push("".to_owned());
             }
         } else {
-            if arg.len() > 32 - command_prefix.len() {
-                panic!("Message inside directive is too long: {}", arg);
-            }
-            args.push(arg.to_owned());
+            push_text_arg(matched_args[0], command_prefix, &mut args);
         }
 
         let reference_var = format!("@{}_{}_STRING", cell_name, args.len() - 1);
@@ -171,10 +166,20 @@ fn replace_directives(asm: &str, directive: Directive) -> (String, Vec<String>) 
             }
             Directive::Print => line,
             Directive::PrintRegister => {
-                format!("{line}\n add {arg}, r0, r0")
+                let register = if matched_args.len() == 1 {
+                    matched_args[0]
+                } else {
+                    matched_args[1]
+                };
+                format!("{line}\n add {}, r0, r0", register)
             }
             Directive::PrintPointer => {
-                format!("{line}\n ptr.add {arg}, r0, r0")
+                let register = if matched_args.len() == 1 {
+                    matched_args[0]
+                } else {
+                    matched_args[1]
+                };
+                format!("{line}\n ptr.add {}, r0, r0", register)
             }
         };
         result = result.replace(matched, &line);
@@ -217,6 +222,29 @@ fn add_data_section_for_directive(asm: &str, directive: Directive, args: Vec<Str
     result.insert_str(position, &data_section);
 
     result
+}
+
+fn parse_args<'a>(text: &'a str, prefix: &str, suffix: &str) -> Vec<&'a str> {
+    // regex to split args from string like: <"a", b, c ...>
+    let args_regex = Regex::new(r#"(\"[^\"]*\")|,?\s*[^\s\,]+"#).expect("Invalid regex");
+    let trimmed_content = text
+        .strip_prefix(prefix)
+        .expect("Invalid text in directive")
+        .strip_suffix(suffix)
+        .expect("Invalid text in directive")
+        .trim();
+
+    trimmed_content
+        .matches(&args_regex)
+        .map(|x| x.trim_matches(',').trim().trim_matches('"'))
+        .collect()
+}
+
+fn push_text_arg(text_arg: &str, command_prefix: &str, args: &mut Vec<String>) {
+    if text_arg.len() > 32 - command_prefix.len() {
+        panic!("Message inside directive is too long: {}", text_arg);
+    }
+    args.push(text_arg.to_owned());
 }
 
 #[cfg(test)]

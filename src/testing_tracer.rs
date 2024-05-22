@@ -84,9 +84,15 @@ impl TestingTracer {
                             self.execute_print(&arg);
                         }
                         PRINT_REG_PREFIX => {
+                            if arg.len() != 0 {
+                                self.execute_print(&arg);
+                            }
                             new_state = TracerState::ExpectingRegisterValue;
                         }
                         PRINT_PTR_PREFIX => {
+                            if arg.len() != 0 {
+                                self.execute_print(&arg);
+                            }
                             new_state = TracerState::ExpectingPointerValue;
                         }
                         _ => {
