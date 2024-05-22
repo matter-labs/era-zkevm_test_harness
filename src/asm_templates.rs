@@ -1,4 +1,7 @@
 use crate::ethereum_types::U256;
+use crate::ethereum_types::H160;
+use crate::ethereum_types::Address;
+use crate::zk_evm::bytecode_to_code_hash;
 use regex::Regex;
 
 // Contains functions to preprocess asm templates and generate valid assembly code
@@ -31,22 +34,54 @@ pub const PRINT_REG_PREFIX: &str = "R:";
 pub const PRINT_PTR_PREFIX: &str = "P:";
 
 /// Replaces special directives in asm with TestingTracer compatible "commands"
-pub fn preprocess_asm(asm: &str) -> String {
-    let mut result = asm.to_owned();
-    for directive in [
+pub fn preprocess_asm(asm: &str, additional_contracts: Option<&Vec<(H160, Vec<[u8; 32]>)>>) -> String {
+    let result = [
         Directive::Print,
         Directive::Revert,
         Directive::PrintRegister,
         Directive::PrintPointer,
-    ] {
-        result = preprocess_directive(&result, directive.clone());
-    }
-    result
+    ].iter().fold(asm.to_owned(), |acc, x| preprocess_directive(&acc, *x));
+
+    link_additional_contracts(&result, additional_contracts)
 }
 
 fn preprocess_directive(asm: &str, directive: Directive) -> String {
     let (asm_replaced, messages) = replace_directives(asm, directive);
     let result = add_data_section_for_directive(&asm_replaced, directive, messages);
+    result
+}
+
+fn link_additional_contracts(asm: &str, additional_contracts: Option<&Vec<(H160, Vec<[u8; 32]>)>>) -> String {
+    let mut result = asm.to_owned();
+    // regex: <ADDRESS.asm>
+    let contract_regex = Regex::new(r#"<\d+\.asm>"#).expect("Invalid regex");
+
+    for (_, matched) in asm.match_indices(&contract_regex) {
+        let prefix = "<";
+        let suffix = ".asm>";
+        let contract_address = Address::from_low_u64_be(matched
+        .strip_prefix(&prefix)
+        .expect("Invalid text in directive")
+        .strip_suffix(&suffix)
+        .expect("Invalid text in directive")
+        .parse::<u64>().expect("Invalid additional contract address"));
+
+        result = match additional_contracts {
+            Some(contracts) => {
+                if let Some((_, bytecode)) = contracts.iter().find(|(address, _)| *address == contract_address) {
+                    let hash = bytecode_to_code_hash(&bytecode).unwrap();
+        
+                    result.replace(matched, &U256::from(hash).to_string())
+                } else {
+                    panic!("Can't link additional contract: {}", matched);
+                }
+            },
+            None => {
+                panic!("Can't link additional contract: {}", matched);
+            }
+        } 
+    };
+
     result
 }
 
@@ -186,7 +221,7 @@ print("TEST")
 print(r5)
 revert("TEST2")"#;
 
-        let result = preprocess_asm(&asm);
+        let result = preprocess_asm(&asm, None);
 
         let print_text = U256::from(format!("{}{}", PRINT_PREFIX, "TEST").as_bytes());
         let print_reg_text = U256::from(PRINT_REG_PREFIX.as_bytes());
@@ -234,7 +269,7 @@ add @REVERT_0_STRING, r0, r0
                     ret.ok r0
         "#, };
 
-        preprocess_asm(&asm);
+        preprocess_asm(&asm, None);
     }
 
     #[test]

@@ -3,3 +3,4 @@ In tests in `.asm` files it is possible to use several additional directives (no
 - `print(<src>)` - print value of `<src>` (register/constant/etc) in console
 - `printPtr(<ptr>)` - print value of `<ptr>` (fat pointer) in console
 - `revert("<TEXT>")` - panic with message `<TEXT>`. Max length of text is 30 symbols
+- `<ADDRESS.asm>` - will be replaced with the hash of `ADDRESS.asm` additional contract
