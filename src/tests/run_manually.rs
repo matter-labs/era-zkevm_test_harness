@@ -185,6 +185,7 @@ pub struct Options {
     pub other_contracts: Vec<(H160, Vec<[u8; 32]>)>,
     // How many cycles should a single VM handle (default is DEFAULT_CYCLES_PER_VM_SNAPSHOT = 5)
     pub cycles_per_vm_snapshot: u32,
+    pub default_bytecode: Option<Vec<[u8; 32]>>,
 }
 
 impl Default for Options {
@@ -193,6 +194,7 @@ impl Default for Options {
             cycle_limit: DEFAULT_CYCLE_LIMIT,
             other_contracts: Default::default(),
             cycles_per_vm_snapshot: DEFAULT_CYCLES_PER_VM_SNAPSHOT,
+            default_bytecode: None,
         }
     }
 }
@@ -247,7 +249,12 @@ pub(crate) fn run_with_options(entry_point_bytecode: Vec<[u8; 32]>, options: Opt
     }));
 
     // We must pass a correct empty code hash (with proper version) into the run method.
-    let empty_code_hash = U256::from_big_endian(&bytecode_to_code_hash(&[[0; 32]]).unwrap());
+    let empty_code_hash = if let Some(bytecode) = options.default_bytecode {
+        U256::from_big_endian(&bytecode_to_code_hash(&bytecode).unwrap())
+    } else {
+        U256::from_big_endian(&bytecode_to_code_hash(&[[0; 32]]).unwrap())
+    };
+    println!("Empty coded hash is: {:?}", empty_code_hash);
 
     let mut storage_impl = InMemoryStorage::new();
     let mut tree = ZKSyncTestingTree::empty();

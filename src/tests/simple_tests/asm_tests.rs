@@ -40,6 +40,16 @@ pub fn run_asm_based_test(test_dir: &str, additional_contracts: &[i32], options:
 
     let mut options = options.clone();
     options.other_contracts = contracts;
+
+    let file_path = data_path.join("default.asm");
+    if let Ok(asm) = fs::read_to_string(file_path.clone()) {
+        let bytecode = Assembly::try_from(asm.to_owned())
+            .unwrap()
+            .compile_to_bytecode()
+            .expect(&format!("Failed to compile {:?}", file_path));
+        options.default_bytecode = Some(bytecode);
+    }
+
     run_with_options(entry_bytecode, options);
 }
 

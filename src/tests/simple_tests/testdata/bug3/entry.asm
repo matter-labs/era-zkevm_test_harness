@@ -4,14 +4,22 @@
         .p2align	5
 CPI0_0:
         ; this is the hash of the contract in 80000.asm
-	    .cell 452312938437537823148903869859771978505772238111866864847149311043017845250
+	    ;.cell 452312938437537823148903869859771978505772238111866864847149311043017845250
+        ;.cell 7689318515769800037122090432902766219335146279714402117313248311537588447746 
+        .cell 180000
 
 
         .text
         .globl	__entry
     __entry:
     .main:
+
         ptr.add r1, r2, r1
+
+        add 211, r0, r5
+        add 64, r0, r6
+        st.1 r6, r5
+        st.2 r6, r5
         
 
         ;add 15, r0, r11
@@ -44,13 +52,11 @@ CPI0_0:
         context.set_context_u128 r7
 
 
-        add @CPI0_0[0], r0, r1
+        add @CPI0_0[0], r0, r5
         context.ergs_left r9
         ; extra cost
         add 2000, r0, r2
-        log.decommit r1, r2, r3
-
-
+        log.decommit r5, r2, r3
 
         add @CPI0_0[0], r0, r2
 
@@ -64,6 +70,7 @@ CPI0_0:
 
         ret.ok r0
     do_panic:
-        ret.ok r0
+        ret.panic r0
+        ;ret.ok r0
 
         
