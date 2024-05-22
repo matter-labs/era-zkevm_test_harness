@@ -117,6 +117,19 @@ mod tests {
             },
         )
     }
+
+    #[test_log::test]
+    fn test_bug7() {
+        run_asm_based_test(
+            "src/tests/simple_tests/testdata/bug7",
+            &[180000],
+            Options {
+                cycles_per_vm_snapshot: 1,
+                cycle_limit: 100,
+                ..Default::default()
+            },
+        )
+    }
 }
 
 #[test_log::test]
