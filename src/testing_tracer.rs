@@ -22,9 +22,15 @@ enum TracerState {
     #[default]
     ExpectingCommand,
     /// will print next value from VM
-    ExpectingRegisterValue,
-    /// will print next value from VM as pointer
-    ExpectingPointerValue,
+    ExpectingValueToPrint(ExpectedValueType),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum ExpectedValueType {
+    /// expecting raw register value
+    Register,
+    /// expecting fat pointer
+    Pointer,
 }
 
 /// Tracks prints and exceptions during VM execution cycles.
@@ -68,10 +74,7 @@ impl TestingTracer {
         let mut new_state = TracerState::ExpectingCommand;
 
         match self.tracer_state {
-            TracerState::ExpectingRegisterValue => {
-                self.execute_print_from_register(value);
-            }
-            TracerState::ExpectingPointerValue => {
+            TracerState::ExpectingValueToPrint(..) => {
                 self.execute_print_from_register(value);
             }
             TracerState::ExpectingCommand => {
@@ -84,10 +87,12 @@ impl TestingTracer {
                             self.execute_print(&arg);
                         }
                         PRINT_REG_PREFIX => {
-                            new_state = TracerState::ExpectingRegisterValue;
+                            new_state =
+                                TracerState::ExpectingValueToPrint(ExpectedValueType::Register);
                         }
                         PRINT_PTR_PREFIX => {
-                            new_state = TracerState::ExpectingPointerValue;
+                            new_state =
+                                TracerState::ExpectingValueToPrint(ExpectedValueType::Pointer);
                         }
                         _ => {
                             // ignore invalid command
@@ -126,7 +131,7 @@ impl TestingTracer {
             }
         }
 
-        return None;
+        None
     }
 }
 
@@ -175,11 +180,8 @@ impl Tracer for TestingTracer {
         // commands always have r0 as src1 and dst0
         let new_state = if data.opcode.src1_reg_idx == 0 && data.opcode.dst0_reg_idx == 0 {
             match inner_opcode {
-                Opcode::Add(AddOpcode::Add) => {
+                Opcode::Add(AddOpcode::Add) | Opcode::Ptr(PtrOpcode::Add) => {
                     // `add x r0 r0` is used to pass "x" to TestingTracer
-                    self.handle_value_from_vm(data.src0_value)
-                }
-                Opcode::Ptr(PtrOpcode::Add) => {
                     // `ptr.add x r0 r0` is used to pass "x" pointer to TestingTracer
                     self.handle_value_from_vm(data.src0_value)
                 }
