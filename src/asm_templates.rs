@@ -101,7 +101,7 @@ fn replace_directives(asm: &str, directive: Directive) -> (String, Vec<String>) 
         if asm[..index]
             .chars()
             .rev()
-            .take_while(|&symbol| symbol == ' ' || symbol == '\t' || symbol == ';')
+            .take_while(|&symbol| symbol != '\n')
             .any(|symbol| symbol == ';')
         {
             continue;
