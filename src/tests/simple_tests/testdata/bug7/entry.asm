@@ -3,11 +3,7 @@
         .rodata.cst32
         .p2align	5
 CPI0_0:
-        ; this is the hash of the contract in 80000.asm
-	    ;.cell 452312938437537823148903869859771978505772238111866864847149311043017845250
-        ;.cell 7689318515769800037122090432902766219335146279714402117313248311537588447746 
         .cell 180000
-
 
         .text
         .globl	__entry
@@ -21,11 +17,6 @@ CPI0_0:
         st.1 r6, r5
         st.2 r6, r5
         
-
-        ;add 15, r0, r11
-        ;add 16, r0, r12
-        ;context.ergs_left r9
-
         ; use 2 for forwarding mode
         add 2, r1, r1
         shl.s 32, r1, r1
@@ -37,7 +28,6 @@ CPI0_0:
 
 
         add r5, r1, r1
-        ;shl.s 192, r1, r1
 
         shl.s 96, r1, r1
         ; fat ptr length
@@ -71,6 +61,5 @@ CPI0_0:
         ret.ok r0
     do_panic:
         ret.panic r0
-        ;ret.ok r0
 
         
