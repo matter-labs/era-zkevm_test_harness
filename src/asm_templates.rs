@@ -1,7 +1,9 @@
 use crate::ethereum_types::U256;
 use regex::Regex;
 
-// Default config template for simple tests
+// Contains functions to preprocess asm templates and generate valid assembly code
+
+/// Default config template for simple tests
 const DEFAULT_CONFIG: &str = r#"
     .text
     .file	"Test_zkevm"
@@ -16,7 +18,7 @@ pub fn asm_with_default_config(asm: &str) -> String {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum Directives {
+enum Directive {
     Print,
     PrintRegister,
     PrintPointer,
@@ -30,12 +32,12 @@ pub const PRINT_PTR_PREFIX: &str = "P:";
 
 /// Replaces special directives in asm with TestingTracer compatible "commands"
 pub fn preprocess_asm(asm: &str) -> String {
-    let mut result = asm.to_owned().clone();
+    let mut result = asm.to_owned();
     for directive in [
-        Directives::Print,
-        Directives::Revert,
-        Directives::PrintRegister,
-        Directives::PrintPointer,
+        Directive::Print,
+        Directive::Revert,
+        Directive::PrintRegister,
+        Directive::PrintPointer,
     ]
     .iter()
     {
@@ -44,24 +46,24 @@ pub fn preprocess_asm(asm: &str) -> String {
     result
 }
 
-fn preprocess_directive(asm: &str, directive: Directives) -> String {
+fn preprocess_directive(asm: &str, directive: Directive) -> String {
     let (asm_replaced, messages) = replace_directives(asm, directive);
     let result = add_data_section_for_directive(&asm_replaced, directive, messages);
     result
 }
 
 /// replace all occurrences of the directive with the corresponding assembly code
-fn replace_directives(asm: &str, directive: Directives) -> (String, Vec<String>) {
-    let mut result = asm.to_owned().clone();
+fn replace_directives(asm: &str, directive: Directive) -> (String, Vec<String>) {
+    let mut result = asm.to_owned();
     let mut prints: Vec<String> = Vec::new();
 
     let (command_prefix, regex, cell_name, prefix, suffix) = match directive.clone() {
-        Directives::Print => {
+        Directive::Print => {
             // regex: print("<message>")
             let print_regex = Regex::new(r#"print\("[^"]*"\)"#).expect("Invalid regex");
             (PRINT_PREFIX, print_regex, "PRINT", r#"print(""#, r#"")"#)
         }
-        Directives::Revert => {
+        Directive::Revert => {
             // regex: revert("<message>")
             let revert_regex = Regex::new(r#"revert\("[^"]*"\)"#).expect("Invalid regex");
             (
@@ -72,7 +74,7 @@ fn replace_directives(asm: &str, directive: Directives) -> (String, Vec<String>)
                 r#"")"#,
             )
         }
-        Directives::PrintRegister => {
+        Directive::PrintRegister => {
             // regex: print(<src>)
             let print_reg_regex = Regex::new(r#"print\([^"\))]+\)"#).expect("Invalid regex");
             (
@@ -83,7 +85,7 @@ fn replace_directives(asm: &str, directive: Directives) -> (String, Vec<String>)
                 r#")"#,
             )
         }
-        Directives::PrintPointer => {
+        Directive::PrintPointer => {
             // regex: printPtr(<src>)
             let print_ptr_regex = Regex::new(r#"printPtr\([^"\)]+\)"#).expect("Invalid regex");
             (
@@ -103,7 +105,7 @@ fn replace_directives(asm: &str, directive: Directives) -> (String, Vec<String>)
             .strip_suffix(&suffix)
             .expect("Invalid text in directive");
 
-        if directive == Directives::PrintRegister || directive == Directives::PrintPointer {
+        if directive == Directive::PrintRegister || directive == Directive::PrintPointer {
             // ignore any args
             if prints.is_empty() {
                 prints.push("".to_owned());
@@ -115,20 +117,19 @@ fn replace_directives(asm: &str, directive: Directives) -> (String, Vec<String>)
             prints.push(arg.to_owned());
         }
 
-        let reference_var =
-            "@".to_owned() + cell_name + "_" + &(prints.len() - 1).to_string() + "_STRING";
-        let mut line = "add ".to_owned() + &reference_var + ", r0, r0";
+        let reference_var = format!("@{}_{}_STRING", cell_name, prints.len() - 1);
+        let mut line = format!("add {reference_var}, r0, r0");
 
         // additional lines
         match directive {
-            Directives::Revert => {
-                line = line + "\n" + "ret.panic r0";
+            Directive::Revert => {
+                line = format!("{line}\n ret.panic r0");
             }
-            Directives::PrintRegister => {
-                line = line + "\n" + "add " + arg + ", r0, r0";
+            Directive::PrintRegister => {
+                line = format!("{line}\n add {arg}, r0, r0");
             }
-            Directives::PrintPointer => {
-                line = line + "\n" + "ptr.add " + arg + ", r0, r0";
+            Directive::PrintPointer => {
+                line = format!("{line}\n ptr.add {arg}, r0, r0");
             }
             _ => {}
         }
@@ -141,28 +142,29 @@ fn replace_directives(asm: &str, directive: Directives) -> (String, Vec<String>)
 /// add .rodata section with messages from directives
 fn add_data_section_for_directive(
     asm: &str,
-    directive: Directives,
-    messages: Vec<String>,
+    directive: Directive,
+    args: Vec<String>,
 ) -> String {
     let mut result = asm.to_owned().clone();
-    if messages.len() == 0 {
+    if args.len() == 0 {
         return result;
     }
 
-    let (prefix, directive_line) = match directive {
-        Directives::Print => (PRINT_PREFIX, "PRINT"),
-        Directives::Revert => (EXCEPTION_PREFIX, "REVERT"),
-        Directives::PrintRegister => (PRINT_REG_PREFIX, "PRINT_REG"),
-        Directives::PrintPointer => (PRINT_PTR_PREFIX, "PRINT_PTR"),
+    let (command_prefix, arg_label_prefix) = match directive {
+        Directive::Print => (PRINT_PREFIX, "PRINT"),
+        Directive::Revert => (EXCEPTION_PREFIX, "REVERT"),
+        Directive::PrintRegister => (PRINT_REG_PREFIX, "PRINT_REG"),
+        Directive::PrintPointer => (PRINT_PTR_PREFIX, "PRINT_PTR"),
     };
 
     let mut data_section = ".rodata\n".to_owned();
-    for (index, message) in messages.iter().enumerate() {
-        let mut data_line = directive_line.to_owned() + "_" + &(index).to_string() + "_STRING:\n";
+    for (index, arg) in args.iter().enumerate() {
+        let mut data_line = format!("{arg_label_prefix}_{index}_STRING:\n");
 
-        let text = prefix.to_owned() + message;
-        let value = U256::from(text.as_bytes());
-        data_line = data_line + ".cell " + &value.to_string() + "\n";
+        let command = format!{"{command_prefix}{arg}"};
+        let value = U256::from(command.as_bytes());
+
+        data_line = format!("{data_line} .cell {value}\n");
         data_section = data_section + &data_line;
     }
     data_section = data_section + ".text\n";

@@ -16,13 +16,23 @@ use crate::asm_templates::PRINT_PREFIX;
 use crate::asm_templates::PRINT_PTR_PREFIX;
 use crate::asm_templates::PRINT_REG_PREFIX;
 
+#[derive(Debug, Clone, PartialEq)]
+enum TracerState {
+    /// will try to parse next value from VM as command
+    ExpectingCommand,
+    /// will print next value from VM
+    ExpectingRegisterValue,
+    /// will print next value from VM as pointer
+    ExpectingPointerValue
+}
+
 /// Tracks prints and exceptions during VM execution cycles.
 #[derive(Debug, Clone)]
 pub struct TestingTracer {
     /// the last uncatched exception message
     pub exception_message: Option<String>,
-    /// true if next command should be interpreted as printable value and printed
-    expecting_register_value: bool,
+    /// the inner state, affects the interpretation of values from the VM
+    tracer_state: TracerState,
 }
 
 /// TestingTracer interprets valid x values in `add x r0 r0` and `ptr.add x r0 r0` instructions as commands to execute.
@@ -36,7 +46,7 @@ impl TestingTracer {
     pub fn new() -> Self {
         Self {
             exception_message: None,
-            expecting_register_value: false,
+            tracer_state: TracerState::ExpectingCommand,
         }
     }
 
@@ -53,12 +63,59 @@ impl TestingTracer {
     }
 
     fn execute_print_from_register(&mut self, val: PrimitiveValue) {
-        assert!(
-            self.expecting_register_value,
-            "Unexpected print_from_register command"
-        );
-        self.expecting_register_value = false;
-        println!("{}", val.value);
+        match self.tracer_state {
+            TracerState::ExpectingCommand => {
+                panic!("Unexpected print_from_register command")
+            }
+            _ => {
+                println!("{}", val.value);
+            }
+        }
+    }
+
+    fn handle_value_from_vm(&mut self, value: PrimitiveValue) -> TracerState {
+        let mut new_state = TracerState::ExpectingCommand;
+
+        match self.tracer_state {
+            TracerState::ExpectingRegisterValue => {
+                self.execute_print_from_register(value);
+            },
+            _ => {
+                if let (Some(command_prefix), Some(arg)) =
+                self.parse_command_from_register(value)
+                {
+                    match command_prefix.as_str() {
+                        EXCEPTION_PREFIX => {
+                            self.set_exception_message(&arg);
+                        }
+                        PRINT_PREFIX => {
+                            self.execute_print(&arg);
+                        }
+                        PRINT_REG_PREFIX => {
+                            new_state = TracerState::ExpectingRegisterValue;
+                        }
+                        PRINT_PTR_PREFIX => {
+                            new_state = TracerState::ExpectingPointerValue;
+                        }
+                        _ => {
+                            // ignore invalid command
+                        }
+                    }
+                }
+            }
+        }
+
+        new_state
+    }
+
+    fn handle_pointer_from_vm(&mut self, value: PrimitiveValue) -> TracerState {
+        let new_state = TracerState::ExpectingCommand;
+
+        if self.tracer_state == TracerState::ExpectingPointerValue {
+            self.execute_print_from_register(value);
+        }
+
+        new_state
     }
 
     fn parse_command_from_register(
@@ -105,13 +162,13 @@ impl Tracer for TestingTracer {
     fn after_decoding(
         &mut self,
         _state: VmLocalStateData<'_>,
-        _data: AfterDecodingData,
+        data: AfterDecodingData,
         _memory: &Self::SupportedMemory,
     ) {
         // check for built-in panics
-        if !_data.error_flags_accumulated.is_empty() {
+        if !data.error_flags_accumulated.is_empty() {
             // last accumulated panic will be used as exception_message
-            for (panic, _) in _data.error_flags_accumulated.iter_names() {
+            for (panic, _) in data.error_flags_accumulated.iter_names() {
                 self.exception_message = Some(panic.to_owned());
             }
         }
@@ -120,10 +177,10 @@ impl Tracer for TestingTracer {
     fn before_execution(
         &mut self,
         _state: VmLocalStateData<'_>,
-        _data: BeforeExecutionData,
+        data: BeforeExecutionData,
         _memory: &Self::SupportedMemory,
     ) {
-        let inner_opcode = _data.opcode.inner.variant.opcode;
+        let inner_opcode = data.opcode.inner.variant.opcode;
 
         // Propagate error message if Nop, ret.panic, ret.revert; reset otherwise
         match inner_opcode {
@@ -135,47 +192,28 @@ impl Tracer for TestingTracer {
             }
         }
 
-        // Try to execute commands
+        let mut new_state = TracerState::ExpectingCommand;
+
+        // check if we have a valid command for TestingTracer and execute the command if any.
         // commands always have r0 as src1 and dst0
-        if _data.opcode.src1_reg_idx == 0 && _data.opcode.dst0_reg_idx == 0 {
-            match inner_opcode {
+        if data.opcode.src1_reg_idx == 0 && data.opcode.dst0_reg_idx == 0 {
+            new_state = match inner_opcode {
                 Opcode::Add(AddOpcode::Add) => {
-                    // `add x r0 r0` is used as "execute x command" statement
-                    if self.expecting_register_value {
-                        self.execute_print_from_register(_data.src0_value);
-                    } else {
-                        if let (Some(command_prefix), Some(arg)) =
-                            self.parse_command_from_register(_data.src0_value)
-                        {
-                            if command_prefix == EXCEPTION_PREFIX {
-                                self.set_exception_message(&arg);
-                            } else if command_prefix == PRINT_PREFIX {
-                                self.execute_print(&arg);
-                            } else if command_prefix == PRINT_REG_PREFIX {
-                                self.expecting_register_value = true;
-                            } else if command_prefix == PRINT_PTR_PREFIX {
-                                self.expecting_register_value = true;
-                            }
-                        }
-                    }
+                    // `add x r0 r0` is used to pass "x" to TestingTracer
+                    self.handle_value_from_vm(data.src0_value)
                 }
                 Opcode::Ptr(PtrOpcode::Add) => {
-                    // `ptr.add x r0 r0` is used as "print" statement for pointers
-                    if self.expecting_register_value {
-                        self.execute_print_from_register(_data.src0_value);
-                    }
+                    // `ptr.add x r0 r0` is used to pass "x" pointer to TestingTracer
+                    self.handle_pointer_from_vm(data.src0_value)
                 }
-                _ => {
-                    self.expecting_register_value = false;
-                }
+                _ => {new_state}
             };
-        } else {
-            // not a command
-            self.expecting_register_value = false;
         }
 
+        self.tracer_state = new_state;
+
         // pc 0 means VM finished without any panics
-        if _data.new_pc == 0 {
+        if data.new_pc == 0 {
             self.reset_exception();
         }
     }
