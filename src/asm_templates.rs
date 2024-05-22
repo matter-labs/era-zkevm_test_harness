@@ -77,22 +77,19 @@ fn link_additional_contracts(
                 .expect("Invalid additional contract address"),
         );
 
-        result = match additional_contracts {
-            Some(contracts) => {
-                if let Some((_, bytecode)) = contracts
-                    .iter()
-                    .find(|(address, _)| *address == contract_address)
-                {
-                    let hash = bytecode_to_code_hash(&bytecode).unwrap();
+        if let None = additional_contracts {
+            panic!("Can't link additional contract: {}", matched);
+        }
 
-                    result.replace(matched, &U256::from(hash).to_string())
-                } else {
-                    panic!("Can't link additional contract: {}", matched);
-                }
-            }
-            None => {
-                panic!("Can't link additional contract: {}", matched);
-            }
+        result = if let Some((_, bytecode)) = additional_contracts
+            .unwrap()
+            .iter()
+            .find(|(address, _)| *address == contract_address)
+        {
+            let hash = bytecode_to_code_hash(&bytecode).unwrap();
+            result.replace(matched, &U256::from(hash).to_string())
+        } else {
+            panic!("Can't link additional contract: {}", matched);
         }
     }
 
