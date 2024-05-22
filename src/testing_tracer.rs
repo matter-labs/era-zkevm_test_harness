@@ -57,14 +57,11 @@ impl TestingTracer {
     }
 
     fn execute_print_from_register(&self, val: PrimitiveValue) {
-        match self.tracer_state {
-            TracerState::ExpectingCommand => {
-                panic!("Unexpected print_from_register command")
-            }
-            _ => {
-                println!("{}", val.value);
-            }
+        if let TracerState::ExpectingCommand = self.tracer_state {
+            panic!("Unexpected execute_print_from_register command");
         }
+        
+        println!("{}", val.value);
     }
 
     fn handle_value_from_vm(&mut self, value: PrimitiveValue) -> TracerState {
