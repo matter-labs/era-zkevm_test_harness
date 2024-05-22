@@ -1,6 +1,6 @@
-use crate::ethereum_types::U256;
-use crate::ethereum_types::H160;
 use crate::ethereum_types::Address;
+use crate::ethereum_types::H160;
+use crate::ethereum_types::U256;
 use crate::zk_evm::bytecode_to_code_hash;
 use regex::Regex;
 
@@ -34,13 +34,18 @@ pub const PRINT_REG_PREFIX: &str = "R:";
 pub const PRINT_PTR_PREFIX: &str = "P:";
 
 /// Replaces special directives in asm with TestingTracer compatible "commands"
-pub fn preprocess_asm(asm: &str, additional_contracts: Option<&Vec<(H160, Vec<[u8; 32]>)>>) -> String {
+pub fn preprocess_asm(
+    asm: &str,
+    additional_contracts: Option<&Vec<(H160, Vec<[u8; 32]>)>>,
+) -> String {
     let result = [
         Directive::Print,
         Directive::Revert,
         Directive::PrintRegister,
         Directive::PrintPointer,
-    ].iter().fold(asm.to_owned(), |acc, x| preprocess_directive(&acc, *x));
+    ]
+    .iter()
+    .fold(asm.to_owned(), |acc, x| preprocess_directive(&acc, *x));
 
     link_additional_contracts(&result, additional_contracts)
 }
@@ -51,7 +56,10 @@ fn preprocess_directive(asm: &str, directive: Directive) -> String {
     result
 }
 
-fn link_additional_contracts(asm: &str, additional_contracts: Option<&Vec<(H160, Vec<[u8; 32]>)>>) -> String {
+fn link_additional_contracts(
+    asm: &str,
+    additional_contracts: Option<&Vec<(H160, Vec<[u8; 32]>)>>,
+) -> String {
     let mut result = asm.to_owned();
     // regex: <ADDRESS.asm>
     let contract_regex = Regex::new(r#"<\d+\.asm>"#).expect("Invalid regex");
@@ -59,28 +67,34 @@ fn link_additional_contracts(asm: &str, additional_contracts: Option<&Vec<(H160,
     for (_, matched) in asm.match_indices(&contract_regex) {
         let prefix = "<";
         let suffix = ".asm>";
-        let contract_address = Address::from_low_u64_be(matched
-        .strip_prefix(&prefix)
-        .expect("Invalid text in directive")
-        .strip_suffix(&suffix)
-        .expect("Invalid text in directive")
-        .parse::<u64>().expect("Invalid additional contract address"));
+        let contract_address = Address::from_low_u64_be(
+            matched
+                .strip_prefix(&prefix)
+                .expect("Invalid text in directive")
+                .strip_suffix(&suffix)
+                .expect("Invalid text in directive")
+                .parse::<u64>()
+                .expect("Invalid additional contract address"),
+        );
 
         result = match additional_contracts {
             Some(contracts) => {
-                if let Some((_, bytecode)) = contracts.iter().find(|(address, _)| *address == contract_address) {
+                if let Some((_, bytecode)) = contracts
+                    .iter()
+                    .find(|(address, _)| *address == contract_address)
+                {
                     let hash = bytecode_to_code_hash(&bytecode).unwrap();
-        
+
                     result.replace(matched, &U256::from(hash).to_string())
                 } else {
                     panic!("Can't link additional contract: {}", matched);
                 }
-            },
+            }
             None => {
                 panic!("Can't link additional contract: {}", matched);
             }
-        } 
-    };
+        }
+    }
 
     result
 }

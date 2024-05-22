@@ -1,6 +1,6 @@
 use self::run_manually::{run_and_try_create_witness_for_extended_state, Options};
 use super::*;
-use crate::asm_templates::{preprocess_asm};
+use crate::asm_templates::preprocess_asm;
 use crate::tests::run_manually::run_and_try_create_witness_inner;
 use std::{fs, path::Path};
 use zkevm_assembly::Assembly;
@@ -13,21 +13,21 @@ pub fn run_asm_based_test(test_dir: &str, additional_contracts: &[i32], options:
     let data_path = Path::new(test_dir);
 
     let contracts = additional_contracts
-    .iter()
-    .map(|address| {
-        let file_path = data_path.join(format!("{}.asm", address));
-        let asm = fs::read_to_string(file_path.clone()).expect(&format!(
-            "Should have been able to read the file {:?}",
-            file_path
-        ));
-        let asm_preprocessed = preprocess_asm(&asm, None);
-        let bytecode = Assembly::try_from(asm_preprocessed.to_owned())
-            .unwrap()
-            .compile_to_bytecode()
-            .expect(&format!("Failed to compile {:?}", file_path));
-        (Address::from_low_u64_be(*address as u64), bytecode)
-    })
-    .collect();
+        .iter()
+        .map(|address| {
+            let file_path = data_path.join(format!("{}.asm", address));
+            let asm = fs::read_to_string(file_path.clone()).expect(&format!(
+                "Should have been able to read the file {:?}",
+                file_path
+            ));
+            let asm_preprocessed = preprocess_asm(&asm, None);
+            let bytecode = Assembly::try_from(asm_preprocessed.to_owned())
+                .unwrap()
+                .compile_to_bytecode()
+                .expect(&format!("Failed to compile {:?}", file_path));
+            (Address::from_low_u64_be(*address as u64), bytecode)
+        })
+        .collect();
 
     let entry_asm = fs::read_to_string(data_path.join("entry.asm"))
         .expect("Should have been able to read the file");
