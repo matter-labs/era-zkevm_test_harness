@@ -53,7 +53,7 @@ fn preprocess_directive(asm: &str, directive: Directive) -> String {
 /// replace all occurrences of the directive with the corresponding assembly code
 fn replace_directives(asm: &str, directive: Directive) -> (String, Vec<String>) {
     let mut result = asm.to_owned();
-    let mut prints: Vec<String> = Vec::new();
+    let mut args: Vec<String> = Vec::new();
 
     let (command_prefix, regex, cell_name, prefix, suffix) = match directive.clone() {
         Directive::Print => {
@@ -105,17 +105,17 @@ fn replace_directives(asm: &str, directive: Directive) -> (String, Vec<String>) 
 
         if directive == Directive::PrintRegister || directive == Directive::PrintPointer {
             // ignore any args
-            if prints.is_empty() {
-                prints.push("".to_owned());
+            if args.is_empty() {
+                args.push("".to_owned());
             }
         } else {
             if arg.len() > 32 - command_prefix.len() {
                 panic!("Message inside directive is too long: {}", arg);
             }
-            prints.push(arg.to_owned());
+            args.push(arg.to_owned());
         }
 
-        let reference_var = format!("@{}_{}_STRING", cell_name, prints.len() - 1);
+        let reference_var = format!("@{}_{}_STRING", cell_name, args.len() - 1);
         let line = format!("add {reference_var}, r0, r0");
 
         // additional lines
@@ -134,7 +134,7 @@ fn replace_directives(asm: &str, directive: Directive) -> (String, Vec<String>) 
         result = result.replace(matched, &line);
     }
 
-    return (result, prints);
+    return (result, args);
 }
 
 /// add .rodata section with messages from directives
@@ -167,4 +167,83 @@ fn add_data_section_for_directive(asm: &str, directive: Directive, args: Vec<Str
     result.insert_str(position, &data_section);
 
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_preprocess() {
+        let asm = r#"
+__entry:
+.main:
+print("TEST")
+print(r5)
+revert("TEST2")"#;
+
+        let result = preprocess_asm(&asm);
+
+        let print_text = U256::from(format!("{}{}", PRINT_PREFIX, "TEST").as_bytes());
+        let print_reg_text = U256::from(PRINT_REG_PREFIX.as_bytes());
+        let revert_text = U256::from(format!("{}{}", EXCEPTION_PREFIX, "TEST2").as_bytes());
+
+        let expected_result = format!(
+            r#"
+.rodata
+PRINT_0_STRING:
+ .cell {print_text}
+.text
+.rodata
+REVERT_0_STRING:
+ .cell {revert_text}
+.text
+.rodata
+PRINT_REG_0_STRING:
+ .cell {print_reg_text}
+.text
+__entry:
+.main:
+add @PRINT_0_STRING, r0, r0
+add @PRINT_REG_0_STRING, r0, r0
+ add r5, r0, r0
+add @REVERT_0_STRING, r0, r0
+ ret.panic r0"#
+        );
+
+        assert_eq!(result, expected_result);
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Message inside directive is too long: ttttttttttttttttttttttttttttttt"
+    )]
+    fn test_panic_too_long_print() {
+        let long_message = "ttttttttttttttttttttttttttttttt";
+
+        let asm = format! {r#"
+            .text
+            .globl	__entry
+            __entry:
+                .main:
+                    print("{long_message}")
+                    ret.ok r0
+        "#, };
+
+        preprocess_asm(&asm);
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid asm")]
+    fn test_panic_with_unexpected_entry() {
+        let args = Vec::from(["Test".to_owned()]);
+        let asm = r#"
+            .text
+            .globl	__unexpected_entry
+            __unexpected_entry:
+                .main:
+                    ret.ok r0
+        "#;
+        add_data_section_for_directive(asm, Directive::Print, args);
+    }
 }
