@@ -22,11 +22,9 @@
         add 2000, r0, r2
         log.decommit r1, r2, r3
         context.ergs_left r10
-        log.event r9, r10, r0
 
         ; so after the call, we should have burned at least 2k gas.
         sub.s 2000, r9, r11
-        log.event r10, r11, r0
         ; assert(r9-2000 >= r10) - make sure that we really burned 2k gas
         sub! r11, r10, r0 
         jump.lt @.panic
