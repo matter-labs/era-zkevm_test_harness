@@ -96,8 +96,19 @@ fn replace_directives(asm: &str, directive: Directive) -> (String, Vec<String>) 
         }
     };
 
-    for (_, matched) in asm.match_indices(&regex) {
+    for (index, matched) in asm.match_indices(&regex) {
+        // skip if directive commented out
+        if asm[..index]
+            .chars()
+            .rev()
+            .take_while(|&symbol| symbol == ' ' || symbol == '\t' || symbol == ';')
+            .any(|symbol| symbol == ';')
+        {
+            continue;
+        }
+
         let arg = matched
+            .trim()
             .strip_prefix(&prefix)
             .expect("Invalid text in directive")
             .strip_suffix(&suffix)
