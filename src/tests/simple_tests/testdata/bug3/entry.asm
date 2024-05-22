@@ -2,13 +2,22 @@
         .file	"Test_26"
         .rodata.cst32
         .p2align	5
+CPI0_0:
+        ; this is the hash of the contract in 80000.asm
+	    .cell 452312938437537823148903869859771978505772238111866864847149311043017845250
+
+CPI0_2:
+        ; this is the hash of the contract in 80000.asm
+	    .cell 452312938437537823148903869859771978505772238111866864847149311043017845250
 CPI0_1:
 	    .cell 8000
+
         .text
         .globl	__entry
     __entry:
     .main:
         ptr.add r1, r2, r1
+        
 
         ;add 15, r0, r11
         ;add 16, r0, r12
@@ -40,10 +49,15 @@ CPI0_1:
         context.set_context_u128 r7
 
 
+        add @CPI0_0[0], r0, r1
+        context.ergs_left r9
+        ; extra cost
+        add 2000, r0, r2
+        log.decommit r1, r2, r3
 
 
-        
-        add @CPI0_1[0], r0, r2
+
+        add @CPI0_0[0], r0, r2
 
         far_call r1, r2, @do_panic
 
@@ -55,9 +69,9 @@ CPI0_1:
 
         ret.ok r0
     do_panic:
-        ret.panic r0
+        ;ret.panic r0
         ;log.event.first r1, r5, r10
 
-        ;ret.ok r0
+        ret.ok r0
 
         
