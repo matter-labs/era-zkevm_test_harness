@@ -23,7 +23,7 @@ enum TracerState {
     /// will print next value from VM
     ExpectingRegisterValue,
     /// will print next value from VM as pointer
-    ExpectingPointerValue
+    ExpectingPointerValue,
 }
 
 /// Tracks prints and exceptions during VM execution cycles.
@@ -79,11 +79,9 @@ impl TestingTracer {
         match self.tracer_state {
             TracerState::ExpectingRegisterValue => {
                 self.execute_print_from_register(value);
-            },
+            }
             _ => {
-                if let (Some(command_prefix), Some(arg)) =
-                self.parse_command_from_register(value)
-                {
+                if let (Some(command_prefix), Some(arg)) = self.parse_command_from_register(value) {
                     match command_prefix.as_str() {
                         EXCEPTION_PREFIX => {
                             self.set_exception_message(&arg);
@@ -206,7 +204,7 @@ impl Tracer for TestingTracer {
                     // `ptr.add x r0 r0` is used to pass "x" pointer to TestingTracer
                     self.handle_pointer_from_vm(data.src0_value)
                 }
-                _ => {new_state}
+                _ => new_state,
             };
         }
 

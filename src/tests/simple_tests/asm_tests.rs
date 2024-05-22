@@ -1,9 +1,9 @@
+use self::run_manually::{run_and_try_create_witness_for_extended_state, Options};
 use super::*;
+use crate::asm_templates::preprocess_asm;
+use crate::tests::run_manually::run_and_try_create_witness_inner;
 use std::{fs, path::Path};
 use zkevm_assembly::Assembly;
-use self::run_manually::{run_and_try_create_witness_for_extended_state, Options};
-use crate::tests::run_manually::run_and_try_create_witness_inner;
-use crate::asm_templates::preprocess_asm;
 
 /// Runs the tests based on the ASM files from a given directory.
 /// The main assembly should be in `entry.asm` file, while additional

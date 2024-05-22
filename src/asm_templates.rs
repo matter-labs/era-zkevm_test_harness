@@ -140,11 +140,7 @@ fn replace_directives(asm: &str, directive: Directive) -> (String, Vec<String>) 
 }
 
 /// add .rodata section with messages from directives
-fn add_data_section_for_directive(
-    asm: &str,
-    directive: Directive,
-    args: Vec<String>,
-) -> String {
+fn add_data_section_for_directive(asm: &str, directive: Directive, args: Vec<String>) -> String {
     let mut result = asm.to_owned().clone();
     if args.len() == 0 {
         return result;
@@ -161,7 +157,7 @@ fn add_data_section_for_directive(
     for (index, arg) in args.iter().enumerate() {
         let mut data_line = format!("{arg_label_prefix}_{index}_STRING:\n");
 
-        let command = format!{"{command_prefix}{arg}"};
+        let command = format! {"{command_prefix}{arg}"};
         let value = U256::from(command.as_bytes());
 
         data_line = format!("{data_line} .cell {value}\n");
