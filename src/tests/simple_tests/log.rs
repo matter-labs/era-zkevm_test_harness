@@ -89,6 +89,7 @@ mod tests {
             &[8000, 32777, 180000, 200000],
             Options {
                 cycles_per_vm_snapshot: 1,
+                cycle_limit: 100,
                 ..Default::default()
             },
         )

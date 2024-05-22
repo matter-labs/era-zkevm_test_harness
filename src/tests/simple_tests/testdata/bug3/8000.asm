@@ -6,10 +6,18 @@
         .globl	__entry
     __entry:
     .main:
-        ; empty contract. Do not change, as its hash is hardcoded in entry.asm.
-        add 18, r0, r1
+        ptr.add r1, r0, r12
+        add 999, r0, r11
         context.ergs_left r9
 
-        log.event.first r1, r9, r1
+        add 1, r0, r3
+        shl.s 224, r3, r3
 
-        ret.ok r0
+        ptr.pack r12, r3, r12
+
+        add 12, r0, r7
+        context.set_context_u128 r7
+        
+
+        ret.ok r12
+        
