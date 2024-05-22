@@ -38,9 +38,7 @@ pub fn preprocess_asm(asm: &str) -> String {
         Directive::Revert,
         Directive::PrintRegister,
         Directive::PrintPointer,
-    ]
-    .iter()
-    {
+    ] {
         result = preprocess_directive(&result, directive.clone());
     }
     result
@@ -118,21 +116,21 @@ fn replace_directives(asm: &str, directive: Directive) -> (String, Vec<String>) 
         }
 
         let reference_var = format!("@{}_{}_STRING", cell_name, prints.len() - 1);
-        let mut line = format!("add {reference_var}, r0, r0");
+        let line = format!("add {reference_var}, r0, r0");
 
         // additional lines
-        match directive {
+        let line = match directive {
             Directive::Revert => {
-                line = format!("{line}\n ret.panic r0");
+                format!("{line}\n ret.panic r0")
             }
+            Directive::Print => line,
             Directive::PrintRegister => {
-                line = format!("{line}\n add {arg}, r0, r0");
+                format!("{line}\n add {arg}, r0, r0")
             }
             Directive::PrintPointer => {
-                line = format!("{line}\n ptr.add {arg}, r0, r0");
+                format!("{line}\n ptr.add {arg}, r0, r0")
             }
-            _ => {}
-        }
+        };
         result = result.replace(matched, &line);
     }
 
@@ -141,7 +139,7 @@ fn replace_directives(asm: &str, directive: Directive) -> (String, Vec<String>) 
 
 /// add .rodata section with messages from directives
 fn add_data_section_for_directive(asm: &str, directive: Directive, args: Vec<String>) -> String {
-    let mut result = asm.to_owned().clone();
+    let mut result = asm.to_owned();
     if args.len() == 0 {
         return result;
     }

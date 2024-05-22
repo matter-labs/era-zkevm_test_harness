@@ -38,10 +38,8 @@ pub use crate::zk_evm::ethereum_types;
 
 use self::utils::*;
 
-pub mod asm_templates;
 pub mod capacity_estimator;
 pub mod external_calls;
-pub mod testing_tracer;
 pub mod toolset;
 // pub mod circuit_limit_estimator;
 
@@ -56,3 +54,6 @@ pub mod proof_wrapper_utils;
 pub(crate) mod tests;
 
 pub use tests::complex_tests::utils::empty_node_proof;
+
+mod asm_templates;
+mod testing_tracer;

@@ -16,9 +16,10 @@ use crate::asm_templates::PRINT_PREFIX;
 use crate::asm_templates::PRINT_PTR_PREFIX;
 use crate::asm_templates::PRINT_REG_PREFIX;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 enum TracerState {
     /// will try to parse next value from VM as command
+    #[default]
     ExpectingCommand,
     /// will print next value from VM
     ExpectingRegisterValue,
@@ -27,7 +28,7 @@ enum TracerState {
 }
 
 /// Tracks prints and exceptions during VM execution cycles.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct TestingTracer {
     /// the last uncatched exception message
     pub exception_message: Option<String>,
@@ -43,13 +44,6 @@ pub struct TestingTracer {
 /// "PRINT_REG_PREFIX:" - print raw "x" value of next command in the console
 /// "PRINT_PTR_PREFIX:" - print raw "x" pointer value of next command in the console (currently same result as previous command)
 impl TestingTracer {
-    pub fn new() -> Self {
-        Self {
-            exception_message: None,
-            tracer_state: TracerState::ExpectingCommand,
-        }
-    }
-
     fn reset_exception(&mut self) {
         self.exception_message = None;
     }
@@ -58,11 +52,11 @@ impl TestingTracer {
         self.exception_message = Some(message.to_owned());
     }
 
-    fn execute_print(&mut self, message: &str) {
+    fn execute_print(&self, message: &str) {
         println!("{}", message);
     }
 
-    fn execute_print_from_register(&mut self, val: PrimitiveValue) {
+    fn execute_print_from_register(&self, val: PrimitiveValue) {
         match self.tracer_state {
             TracerState::ExpectingCommand => {
                 panic!("Unexpected print_from_register command")
@@ -80,8 +74,11 @@ impl TestingTracer {
             TracerState::ExpectingRegisterValue => {
                 self.execute_print_from_register(value);
             }
-            _ => {
-                if let (Some(command_prefix), Some(arg)) = self.parse_command_from_register(value) {
+            TracerState::ExpectingPointerValue => {
+                self.execute_print_from_register(value);
+            }
+            TracerState::ExpectingCommand => {
+                if let Some((command_prefix, arg)) = self.parse_command_from_register(value) {
                     match command_prefix.as_str() {
                         EXCEPTION_PREFIX => {
                             self.set_exception_message(&arg);
@@ -106,28 +103,17 @@ impl TestingTracer {
         new_state
     }
 
-    fn handle_pointer_from_vm(&mut self, value: PrimitiveValue) -> TracerState {
-        let new_state = TracerState::ExpectingCommand;
-
-        if self.tracer_state == TracerState::ExpectingPointerValue {
-            self.execute_print_from_register(value);
-        }
-
-        new_state
-    }
-
-    fn parse_command_from_register(
-        &mut self,
-        val: PrimitiveValue,
-    ) -> (Option<String>, Option<String>) {
+    /// Returns (command_prefix, arg) if parsed command successfully
+    /// None otherwise
+    fn parse_command_from_register(&self, val: PrimitiveValue) -> Option<(String, String)> {
         if val.value == U256::from(0) {
-            return (None, None);
+            return None;
         }
 
-        let bytes: &mut [u8; 32] = &mut [0; 32];
-        val.value.to_big_endian(bytes);
+        let mut bytes: [u8; 32] = [0; 32];
+        val.value.to_big_endian(&mut bytes);
 
-        if let Ok(message) = std::str::from_utf8(bytes) {
+        if let Ok(message) = std::str::from_utf8(&bytes) {
             let message_trimmed = message.trim_matches(char::from(0));
 
             for prefix in [
@@ -135,17 +121,15 @@ impl TestingTracer {
                 PRINT_PREFIX,
                 PRINT_REG_PREFIX,
                 PRINT_PTR_PREFIX,
-            ]
-            .iter()
-            {
-                if message_trimmed.starts_with(*prefix) {
+            ] {
+                if message_trimmed.starts_with(prefix) {
                     let arg = message_trimmed.strip_prefix(prefix).unwrap();
-                    return (Some((*prefix).to_string()), Some(arg.to_owned()));
+                    return Some((prefix.to_owned(), arg.to_owned()));
                 }
             }
         }
 
-        return (None, None);
+        return None;
     }
 }
 
@@ -190,23 +174,23 @@ impl Tracer for TestingTracer {
             }
         }
 
-        let mut new_state = TracerState::ExpectingCommand;
-
         // check if we have a valid command for TestingTracer and execute the command if any.
         // commands always have r0 as src1 and dst0
-        if data.opcode.src1_reg_idx == 0 && data.opcode.dst0_reg_idx == 0 {
-            new_state = match inner_opcode {
+        let new_state = if data.opcode.src1_reg_idx == 0 && data.opcode.dst0_reg_idx == 0 {
+            match inner_opcode {
                 Opcode::Add(AddOpcode::Add) => {
                     // `add x r0 r0` is used to pass "x" to TestingTracer
                     self.handle_value_from_vm(data.src0_value)
                 }
                 Opcode::Ptr(PtrOpcode::Add) => {
                     // `ptr.add x r0 r0` is used to pass "x" pointer to TestingTracer
-                    self.handle_pointer_from_vm(data.src0_value)
+                    self.handle_value_from_vm(data.src0_value)
                 }
-                _ => new_state,
-            };
-        }
+                _ => TracerState::ExpectingCommand,
+            }
+        } else {
+            TracerState::ExpectingCommand
+        };
 
         self.tracer_state = new_state;
 

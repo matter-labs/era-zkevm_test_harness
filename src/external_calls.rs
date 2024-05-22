@@ -179,7 +179,7 @@ pub fn run<
     }
 
     // we are using TestingTracer to track prints and exceptions inside out_of_circuit_vm cycles
-    let mut tracer = TestingTracer::new();
+    let mut tracer = TestingTracer::default();
 
     // tracing::debug!("Running out of circuit for {} cycles", cycle_limit);
     println!("Running out of circuit for {} cycles", cycle_limit);
