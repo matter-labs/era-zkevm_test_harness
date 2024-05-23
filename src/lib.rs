@@ -56,4 +56,5 @@ pub(crate) mod tests;
 pub use tests::complex_tests::utils::empty_node_proof;
 
 mod asm_templates;
+mod run_vms;
 mod testing_tracer;
