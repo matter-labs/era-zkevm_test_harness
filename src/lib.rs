@@ -34,6 +34,9 @@ pub mod snark_wrapper_test;
 pub mod utils;
 pub mod witness;
 
+// Debugging tools (for example for failed proofs).
+pub mod debug;
+
 pub use crate::zk_evm::ethereum_types;
 
 use self::utils::*;
