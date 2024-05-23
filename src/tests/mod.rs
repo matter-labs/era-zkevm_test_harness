@@ -1,10 +1,10 @@
 use super::*;
 
-pub mod asm_templates;
 pub mod complex_tests;
 pub mod run_manually;
 pub mod simple_tests;
-pub mod testing_tracer;
+
+pub(crate) mod utils;
 
 use crate::blake2::Blake2s256;
 use crate::boojum::worker::Worker;

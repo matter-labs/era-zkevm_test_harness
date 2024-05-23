@@ -1,7 +1,7 @@
 use crate::ethereum_types::U256;
 use regex::Regex;
 
-// Contains functions to preprocess asm templates and generate valid assembly code
+// Contains functions to preprocess asm templates and generate valid assembly code compatible with TestingTracer
 
 /// Default config template for simple tests
 const DEFAULT_CONFIG: &str = r#"

@@ -1,6 +1,6 @@
 use super::*;
-use crate::tests::asm_templates::asm_with_default_config;
 use crate::tests::simple_tests::asm_tests::run_asm_based_test;
+use crate::tests::utils::preprocess_asm::asm_with_default_config;
 
 #[test_log::test]
 fn test_ptr_add_valid_input() {
