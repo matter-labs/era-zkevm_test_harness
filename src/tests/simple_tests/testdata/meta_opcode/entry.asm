@@ -18,4 +18,6 @@ __entry:
         context.this r8
         context.caller r9
         context.code_source r10
+        add 2, ${test}, r3
+        print(r3)
         ret.ok r0

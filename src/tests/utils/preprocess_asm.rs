@@ -42,7 +42,10 @@ pub const PRINT_PTR_PREFIX: &str = "P:";
 pub fn preprocess_asm(
     asm: &str,
     additional_contracts: Option<&Vec<(H160, Vec<[u8; 32]>)>>,
+    replacements: Option<&Vec<(&str, &str)>>,
 ) -> String {
+    let asm = replace_templating(&asm, replacements);
+
     let result = [
         Directive::Print(PrintType::Text),
         Directive::Print(PrintType::Register),
@@ -53,6 +56,35 @@ pub fn preprocess_asm(
     .fold(asm.to_owned(), |acc, x| preprocess_directive(&acc, *x));
 
     link_additional_contracts(&result, additional_contracts)
+}
+
+// TODO hashmap
+pub fn replace_templating(asm: &str, replacements: Option<&Vec<(&str, &str)>>) -> String {
+    let mut result = asm.to_owned();
+    let template_regex = Regex::new(r#"\$\{[^\}]+\}"#).expect("Invalid regex");
+
+    for (_, matched) in asm.match_indices(&template_regex) {
+        let prefix = "${";
+        let suffix = "}";
+        let key_to_replace = matched
+            .strip_prefix(prefix)
+            .expect("Invalid text in template")
+            .strip_suffix(suffix)
+            .expect("Invalid text in template");
+
+        if replacements == None {
+            panic!("Unknown key: {key_to_replace}");
+        }
+        let (_, replacement) = replacements
+            .unwrap()
+            .iter()
+            .find(|(key, _)| *key == key_to_replace)
+            .expect(&format! {"Unknown key: {key_to_replace}"});
+
+        result = result.replace(matched, replacement);
+    }
+
+    result
 }
 
 fn preprocess_directive(asm: &str, directive: Directive) -> String {
@@ -279,7 +311,7 @@ print("TEST")
 print(r5)
 revert("TEST2")"#;
 
-        let result = preprocess_asm(&asm, None);
+        let result = preprocess_asm(&asm, None, None);
 
         let print_text = U256::from(format!("{}{}", PRINT_PREFIX, "TEST").as_bytes());
         let print_reg_text = U256::from(PRINT_REG_PREFIX.as_bytes());
@@ -327,7 +359,7 @@ add @REVERT_0_STRING, r0, r0
                     ret.ok r0
         "#, };
 
-        preprocess_asm(&asm, None);
+        preprocess_asm(&asm, None, None);
     }
 
     #[test]
