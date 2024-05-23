@@ -203,7 +203,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_preprocess() {
+    fn test_preprocess_asm() {
         let asm = r#"
 __entry:
 .main:
@@ -224,12 +224,12 @@ PRINT_0_STRING:
  .cell {print_text}
 .text
 .rodata
-REVERT_0_STRING:
- .cell {revert_text}
-.text
-.rodata
 PRINT_REG_0_STRING:
  .cell {print_reg_text}
+.text
+.rodata
+REVERT_0_STRING:
+ .cell {revert_text}
 .text
 __entry:
 .main:
