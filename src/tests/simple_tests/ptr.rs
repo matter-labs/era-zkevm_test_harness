@@ -1,5 +1,5 @@
 use super::*;
-use crate::asm_templates::asm_with_default_config;
+use crate::tests::asm_templates::asm_with_default_config;
 use crate::tests::simple_tests::asm_tests::run_asm_based_test;
 
 #[test_log::test]

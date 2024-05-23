@@ -11,10 +11,10 @@ use crate::zk_evm::opcodes::DecodedOpcode;
 use crate::zk_evm::reference_impls::memory::SimpleMemory;
 use crate::zk_evm::tracing::*;
 
-use crate::asm_templates::EXCEPTION_PREFIX;
-use crate::asm_templates::PRINT_PREFIX;
-use crate::asm_templates::PRINT_PTR_PREFIX;
-use crate::asm_templates::PRINT_REG_PREFIX;
+use crate::tests::asm_templates::EXCEPTION_PREFIX;
+use crate::tests::asm_templates::PRINT_PREFIX;
+use crate::tests::asm_templates::PRINT_PTR_PREFIX;
+use crate::tests::asm_templates::PRINT_REG_PREFIX;
 
 #[derive(Debug, Clone, PartialEq, Default)]
 enum TracerState {
