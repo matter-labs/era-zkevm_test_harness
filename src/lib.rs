@@ -47,7 +47,6 @@ pub use circuit_sequencer_api::INITIAL_MONOTONIC_CYCLE_COUNTER;
 
 // #[cfg(test)]
 pub mod helper;
-// #[cfg(test)]
 pub(crate) mod tests;
 
 pub mod compute_setups;

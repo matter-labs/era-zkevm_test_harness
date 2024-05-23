@@ -1,9 +1,11 @@
 use super::*;
 
 pub mod complex_tests;
+#[cfg(test)]
 pub mod run_manually;
+#[cfg(test)]
 pub mod simple_tests;
-
+#[cfg(test)]
 pub(crate) mod utils;
 
 use crate::blake2::Blake2s256;
