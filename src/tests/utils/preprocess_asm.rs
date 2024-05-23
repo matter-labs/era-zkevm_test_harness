@@ -4,7 +4,7 @@ use crate::ethereum_types::U256;
 use crate::zk_evm::bytecode_to_code_hash;
 use regex::Regex;
 
-// Contains functions to preprocess asm templates and generate valid assembly code
+// Contains functions to preprocess asm templates and generate valid assembly code compatible with TestingTracer
 
 /// Default config template for simple tests
 const DEFAULT_CONFIG: &str = r#"
@@ -22,10 +22,15 @@ pub fn asm_with_default_config(asm: &str) -> String {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Directive {
-    Print,
-    PrintRegister,
-    PrintPointer,
+    Print(PrintType),
     Revert,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum PrintType {
+    Text,
+    Register,
+    Pointer,
 }
 
 pub const EXCEPTION_PREFIX: &str = "E:";
@@ -39,10 +44,10 @@ pub fn preprocess_asm(
     additional_contracts: Option<&Vec<(H160, Vec<[u8; 32]>)>>,
 ) -> String {
     let result = [
-        Directive::Print,
+        Directive::Print(PrintType::Text),
+        Directive::Print(PrintType::Register),
+        Directive::Print(PrintType::Pointer),
         Directive::Revert,
-        Directive::PrintRegister,
-        Directive::PrintPointer,
     ]
     .iter()
     .fold(asm.to_owned(), |acc, x| preprocess_directive(&acc, *x));
@@ -52,8 +57,7 @@ pub fn preprocess_asm(
 
 fn preprocess_directive(asm: &str, directive: Directive) -> String {
     let (asm_replaced, messages) = replace_directives(asm, directive);
-    let result = add_data_section_for_directive(&asm_replaced, directive, messages);
-    result
+    add_data_section_for_directive(&asm_replaced, directive, messages)
 }
 
 fn link_additional_contracts(
@@ -101,12 +105,7 @@ fn replace_directives(asm: &str, directive: Directive) -> (String, Vec<String>) 
     let mut result = asm.to_owned();
     let mut args: Vec<String> = Vec::new();
 
-    let (command_prefix, regex, cell_name, prefix, suffix) = match directive.clone() {
-        Directive::Print => {
-            // regex: print("<message>")
-            let print_regex = Regex::new(r#"print\("[^"]*"\)"#).expect("Invalid regex");
-            (PRINT_PREFIX, print_regex, "PRINT", r#"print(""#, r#"")"#)
-        }
+    let (command_prefix, regex, cell_name, prefix, suffix) = match directive {
         Directive::Revert => {
             // regex: revert("<message>")
             let revert_regex = Regex::new(r#"revert\("[^"]*"\)"#).expect("Invalid regex");
@@ -118,7 +117,12 @@ fn replace_directives(asm: &str, directive: Directive) -> (String, Vec<String>) 
                 r#"")"#,
             )
         }
-        Directive::PrintRegister => {
+        Directive::Print(PrintType::Text) => {
+            // regex: print("<message>")
+            let print_regex = Regex::new(r#"print\("[^"]*"\)"#).expect("Invalid regex");
+            (PRINT_PREFIX, print_regex, "PRINT", r#"print(""#, r#"")"#)
+        }
+        Directive::Print(PrintType::Register) => {
             // regex: print(<src>) or print("<message", <src>)
             let print_reg_regex =
                 Regex::new(r#"print\(("[^"\)]+"\s*\,\s*)?([^"\)]+)\)"#).expect("Invalid regex");
@@ -130,7 +134,7 @@ fn replace_directives(asm: &str, directive: Directive) -> (String, Vec<String>) 
                 r#")"#,
             )
         }
-        Directive::PrintPointer => {
+        Directive::Print(PrintType::Pointer) => {
             // regex: printPtr(<src>)
             let print_ptr_regex = Regex::new(r#"printPtr\([^"\)]+\)"#).expect("Invalid regex");
             (
@@ -143,18 +147,31 @@ fn replace_directives(asm: &str, directive: Directive) -> (String, Vec<String>) 
         }
     };
 
-    for (_, matched) in asm.match_indices(&regex) {
+    for (index, matched) in asm.match_indices(&regex) {
+        // skip if directive commented out
+        if asm[..index]
+            .chars()
+            .rev()
+            .take_while(|&symbol| symbol != '\n')
+            .any(|symbol| symbol == ';')
+        {
+            continue;
+        }
+
         let matched_args = parse_args(matched, prefix, suffix);
 
-        if directive == Directive::PrintRegister || directive == Directive::PrintPointer {
-            if matched_args.len() > 1 {
-                push_text_arg(matched_args[0], command_prefix, &mut args);
-            } else {
-                args.push("".to_owned());
+        match directive {
+            Directive::Print(PrintType::Register | PrintType::Pointer) => {
+                if matched_args.len() > 1 {
+                    push_text_arg(matched_args[0], command_prefix, &mut args);
+                } else {
+                    args.push("".to_owned());
+                }
             }
-        } else {
-            push_text_arg(matched_args[0], command_prefix, &mut args);
-        }
+            _ => {
+                push_text_arg(matched_args[0], command_prefix, &mut args);
+            }
+        };
 
         let reference_var = format!("@{}_{}_STRING", cell_name, args.len() - 1);
         let line = format!("add {reference_var}, r0, r0");
@@ -164,42 +181,44 @@ fn replace_directives(asm: &str, directive: Directive) -> (String, Vec<String>) 
             Directive::Revert => {
                 format!("{line}\n ret.panic r0")
             }
-            Directive::Print => line,
-            Directive::PrintRegister => {
-                let register = if matched_args.len() == 1 {
-                    matched_args[0]
+            Directive::Print(print_type) => {
+                if print_type == PrintType::Text {
+                    line
                 } else {
-                    matched_args[1]
-                };
-                format!("{line}\n add {}, r0, r0", register)
-            }
-            Directive::PrintPointer => {
-                let register = if matched_args.len() == 1 {
-                    matched_args[0]
-                } else {
-                    matched_args[1]
-                };
-                format!("{line}\n ptr.add {}, r0, r0", register)
+                    let src0 = if matched_args.len() == 1 {
+                        matched_args[0]
+                    } else {
+                        matched_args[1]
+                    };
+                    let opcode = match print_type {
+                        PrintType::Register => "add",
+                        PrintType::Pointer => "ptr.add",
+                        _ => {
+                            panic!("Unknown print type")
+                        }
+                    };
+                    format!("{line}\n {opcode} {src0}, r0, r0")
+                }
             }
         };
         result = result.replace(matched, &line);
     }
 
-    return (result, args);
+    (result, args)
 }
 
 /// add .rodata section with messages from directives
 fn add_data_section_for_directive(asm: &str, directive: Directive, args: Vec<String>) -> String {
     let mut result = asm.to_owned();
-    if args.len() == 0 {
+    if args.is_empty() {
         return result;
     }
 
     let (command_prefix, arg_label_prefix) = match directive {
-        Directive::Print => (PRINT_PREFIX, "PRINT"),
         Directive::Revert => (EXCEPTION_PREFIX, "REVERT"),
-        Directive::PrintRegister => (PRINT_REG_PREFIX, "PRINT_REG"),
-        Directive::PrintPointer => (PRINT_PTR_PREFIX, "PRINT_PTR"),
+        Directive::Print(PrintType::Text) => (PRINT_PREFIX, "PRINT"),
+        Directive::Print(PrintType::Register) => (PRINT_REG_PREFIX, "PRINT_REG"),
+        Directive::Print(PrintType::Pointer) => (PRINT_PTR_PREFIX, "PRINT_PTR"),
     };
 
     let data_section: String = args
@@ -212,7 +231,7 @@ fn add_data_section_for_directive(asm: &str, directive: Directive, args: Vec<Str
             );
             data_line
         })
-        .chain(Some(".text\n".to_owned()).into_iter())
+        .chain(Some(".text\n".to_owned()))
         .fold(".rodata\n".to_owned(), |mut acc, line| {
             acc.push_str(&line);
             acc
@@ -252,7 +271,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_preprocess() {
+    fn test_preprocess_asm() {
         let asm = r#"
 __entry:
 .main:
@@ -273,12 +292,12 @@ PRINT_0_STRING:
  .cell {print_text}
 .text
 .rodata
-REVERT_0_STRING:
- .cell {revert_text}
-.text
-.rodata
 PRINT_REG_0_STRING:
  .cell {print_reg_text}
+.text
+.rodata
+REVERT_0_STRING:
+ .cell {revert_text}
 .text
 __entry:
 .main:
@@ -322,6 +341,6 @@ add @REVERT_0_STRING, r0, r0
                 .main:
                     ret.ok r0
         "#;
-        add_data_section_for_directive(asm, Directive::Print, args);
+        add_data_section_for_directive(asm, Directive::Print(PrintType::Text), args);
     }
 }

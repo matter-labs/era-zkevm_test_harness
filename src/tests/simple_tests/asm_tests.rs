@@ -1,7 +1,8 @@
-use self::run_manually::{run_and_try_create_witness_for_extended_state, Options};
+use self::run_manually::{
+    run_and_try_create_witness_for_extended_state, run_and_try_create_witness_inner, Options,
+};
 use super::*;
-use crate::asm_templates::preprocess_asm;
-use crate::tests::run_manually::run_and_try_create_witness_inner;
+use crate::tests::utils::preprocess_asm::preprocess_asm;
 use std::{fs, path::Path};
 use zkevm_assembly::Assembly;
 

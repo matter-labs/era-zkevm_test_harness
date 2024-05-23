@@ -213,10 +213,10 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
 }
 
 pub(crate) fn run_with_options(entry_point_bytecode: Vec<[u8; 32]>, options: Options) {
-    use crate::external_calls::run;
-    use crate::zk_evm::zkevm_opcode_defs::system_params::BOOTLOADER_FORMAL_ADDRESS;
-
+    use crate::run_vms::{run_vms, RunVmError};
+    use crate::tests::utils::testing_tracer::TestingTracer;
     use crate::toolset::GeometryConfig;
+    use crate::zk_evm::zkevm_opcode_defs::system_params::BOOTLOADER_FORMAL_ADDRESS;
 
     let geometry = GeometryConfig {
         cycles_per_vm_snapshot: options.cycles_per_vm_snapshot,
@@ -258,7 +258,11 @@ pub(crate) fn run_with_options(entry_point_bytecode: Vec<[u8; 32]>, options: Opt
     save_predeployed_contracts(&mut storage_impl, &mut tree, &known_contracts);
 
     let mut basic_block_circuits = vec![];
-    run(
+
+    // we are using TestingTracer to track prints and exceptions inside out_of_circuit_vm cycles
+    let mut out_of_circuit_tracer = TestingTracer::default();
+
+    if let Err(err) = run_vms(
         Address::zero(),
         *BOOTLOADER_FORMAL_ADDRESS,
         entry_point_bytecode,
@@ -276,7 +280,23 @@ pub(crate) fn run_with_options(entry_point_bytecode: Vec<[u8; 32]>, options: Opt
         std::array::from_fn(|_| None),
         |circuit| basic_block_circuits.push(circuit),
         |_, _, _| {},
-    );
+        &mut out_of_circuit_tracer,
+    ) {
+        let error_text = match err {
+            RunVmError::InvalidInput(msg) => {
+                format!("Invalid input error: {msg}")
+            }
+            RunVmError::OutOfCircuitExecutionError(_) => {
+                let msg = if let Some(exception_message) = out_of_circuit_tracer.exception_message {
+                    format!("root frame ended up with exception: {}", exception_message)
+                } else {
+                    format!("root frame ended up with unexpected panic")
+                };
+                format!("Out-of-circuit execution error: {msg}")
+            }
+        };
+        panic!("{error_text}");
+    }
 
     println!("Simulation and witness creation are completed");
 
