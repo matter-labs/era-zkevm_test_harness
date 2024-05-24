@@ -54,3 +54,6 @@ lto = false
 
 [profile.bench]
 debug = false
+
+[features]
+verbose_circuits = ["circuit_definitions/verbose_circuits", "circuit_sequencer_api/verbose_circuits"]

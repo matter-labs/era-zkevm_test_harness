@@ -18,3 +18,4 @@ serde = {version = "1", features = ["derive"]}
 [features]
 default = []
 log_tracing = ["zkevm_circuits/log_tracing"]
+verbose_circuits = ["zkevm_circuits/verbose_circuits"]

@@ -48,6 +48,27 @@ mod tests {
             },
         )
     }
+    fn test_common(dir: &str) {
+        run_asm_based_test(
+            &format!("src/tests/simple_tests/testdata/{}", dir),
+            &[800000],
+            Options {
+                cycles_per_vm_snapshot: 1,
+                ..Default::default()
+            },
+        )
+    }
+
+    #[test_log::test]
+    fn test_decommit_invalid() {
+        test_common("decommit_invalid")
+    }
+
+    #[test_log::test]
+    fn test_decommit_ok() {
+        test_common("decommit_ok");
+        test_common("decommit_ok_with_panic");
+    }
 }
 
 #[test_log::test]
