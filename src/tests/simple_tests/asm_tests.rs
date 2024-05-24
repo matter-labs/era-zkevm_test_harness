@@ -26,8 +26,7 @@ pub fn run_asm_based_test_template(
     let contracts: Vec<(H160, Vec<[u8; 32]>)> = additional_contracts
         .iter()
         .map(|address| {
-            let bytecode =
-                compile_asm_template(data_path, &address.to_string(), dictionary, None);
+            let bytecode = compile_asm_template(data_path, &address.to_string(), dictionary, None);
             (Address::from_low_u64_be(*address as u64), bytecode)
         })
         .collect();
@@ -62,6 +61,6 @@ fn test_meta_opcode_asm() {
     run_asm_based_test(
         "src/tests/simple_tests/testdata/meta_opcode",
         &[],
-        Default::default()
+        Default::default(),
     )
 }

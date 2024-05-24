@@ -61,7 +61,10 @@ pub fn preprocess_asm(
 }
 
 /// Replaces tags like "${TAG}" with values from dictionary
-fn replace_tags_in_template(asm_template: String, dictionary: Option<&TemplateDictionary>) -> String {
+fn replace_tags_in_template(
+    asm_template: String,
+    dictionary: Option<&TemplateDictionary>,
+) -> String {
     let mut result = asm_template.clone();
     let template_regex = Regex::new(r#"\$\{[^\}]+\}"#).expect("Invalid regex");
 
@@ -82,13 +85,12 @@ fn replace_tags_in_template(asm_template: String, dictionary: Option<&TemplateDi
             Some(value) => {
                 result = result.replace(matched, value);
             }
-            None => panic!("Unknown key: {key_to_replace}")
+            None => panic!("Unknown key: {key_to_replace}"),
         }
     }
 
     result
 }
-
 
 fn preprocess_directive(asm: String, directive: Directive) -> String {
     let (asm_replaced, messages) = replace_directives(asm, directive);
@@ -204,12 +206,8 @@ fn replace_directives(asm: String, directive: Directive) -> (String, Vec<String>
                     "".to_owned()
                 }
             }
-            _ => {
-                check_arg_for_command(matched_args[0], command_prefix).to_owned()
-            }
+            _ => check_arg_for_command(matched_args[0], command_prefix).to_owned(),
         });
-
-
 
         let reference_var = format!("@{}_{}_STRING", cell_name, args_for_commands.len() - 1);
         let line = format!("add {reference_var}, r0, r0");
@@ -400,14 +398,19 @@ add @REVERT_0_STRING, r0, r0
 
         let res = replace_tags_in_template(asm.to_owned(), Some(&dictionary));
 
-        let expected_res = format!(r#"
+        let expected_res = format!(
+            r#"
             .text
             .globl	__unexpected_entry
             __unexpected_entry:
                 .main:
                     add {} {} {}
                     ret.ok r0
-        "#, dictionary.get("src0").unwrap(), dictionary.get("src1").unwrap(), dictionary.get("dst0").unwrap());
+        "#,
+            dictionary.get("src0").unwrap(),
+            dictionary.get("src1").unwrap(),
+            dictionary.get("dst0").unwrap()
+        );
 
         assert_eq!(res, expected_res);
     }

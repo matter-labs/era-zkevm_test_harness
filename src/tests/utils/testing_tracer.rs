@@ -78,11 +78,11 @@ impl TestingTracer {
 
     fn handle_value_from_vm(&mut self, value: PrimitiveValue) -> TracerState {
         let mut new_state = TracerState::ExpectingCommand;
+        let mut new_message_buffer_value = None;
 
         match self.tracer_state {
             TracerState::ExpectingValueToPrint(..) => {
                 self.execute_print_from_register(value);
-                self.message_buffer = None;
             }
             TracerState::ExpectingCommand => {
                 if let Some((command_prefix, arg)) = self.parse_command_from_register(value) {
@@ -95,14 +95,14 @@ impl TestingTracer {
                         }
                         PRINT_REG_PREFIX => {
                             if !arg.is_empty() {
-                                self.message_buffer = Some(arg);
+                                new_message_buffer_value = Some(arg);
                             }
                             new_state =
                                 TracerState::ExpectingValueToPrint(ExpectedValueType::Register);
                         }
                         PRINT_PTR_PREFIX => {
                             if !arg.is_empty() {
-                                self.message_buffer = Some(arg);
+                                new_message_buffer_value = Some(arg);
                             }
                             new_state =
                                 TracerState::ExpectingValueToPrint(ExpectedValueType::Pointer);
@@ -115,6 +115,7 @@ impl TestingTracer {
             }
         }
 
+        self.message_buffer = new_message_buffer_value;
         new_state
     }
 
