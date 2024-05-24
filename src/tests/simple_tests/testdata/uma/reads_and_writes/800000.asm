@@ -6,7 +6,6 @@
         .globl	__entry
     __entry:
     .main:
-        print("in user context")
         ; we got fat pointer from the caller
         ; the first value should be 0
         uma.fat_ptr_read r1, r0, r3, r0

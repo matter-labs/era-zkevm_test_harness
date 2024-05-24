@@ -8,10 +8,7 @@
         .text
         .globl	__entry
     __entry:
-    .main:
-        print("!!Hello")
-        print(r0)
-        
+    .main:        
         add 65, r0, r1
         add 120, r0, r2
 
