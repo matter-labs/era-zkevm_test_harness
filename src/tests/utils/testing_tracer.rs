@@ -40,6 +40,8 @@ pub struct TestingTracer {
     pub exception_message: Option<String>,
     /// the inner state, affects the interpretation of values from the VM
     tracer_state: TracerState,
+    /// stores pending messages that should be printed
+    message_buffer: Option<String>,
 }
 
 /// TestingTracer interprets valid x values in `add x r0 r0` and `ptr.add x r0 r0` instructions as commands to execute.
@@ -67,7 +69,11 @@ impl TestingTracer {
             panic!("Unexpected execute_print_from_register command");
         }
 
-        println!("{}", val.value);
+        if let Some(message) = &self.message_buffer {
+            println!("{message} {}", val.value);
+        } else {
+            println!("{}", val.value);
+        }
     }
 
     fn handle_value_from_vm(&mut self, value: PrimitiveValue) -> TracerState {
@@ -76,6 +82,7 @@ impl TestingTracer {
         match self.tracer_state {
             TracerState::ExpectingValueToPrint(..) => {
                 self.execute_print_from_register(value);
+                self.message_buffer = None;
             }
             TracerState::ExpectingCommand => {
                 if let Some((command_prefix, arg)) = self.parse_command_from_register(value) {
@@ -87,15 +94,15 @@ impl TestingTracer {
                             self.execute_print(&arg);
                         }
                         PRINT_REG_PREFIX => {
-                            if arg.len() != 0 {
-                                self.execute_print(&arg);
+                            if !arg.is_empty() {
+                                self.message_buffer = Some(arg);
                             }
                             new_state =
                                 TracerState::ExpectingValueToPrint(ExpectedValueType::Register);
                         }
                         PRINT_PTR_PREFIX => {
-                            if arg.len() != 0 {
-                                self.execute_print(&arg);
+                            if !arg.is_empty() {
+                                self.message_buffer = Some(arg);
                             }
                             new_state =
                                 TracerState::ExpectingValueToPrint(ExpectedValueType::Pointer);
