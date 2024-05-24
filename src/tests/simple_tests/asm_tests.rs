@@ -10,7 +10,11 @@ use zkevm_assembly::Assembly;
 /// The main assembly should be in `entry.asm` file, while additional
 /// contracts should be in `ADDRESS.asm` files, where `ADDRESS` is the numerical
 /// address at which they should be deployed.
-pub fn run_asm_based_test(test_dir: &str, additional_contracts: &[i32], options: Options) {
+pub fn run_asm_based_test(
+    test_dir: &str,
+    additional_contracts: &[i32],
+    options: Options,
+) -> Result<(), String> {
     let data_path = Path::new(test_dir);
     let entry_asm = fs::read_to_string(data_path.join("entry.asm"))
         .expect("Should have been able to read the file");
@@ -39,7 +43,7 @@ pub fn run_asm_based_test(test_dir: &str, additional_contracts: &[i32], options:
 
     let mut options = options.clone();
     options.other_contracts = contracts;
-    run_with_options(entry_bytecode, options);
+    run_with_options(entry_bytecode, options)
 }
 
 #[test_log::test]
@@ -49,4 +53,5 @@ fn test_meta_opcode_asm() {
         &[],
         Default::default(),
     )
+    .unwrap();
 }

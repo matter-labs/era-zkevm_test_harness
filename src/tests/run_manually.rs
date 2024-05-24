@@ -210,9 +210,13 @@ pub(crate) fn run_and_try_create_witness_for_extended_state(
             ..Default::default()
         },
     )
+    .expect("Run failed")
 }
 
-pub(crate) fn run_with_options(entry_point_bytecode: Vec<[u8; 32]>, options: Options) {
+pub(crate) fn run_with_options(
+    entry_point_bytecode: Vec<[u8; 32]>,
+    options: Options,
+) -> Result<(), String> {
     use crate::run_vms::{run_vms, RunVmError};
     use crate::tests::utils::testing_tracer::TestingTracer;
     use crate::toolset::GeometryConfig;
@@ -295,7 +299,7 @@ pub(crate) fn run_with_options(entry_point_bytecode: Vec<[u8; 32]>, options: Opt
                 format!("Out-of-circuit execution error: {msg}")
             }
         };
-        panic!("{error_text}");
+        return Err(error_text);
     }
 
     println!("Simulation and witness creation are completed");
@@ -304,6 +308,7 @@ pub(crate) fn run_with_options(entry_point_bytecode: Vec<[u8; 32]>, options: Opt
         println!("Doing {} circuit", el.short_description());
         base_test_circuit(el);
     }
+    Ok(())
 
     // // for el in flattened.into_iter() {
     // //     use crate::bellman::plonk::better_better_cs::cs::PlonkCsWidth4WithNextStepAndCustomGatesParams;
