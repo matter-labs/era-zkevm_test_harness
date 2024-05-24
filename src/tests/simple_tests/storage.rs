@@ -12,7 +12,6 @@ mod tests {
                 ..Default::default()
             },
         )
-        .unwrap();
     }
 
     #[test_log::test]
@@ -26,6 +25,5 @@ mod tests {
                 ..Default::default()
             },
         )
-        .unwrap()
     }
 }

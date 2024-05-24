@@ -47,7 +47,6 @@ mod tests {
                 ..Default::default()
             },
         )
-        .unwrap()
     }
     fn test_common(dir: &str) {
         run_asm_based_test(
@@ -58,7 +57,6 @@ mod tests {
                 ..Default::default()
             },
         )
-        .unwrap()
     }
 
     #[test_log::test]

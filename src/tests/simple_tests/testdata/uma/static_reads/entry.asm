@@ -24,9 +24,9 @@
         
         add @CPI0_0[0], r0, r2
         ; call the other_asm contract
-        far_call r1, r2, @user_call_handler
-        ret.ok r0
+        far_call r1, r2, @expect_panic
+        revert("must panic due to static read")
         
-    user_call_handler:
-        ret.panic r0
+    expect_panic:
+        ret.ok r0
 

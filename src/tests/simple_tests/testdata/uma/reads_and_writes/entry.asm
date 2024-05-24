@@ -52,7 +52,7 @@
         far_call r1, r2, @user_call_handler
 
         add 10000, r0, r4
-        ; set the register for near call
+        ; set the register for near call (doing it before, as registers values should be persisted for near calls)
         add 65, r0, r1
         near_call r4, @inner, @near_call_handler
         ret.ok r0
@@ -78,5 +78,4 @@
 
     .panic_wrong_read:
         revert("wrong value read")
-        ret.panic r0
     

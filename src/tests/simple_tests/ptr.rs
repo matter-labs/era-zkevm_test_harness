@@ -9,7 +9,6 @@ fn test_ptr_add_valid_input() {
         &[],
         Default::default(),
     )
-    .unwrap();
 }
 
 #[test_log::test]
@@ -19,7 +18,6 @@ fn test_ptr_add_invalid_1_pointer() {
         &[],
         Default::default(),
     )
-    .unwrap();
 }
 
 #[test_log::test]

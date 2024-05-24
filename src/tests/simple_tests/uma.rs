@@ -13,12 +13,11 @@ mod tests {
                 ..Default::default()
             },
         )
-        .unwrap();
     }
 
     #[test_log::test]
     fn test_uma_static_reads() {
-        let error = run_asm_based_test(
+        run_asm_based_test(
             "src/tests/simple_tests/testdata/uma/static_reads",
             &[800000],
             Options {
@@ -27,13 +26,17 @@ mod tests {
                 ..Default::default()
             },
         )
-        .err()
-        .expect("Expected this test to fail");
-        // We try to access static data from user space - it results in
-        assert!(
-            error.contains("PRIVILAGED_ACCESS_NOT_FROM_KERNEL"),
-            "Error was: {:?}",
-            error
-        );
+    }
+    #[test_log::test]
+    fn test_uma_kernel_static_reads() {
+        run_asm_based_test(
+            "src/tests/simple_tests/testdata/uma/kernel_static_reads",
+            &[],
+            Options {
+                cycle_limit: 100,
+                cycles_per_vm_snapshot: 1,
+                ..Default::default()
+            },
+        )
     }
 }

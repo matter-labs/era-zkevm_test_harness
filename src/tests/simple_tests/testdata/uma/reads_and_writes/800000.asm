@@ -45,14 +45,8 @@
         sub.s! 0, r3, r0
         jump.ne @.panic_wrong_read
 
-        ; now try accessing the static memory
-        ;add 180, r0, r2
-        ;uma.static_read r1, r2, r0, r0
-
-        ; user contract
         ret.ok r0
 
     .panic_wrong_read:
         revert("user: wrong value read")
-        ret.panic r0
 
