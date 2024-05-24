@@ -19,6 +19,7 @@ use circuit_definitions::{
 };
 
 use crossbeam::atomic::AtomicCell;
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use self::toolset::GeometryConfig;
 
@@ -420,27 +421,41 @@ pub fn generate_base_layer_vks(
     source: &mut dyn SetupDataSource,
 ) -> crate::data_source::SourceResult<()> {
     let geometry = crate::geometry_config::get_geometry_config();
-    let worker = Worker::new();
 
-    for circuit in get_all_basic_circuits(&geometry) {
-        let circuit_type = circuit.numeric_circuit_type();
+    let results: Vec<_> = get_all_basic_circuits(&geometry)
+        .into_par_iter()
+        .map(|circuit| generate_vk_and_finalization_hint(circuit, num_cpus::get_physical() / 10))
+        .collect();
 
-        let (_, _, vk, _, _, _, finalization_hint) = create_base_layer_setup_data(
-            circuit,
-            &worker,
-            BASE_LAYER_FRI_LDE_FACTOR,
-            BASE_LAYER_CAP_SIZE,
-        );
-
-        let typed_vk = ZkSyncBaseLayerVerificationKey::from_inner(circuit_type, vk.clone());
-        let typed_finalization_hint =
-            ZkSyncBaseLayerFinalizationHint::from_inner(circuit_type, finalization_hint.clone());
-
-        source.set_base_layer_finalization_hint(typed_finalization_hint)?;
-        source.set_base_layer_vk(typed_vk)?;
+    for (vk, hint) in results.into_iter() {
+        source.set_base_layer_finalization_hint(hint)?;
+        source.set_base_layer_vk(vk)?;
     }
 
     Ok(())
+}
+
+fn generate_vk_and_finalization_hint(
+    circuit: ZkSyncBaseLayerCircuit,
+    threads_per_worker: usize,
+) -> (
+    ZkSyncBaseLayerVerificationKey,
+    ZkSyncBaseLayerFinalizationHint,
+) {
+    let circuit_type = circuit.numeric_circuit_type();
+    let worker = Worker::new_with_num_threads(threads_per_worker);
+
+    let (_, _, vk, _, _, _, finalization_hint) = create_base_layer_setup_data(
+        circuit,
+        &worker,
+        BASE_LAYER_FRI_LDE_FACTOR,
+        BASE_LAYER_CAP_SIZE,
+    );
+
+    let typed_vk = ZkSyncBaseLayerVerificationKey::from_inner(circuit_type, vk.clone());
+    let typed_finalization_hint =
+        ZkSyncBaseLayerFinalizationHint::from_inner(circuit_type, finalization_hint.clone());
+    (typed_vk, typed_finalization_hint)
 }
 
 /// For backwards compatibility (as zksync-era uses this method).
