@@ -118,7 +118,7 @@ fn link_additional_contracts(
                 .expect("Invalid additional contract address"),
         );
 
-        if let None = additional_contracts {
+        if additional_contracts.is_none() {
             panic!("Can't link additional contract: {}", matched);
         }
 

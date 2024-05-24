@@ -17,4 +17,17 @@ In tests in `.asm` files it is possible to use several additional directives (no
     add ${src0} r0 r1
 ``` 
 
-will be replaced by `dictionary.get("src0")`
+will be replaced by `dictionary.get("src0")`. 
+
+This can be used to simplify creation of new tests. For example, you can create a template like this:
+
+```asm
+    .text
+    .globl	__entry
+__entry:
+.main:
+        ${opcode} ${src0}, ${src1}, ${dst0}
+        ret.ok r0
+```
+
+and then generate and test different sets of parameters. Also can be used for "fuzzy-style" tests.
