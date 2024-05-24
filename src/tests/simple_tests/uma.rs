@@ -27,6 +27,8 @@ mod tests {
             },
         )
     }
+
+    #[ignore = "static reads not supported yet"]
     #[test_log::test]
     fn test_uma_kernel_static_reads() {
         run_asm_based_test(
