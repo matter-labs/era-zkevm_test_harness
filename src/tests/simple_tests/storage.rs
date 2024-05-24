@@ -11,7 +11,7 @@ mod tests {
                 cycles_per_vm_snapshot: 1,
                 ..Default::default()
             },
-        )
+        );
     }
 
     #[test_log::test]

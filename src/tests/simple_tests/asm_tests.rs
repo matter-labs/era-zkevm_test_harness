@@ -39,7 +39,7 @@ pub fn run_asm_based_test(test_dir: &str, additional_contracts: &[i32], options:
 
     let mut options = options.clone();
     options.other_contracts = contracts;
-    run_with_options(entry_bytecode, options).unwrap()
+    run_with_options(entry_bytecode, options);
 }
 
 #[test_log::test]
