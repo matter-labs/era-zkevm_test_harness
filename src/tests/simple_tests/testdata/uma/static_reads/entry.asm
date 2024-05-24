@@ -9,10 +9,6 @@
         .globl	__entry
     __entry:
     .main:
-        ; static writes & reads are not supported from kernel contracts yet.
-        ;add 180, r0, r2
-        ;uma.static_write r1, r2, r0, r0
-
         ; create ABI for far_call
         add 2, r0, r1
         shl.s 32, r1, r1
