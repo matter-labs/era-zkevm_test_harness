@@ -8,6 +8,7 @@ mod tests {
             "src/tests/simple_tests/testdata/uma",
             &[60000, 800000],
             Options {
+                cycle_limit: 100,
                 cycles_per_vm_snapshot: 1,
                 ..Default::default()
             },

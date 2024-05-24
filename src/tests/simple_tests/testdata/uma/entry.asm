@@ -3,38 +3,83 @@
         .rodata.cst32
         .p2align	5
     CPI0_0:
-        ; this is the hash of the contract in 80000.asm
-	    .cell 452312938437537823148903869859771978505772238111866864847149311043017845250
+        ; this is 'user' contract
+	    .cell 800000
         .text
         .globl	__entry
     __entry:
     .main:
+        print("!!Hello")
+        print(r0)
+        
+        add 65, r0, r1
+        add 120, r0, r2
+
+        ; write '120' in slot 65
+        uma.heap_write r1, r2, r0, r0
+
+        ; write '150' in slot 65 for AUX
+        add 150, r0, r2
+        uma.aux_heap_write r1, r2, r0, r0
+
+
+        ; now reading.
+        uma.heap_read r1, r0, r3, r0
+
+        ; assert r3 == 120
+        sub.s! 120, r3, r0
+        jump.ne @.panic_wrong_read
+
+
+        uma.aux_heap_read r1, r0, r3, r0
+        sub.s! 150, r3, r4
+        jump.ne @.panic_wrong_read
+
+        ; static writes & reads are not supported from kernel contracts yet.
+        ;add 180, r0, r2
+        ;uma.static_write r1, r2, r0, r0
+
+        ; create ABI for far_call
+        ; use 2 for forwarding mode (Aux heap)
+        add 2, r0, r1
+        shl.s 32, r1, r1
+        ; give 10k gas
+        add 100000, r1, r1
+        shl.s 96, r1, r1
+        add 36, r1, r1
+        shl.s 32, r1, r1
+        add 64, r1, r1
+        shl.s 64, r1, r1
+        add @CPI0_0[0], r0, r2
+        ; call the other_asm contract
+        far_call r1, r2, @user_call_handler
 
         add 10000, r0, r4
-
-        near_call r4, @inner, @handler
+        ; set the register for near call
+        add 65, r0, r1
+        near_call r4, @inner, @near_call_handler
         ret.ok r0
         
     inner:
-        add @CPI0_0[0], r0, r1
-        context.ergs_left r9
-        ; extra cost
-        add 2000, r0, r2
-        log.decommit r1, r2, r3
-        context.ergs_left r10
+        uma.heap_read r1, r0, r3, r0
+        ; assert r3 == 120
+        sub.s! 120, r3, r0
+        jump.ne @.panic_wrong_read
 
-        ; so after the call, we should have burned at least 2k gas.
-        sub.s 2000, r9, r11
-        ; assert(r9-2000 >= r10) - make sure that we really burned 2k gas
-        sub! r11, r10, r0 
-        jump.lt @.panic
 
+        uma.aux_heap_read r1, r0, r3, r0
+        sub.s! 150, r3, r4
+        jump.ne @.panic_wrong_read
 
         ret.ok r0
 
-    handler:
+    user_call_handler:
         ret.panic r0
 
-    .panic:
+    near_call_handler:
+        ret.panic r0
+
+    .panic_wrong_read:
+        revert("wrong value read")
         ret.panic r0
     
