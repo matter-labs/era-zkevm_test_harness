@@ -1,13 +1,20 @@
+use circuit_definitions::boojum::utils::PipeOp;
+use circuit_definitions::ethereum_types::H160;
 use circuit_definitions::zk_evm::vm_state::ErrorFlags;
 use circuit_definitions::zk_evm::vm_state::PrimitiveValue;
+use std::fmt;
+use std::usize;
+use zkevm_assembly::zkevm_opcode_defs::decoding::{
+    AllowedPcOrImm, EncodingModeProduction, VmEncodingMode,
+};
 use zkevm_assembly::zkevm_opcode_defs::AddOpcode;
+use zkevm_assembly::zkevm_opcode_defs::DecodedOpcode;
 use zkevm_assembly::zkevm_opcode_defs::NopOpcode;
 use zkevm_assembly::zkevm_opcode_defs::Opcode;
 use zkevm_assembly::zkevm_opcode_defs::PtrOpcode;
 use zkevm_assembly::zkevm_opcode_defs::RetOpcode;
 
 use crate::ethereum_types::U256;
-use crate::zk_evm::opcodes::DecodedOpcode;
 use crate::zk_evm::reference_impls::memory::SimpleMemory;
 use crate::zk_evm::tracing::*;
 
@@ -33,11 +40,50 @@ enum ExpectedValueType {
     Pointer,
 }
 
-/// Tracks prints and exceptions during VM execution cycles.
 #[derive(Debug, Clone, Default)]
-pub struct TestingTracer {
-    /// the last uncatched exception message
+pub struct OutOfCircuitException<const N: usize, E: VmEncodingMode<N>> {
     pub exception_message: Option<String>,
+    pub opcode: Option<DecodedOpcode<N, E>>,
+    pub contract_address: Option<H160>,
+}
+
+impl<const N: usize, E: VmEncodingMode<N>> OutOfCircuitException<N, E> {
+    pub fn new(
+        exception_message: Option<String>,
+        opcode: Option<DecodedOpcode<N, E>>,
+        contract_address: Option<H160>,
+    ) -> Self {
+        Self {
+            exception_message,
+            opcode,
+            contract_address,
+        }
+    }
+}
+
+impl<const N: usize, E: VmEncodingMode<N>> fmt::Display for OutOfCircuitException<N, E> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
+        if let Some(message) = &self.exception_message {
+            write!(f, "{}", message)?
+        };
+
+        if let Some(address) = &self.contract_address {
+            write!(f, "\nIn contract: {:?}", address)?
+        };
+
+        if let Some(opcode) = &self.opcode {
+            write!(f, "\nFailed opcode:\n{}", opcode)?
+        };
+
+        Ok(())
+    }
+}
+
+/// Tracks prints and exceptions during VM execution cycles.
+#[derive(Debug, Clone)]
+pub struct TestingTracer<const N: usize = 8, E: VmEncodingMode<N> = EncodingModeProduction> {
+    /// the last uncatched exception
+    pub exception: Option<OutOfCircuitException<N, E>>,
     /// the inner state, affects the interpretation of values from the VM
     tracer_state: TracerState,
     /// stores pending messages that should be printed
@@ -51,13 +97,30 @@ pub struct TestingTracer {
 /// "PRINT_PREFIX:<text>" - print <text> in the console
 /// "PRINT_REG_PREFIX:" - print raw "x" value of next command in the console
 /// "PRINT_PTR_PREFIX:" - print raw "x" pointer value of next command in the console (currently same result as previous command)
-impl TestingTracer {
-    fn reset_exception(&mut self) {
-        self.exception_message = None;
+impl<const N: usize, E: VmEncodingMode<N>> TestingTracer<N, E> {
+    pub fn new() -> Self {
+        Self {
+            exception: None,
+            tracer_state: TracerState::default(),
+            message_buffer: None,
+        }
     }
 
-    fn set_exception_message(&mut self, message: &str) {
-        self.exception_message = Some(message.to_owned());
+    fn reset_exception(&mut self) {
+        self.exception = None;
+    }
+
+    fn set_exception(
+        &mut self,
+        message: Option<String>,
+        opcode: Option<DecodedOpcode<N, E>>,
+        contract_address: Option<H160>,
+    ) {
+        self.exception = Some(OutOfCircuitException::new(
+            message,
+            opcode,
+            contract_address,
+        ));
     }
 
     fn execute_print(&self, message: &str) {
@@ -88,7 +151,7 @@ impl TestingTracer {
                 if let Some((command_prefix, arg)) = self.parse_command_from_register(value) {
                     match command_prefix.as_str() {
                         EXCEPTION_PREFIX => {
-                            self.set_exception_message(&arg);
+                            self.set_exception(Some(arg), None, None);
                         }
                         PRINT_PREFIX => {
                             self.execute_print(&arg);
@@ -149,33 +212,61 @@ impl TestingTracer {
     }
 }
 
-impl Tracer for TestingTracer {
+impl<const N: usize, E: VmEncodingMode<N>> Tracer<N, E> for TestingTracer<N, E> {
     type SupportedMemory = SimpleMemory;
     const CALL_BEFORE_EXECUTION: bool = true;
     const CALL_AFTER_DECODING: bool = true;
 
     #[inline]
-    fn before_decoding(&mut self, _state: VmLocalStateData<'_>, _memory: &Self::SupportedMemory) {}
+    fn before_decoding(
+        &mut self,
+        _state: VmLocalStateData<'_, N, E>,
+        _memory: &Self::SupportedMemory,
+    ) {
+    }
 
     fn after_decoding(
         &mut self,
-        _state: VmLocalStateData<'_>,
-        data: AfterDecodingData,
+        state: VmLocalStateData<'_, N, E>,
+        data: AfterDecodingData<N, E>,
         _memory: &Self::SupportedMemory,
     ) {
-        // check for built-in panics
-        if !data.error_flags_accumulated.is_empty() {
-            // last accumulated panic will be used as exception_message
-            for (panic, _) in data.error_flags_accumulated.iter_names() {
-                self.exception_message = Some(panic.to_owned());
+        if let Opcode::Ret(RetOpcode::Panic | RetOpcode::Revert) =
+            data.opcode_masked.inner.variant.opcode
+        {
+            if let Some(exception) = &self.exception {
+                if exception.opcode.is_some() {
+                    return;
+                }
             }
-        }
+
+            let (raw_opcode, _) =
+                E::parse_preliminary_variant_and_absolute_number(data.raw_opcode_unmasked);
+
+            let message = if data.error_flags_accumulated.is_empty() {
+                if let Some(exception) = &self.exception {
+                    exception.exception_message.clone()
+                } else {
+                    None
+                }
+            } else {
+                // check for built-in panics
+                let (panic_name, _) = data.error_flags_accumulated.iter_names().nth(0).unwrap();
+                Some(panic_name.to_owned())
+            };
+
+            self.set_exception(
+                message,
+                Some(raw_opcode),
+                Some(state.vm_local_state.callstack.current.this_address),
+            );
+        };
     }
 
     fn before_execution(
         &mut self,
-        _state: VmLocalStateData<'_>,
-        data: BeforeExecutionData,
+        _state: VmLocalStateData<'_, N, E>,
+        data: BeforeExecutionData<N, E>,
         _memory: &Self::SupportedMemory,
     ) {
         let inner_opcode = data.opcode.inner.variant.opcode;
@@ -183,8 +274,7 @@ impl Tracer for TestingTracer {
         // Propagate error message if Nop, ret.panic, ret.revert; reset otherwise
         match inner_opcode {
             Opcode::Nop(NopOpcode) => {}
-            Opcode::Ret(RetOpcode::Panic) => {}
-            Opcode::Ret(RetOpcode::Revert) => {}
+            Opcode::Ret(RetOpcode::Panic | RetOpcode::Revert) => {}
             _ => {
                 self.reset_exception();
             }
@@ -208,7 +298,7 @@ impl Tracer for TestingTracer {
         self.tracer_state = new_state;
 
         // pc 0 means VM finished without any panics
-        if data.new_pc == 0 {
+        if data.new_pc == E::PcOrImm::from_u64_clipped(0) {
             self.reset_exception();
         }
     }
@@ -216,8 +306,8 @@ impl Tracer for TestingTracer {
     #[inline]
     fn after_execution(
         &mut self,
-        _state: VmLocalStateData<'_>,
-        _data: AfterExecutionData,
+        _state: VmLocalStateData<'_, N, E>,
+        _data: AfterExecutionData<N, E>,
         _memory: &Self::SupportedMemory,
     ) {
     }
