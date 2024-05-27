@@ -46,7 +46,7 @@ __entry:
     ; we perform the subtraction not in kernel mode, r1 should be cleaned
     sub.s! r1, r4, r5
     jump.eq @not_cleaned_but_should
-    sub! r4, r1, r5
+    sub! r1, r4, r5
     jump.eq @not_cleaned_but_should
 
     ; clean tag and metadata
@@ -58,7 +58,6 @@ __entry:
     jump.eq @ret_ok
     
     revert("Pointer invalid")
-    
 
 far_call_handler:
     ret.panic r0

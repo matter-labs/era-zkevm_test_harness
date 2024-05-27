@@ -44,15 +44,14 @@ __entry:
 
     ; we perform the subtraction in kernel mode, r1 should not be cleaned
     sub.s! r1, r4, r5
-    jump.eq @ret_ok
-    sub! r4, r1, r5
-    jump.eq @ret_ok
+    jump.ne @cleaned_but_should_not
+    sub! r1, r4, r5
+    jump.ne @cleaned_but_should_not
 
-    revert("Pointer cleaned")
-    
+    ret.ok r0
 
 far_call_handler:
     ret.panic r0
 
-ret_ok:
-    ret.ok r0
+cleaned_but_should_not:
+    revert("Pointer cleaned")
