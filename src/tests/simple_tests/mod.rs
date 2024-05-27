@@ -13,5 +13,7 @@ mod limited_ergs;
 mod log;
 mod memory_growth;
 mod near_call;
-mod ptr_add;
+mod ptr;
 mod stack;
+mod storage;
+mod uma;

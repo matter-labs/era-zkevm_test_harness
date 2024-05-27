@@ -17,12 +17,18 @@ use boojum::{
 
 use rayon::prelude::*;
 
-// Remove these, once we move all kzg logic from zksync-era crate.
-pub use boojum;
-pub use zkevm_circuits;
+// These are the 3 things that are exposed to the public and used by sequencer.
+pub use kzg_info::pubdata_to_blob_commitments;
+pub use kzg_info::KzgInfo;
+pub use kzg_info::ZK_SYNC_BYTES_PER_BLOB;
+
+mod kzg_info;
+#[cfg(test)]
+mod tests;
+mod trusted_setup;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-struct TrustedSetup {
+pub struct TrustedSetup {
     g1_lagrange: Vec<String>,
 }
 
@@ -35,6 +41,12 @@ pub struct KzgSettings {
 
 impl KzgSettings {
     pub fn new(settings_file: &str) -> Self {
+        let setup: TrustedSetup =
+            serde_json::from_slice(&std::fs::read(settings_file).unwrap()).unwrap();
+
+        KzgSettings::new_from_trusted_setup(setup)
+    }
+    pub fn new_from_trusted_setup(setup: TrustedSetup) -> Self {
         let roots_of_unity = {
             // 39033254847818212395286706435128746857159659164139250548781411570340225835782
             // 2^12 root of unity for BLS12-381
@@ -71,9 +83,6 @@ impl KzgSettings {
             v.copy_from_slice(bytes.as_slice());
             point.into_affine().unwrap().into_projective()
         };
-
-        let setup: TrustedSetup =
-            serde_json::from_slice(&std::fs::read(settings_file).unwrap()).unwrap();
 
         let lagrange_setup_brp = {
             let mut base_setup: Vec<G1> = setup
@@ -420,7 +429,7 @@ fn reduce(repr: [u64; 4], modulus: [u64; 4]) -> [u64; 4] {
 }
 
 #[cfg(test)]
-mod tests {
+mod local_tests {
     use super::*;
     use rand::Rand;
 

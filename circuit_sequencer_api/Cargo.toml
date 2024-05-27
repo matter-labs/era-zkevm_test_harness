@@ -19,3 +19,4 @@ rayon = "*"
 
 [features]
 default = []
+verbose_circuits = ["circuit_encodings/verbose_circuits"]

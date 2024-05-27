@@ -44,6 +44,7 @@ reqwest = { version = "0.11", features = ["blocking"] }
 curl = "0.4"
 walkdir = "2.4"
 num_cpus = "1"
+regex = { version = "1.10.4", features = ["pattern"] }
 
 [dev-dependencies]
 rand = "0.4"
@@ -54,3 +55,6 @@ lto = false
 
 [profile.bench]
 debug = false
+
+[features]
+verbose_circuits = ["circuit_definitions/verbose_circuits", "circuit_sequencer_api/verbose_circuits"]

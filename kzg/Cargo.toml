@@ -12,6 +12,9 @@ derivative = "*"
 serde = {version = "1", features = ["derive"]}
 serde_json = "1.0"
 rayon = "*"
+hex = "*"
+once_cell = "1"
+serde_with = {version = "1", features = ["hex"]}
 
 boojum = {git = "https://github.com/matter-labs/era-boojum.git", branch = "main"}
 zkevm_circuits = {git = "https://github.com/matter-labs/era-zkevm_circuits.git", branch = "v1.5.0"}
