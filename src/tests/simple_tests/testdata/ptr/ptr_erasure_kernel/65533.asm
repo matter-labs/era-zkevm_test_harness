@@ -45,6 +45,8 @@ __entry:
     ; we perform the subtraction in kernel mode, r1 should not be cleaned
     sub.s! r1, r4, r5
     jump.eq @ret_ok
+    sub! r4, r1, r5
+    jump.eq @ret_ok
 
     revert("Pointer cleaned")
     
