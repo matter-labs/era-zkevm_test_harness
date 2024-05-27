@@ -260,7 +260,7 @@ pub(crate) fn run_with_options(entry_point_bytecode: Vec<[u8; 32]>, options: Opt
     let mut basic_block_circuits = vec![];
 
     // we are using TestingTracer to track prints and exceptions inside out_of_circuit_vm cycles
-    let mut out_of_circuit_tracer = TestingTracer::default();
+    let mut out_of_circuit_tracer = TestingTracer::new();
 
     if let Err(err) = run_vms(
         Address::zero(),
@@ -287,8 +287,8 @@ pub(crate) fn run_with_options(entry_point_bytecode: Vec<[u8; 32]>, options: Opt
                 format!("Invalid input error: {msg}")
             }
             RunVmError::OutOfCircuitExecutionError(_) => {
-                let msg = if let Some(exception_message) = out_of_circuit_tracer.exception_message {
-                    format!("root frame ended up with exception: {}", exception_message)
+                let msg = if let Some(exception) = out_of_circuit_tracer.exception {
+                    format!("root frame ended up with exception: {}", exception)
                 } else {
                     format!("root frame ended up with unexpected panic")
                 };

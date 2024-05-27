@@ -149,14 +149,14 @@ fn replace_directives(asm: String, directive: Directive) -> (String, Vec<String>
                 EXCEPTION_PREFIX,
                 revert_regex,
                 "REVERT",
-                r#"revert(""#,
-                r#"")"#,
+                r#"revert("#,
+                r#")"#,
             )
         }
         Directive::Print(PrintType::Text) => {
             // regex: print("<message>")
             let print_regex = Regex::new(r#"print\("[^"]*"\)"#).expect("Invalid regex");
-            (PRINT_PREFIX, print_regex, "PRINT", r#"print(""#, r#"")"#)
+            (PRINT_PREFIX, print_regex, "PRINT", r#"print("#, r#")"#)
         }
         Directive::Print(PrintType::Register) => {
             // regex: print(<src>) or print("<message", <src>)
