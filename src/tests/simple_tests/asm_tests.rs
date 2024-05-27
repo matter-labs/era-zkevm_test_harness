@@ -50,6 +50,8 @@ fn compile_asm_template(
         file_path
     ));
     let asm_preprocessed = preprocess_asm(asm, additional_contracts, dictionary);
+    println!("{}", asm_preprocessed);
+    println!("");
     Assembly::try_from(asm_preprocessed.to_owned())
         .unwrap()
         .compile_to_bytecode()

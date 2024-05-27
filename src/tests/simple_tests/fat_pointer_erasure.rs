@@ -9,3 +9,12 @@ fn test_fat_pointer_erasure() {
         Default::default(),
     )
 }
+
+#[test_log::test]
+fn test_ptr_add_src0_erasure() {
+    run_asm_based_test(
+        "src/tests/simple_tests/testdata/ptr/ptr_add_src0_erasure",
+        &[65537],
+        Default::default(),
+    )
+}
