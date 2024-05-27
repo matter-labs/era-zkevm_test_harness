@@ -26,4 +26,17 @@ mod tests {
             },
         )
     }
+
+    #[test_log::test]
+    fn test_storage_read_after_panic() {
+        run_asm_based_test(
+            "src/tests/simple_tests/testdata/storage_read_after_panic",
+            &[],
+            Options {
+                // Do only 1 cycle per VM snapshot to really test all the boundary conditions.
+                cycles_per_vm_snapshot: 1,
+                ..Default::default()
+            },
+        )
+    }
 }
