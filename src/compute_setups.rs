@@ -418,6 +418,8 @@ pub fn generate_base_layer_vks_and_proofs(
 }
 
 /// Generate Verification keys for all base layer circuits.
+/// num_threads control how many VKs are generated in parallel - each one takes around 30GB of RAM.
+/// if not specified, will run them sequencially.
 pub fn generate_base_layer_vks(
     source: &mut dyn SetupDataSource,
     num_threads: Option<usize>,
@@ -477,40 +479,73 @@ fn generate_vk_and_finalization_hint(
 pub fn generate_recursive_layer_vks_and_proofs(
     source: &mut dyn SetupDataSource,
 ) -> crate::data_source::SourceResult<()> {
-    generate_recursive_layer_vks(source)
+    generate_recursive_layer_vks(source, None)
+}
+
+fn generate_vk_and_finalization_hint_for_recursion(
+    circuit: ZkSyncRecursiveLayerCircuit,
+    threads_per_worker: usize,
+) -> (
+    ZkSyncRecursionLayerVerificationKey,
+    ZkSyncRecursionLayerFinalizationHint,
+) {
+    println!(
+        "Computing leaf layer VK for type {:?}",
+        circuit.numeric_circuit_type()
+    );
+
+    let worker = Worker::new_with_num_threads(threads_per_worker);
+    let numeric_circuit_type = circuit.numeric_circuit_type();
+    let (_setup_base, _setup, vk, _setup_tree, _vars_hint, _wits_hint, finalization_hint) =
+        create_recursive_layer_setup_data(
+            circuit,
+            &worker,
+            RECURSION_LAYER_FRI_LDE_FACTOR,
+            RECURSION_LAYER_CAP_SIZE,
+        );
+
+    let typed_vk =
+        ZkSyncRecursionLayerVerificationKey::from_inner(numeric_circuit_type, vk.clone());
+
+    let typed_finalization_hint = ZkSyncRecursionLayerFinalizationHint::from_inner(
+        numeric_circuit_type,
+        finalization_hint.clone(),
+    );
+    (typed_vk, typed_finalization_hint)
 }
 
 pub fn generate_recursive_layer_vks(
     source: &mut dyn SetupDataSource,
+    num_threads: Option<usize>,
 ) -> crate::data_source::SourceResult<()> {
     // here we rely ONLY on VKs and proofs from the setup, so we keep the geometries and circuits
     // via padding proofs
     let worker = Worker::new();
+    let num_threads = num_threads.unwrap_or(1);
 
     println!("Computing leaf vks");
-    for circuit in get_leaf_circuits(source)? {
-        println!(
-            "Computing leaf layer VK for type {:?}",
-            circuit.numeric_circuit_type()
-        );
 
-        let numeric_circuit_type = circuit.numeric_circuit_type();
-        let (_setup_base, _setup, vk, _setup_tree, _vars_hint, _wits_hint, finalization_hint) =
-            create_recursive_layer_setup_data(
-                circuit,
-                &worker,
-                RECURSION_LAYER_FRI_LDE_FACTOR,
-                RECURSION_LAYER_CAP_SIZE,
-            );
+    let pool = ThreadPoolBuilder::new()
+        .num_threads(num_threads)
+        .build()
+        .unwrap();
+    let threads_per_worker = std::cmp::max(num_cpus::get_physical() / num_threads, 1);
 
-        let typed_finalization_hint = ZkSyncRecursionLayerFinalizationHint::from_inner(
-            numeric_circuit_type,
-            finalization_hint.clone(),
-        );
-        source.set_recursion_layer_finalization_hint(typed_finalization_hint)?;
-        let typed_vk =
-            ZkSyncRecursionLayerVerificationKey::from_inner(numeric_circuit_type, vk.clone());
-        source.set_recursion_layer_vk(typed_vk)?;
+    let leaf_circuits = get_leaf_circuits(source)?;
+
+    let r = pool.install(|| {
+        let results: Vec<_> = leaf_circuits
+            .into_par_iter()
+            .map(|circuit| {
+                generate_vk_and_finalization_hint_for_recursion(circuit, threads_per_worker)
+            })
+            .collect();
+        return results;
+    });
+
+    for (vk, hint) in r.into_iter() {
+        source.set_recursion_layer_node_finalization_hint(hint)?;
+        source.set_recursion_layer_node_vk(vk)?;
     }
 
     println!("Computing node vk");
@@ -631,7 +666,7 @@ mod test {
     fn test_run_create_recursion_layer_vks_and_proofs() {
         let mut source = LocalFileDataSource::default();
         source.create_folders_for_storing_data();
-        generate_recursive_layer_vks_and_proofs(&mut source).expect("must compute setup");
+        generate_recursive_layer_vks(&mut source, None).expect("must compute setup");
     }
 
     #[ignore = "too slow"]
