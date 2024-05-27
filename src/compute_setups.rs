@@ -425,6 +425,7 @@ pub fn generate_base_layer_vks(
     num_threads: Option<usize>,
 ) -> crate::data_source::SourceResult<()> {
     let geometry = crate::geometry_config::get_geometry_config();
+    let worker = Worker::new();
 
     let num_threads = num_threads.unwrap_or(1);
 
@@ -432,12 +433,11 @@ pub fn generate_base_layer_vks(
         .num_threads(num_threads)
         .build()
         .unwrap();
-    let threads_per_worker = std::cmp::max(num_cpus::get_physical() / num_threads, 1);
 
     let r = pool.install(|| {
         let results: Vec<_> = get_all_basic_circuits(&geometry)
             .into_par_iter()
-            .map(|circuit| generate_vk_and_finalization_hint(circuit, threads_per_worker))
+            .map(|circuit| generate_vk_and_finalization_hint(circuit, &worker))
             .collect();
 
         return results;
@@ -453,13 +453,13 @@ pub fn generate_base_layer_vks(
 
 fn generate_vk_and_finalization_hint(
     circuit: ZkSyncBaseLayerCircuit,
-    threads_per_worker: usize,
+    worker: &Worker,
 ) -> (
     ZkSyncBaseLayerVerificationKey,
     ZkSyncBaseLayerFinalizationHint,
 ) {
     let circuit_type = circuit.numeric_circuit_type();
-    let worker = Worker::new_with_num_threads(threads_per_worker);
+    //let worker = Worker::new_with_num_threads(threads_per_worker);
 
     let (_, _, vk, _, _, _, finalization_hint) = create_base_layer_setup_data(
         circuit,
@@ -484,7 +484,7 @@ pub fn generate_recursive_layer_vks_and_proofs(
 
 fn generate_vk_and_finalization_hint_for_recursion(
     circuit: ZkSyncRecursiveLayerCircuit,
-    threads_per_worker: usize,
+    worker: &Worker,
 ) -> (
     ZkSyncRecursionLayerVerificationKey,
     ZkSyncRecursionLayerFinalizationHint,
@@ -494,7 +494,6 @@ fn generate_vk_and_finalization_hint_for_recursion(
         circuit.numeric_circuit_type()
     );
 
-    let worker = Worker::new_with_num_threads(threads_per_worker);
     let numeric_circuit_type = circuit.numeric_circuit_type();
     let (_setup_base, _setup, vk, _setup_tree, _vars_hint, _wits_hint, finalization_hint) =
         create_recursive_layer_setup_data(
@@ -514,6 +513,8 @@ fn generate_vk_and_finalization_hint_for_recursion(
     (typed_vk, typed_finalization_hint)
 }
 
+/// num_threads control how many VKs are generated in parallel - each one takes around 25GB of RAM.
+/// if not specified, will run them sequencially.
 pub fn generate_recursive_layer_vks(
     source: &mut dyn SetupDataSource,
     num_threads: Option<usize>,
@@ -529,16 +530,13 @@ pub fn generate_recursive_layer_vks(
         .num_threads(num_threads)
         .build()
         .unwrap();
-    let threads_per_worker = std::cmp::max(num_cpus::get_physical() / num_threads, 1);
 
     let leaf_circuits = get_leaf_circuits(source)?;
 
     let r = pool.install(|| {
         let results: Vec<_> = leaf_circuits
             .into_par_iter()
-            .map(|circuit| {
-                generate_vk_and_finalization_hint_for_recursion(circuit, threads_per_worker)
-            })
+            .map(|circuit| generate_vk_and_finalization_hint_for_recursion(circuit, &worker))
             .collect();
         return results;
     });
