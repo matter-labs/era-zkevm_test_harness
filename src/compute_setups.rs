@@ -20,6 +20,7 @@ use circuit_definitions::{
 
 use crossbeam::atomic::AtomicCell;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use rayon::ThreadPoolBuilder;
 
 use self::toolset::GeometryConfig;
 
@@ -413,21 +414,34 @@ pub fn generate_circuit_setup_data(
 pub fn generate_base_layer_vks_and_proofs(
     source: &mut dyn SetupDataSource,
 ) -> crate::data_source::SourceResult<()> {
-    generate_base_layer_vks(source)
+    generate_base_layer_vks(source, None)
 }
 
 /// Generate Verification keys for all base layer circuits.
 pub fn generate_base_layer_vks(
     source: &mut dyn SetupDataSource,
+    num_threads: Option<usize>,
 ) -> crate::data_source::SourceResult<()> {
     let geometry = crate::geometry_config::get_geometry_config();
 
-    let results: Vec<_> = get_all_basic_circuits(&geometry)
-        .into_par_iter()
-        .map(|circuit| generate_vk_and_finalization_hint(circuit, num_cpus::get_physical() / 10))
-        .collect();
+    let num_threads = num_threads.unwrap_or(1);
 
-    for (vk, hint) in results.into_iter() {
+    let pool = ThreadPoolBuilder::new()
+        .num_threads(num_threads)
+        .build()
+        .unwrap();
+    let threads_per_worker = std::cmp::max(num_cpus::get_physical() / num_threads, 1);
+
+    let r = pool.install(|| {
+        let results: Vec<_> = get_all_basic_circuits(&geometry)
+            .into_par_iter()
+            .map(|circuit| generate_vk_and_finalization_hint(circuit, threads_per_worker))
+            .collect();
+
+        return results;
+    });
+
+    for (vk, hint) in r.into_iter() {
         source.set_base_layer_finalization_hint(hint)?;
         source.set_base_layer_vk(vk)?;
     }
@@ -609,7 +623,7 @@ mod test {
         let mut source = LocalFileDataSource::default();
         source.create_folders_for_storing_data();
 
-        generate_base_layer_vks(&mut source).expect("must compute setup");
+        generate_base_layer_vks(&mut source, None).expect("must compute setup");
     }
 
     #[ignore = "too slow"]
