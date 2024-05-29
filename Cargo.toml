@@ -48,6 +48,8 @@ regex = { version = "1.10.4", features = ["pattern"] }
 
 [dev-dependencies]
 rand = "0.4"
+indicatif = "0.16"
+
 
 [profile.release]
 debug = false

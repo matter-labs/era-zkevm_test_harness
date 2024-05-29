@@ -414,15 +414,22 @@ pub fn generate_circuit_setup_data(
 pub fn generate_base_layer_vks_and_proofs(
     source: &mut dyn SetupDataSource,
 ) -> crate::data_source::SourceResult<()> {
-    generate_base_layer_vks(source, None)
+    generate_base_layer_vks(source, None, || {})
+}
+
+/// Returns number of basic verification keys.
+pub fn basic_vk_count() -> usize {
+    BaseLayerCircuitType::as_iter_u8().count()
 }
 
 /// Generate Verification keys for all base layer circuits.
 /// num_threads control how many VKs are generated in parallel - each one takes around 30GB of RAM.
 /// if not specified, will run them sequencially.
-pub fn generate_base_layer_vks(
+/// CB callback will be called on each finished VK (to track progress).
+pub fn generate_base_layer_vks<CB: Fn() + Send + Sync>(
     source: &mut dyn SetupDataSource,
     num_threads: Option<usize>,
+    cb: CB,
 ) -> crate::data_source::SourceResult<()> {
     let geometry = crate::geometry_config::get_geometry_config();
     let worker = Worker::new();
@@ -434,13 +441,15 @@ pub fn generate_base_layer_vks(
         .build()
         .unwrap();
 
-    let r = pool.install(|| {
-        let results: Vec<_> = get_all_basic_circuits(&geometry)
+    let r: Vec<_> = pool.install(|| {
+        get_all_basic_circuits(&geometry)
             .into_par_iter()
-            .map(|circuit| generate_vk_and_finalization_hint(circuit, &worker))
-            .collect();
-
-        return results;
+            .map(|circuit| {
+                let result = generate_vk_and_finalization_hint(circuit, &worker);
+                cb();
+                result
+            })
+            .collect()
     });
 
     for (vk, hint) in r.into_iter() {
@@ -479,7 +488,7 @@ fn generate_vk_and_finalization_hint(
 pub fn generate_recursive_layer_vks_and_proofs(
     source: &mut dyn SetupDataSource,
 ) -> crate::data_source::SourceResult<()> {
-    generate_recursive_layer_vks(source, None)
+    generate_recursive_layer_vks(source, None, || {})
 }
 
 fn generate_vk_and_finalization_hint_for_recursion(
@@ -513,11 +522,18 @@ fn generate_vk_and_finalization_hint_for_recursion(
     (typed_vk, typed_finalization_hint)
 }
 
+/// Returns number of recursive layer verification keys.
+pub fn recursive_layer_vk_count() -> usize {
+    // Leafs (one per base layer) + node + recursion + scheduler
+    basic_vk_count() + 3
+}
+
 /// num_threads control how many VKs are generated in parallel - each one takes around 25GB of RAM.
 /// if not specified, will run them sequencially.
-pub fn generate_recursive_layer_vks(
+pub fn generate_recursive_layer_vks<CB: Fn() + Send + Sync>(
     source: &mut dyn SetupDataSource,
     num_threads: Option<usize>,
+    cb: CB,
 ) -> crate::data_source::SourceResult<()> {
     // here we rely ONLY on VKs and proofs from the setup, so we keep the geometries and circuits
     // via padding proofs
@@ -533,12 +549,15 @@ pub fn generate_recursive_layer_vks(
 
     let leaf_circuits = get_leaf_circuits(source)?;
 
-    let r = pool.install(|| {
-        let results: Vec<_> = leaf_circuits
+    let r: Vec<_> = pool.install(|| {
+        leaf_circuits
             .into_par_iter()
-            .map(|circuit| generate_vk_and_finalization_hint_for_recursion(circuit, &worker))
-            .collect();
-        return results;
+            .map(|circuit| {
+                let result = generate_vk_and_finalization_hint_for_recursion(circuit, &worker);
+                cb();
+                result
+            })
+            .collect()
     });
 
     for (vk, hint) in r.into_iter() {
@@ -565,12 +584,15 @@ pub fn generate_recursive_layer_vks(
         let typed_vk = ZkSyncRecursionLayerVerificationKey::NodeLayerCircuit(vk.clone());
         source.set_recursion_layer_node_vk(typed_vk)?;
     }
+    cb();
 
     println!("Computing recursion tip vk");
     generate_recursion_tip_vk(source)?;
+    cb();
 
     println!("Computing scheduler vk");
     generate_scheduler_vk(source)?;
+    cb();
 
     Ok(())
 }
@@ -646,6 +668,10 @@ pub fn compute_leaf_params(
 
 #[cfg(test)]
 mod test {
+    use std::sync::Mutex;
+
+    use indicatif::{ProgressBar, ProgressStyle};
+
     use self::data_source::local_file_data_source::LocalFileDataSource;
 
     use super::*;
@@ -655,8 +681,19 @@ mod test {
     fn test_run_create_base_layer_vks_and_proofs() {
         let mut source = LocalFileDataSource::default();
         source.create_folders_for_storing_data();
+        let count = basic_vk_count();
+        let progress_bar = ProgressBar::new(count as u64);
+        progress_bar.set_style(ProgressStyle::default_bar()
+        .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos:>7}/{len:7} ({eta})")
+        .progress_chars("#>-"));
 
-        generate_base_layer_vks(&mut source, None).expect("must compute setup");
+        let pb = Arc::new(Mutex::new(progress_bar));
+
+        generate_base_layer_vks(&mut source, None, || {
+            pb.lock().unwrap().inc(1);
+        })
+        .expect("must compute setup");
+        pb.lock().unwrap().finish_with_message("done");
     }
 
     #[ignore = "too slow"]
@@ -664,7 +701,7 @@ mod test {
     fn test_run_create_recursion_layer_vks_and_proofs() {
         let mut source = LocalFileDataSource::default();
         source.create_folders_for_storing_data();
-        generate_recursive_layer_vks(&mut source, None).expect("must compute setup");
+        generate_recursive_layer_vks(&mut source, None, || {}).expect("must compute setup");
     }
 
     #[ignore = "too slow"]
