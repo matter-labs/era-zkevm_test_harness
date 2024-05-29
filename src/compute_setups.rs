@@ -468,7 +468,6 @@ fn generate_vk_and_finalization_hint(
     ZkSyncBaseLayerFinalizationHint,
 ) {
     let circuit_type = circuit.numeric_circuit_type();
-    //let worker = Worker::new_with_num_threads(threads_per_worker);
 
     let (_, _, vk, _, _, _, finalization_hint) = create_base_layer_setup_data(
         circuit,
