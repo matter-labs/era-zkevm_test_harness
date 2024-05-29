@@ -561,8 +561,8 @@ pub fn generate_recursive_layer_vks<CB: Fn() + Send + Sync>(
     });
 
     for (vk, hint) in r.into_iter() {
-        source.set_recursion_layer_node_finalization_hint(hint)?;
-        source.set_recursion_layer_node_vk(vk)?;
+        source.set_recursion_layer_finalization_hint(hint)?;
+        source.set_recursion_layer_vk(vk)?;
     }
 
     println!("Computing node vk");
