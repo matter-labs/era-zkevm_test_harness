@@ -40,7 +40,7 @@ __entry:
 
     far_call r1, r2, @far_call_handler
 
-    ; load "cloned" pointer
+    ; load cloned "pointer"
     add stack[0], r0, r4
 
     ; we perform the subtraction not in kernel mode, r1 should be cleaned

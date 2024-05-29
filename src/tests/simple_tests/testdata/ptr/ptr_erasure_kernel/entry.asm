@@ -16,7 +16,7 @@ __entry:
     add 0, r0, r1
     shl.s 32, r1, r1
     ; give 10k gas
-    add 100000, r1, r1
+    add 10000, r1, r1
     shl.s 96, r1, r1
     add 36, r1, r1
     shl.s 32, r1, r1

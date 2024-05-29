@@ -39,7 +39,7 @@ __entry:
     ; we make the extra far call to create a pointer type
     far_call r1, r2, @far_call_handler
 
-    ; load "cloned" pointer
+    ; load cloned "pointer"
     add stack[0], r0, r4
 
     ; we perform the subtraction in kernel mode, r1 should not be cleaned
