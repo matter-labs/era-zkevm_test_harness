@@ -6,7 +6,10 @@ fn test_near_call_memory_growth_ret_ok() {
     run_asm_based_test(
         "src/tests/simple_tests/testdata/near_call/memory_growth_ret_ok",
         &[65536],
-        Options { cycle_limit: 100, ..Default::default() }
+        Options {
+            cycle_limit: 100,
+            ..Default::default()
+        },
     )
 }
 
@@ -15,7 +18,7 @@ fn test_near_call_resets_sp() {
     run_asm_based_test(
         "src/tests/simple_tests/testdata/near_call/resets_sp",
         &[],
-        Default::default()
+        Default::default(),
     )
 }
 
@@ -24,6 +27,6 @@ fn test_near_call_not_rollback_memory() {
     run_asm_based_test(
         "src/tests/simple_tests/testdata/near_call/not_rollback_memory",
         &[65536],
-        Default::default()
+        Default::default(),
     )
 }
