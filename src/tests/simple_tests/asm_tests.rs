@@ -11,9 +11,12 @@ use zkevm_assembly::Assembly;
 /// The main assembly should be in `entry.asm` file, while additional
 /// contracts should be in `ADDRESS.asm` files, where `ADDRESS` is the numerical
 /// address at which they should be deployed.
-pub fn run_asm_based_test(test_dir: &str, additional_contracts_addresses: &[i32], options: Options) {
-
-    let mut additional_contracts = Vec::<(String, i32)>::new(); 
+pub fn run_asm_based_test(
+    test_dir: &str,
+    additional_contracts_addresses: &[i32],
+    options: Options,
+) {
+    let mut additional_contracts = Vec::<(String, i32)>::new();
     for address in additional_contracts_addresses {
         additional_contracts.push((address.to_string(), *address));
     }
@@ -29,7 +32,8 @@ pub fn run_asm_based_test_template(
 ) {
     let data_path = Path::new(test_dir);
 
-    let contracts: Vec<(H160, Vec<[u8; 32]>)> = compile_additional_contracts(test_dir, additional_contracts, dictionary);
+    let contracts: Vec<(H160, Vec<[u8; 32]>)> =
+        compile_additional_contracts(test_dir, additional_contracts, dictionary);
 
     let entry_bytecode = compile_asm_template(data_path, "entry", dictionary, Some(&contracts));
 
