@@ -8,6 +8,8 @@ __entry:
 .main:
         add 32, r0, r2
         add 64, r0, r3
+        st.1.inc r2, r3, r2
+        st.2.inc r2, r3, r2
         ; execute each possible context opcode
         context.set_ergs_per_pubdata r2
         context.set_context_u128 r3

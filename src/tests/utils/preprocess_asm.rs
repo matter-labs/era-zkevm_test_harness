@@ -38,7 +38,7 @@ pub const PRINT_PREFIX: &str = "L:";
 pub const PRINT_REG_PREFIX: &str = "R:";
 pub const PRINT_PTR_PREFIX: &str = "P:";
 
-pub type TemplateDictionary<'a> = HashMap<&'a str, &'a str>;
+pub type TemplateDictionary<'a> = HashMap<&'a str, String>;
 
 /// Replaces special directives in asm with TestingTracer compatible "commands"
 pub fn preprocess_asm(
@@ -383,9 +383,9 @@ add @REVERT_0_STRING, r0, r0
     #[test]
     fn test_templates_replace_tags() {
         let mut dictionary: TemplateDictionary = Default::default();
-        dictionary.insert("src0", "5");
-        dictionary.insert("src1", "r0");
-        dictionary.insert("dst0", "r2");
+        dictionary.insert("src0", "5".to_owned());
+        dictionary.insert("src1", "r0".to_owned());
+        dictionary.insert("dst0", "r2".to_owned());
 
         let asm = r#"
             .text
