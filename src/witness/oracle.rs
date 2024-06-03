@@ -552,8 +552,31 @@ pub fn create_artifacts_from_tracer<
         // wherever we have this marker we should look at the tail of the item right before it
         let pos = log_position_mapping[&rollback_tail_marker];
         let tail = if pos == -1 {
-            // empty
-            global_end_of_storage_log
+            // empty frame
+            let pos_forward_head =
+                log_position_mapping[&ExtendedLogQuery::FrameForwardHeadMarker(frame_index)];
+            let pos_forward_tail =
+                log_position_mapping[&ExtendedLogQuery::FrameForwardTailMarker(frame_index)];
+            let pos_rollback_head =
+                log_position_mapping[&ExtendedLogQuery::FrameRollbackHeadMarker(frame_index)];
+
+            if pos_forward_head == -1 && pos_forward_tail == -1 && pos_rollback_head == -1 {
+                // absolutely empty frame, most likely leaf one,
+                // but we can not just use global end,
+                // instead we should use previous frame's data
+                let pos_previous_frame_forward_tail = log_position_mapping
+                    [&ExtendedLogQuery::FrameForwardTailMarker(frame_index - 1)];
+                if pos_previous_frame_forward_tail != -1 {
+                    let pointer = pos_previous_frame_forward_tail as usize;
+                    let element = chain_of_states[pointer].2 .0;
+
+                    element
+                } else {
+                    global_end_of_storage_log
+                }
+            } else {
+                global_end_of_storage_log
+            }
         } else {
             let pointer = pos as usize;
             let element = chain_of_states[pointer].2 .1;
