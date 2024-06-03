@@ -8,6 +8,13 @@
     .main:
         ; Stack is empty, SP is 0
 
+        ; try overflowing absolute address on stack
+        sub.s 2, r0, r5
+        add 1, r0, stack[r5]
+        add stack[r5], r0, r2
+        sub.s! 1, r2, r0
+        jump.ne @absolute_panic
+
         ; try overflow stack with pop
         context.sp r6
         add 1, r6, r6
@@ -28,6 +35,9 @@
         jump.ne @push_panic
 
         ret.ok r0
+
+    absolute_panic:
+        revert("Overflowing addressing failed")
 
     push_panic:
         revert("Push overflow failed")
