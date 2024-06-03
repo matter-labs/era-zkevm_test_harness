@@ -255,7 +255,7 @@ pub(crate) fn generate_base_layer(
 
     let mut basic_block_circuits = vec![];
     let mut recursion_queues = vec![];
-    let (scheduler_partial_input, _aux_data) = run(
+    let (scheduler_partial_input, _aux_data, _storage) = run(
         Address::zero(),
         test_artifact.entry_point_address,
         test_artifact.entry_point_code,
