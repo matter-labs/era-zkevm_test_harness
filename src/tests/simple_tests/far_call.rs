@@ -54,12 +54,13 @@ fn test_far_call_with_decommit() {
     "#
     .repeat(10000);
 
-    let mut dictionary: TemplateDictionary = Default::default();
-    dictionary.insert("garbage", &garbage);
+    let dummy_address = 65536;
+    let contracts = Vec::from([(dummy_address.to_string(), dummy_address)]);
+    let dictionary: TemplateDictionary = TemplateDictionary::from([("garbage", garbage)]);
 
     run_asm_based_test_template(
         "src/tests/simple_tests/testdata/far_call/fail_on_decommit",
-        &[65536],
+        &contracts,
         Default::default(),
         Some(&dictionary),
     );
