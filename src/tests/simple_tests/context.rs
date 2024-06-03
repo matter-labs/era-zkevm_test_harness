@@ -1,7 +1,7 @@
 use super::*;
 use crate::tests::simple_tests::asm_tests::run_asm_based_test;
 
-// TODO meta isn't checked
+// TODO return value of "meta" opcode isn't checked
 #[test_log::test]
 fn test_meta_opcode() {
     run_asm_based_test(
