@@ -59,6 +59,17 @@
         sub.s! 999, r2, r0
         jump.ne @push_panic
 
+        ; try do push and pop addressing on stack simultaneously
+        add 4, r0, stack-[0]
+        ; increase stack
+        nop stack+=[2]
+        ; pop should return value at SP - offset and move SP to SP - offset
+        ; push should change value at SP and move SP to SP + offset
+        add stack-=[2], r0, stack+=[2]
+        add stack-[2], r0, r3
+        sub.s! 4, r3, r0
+        jump.ne @push_pop_panic
+
         ret.ok r0
 
     absolute_panic:
@@ -72,3 +83,6 @@
 
     pop_panic:
         revert("Pop addressing failed")
+
+    push_pop_panic:
+        revert("Push+pop addressing failed")
