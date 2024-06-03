@@ -6,7 +6,7 @@ use zkevm_assembly::Assembly;
 mod asm_tests;
 mod context;
 mod eip4844;
-mod far_calls;
+mod far_call;
 mod kernel_ops;
 mod limited_ergs;
 mod log;

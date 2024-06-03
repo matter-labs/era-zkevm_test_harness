@@ -38,7 +38,7 @@ pub fn run_asm_based_test_template(
     run_with_options(entry_bytecode, options);
 }
 
-fn compile_asm_template(
+pub fn compile_asm_template(
     data_path: &Path,
     filename: &str,
     dictionary: Option<&TemplateDictionary>,
