@@ -5,7 +5,7 @@ mod tests {
     #[test_log::test]
     fn test_pubdata_and_storage_writes() {
         run_asm_based_test(
-            "src/tests/simple_tests/testdata/storage_writes",
+            "src/tests/simple_tests/testdata/storage/writes",
             &[],
             Options {
                 cycles_per_vm_snapshot: 1,
@@ -17,7 +17,7 @@ mod tests {
     #[test_log::test]
     fn test_storage_reads() {
         run_asm_based_test(
-            "src/tests/simple_tests/testdata/storage_reads",
+            "src/tests/simple_tests/testdata/storage/reads",
             &[],
             Options {
                 // Do only 1 cycle per VM snapshot to really test all the boundary conditions.
@@ -28,9 +28,9 @@ mod tests {
     }
 
     #[test_log::test]
-    fn test_storage_read_after_panic() {
+    fn test_storage_write_after_panic() {
         run_asm_based_test(
-            "src/tests/simple_tests/testdata/storage_read_after_panic",
+            "src/tests/simple_tests/testdata/storage/write_after_panic",
             &[],
             Options {
                 // Do only 1 cycle per VM snapshot to really test all the boundary conditions.
