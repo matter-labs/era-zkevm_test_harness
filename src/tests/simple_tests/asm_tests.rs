@@ -16,10 +16,10 @@ pub fn run_asm_based_test(
     additional_contracts_addresses: &[i32],
     options: Options,
 ) {
-    let mut additional_contracts = Vec::<(String, i32)>::new();
-    for address in additional_contracts_addresses {
-        additional_contracts.push((address.to_string(), *address));
-    }
+    let additional_contracts = additional_contracts_addresses
+        .iter()
+        .map(|address| (address.to_string(), *address))
+        .collect();
 
     run_asm_based_test_template(test_dir, &additional_contracts, options, None);
 }
