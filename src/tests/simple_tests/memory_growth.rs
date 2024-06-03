@@ -1,103 +1,136 @@
 use super::*;
-
-// todo: move calls to another contract, so upper bound is not max value
+use crate::tests::simple_tests::asm_tests::{run_asm_based_test, run_asm_based_test_template};
+use crate::tests::utils::preprocess_asm::TemplateDictionary;
 
 #[test_log::test]
-fn test_memory_growth() {
-    let asm = r#"
-        .text
-        .file	"Test_26"
-        .rodata.cst32
-        .p2align	5
-        .text
-        .globl	__entry
-    __entry:
-    .main:
-        sstore r0, r0
-        event.first r0, r0
-        to_l1.first r0, r0
-        add 64, r0, r2
-        add 8, r0, r3
-        st.1 r2, r3
-        add 128, r0, r2
-        ld.1 r2, r3
-        ld.1.inc r2, r4, r2
-        ret.ok r0
-    "#;
-
-    run_and_try_create_witness_inner(asm, 50);
+fn test_memory_growth_heap_write_kernel() {
+    test_memory_growth_heap_write(65534);
 }
 
 #[test_log::test]
-fn test_ret_memory_growth() {
-    let asm = r#"
-        .text
-        .file	"Test_26"
-        .rodata.cst32
-        .p2align	5
-        .text
-        .globl	__entry
-    __entry:
-    .main:
-        sstore r0, r0
-        event.first r0, r0
-        to_l1.first r0, r0
-        add 128, r0, r1
-        shl.s 96, r1, r1
-        ret r1
-    "#;
+fn test_memory_growth_heap_write_not_kernel() {
+    test_memory_growth_heap_write(800000);
+}
 
-    run_and_try_create_witness_inner(asm, 50);
+fn test_memory_growth_heap_write(heaps_growth_test_address: i32) {
+    let additional_contracts =
+        Vec::<(String, i32)>::from([("heaps_grows_test".to_owned(), heaps_growth_test_address)]);
+
+    let mut dictionary = TemplateDictionary::new();
+    dictionary.insert(
+        "heaps_grows_test_contract_address",
+        heaps_growth_test_address.to_string(),
+    );
+
+    run_asm_based_test_template(
+        "src/tests/simple_tests/testdata/memory_growth/heap_write",
+        &additional_contracts,
+        Options {
+            cycle_limit: 100,
+            ..Default::default()
+        },
+        Some(&dictionary),
+    )
 }
 
 #[test_log::test]
-fn test_ret_memory_growth_out_of_ergs() {
-    let asm = r#"
-        .text
-        .file	"Test_26"
-        .rodata.cst32
-        .p2align	5
-        .text
-        .globl	__entry
-    __entry:
-    .main:
-        sstore r0, r0
-        event.first r0, r0
-        to_l1.first r0, r0
-        add 1, r0, r1
-        shl.s 32, r1, r1
-        sub.s 1, r1, r1
-        shl.s 96, r1, r1
-        ret r1
-    "#;
-
-    run_and_try_create_witness_inner(asm, 50);
+fn test_memory_growth_ret_kernel() {
+    test_memory_growth_ret(65534, 65533);
 }
 
 #[test_log::test]
-fn test_new_uma_store() {
-    let asm = r#"
-        .text
-        .file	"Test_26"
-        .rodata.cst32
-        .p2align	5
-        .text
-        .globl	__entry
-    __entry:
-    .main:
-        sstore r0, r0
-        event.first r0, r0
-        to_l1.first r0, r0
-        add 32, r0, r7
-        add 1, r0, r1
-        st.1 32, r1
-        ld.1 r7, r2
-        sub.s! 1, r2, r0
-        jump.ne @.panic
-        ret r0
-    .panic:
-        ret.panic r0
-    "#;
+fn test_memory_growth_ret_not_kernel() {
+    test_memory_growth_ret(800000, 800001);
+}
 
-    run_and_try_create_witness_inner(asm, 50);
+fn test_memory_growth_ret(heap_test_address: i32, aux_heap_test_address: i32) {
+    let additional_contracts = Vec::<(String, i32)>::from([
+        ("heap_test".to_owned(), heap_test_address),
+        ("aux_heap_test".to_owned(), aux_heap_test_address),
+    ]);
+
+    let mut dictionary = TemplateDictionary::new();
+
+    dictionary.insert("heap_test_contract_address", heap_test_address.to_string());
+    dictionary.insert(
+        "aux_heap_test_contract_address",
+        aux_heap_test_address.to_string(),
+    );
+
+    run_asm_based_test_template(
+        "src/tests/simple_tests/testdata/memory_growth/ret",
+        &additional_contracts,
+        Options {
+            cycle_limit: 100,
+            ..Default::default()
+        },
+        Some(&dictionary),
+    )
+}
+
+#[test_log::test]
+fn test_memory_growth_far_call_kernel() {
+    test_memory_growth_far_call(65534);
+}
+
+#[test_log::test]
+fn test_memory_growth_far_call_not_kernel() {
+    test_memory_growth_far_call(800000);
+}
+
+fn test_memory_growth_far_call(far_call_test_address: i32) {
+    let dummy_address = 900000;
+    let additional_contracts = Vec::<(String, i32)>::from([
+        ("far_call_test".to_owned(), far_call_test_address),
+        ("dummy".to_owned(), dummy_address),
+    ]);
+
+    let mut dictionary = TemplateDictionary::new();
+    dictionary.insert("far_call_test_address", far_call_test_address.to_string());
+    dictionary.insert("dummy_address", dummy_address.to_string());
+
+    run_asm_based_test_template(
+        "src/tests/simple_tests/testdata/memory_growth/far_call",
+        &additional_contracts,
+        Options {
+            cycle_limit: 100,
+            ..Default::default()
+        },
+        Some(&dictionary),
+    )
+}
+
+#[test_log::test]
+fn test_memory_growth_ret_out_of_ergs_kernel() {
+    test_memory_growth_ret_out_of_ergs(65534, 65533);
+}
+
+#[test_log::test]
+fn test_memory_growth_ret_out_of_ergs_not_kernel() {
+    test_memory_growth_ret_out_of_ergs(800000, 800001);
+}
+
+fn test_memory_growth_ret_out_of_ergs(heap_test_address: i32, aux_heap_test_address: i32) {
+    let additional_contracts = Vec::<(String, i32)>::from([
+        ("heap_test".to_owned(), heap_test_address),
+        ("aux_heap_test".to_owned(), aux_heap_test_address),
+    ]);
+
+    let mut dictionary = TemplateDictionary::new();
+
+    dictionary.insert("heap_test_contract_address", heap_test_address.to_string());
+    dictionary.insert(
+        "aux_heap_test_contract_address",
+        aux_heap_test_address.to_string(),
+    );
+
+    run_asm_based_test_template(
+        "src/tests/simple_tests/testdata/memory_growth/ret_out_of_ergs",
+        &additional_contracts,
+        Options {
+            cycle_limit: 100,
+            ..Default::default()
+        },
+        Some(&dictionary),
+    )
 }

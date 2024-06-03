@@ -222,3 +222,30 @@ fn test_ptr_to_global() {
 
     run_and_try_create_witness_inner(&asm, 50);
 }
+
+#[test_log::test]
+fn test_ptr_erasure_not_kernel() {
+    run_asm_based_test(
+        "src/tests/simple_tests/testdata/ptr/ptr_erasure_not_kernel",
+        &[65536, 65534],
+        Default::default(),
+    )
+}
+
+#[test_log::test]
+fn test_ptr_erasure_kernel() {
+    run_asm_based_test(
+        "src/tests/simple_tests/testdata/ptr/ptr_erasure_kernel",
+        &[65533, 65534],
+        Default::default(),
+    )
+}
+
+#[test_log::test]
+fn test_ptr_add_src0_erasure() {
+    run_asm_based_test(
+        "src/tests/simple_tests/testdata/ptr/ptr_add_src0_erasure",
+        &[65537],
+        Default::default(),
+    )
+}

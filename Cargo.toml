@@ -47,6 +47,8 @@ regex = { version = "1.10.4", features = ["pattern"] }
 
 [dev-dependencies]
 rand = "0.4"
+indicatif = "0.16"
+
 
 [profile.release]
 debug = false
@@ -57,3 +59,6 @@ debug = false
 
 [features]
 verbose_circuits = ["circuit_definitions/verbose_circuits", "circuit_sequencer_api/verbose_circuits"]
+log_tracing = ["circuit_definitions/log_tracing"]
+
+default = ["log_tracing"]
