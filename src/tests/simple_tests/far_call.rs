@@ -51,7 +51,8 @@ fn test_far_call_with_decommit() {
 
     let garbage = r#"
         nop
-    "#.repeat(10000);
+    "#
+    .repeat(10000);
 
     let mut dictionary: TemplateDictionary = Default::default();
     dictionary.insert("garbage", &garbage);
@@ -60,6 +61,6 @@ fn test_far_call_with_decommit() {
         "src/tests/simple_tests/testdata/far_call/fail_on_decommit",
         &[65536],
         Default::default(),
-        Some(&dictionary)
+        Some(&dictionary),
     );
 }
