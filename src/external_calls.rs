@@ -57,7 +57,7 @@ pub fn run<
 ) -> (
     SchedulerCircuitInstanceWitness<MainField, CircuitGoldilocksPoseidon2Sponge, GoldilocksExt2>,
     BlockAuxilaryOutputWitness<MainField>,
-    S
+    S,
 ) {
     let mut out_of_circuit_tracer = GenericNoopTracer::<_>::new();
     match run_vms(
@@ -80,7 +80,9 @@ pub fn run<
         queue_simulator_callback,
         &mut out_of_circuit_tracer,
     ) {
-        Ok((scheduler_circuit_witness, aux_data, storage)) => (scheduler_circuit_witness, aux_data, storage),
+        Ok((scheduler_circuit_witness, aux_data, storage)) => {
+            (scheduler_circuit_witness, aux_data, storage)
+        }
         Err(err) => {
             let error_text = match err {
                 RunVmError::InvalidInput(msg) => {

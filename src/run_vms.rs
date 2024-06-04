@@ -51,7 +51,7 @@ pub enum RunVmError {
 pub type RunVMsResult<S> = (
     SchedulerCircuitInstanceWitness<MainField, CircuitGoldilocksPoseidon2Sponge, GoldilocksExt2>,
     BlockAuxilaryOutputWitness<MainField>,
-    S
+    S,
 );
 
 /// Executes a given set of instructions, and returns things necessary to do the proving:
@@ -744,5 +744,9 @@ pub fn run_vms<
         (scheduler_circuit_witness, aux_data)
     };
 
-    Ok((scheduler_circuit_witness, aux_data, out_of_circuit_vm.storage))
+    Ok((
+        scheduler_circuit_witness,
+        aux_data,
+        out_of_circuit_vm.storage,
+    ))
 }

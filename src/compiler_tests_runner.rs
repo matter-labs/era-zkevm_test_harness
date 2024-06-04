@@ -1,13 +1,13 @@
-use std::collections::HashMap;
-use crate::witness::tree::{BinarySparseStorageTree, ZKSyncTestingTree, ZkSyncStorageLeaf};
-use crate::external_calls::run;
-use crate::toolset::GeometryConfig;
-use crate::zk_evm::zkevm_opcode_defs::system_params::BOOTLOADER_FORMAL_ADDRESS;
-use crate::zk_evm::aux_structures::LogQuery;
-use crate::zk_evm::testing::storage::InMemoryStorage;
 use crate::ethereum_types::{Address, U256};
+use crate::external_calls::run;
 use crate::tests::base_test_circuit;
 use crate::tests::complex_tests::get_testing_geometry_config;
+use crate::toolset::GeometryConfig;
+use crate::witness::tree::{BinarySparseStorageTree, ZKSyncTestingTree, ZkSyncStorageLeaf};
+use crate::zk_evm::aux_structures::LogQuery;
+use crate::zk_evm::testing::storage::InMemoryStorage;
+use crate::zk_evm::zkevm_opcode_defs::system_params::BOOTLOADER_FORMAL_ADDRESS;
+use std::collections::HashMap;
 
 pub fn compiler_tests_run(
     entry_point_bytecode: Vec<[u8; 32]>,
@@ -23,8 +23,8 @@ pub fn compiler_tests_run(
     let mut storage_impl = InMemoryStorage::new();
     let mut tree = ZKSyncTestingTree::empty();
 
-    for(address, inner) in storage.iter() {
-        for(key, value) in inner.iter() {
+    for (address, inner) in storage.iter() {
+        for (key, value) in inner.iter() {
             let index = LogQuery::derive_final_address_for_params(&address, &key);
 
             use crate::witness::tree::EnumeratedBinaryLeaf;
