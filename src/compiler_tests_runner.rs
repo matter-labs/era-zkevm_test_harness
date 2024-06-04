@@ -7,6 +7,7 @@ use crate::zk_evm::aux_structures::LogQuery;
 use crate::zk_evm::testing::storage::InMemoryStorage;
 use crate::ethereum_types::{Address, U256};
 use crate::tests::base_test_circuit;
+use crate::tests::complex_tests::get_testing_geometry_config;
 
 pub fn compiler_tests_run(
     entry_point_bytecode: Vec<[u8; 32]>,
@@ -17,24 +18,7 @@ pub fn compiler_tests_run(
     initial_heap_content: Vec<u8>,
     cycle_limit: usize,
 ) -> HashMap<Address, HashMap<U256, U256>> {
-    let geometry = GeometryConfig {
-        // cycles_per_vm_snapshot: DEFAULT_CYCLES_PER_VM_SNAPSHOT,
-        cycles_per_vm_snapshot: 5,
-        cycles_code_decommitter_sorter: 16,
-        cycles_per_log_demuxer: 8,
-        cycles_per_storage_sorter: 4,
-        cycles_per_events_or_l1_messages_sorter: 2,
-        cycles_per_ram_permutation: 4,
-        cycles_per_code_decommitter: 4,
-        cycles_per_storage_application: 2,
-        cycles_per_keccak256_circuit: 1,
-        cycles_per_sha256_circuit: 1,
-        cycles_per_ecrecover_circuit: 1,
-        cycles_per_secp256r1_verify_circuit: 1,
-        cycles_per_transient_storage_sorter: 4,
-
-        limit_for_l1_messages_pudata_hasher: 8,
-    };
+    let geometry = get_testing_geometry_config();
 
     let mut storage_impl = InMemoryStorage::new();
     let mut tree = ZKSyncTestingTree::empty();

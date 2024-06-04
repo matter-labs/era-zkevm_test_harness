@@ -131,7 +131,7 @@ use crate::witness::full_block_artifact::*;
 
 /// Lover memory requirements
 /// Used only for base layer debugging
-fn get_testing_geometry_config() -> GeometryConfig {
+pub fn get_testing_geometry_config() -> GeometryConfig {
     GeometryConfig {
         // cycles_per_vm_snapshot: 1,
         cycles_per_vm_snapshot: 1024,
