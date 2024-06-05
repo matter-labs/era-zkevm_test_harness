@@ -55,6 +55,11 @@ mod tests {
     }
 
     #[test_log::test]
+    fn test_log_decommit_ok_twice() {
+        test_snapshot_every_cycle("decommit_ok_twice", &[800000]);
+    }
+
+    #[test_log::test]
     fn test_log_decommit_ok_with_panic() {
         test_snapshot_every_cycle("decommit_ok_with_panic", &[800000]);
     }
