@@ -23,7 +23,7 @@ mod tests {
 
     #[test_log::test]
     /// Tests the case where we run out of gas during the precompile execution.
-    fn test_precompile_out_of_gas() {
+    fn test_log_precompile_out_of_gas() {
         run_asm_based_test(
             "src/tests/simple_tests/testdata/log/precompile_out_of_gas",
             &[],
@@ -36,7 +36,7 @@ mod tests {
     }
 
     #[test_log::test]
-    fn test_precompile_invalid_address() {
+    fn test_log_precompile_invalid_address() {
         run_asm_based_test(
             "src/tests/simple_tests/testdata/log/precompile_invalid_address",
             &[65399],
