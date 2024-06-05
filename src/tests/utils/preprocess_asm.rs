@@ -24,6 +24,8 @@ pub fn asm_with_default_config(asm: &str) -> String {
 enum Directive {
     Print(PrintType),
     Revert,
+    StorageRefundCold,
+    StorageRefundWarm,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -37,6 +39,8 @@ pub const EXCEPTION_PREFIX: &str = "E:";
 pub const PRINT_PREFIX: &str = "L:";
 pub const PRINT_REG_PREFIX: &str = "R:";
 pub const PRINT_PTR_PREFIX: &str = "P:";
+pub const STORAGE_REFUND_COLD_PREFIX: &str = "C:";
+pub const STORAGE_REFUND_WARM_PREFIX: &str = "W:";
 
 pub type TemplateDictionary<'a> = HashMap<&'a str, String>;
 
@@ -53,6 +57,8 @@ pub fn preprocess_asm(
         Directive::Print(PrintType::Register),
         Directive::Print(PrintType::Pointer),
         Directive::Revert,
+        Directive::StorageRefundCold,
+        Directive::StorageRefundWarm,
     ]
     .iter()
     .fold(asm, |acc, x| preprocess_directive(acc, *x));
@@ -181,6 +187,30 @@ fn replace_directives(asm: String, directive: Directive) -> (String, Vec<String>
                 r#")"#,
             )
         }
+        Directive::StorageRefundCold => {
+            // regex: set_storage_cold()
+            let set_storage_cold_regex =
+                Regex::new(r#"set_storage_cold\(\)"#).expect("Invalid regex");
+            (
+                STORAGE_REFUND_COLD_PREFIX,
+                set_storage_cold_regex,
+                "STORAGE_REFUND_COLD",
+                r#"set_storage_cold()"#,
+                r#""#,
+            )
+        }
+        Directive::StorageRefundWarm => {
+            // regex: set_storage_warm(u32)
+            let set_storage_warm_regex =
+                Regex::new(r#"set_storage_warm\((\d*)\)"#).expect("Invalid regex");
+            (
+                STORAGE_REFUND_WARM_PREFIX,
+                set_storage_warm_regex,
+                "STORAGE_REFUND_WARM",
+                r#"set_storage_warm("#,
+                r#")"#,
+            )
+        }
     };
 
     let mut args_for_commands: Vec<String> = Vec::new();
@@ -206,6 +236,8 @@ fn replace_directives(asm: String, directive: Directive) -> (String, Vec<String>
                     "".to_owned()
                 }
             }
+            Directive::StorageRefundCold => "".to_owned(),
+            Directive::StorageRefundWarm => matched_args[0].to_string(),
             _ => check_arg_for_command(matched_args[0], command_prefix).to_owned(),
         });
 
@@ -236,6 +268,13 @@ fn replace_directives(asm: String, directive: Directive) -> (String, Vec<String>
                     format!("{line}\n {opcode} {src0}, r0, r0")
                 }
             }
+            Directive::StorageRefundCold => {
+                format!("{line}\n add r0, r0, r0")
+            }
+            Directive::StorageRefundWarm => {
+                let src0 = matched_args[0];
+                format!("{line}\n add {src0}, r0, r0")
+            }
         };
         result = result.replace(matched, &line);
     }
@@ -255,6 +294,8 @@ fn add_data_section_for_directive(asm: String, directive: Directive, args: Vec<S
         Directive::Print(PrintType::Text) => (PRINT_PREFIX, "PRINT"),
         Directive::Print(PrintType::Register) => (PRINT_REG_PREFIX, "PRINT_REG"),
         Directive::Print(PrintType::Pointer) => (PRINT_PTR_PREFIX, "PRINT_PTR"),
+        Directive::StorageRefundCold => (STORAGE_REFUND_COLD_PREFIX, "STORAGE_REFUND_COLD"),
+        Directive::StorageRefundWarm => (STORAGE_REFUND_WARM_PREFIX, "STORAGE_REFUND_WARM"),
     };
 
     let data_section: String = args

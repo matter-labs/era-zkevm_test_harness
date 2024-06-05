@@ -26,4 +26,16 @@ mod tests {
             },
         )
     }
+
+    #[test_log::test]
+    fn test_pubdata_refunds() {
+        run_asm_based_test(
+            "src/tests/simple_tests/testdata/pubdata_refunds",
+            &[],
+            Options {
+                cycles_per_vm_snapshot: 1,
+                ..Default::default()
+            },
+        );
+    }
 }
