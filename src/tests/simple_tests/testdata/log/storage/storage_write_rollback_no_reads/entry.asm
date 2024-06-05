@@ -6,14 +6,19 @@
     .globl	__entry
 __entry:
 .main:
-    near_call r0, @inner, @handler
-    context.ergs_left r15
-    ret.ok r0
+    near_call r0, @inner, @expected_panic
+
+    revert("Near call not panicked")
+
 inner:
     add 10000, r0, r1
     add 1000, r0, r10
+
+    ; write 1000 to storage slot 10000
     sstore r1, r10
-    sstore r1, r0
-    ret.ok r0
-handler:
+    
+    ret.panic r0
+
+expected_panic:
+    context.ergs_left r15
     ret.ok r0

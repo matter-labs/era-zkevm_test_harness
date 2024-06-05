@@ -9,12 +9,10 @@
         .globl	__entry
     __entry:
     .main:
-
         add 10000, r0, r4
-
         near_call r4, @inner, @handler
-        ; We should never get here - as the near_call should panic due to out of gas.
-        ret.panic r0
+
+        revert("Near call not reverted")
         
     inner:
         add @CPI0_0[0], r0, r1
@@ -28,7 +26,4 @@
     handler:
         ; we expect the near_call to panic
         ret.ok r0
-
-    .panic:
-        ret.panic r0
     
