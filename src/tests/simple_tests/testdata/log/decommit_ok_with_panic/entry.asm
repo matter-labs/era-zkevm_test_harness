@@ -3,7 +3,7 @@
         .rodata.cst32
         .p2align	5
     CPI0_0:
-        ; this is the hash of the contract in 80000.asm
+        ; this is the hash of the contract in 800000.asm
 	    .cell 452312938437537823148903869859771978505772238111866864847149311043017845250
         .text
         .globl	__entry
