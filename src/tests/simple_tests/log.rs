@@ -1,46 +1,11 @@
-use super::*;
-
-#[test_log::test]
-fn test_out_of_ergs_l1_message() {
-    let asm = r#"
-        .text
-        .file	"Test_26"
-        .rodata.cst32
-        .p2align	5
-        .text
-        .globl	__entry
-    __entry:
-    .main:
-        add 10000, r0, r1
-        add 1000, r0, r10
-        sstore r1, r10
-        event r1, r10
-        to_l1 r1, r10
-        context.set_ergs_per_pubdata r10
-        near_call r1, @inner, @handler
-        context.ergs_left r15
-        ret.ok r0
-    inner:
-        to_l1 r0, r1
-        ret.ok r0
-    handler:
-        ret.ok r0
-    "#;
-
-    run_and_try_create_witness_inner(asm, 50);
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::tests::simple_tests::asm_tests::run_asm_based_test;
-    use crate::tests::simple_tests::run_manually::Options;
+    use crate::tests::simple_tests::{asm_tests::run_asm_based_test, Options};
 
-    #[test_log::test]
-    /// Tests the case where we run out of gas during the precompile execution.
-    fn test_precompile_out_of_gas() {
+    fn test_snapshot_every_cycle(dir: &str, additional_contracts: &[i32]) {
         run_asm_based_test(
-            "src/tests/simple_tests/testdata/log_precompile",
-            &[],
+            &format!("src/tests/simple_tests/testdata/log/{}", dir),
+            additional_contracts,
             Options {
                 // Do only 1 cycle per VM snapshot to really test all the boundary conditions.
                 cycles_per_vm_snapshot: 1,
@@ -48,106 +13,81 @@ mod tests {
             },
         )
     }
-    fn test_common(dir: &str) {
+
+    #[test_log::test]
+    /// Tests the case where we do not have enough gas to send a message to l1
+    fn test_log_l1_message_out_of_gas() {
         run_asm_based_test(
-            &format!("src/tests/simple_tests/testdata/{}", dir),
-            &[800000],
-            Options {
-                cycles_per_vm_snapshot: 1,
-                ..Default::default()
-            },
+            "src/tests/simple_tests/testdata/log/l1_message_out_of_gas",
+            &[],
+            Default::default(),
         )
     }
 
     #[test_log::test]
-    fn test_decommit_invalid() {
-        test_common("decommit_invalid")
+    fn test_log_l1_message_has_zero_pubdata_cost() {
+        run_asm_based_test(
+            "src/tests/simple_tests/testdata/log/l1_message_has_zero_pubdata_cost",
+            &[],
+            Default::default(),
+        )
     }
 
     #[test_log::test]
-    fn test_decommit_ok() {
-        test_common("decommit_ok");
-        test_common("decommit_ok_with_panic");
+    /// Tests the case where we run out of gas during the precompile execution.
+    fn test_log_precompile_out_of_gas() {
+        test_snapshot_every_cycle("precompile_out_of_gas", &[]);
     }
-}
 
-#[test_log::test]
-fn test_write_same_value() {
-    let asm = r#"
-        .text
-        .file	"Test_26"
-        .rodata.cst32
-        .p2align	5
-        .text
-        .globl	__entry
-    __entry:
-    .main:
-        near_call r0, @inner, @handler
-        context.ergs_left r15
-        ret.ok r0
-    inner:
-        add 10000, r0, r1
-        add 1000, r0, r10
-        sstore r1, r10
-        sstore r1, r0
-        ret.ok r0
-    handler:
-        ret.ok r0
-    "#;
+    #[test_log::test]
+    fn test_log_precompile_invalid_address() {
+        test_snapshot_every_cycle("precompile_invalid_address", &[65399]);
+    }
 
-    run_and_try_create_witness_inner(asm, 50);
-}
+    #[test_log::test]
+    fn test_log_decommit_invalid() {
+        test_snapshot_every_cycle("decommit_invalid", &[800000])
+    }
 
-#[test_log::test]
-fn test_rollback_to_same_value_no_reads() {
-    let asm = r#"
-        .text
-        .file	"Test_26"
-        .rodata.cst32
-        .p2align	5
-        .text
-        .globl	__entry
-    __entry:
-    .main:
-        near_call r0, @inner, @handler
-        context.ergs_left r15
-        ret.ok r0
-    inner:
-        add 10000, r0, r1
-        add 1000, r0, r10
-        sstore r1, r10
-        ret.panic r0
-    handler:
-        ret.ok r0
-    "#;
+    #[test_log::test]
+    fn test_log_decommit_ok() {
+        test_snapshot_every_cycle("decommit_ok", &[800000]);
+    }
 
-    run_and_try_create_witness_inner(asm, 50);
-}
+    #[test_log::test]
+    fn test_log_decommit_ok_twice() {
+        test_snapshot_every_cycle("decommit_ok_twice", &[800000]);
+    }
 
-#[test_log::test]
-fn test_rollback_to_same_value_with_reads() {
-    let asm = r#"
-        .text
-        .file	"Test_26"
-        .rodata.cst32
-        .p2align	5
-        .text
-        .globl	__entry
-    __entry:
-    .main:
-        near_call r1, @inner, @handler
-        context.ergs_left r15
-        ret.ok r0
-    inner:
-        add 10000, r0, r1
-        add 1000, r0, r10
-        sstore r1, r10
-        ret.panic r0
-    handler:
-    add 10000, r0, r1
-        sload r1, r2
-        ret.ok r0
-    "#;
+    #[test_log::test]
+    fn test_log_decommit_ok_with_panic() {
+        test_snapshot_every_cycle("decommit_ok_with_panic", &[800000]);
+    }
 
-    run_and_try_create_witness_inner(asm, 50);
+    #[test_log::test]
+    fn test_log_storage_clear_slot() {
+        run_asm_based_test(
+            "src/tests/simple_tests/testdata/log/storage/storage_clear_slot",
+            &[],
+            Default::default(),
+        )
+    }
+
+    #[test_log::test]
+    fn test_log_storage_write_rollback_no_reads() {
+        run_asm_based_test(
+            "src/tests/simple_tests/testdata/log/storage/storage_write_rollback_no_reads",
+            &[],
+            Default::default(),
+        )
+    }
+
+    #[test_log::test]
+    fn test_log_storage_write_rollback_reads() {
+        run_asm_based_test(
+            "src/tests/simple_tests/testdata/log/storage/storage_write_rollback_reads",
+            &[],
+            Default::default(),
+        )
+    }
 }

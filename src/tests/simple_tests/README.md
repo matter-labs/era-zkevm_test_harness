@@ -8,6 +8,8 @@ In tests in `.asm` files it is possible to use several additional directives (no
 - `printPtr("<TEXT>", <ptr>)` - print text `<TEXT>` and value of `<ptr>` (fat pointer) in console. Max length of text is 30 symbols
 - `revert("<TEXT>")` - panic with message `<TEXT>`. Max length of text is 30 symbols
 - `<ADDRESS.asm>` - will be replaced with the hash of `ADDRESS.asm` additional contract
+- `set_storage_cold()` - sets the storage slot refund to be cold
+- `set_storage_warm(<u32>)` - sets the storage slot refund to be warm with a value of `<u32>`
 
 ## Templating
 
