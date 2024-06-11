@@ -23,14 +23,16 @@ pub enum CircuitWrapper {
     Recursive(ZkSyncRecursiveLayerCircuit),
 }
 
-/// Executes the circuit based on the witness data from the given buffer.
-pub fn debug_basic_circuit(buffer: &[u8]) {
+pub fn debug_circuit(buffer: &[u8]) {
     let circuit: CircuitWrapper = bincode::deserialize(&buffer).unwrap();
+    match circuit {
+        CircuitWrapper::Base(basic_circuit) => debug_basic_circuit(basic_circuit),
+        CircuitWrapper::Recursive(recursive_circuit) => debug_recursive_circuit(recursive_circuit),
+    }
+}
 
-    let CircuitWrapper::Base(mut circuit) = circuit else {
-        panic!("invalid circuit type")
-    };
-
+fn debug_basic_circuit(circuit: ZkSyncBaseLayerCircuit) {
+    let mut circuit = circuit.clone();
     match &mut circuit {
         ZkSyncBaseLayerCircuit::MainVM(inner) => {
             let witness = inner.clone_witness().unwrap();
@@ -108,10 +110,8 @@ pub fn debug_basic_circuit(buffer: &[u8]) {
     base_test_circuit(circuit);
 }
 
-pub fn debug_recursive_circuit(buffer: &[u8]) {
-    let mut circuit: ZkSyncRecursiveLayerCircuit = bincode::deserialize(&buffer).unwrap();
-
-    match &mut circuit {
+fn debug_recursive_circuit(circuit: ZkSyncRecursiveLayerCircuit) {
+    match &circuit {
         ZkSyncRecursiveLayerCircuit::SchedulerCircuit(_) => {
             // dbg!(&inner.witness.leaf_layer_parameters);
             // for el in inner.witness.proof_witnesses.iter() {
@@ -140,6 +140,24 @@ pub fn debug_recursive_circuit(buffer: &[u8]) {
                 assert!(valid);
             }
         }
+        ZkSyncRecursiveLayerCircuit::RecursionTipCircuit(inner) => {
+            let vk = inner.witness.vk_witness.clone();
+            println!(
+                "Got {:?} proofs to verify",
+                inner.witness.proof_witnesses.len()
+            );
+            for (i, el) in inner.witness.proof_witnesses.iter().enumerate() {
+                println!("Proof {:?} Start", i);
+                let valid = verify_recursion_layer_proof_for_type::<NoPow>(
+                    ZkSyncRecursionLayerStorageType::NodeLayerCircuit,
+                    el,
+                    &vk,
+                );
+                assert!(valid);
+                println!("Proof {:?} OK", i);
+            }
+        }
+
         _ => {
             panic!("Other recursion circuit types not supported yet");
         }

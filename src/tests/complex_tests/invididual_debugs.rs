@@ -10,7 +10,7 @@ mod test {
     fn read_and_run() {
         let circuit_file_name = "prover_jobs_23_05.bin";
         let buffer = std::fs::read(circuit_file_name).unwrap();
-        debug::debug_basic_circuit(&buffer);
+        debug::debug_circuit(&buffer);
     }
 
     #[ignore = "For manual running only"]
@@ -18,7 +18,7 @@ mod test {
     fn test_and_run_recursive() {
         let circuit_file_name = "prover_jobs_fri_38142_0_3_NodeAggregation_1_raw.bin";
         let buffer = std::fs::read(circuit_file_name).unwrap();
-        debug::debug_recursive_circuit(&buffer);
+        debug::debug_circuit(&buffer);
     }
 
     #[derive(serde::Serialize, serde::Deserialize)]
