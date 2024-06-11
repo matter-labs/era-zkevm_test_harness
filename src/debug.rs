@@ -147,7 +147,7 @@ fn debug_recursive_circuit(circuit: ZkSyncRecursiveLayerCircuit) {
                 inner.witness.proof_witnesses.len()
             );
             for (i, el) in inner.witness.proof_witnesses.iter().enumerate() {
-                println!("Proof {:?} Start", i);
+                println!("Proof {:?} Starting verification", i);
                 let valid = verify_recursion_layer_proof_for_type::<NoPow>(
                     ZkSyncRecursionLayerStorageType::NodeLayerCircuit,
                     el,
