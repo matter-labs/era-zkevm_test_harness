@@ -48,9 +48,10 @@ pub enum RunVmError {
     OutOfCircuitExecutionError(String),
 }
 
-pub type RunVMsResult = (
+pub type RunVMsResult<S> = (
     SchedulerCircuitInstanceWitness<MainField, CircuitGoldilocksPoseidon2Sponge, GoldilocksExt2>,
     BlockAuxilaryOutputWitness<MainField>,
+    S,
 );
 
 /// Executes a given set of instructions, and returns things necessary to do the proving:
@@ -87,7 +88,7 @@ pub fn run_vms<
     circuit_callback: CB,
     queue_simulator_callback: QSCB,
     out_of_circuit_tracer: &mut impl Tracer<SupportedMemory = SimpleMemory>,
-) -> Result<RunVMsResult, RunVmError> {
+) -> Result<RunVMsResult<S>, RunVmError> {
     let round_function = ZkSyncDefaultRoundFunction::default();
 
     if zk_porter_is_available {
@@ -743,5 +744,9 @@ pub fn run_vms<
         (scheduler_circuit_witness, aux_data)
     };
 
-    Ok((scheduler_circuit_witness, aux_data))
+    Ok((
+        scheduler_circuit_witness,
+        aux_data,
+        out_of_circuit_vm.storage,
+    ))
 }

@@ -58,3 +58,5 @@ pub mod proof_wrapper_utils;
 pub use tests::complex_tests::utils::empty_node_proof;
 
 mod run_vms;
+
+pub mod compiler_tests_runner;
