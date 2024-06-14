@@ -279,7 +279,7 @@ pub fn create_artifacts_from_tracer<
     let mut sponges_data: HashMap<u32, LogAccessSpongesInfo<GoldilocksField>> = HashMap::new();
 
     let mut global_beginnings_of_frames: BTreeMap<usize, u32> = BTreeMap::new();
-    
+
     // TODO deadcode?
     let mut actions_in_each_frame: BTreeMap<usize, Vec<(u32, QueryMarker, usize)>> =
         BTreeMap::new();
@@ -537,7 +537,7 @@ pub fn create_artifacts_from_tracer<
 
     let global_end_of_storage_log = chain_of_states
         .last()
-        .map(|el| el.2.1)
+        .map(|el| el.2 .1)
         .unwrap_or([GoldilocksField::ZERO; QUEUE_STATE_WIDTH]);
 
     // we want to save rollback tails for every frame
@@ -551,8 +551,7 @@ pub fn create_artifacts_from_tracer<
         let pointer = log_position_mapping[&rollback_tail_marker];
         let tail = if pointer != -1 {
             // take tail "after" item at pointer
-            chain_of_states[pointer as usize].2.1
-
+            chain_of_states[pointer as usize].2 .1
         } else {
             // We do not have any logs in history before the rollback of this frame
             [GoldilocksField::ZERO; QUEUE_STATE_WIDTH]
