@@ -7,13 +7,20 @@
 __entry:
 .main:  
         add 1000, r0, r3
-        near_call r3, @test_invalid, @expected_panic
+        near_call r3, @test_panic, @expected_panic
         revert("Near call not panicked")
 
-test_invalid:
-        ret.panic r0
+test_panic:
+        add 1000, r0, r3
+        near_call r3, @test_panic2, @expected_panic2
 
 expected_panic:
         ; check that we can access storage after panic
         log.swrite r0, r0, r0
         ret.ok r0
+
+test_panic2:
+        ret.ok r0
+
+expected_panic2:
+        ret.panic r0
