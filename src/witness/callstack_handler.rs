@@ -124,7 +124,7 @@ pub struct CallstackWithAuxData {
     pub full_history: Vec<CallstackActionHistoryEntry>,
     pub log_queue_access_snapshots: Vec<(u32, RenumeratedQueryIndex)>,
     pub log_access_history: Vec<(u32, QueryMarker)>,
-    pub child_into_parent: HashMap<usize, usize>,
+    pub child_into_parent: HashMap<usize, usize>, // ! TODO deadcode
     pub flat_new_frames_history: Vec<(u32, CallStackEntry)>,
 }
 

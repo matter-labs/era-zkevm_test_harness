@@ -245,6 +245,7 @@ pub fn create_artifacts_from_tracer<
     let forward = callstack_with_aux_data.current_entry.forward_queue.clone();
     let rollbacks = callstack_with_aux_data.current_entry.rollback_queue.clone();
 
+    // TODO deadcode?
     let mut query_id_into_cycle_index = BTreeMap::new();
 
     for (cycle, marker) in callstack_with_aux_data.log_access_history.iter() {
@@ -266,6 +267,8 @@ pub fn create_artifacts_from_tracer<
     let mut original_log_queue_states = vec![];
     let mut chain_of_states = vec![];
     let mut original_log_queue_simulator = None;
+
+    // TODO deadcode?
     let mut marker_into_queue_position_renumeration_index: HashMap<QueryMarker, usize> =
         HashMap::new();
 
@@ -276,6 +279,8 @@ pub fn create_artifacts_from_tracer<
     let mut sponges_data: HashMap<u32, LogAccessSpongesInfo<GoldilocksField>> = HashMap::new();
 
     let mut global_beginnings_of_frames: BTreeMap<usize, u32> = BTreeMap::new();
+    
+    // TODO deadcode?
     let mut actions_in_each_frame: BTreeMap<usize, Vec<(u32, QueryMarker, usize)>> =
         BTreeMap::new();
 
@@ -532,60 +537,25 @@ pub fn create_artifacts_from_tracer<
 
     let global_end_of_storage_log = chain_of_states
         .last()
-        .map(|el| el.2 .1)
+        .map(|el| el.2.1)
         .unwrap_or([GoldilocksField::ZERO; QUEUE_STATE_WIDTH]);
-    let mut frame_rollback_tails = BTreeMap::new();
 
+    // we want to save rollback tails for every frame
+    let mut frame_rollback_tails = BTreeMap::new();
     let mut rollback_queue_initial_tails_for_new_frames = vec![];
     let max_frame_idx = callstack_with_aux_data.monotonic_frame_counter;
-
     for frame_index in 0..max_frame_idx {
-        if frame_index == 0 {
-            let tail = global_end_of_storage_log;
-            frame_rollback_tails.insert(frame_index, tail);
-            let frame_beginning_cycle = global_beginnings_of_frames[&frame_index];
-            rollback_queue_initial_tails_for_new_frames.push((frame_beginning_cycle, tail));
-            continue;
-        }
-
         let rollback_tail_marker = ExtendedLogQuery::FrameRollbackTailMarker(frame_index);
-        // wherever we have this marker we should look at the tail of the item right before it
-        let pos = log_position_mapping[&rollback_tail_marker];
-        let tail = if pos == -1 {
-            if frame_index > 1 {
-                // empty frame
-                let pos_forward_head =
-                    log_position_mapping[&ExtendedLogQuery::FrameForwardHeadMarker(frame_index)];
-                let pos_forward_tail =
-                    log_position_mapping[&ExtendedLogQuery::FrameForwardTailMarker(frame_index)];
-                let pos_rollback_head =
-                    log_position_mapping[&ExtendedLogQuery::FrameRollbackHeadMarker(frame_index)];
+        // log_position_mapping should contain a pointer to the last state change in the chain_of_states before the rollback marker
+        // pointer is -1 if there were no such changes
+        let pointer = log_position_mapping[&rollback_tail_marker];
+        let tail = if pointer != -1 {
+            // take tail "after" item at pointer
+            chain_of_states[pointer as usize].2.1
 
-                if pos_forward_head == -1 && pos_forward_tail == -1 && pos_rollback_head == -1 {
-                    // absolutely empty frame, most likely leaf one,
-                    // but we can not just use global end,
-                    // instead we should use previous frame's data
-                    let pos_previous_frame_forward_tail = log_position_mapping
-                        [&ExtendedLogQuery::FrameForwardTailMarker(frame_index - 1)];
-                    if pos_previous_frame_forward_tail != -1 {
-                        let pointer = pos_previous_frame_forward_tail as usize;
-                        let element = chain_of_states[pointer].2 .0;
-
-                        element
-                    } else {
-                        global_end_of_storage_log
-                    }
-                } else {
-                    global_end_of_storage_log
-                }
-            } else {
-                global_end_of_storage_log
-            }
         } else {
-            let pointer = pos as usize;
-            let element = chain_of_states[pointer].2 .1;
-
-            element
+            // We do not have any logs in history before the rollback of this frame
+            [GoldilocksField::ZERO; QUEUE_STATE_WIDTH]
         };
 
         frame_rollback_tails.insert(frame_index, tail);
