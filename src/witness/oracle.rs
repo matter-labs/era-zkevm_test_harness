@@ -496,7 +496,7 @@ struct CallstackSimulationResult<F: SmallField> {
     callstack_values_witnesses: Vec<(u32, (ExtendedCallstackEntry<F>, CallstackSimulatorState<F>))>,
     rollback_queue_head_segments: Vec<(u32, [F; QUEUE_STATE_WIDTH])>,
     history_of_storage_log_states: BTreeMap<u32, StorageLogDetailedState<F>>,
-    global_end_of_storage_log: [F; QUEUE_STATE_WIDTH]
+    global_end_of_storage_log: [F; QUEUE_STATE_WIDTH],
 }
 
 fn callstack_simulation<'a>(
@@ -590,11 +590,7 @@ fn callstack_simulation<'a>(
 
     let mut state_to_merge: Option<(bool, StorageLogDetailedState<GoldilocksField>)> = None;
 
-    for (_idx, el) in callstack_with_aux_data
-        .full_history
-        .iter()
-        .enumerate()
-    {
+    for (_idx, el) in callstack_with_aux_data.full_history.iter().enumerate() {
         let frame_index = el.frame_index;
 
         match el.action {
@@ -863,8 +859,406 @@ fn callstack_simulation<'a>(
         callstack_values_witnesses,
         rollback_queue_head_segments,
         history_of_storage_log_states,
-        global_end_of_storage_log
+        global_end_of_storage_log,
     }
+}
+
+use crate::zk_evm::aux_structures::MemoryQuery;
+use crate::zk_evm::zk_evm_abstractions::precompiles::ecrecover::ECRecoverRoundWitness;
+use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::Keccak256RoundWitness;
+use crate::zk_evm::zk_evm_abstractions::precompiles::secp256r1_verify::Secp256r1VerifyRoundWitness;
+use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Sha256RoundWitness;
+use circuit_definitions::circuit_definitions::base_layer::LogDemuxInstanceSynthesisFunction;
+use circuit_definitions::circuit_definitions::base_layer::RAMPermutationInstanceSynthesisFunction;
+use circuit_definitions::circuit_definitions::base_layer::StorageApplicationInstanceSynthesisFunction;
+
+fn create_artifacts_inner<
+    CB: FnMut(ZkSyncBaseLayerCircuit),
+    QSCB: FnMut(
+        u64,
+        RecursionQueueSimulator<GoldilocksField>,
+        Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
+    ),
+>(
+    geometry: &GeometryConfig,
+    tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
+    vm_memory_queries_accumulated: Vec<(u32, MemoryQuery)>,
+    prepared_decommittment_queries: Vec<(u32, DecommittmentQuery)>,
+    executed_decommittment_queries: Vec<(u32, DecommittmentQuery, Vec<U256>)>,
+    keccak_round_function_witnesses: Vec<(u32, LogQuery, Vec<Keccak256RoundWitness>)>,
+    sha256_round_function_witnesses: Vec<(u32, LogQuery, Vec<Sha256RoundWitness>)>,
+    ecrecover_witnesses: Vec<(u32, LogQuery, ECRecoverRoundWitness)>,
+    secp256r1_verify_witnesses: Vec<(u32, LogQuery, Secp256r1VerifyRoundWitness)>,
+    log_simulation_queries_data: LogSimulationQueriesData<GoldilocksField>,
+    round_function: &Poseidon2Goldilocks,
+    num_non_deterministic_heap_queries: usize,
+    mut cs_for_witness_generation: &mut ConstraintSystemImpl<GoldilocksField, Poseidon2Goldilocks>,
+    mut cycles_used: &mut usize,
+    mut circuit_callback: &mut CB,
+    mut recursion_queue_callback: &mut QSCB,
+) -> (
+    FullBlockArtifacts<GoldilocksField>,
+    Vec<u32>,
+    FirstAndLastCircuit<LogDemuxInstanceSynthesisFunction>,
+    FirstAndLastCircuit<RAMPermutationInstanceSynthesisFunction>,
+    FirstAndLastCircuit<StorageApplicationInstanceSynthesisFunction>,
+    Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
+    Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
+    Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>
+) {
+    let storage_application_circuits;
+    let storage_application_compact_forms;
+    let ram_permutation_circuits;
+    let ram_permutation_circuits_compact_forms_witnesses;
+    let log_demux_circuits;
+    let log_demux_circuits_compact_forms_witnesses;
+    let mut vm_memory_query_cycles = vec![];
+
+    let mut artifacts = FullBlockArtifacts::default();
+    artifacts.all_prepared_decommittment_queries = prepared_decommittment_queries;
+    artifacts.all_executed_decommittment_queries = executed_decommittment_queries;
+    artifacts.keccak_round_function_witnesses = keccak_round_function_witnesses;
+    artifacts.sha256_round_function_witnesses = sha256_round_function_witnesses;
+    artifacts.ecrecover_witnesses = ecrecover_witnesses;
+    artifacts.secp256r1_verify_witnesses = secp256r1_verify_witnesses;
+    artifacts.original_log_queue_simulator = log_simulation_queries_data
+        .original_log_queue_simulator
+        .unwrap_or(LogQueueSimulator::empty());
+    artifacts.original_log_queue_states = log_simulation_queries_data.original_log_queue_states;
+
+    artifacts.demuxed_rollup_storage_queries = log_simulation_queries_data
+        .demuxed_queries
+        .rollup_storage_queries;
+    artifacts.demuxed_event_queries = log_simulation_queries_data.demuxed_queries.event_queries;
+    artifacts.demuxed_to_l1_queries = log_simulation_queries_data.demuxed_queries.to_l1_queries;
+    artifacts.demuxed_keccak_precompile_queries = log_simulation_queries_data
+        .demuxed_queries
+        .keccak_precompile_queries;
+    artifacts.demuxed_sha256_precompile_queries = log_simulation_queries_data
+        .demuxed_queries
+        .sha256_precompile_queries;
+    artifacts.demuxed_ecrecover_queries = log_simulation_queries_data
+        .demuxed_queries
+        .ecrecover_queries;
+    artifacts.demuxed_secp256r1_verify_queries = log_simulation_queries_data
+        .demuxed_queries
+        .secp256r1_verify_queries;
+    artifacts.demuxed_transient_storage_queries = log_simulation_queries_data
+        .demuxed_queries
+        .transient_storage_queries;
+
+    tracing::debug!("Processing artifacts queue");
+
+    let ref mut this = artifacts;
+    let geometry = geometry;
+    // this is parallelizable internally by the factor of 3 in round function implementation later on
+
+    tracing::debug!("Running memory queue simulation");
+
+    for (cycle, query) in vm_memory_queries_accumulated {
+        this.all_memory_queries_accumulated.push(query.clone());
+
+        let (_old_tail, intermediate_info) = this
+            .memory_queue_simulator
+            .push_and_output_intermediate_data(query, round_function);
+
+        vm_memory_query_cycles.push(cycle);
+        this.all_memory_queue_states.push(intermediate_info);
+    }
+
+    assert!(
+        this.memory_queue_simulator.num_items as usize == this.all_memory_queries_accumulated.len()
+    );
+
+    // ----------------------------
+
+    {
+        assert_eq!(
+            this.all_memory_queries_accumulated.len(),
+            this.all_memory_queue_states.len()
+        );
+        assert_eq!(
+            this.all_memory_queries_accumulated.len(),
+            this.memory_queue_simulator.num_items as usize
+        );
+    }
+
+    // ----------------------------
+
+    // direct VM related part is done, other subcircuit's functionality is moved to other functions
+    // that should properly do sorts and memory writes
+
+    use crate::witness::individual_circuits::sort_decommit_requests::compute_decommitts_sorter_circuit_snapshots;
+
+    tracing::debug!("Running code decommittments sorter simulation");
+
+    let mut deduplicated_decommitment_queue_simulator = Default::default();
+    let mut deduplicated_decommittment_queue_states = Default::default();
+    let mut deduplicated_decommit_requests_with_data = Default::default();
+
+    this.decommittments_deduplicator_circuits_data = compute_decommitts_sorter_circuit_snapshots(
+        this,
+        &mut deduplicated_decommitment_queue_simulator,
+        &mut deduplicated_decommittment_queue_states,
+        &mut deduplicated_decommit_requests_with_data,
+        round_function,
+        geometry.cycles_code_decommitter_sorter as usize,
+    );
+
+    use crate::witness::individual_circuits::decommit_code::compute_decommitter_circuit_snapshots;
+
+    tracing::debug!("Running code code decommitter simulation");
+
+    let code_decommitter_circuits_data = compute_decommitter_circuit_snapshots(
+        this,
+        &mut deduplicated_decommitment_queue_simulator,
+        &mut deduplicated_decommittment_queue_states,
+        &mut deduplicated_decommit_requests_with_data,
+        round_function,
+        geometry.cycles_per_code_decommitter as usize,
+    );
+
+    this.code_decommitter_circuits_data = code_decommitter_circuits_data;
+
+    // demux log queue
+    use crate::witness::individual_circuits::log_demux::compute_logs_demux;
+
+    tracing::debug!("Running log demux simulation");
+
+    let (log_demux_circuits_, log_demux_circuits_compact_forms_witnesses_, mut all_demuxed_queues) =
+        compute_logs_demux(
+            this,
+            geometry.cycles_per_log_demuxer as usize,
+            round_function,
+            geometry,
+            &mut cs_for_witness_generation,
+            &mut cycles_used,
+            &mut circuit_callback,
+            &mut recursion_queue_callback,
+        );
+    log_demux_circuits = log_demux_circuits_;
+    log_demux_circuits_compact_forms_witnesses = log_demux_circuits_compact_forms_witnesses_;
+
+    use crate::zkevm_circuits::demux_log_queue::DemuxOutput;
+
+    // keccak precompile
+
+    use crate::witness::individual_circuits::keccak256_round_function::keccak256_decompose_into_per_circuit_witness;
+
+    tracing::debug!("Running keccak simulation");
+
+    let demuxed_keccak_precompile_queue = std::mem::replace(
+        &mut all_demuxed_queues[DemuxOutput::Keccak as usize],
+        Default::default(),
+    );
+
+    let keccak256_circuits_data = keccak256_decompose_into_per_circuit_witness(
+        this,
+        demuxed_keccak_precompile_queue,
+        geometry.cycles_per_keccak256_circuit as usize,
+        round_function,
+    );
+    this.keccak256_circuits_data = keccak256_circuits_data;
+
+    // sha256 precompile
+
+    use crate::witness::individual_circuits::sha256_round_function::sha256_decompose_into_per_circuit_witness;
+
+    tracing::debug!("Running sha256 simulation");
+
+    let demuxed_sha256_precompile_queue = std::mem::replace(
+        &mut all_demuxed_queues[DemuxOutput::Sha256 as usize],
+        Default::default(),
+    );
+
+    let sha256_circuits_data = sha256_decompose_into_per_circuit_witness(
+        this,
+        demuxed_sha256_precompile_queue,
+        geometry.cycles_per_sha256_circuit as usize,
+        round_function,
+    );
+    this.sha256_circuits_data = sha256_circuits_data;
+
+    // ecrecover precompile
+
+    use crate::witness::individual_circuits::ecrecover::ecrecover_decompose_into_per_circuit_witness;
+
+    tracing::debug!("Running ecrecover simulation");
+
+    let demuxed_ecrecover_queue = std::mem::replace(
+        &mut all_demuxed_queues[DemuxOutput::ECRecover as usize],
+        Default::default(),
+    );
+
+    let ecrecover_circuits_data = ecrecover_decompose_into_per_circuit_witness(
+        this,
+        demuxed_ecrecover_queue,
+        geometry.cycles_per_ecrecover_circuit as usize,
+        round_function,
+    );
+    this.ecrecover_circuits_data = ecrecover_circuits_data;
+
+    use crate::witness::individual_circuits::secp256r1_verify::secp256r1_verify_decompose_into_per_circuit_witness;
+
+    tracing::debug!("Running secp256r1_simulation simulation");
+
+    let demuxed_secp256r1_verify_queue = std::mem::replace(
+        &mut all_demuxed_queues[DemuxOutput::Secp256r1Verify as usize],
+        Default::default(),
+    );
+
+    let secp256r1_verify_circuits_data = secp256r1_verify_decompose_into_per_circuit_witness(
+        this,
+        demuxed_secp256r1_verify_queue,
+        geometry.cycles_per_secp256r1_verify_circuit as usize,
+        round_function,
+    );
+    this.secp256r1_verify_circuits_data = secp256r1_verify_circuits_data;
+
+    // we are done with a memory and can do the processing and breaking of the logical arguments into individual circits
+
+    use crate::witness::individual_circuits::ram_permutation::compute_ram_circuit_snapshots;
+
+    tracing::debug!("Running RAM permutation simulation");
+
+    (
+        ram_permutation_circuits,
+        ram_permutation_circuits_compact_forms_witnesses,
+    ) = compute_ram_circuit_snapshots(
+        this,
+        round_function,
+        num_non_deterministic_heap_queries,
+        geometry.cycles_per_ram_permutation as usize,
+        geometry,
+        &mut cs_for_witness_generation,
+        &mut cycles_used,
+        &mut circuit_callback,
+        &mut recursion_queue_callback,
+    );
+
+    // now completely parallel process to reconstruct the states, with internally parallelism in each round function
+
+    use crate::witness::individual_circuits::storage_sort_dedup::compute_storage_dedup_and_sort;
+
+    tracing::debug!("Running storage deduplication simulation");
+
+    let demuxed_rollup_storage_queue = std::mem::replace(
+        &mut all_demuxed_queues[DemuxOutput::RollupStorage as usize],
+        Default::default(),
+    );
+
+    let storage_deduplicator_circuit_data = compute_storage_dedup_and_sort(
+        this,
+        demuxed_rollup_storage_queue,
+        geometry.cycles_per_storage_sorter as usize,
+        round_function,
+    );
+    this.storage_deduplicator_circuit_data = storage_deduplicator_circuit_data;
+
+    use crate::witness::individual_circuits::events_sort_dedup::compute_events_dedup_and_sort;
+
+    tracing::debug!("Running events deduplication simulation");
+
+    let demuxed_event_queue = std::mem::replace(
+        &mut all_demuxed_queues[DemuxOutput::Events as usize],
+        Default::default(),
+    );
+
+    let events_deduplicator_circuit_data = compute_events_dedup_and_sort(
+        &this.demuxed_event_queries,
+        &demuxed_event_queue,
+        &mut Default::default(),
+        geometry.cycles_per_events_or_l1_messages_sorter as usize,
+        round_function,
+    );
+
+    this.events_deduplicator_circuit_data = events_deduplicator_circuit_data;
+
+    tracing::debug!("Running L1 messages deduplication simulation");
+
+    let demuxed_to_l1_queue = std::mem::replace(
+        &mut all_demuxed_queues[DemuxOutput::L2ToL1Messages as usize],
+        Default::default(),
+    );
+
+    let mut deduplicated_to_l1_queue_simulator = Default::default();
+    let l1_messages_deduplicator_circuit_data = compute_events_dedup_and_sort(
+        &this.demuxed_to_l1_queries,
+        &demuxed_to_l1_queue,
+        &mut deduplicated_to_l1_queue_simulator,
+        geometry.cycles_per_events_or_l1_messages_sorter as usize,
+        round_function,
+    );
+
+    this.l1_messages_deduplicator_circuit_data = l1_messages_deduplicator_circuit_data;
+
+    use crate::witness::individual_circuits::transient_storage_sorter::compute_transient_storage_dedup_and_sort;
+
+    tracing::debug!("Running transient storage sorting simulation");
+
+    let demuxed_transient_storage_queue = std::mem::replace(
+        &mut all_demuxed_queues[DemuxOutput::TransientStorage as usize],
+        Default::default(),
+    );
+
+    let transient_storage_sorter_circuit_data = compute_transient_storage_dedup_and_sort(
+        this,
+        demuxed_transient_storage_queue,
+        geometry.cycles_per_transient_storage_sorter as usize,
+        round_function,
+    );
+    this.transient_storage_sorter_circuit_data = transient_storage_sorter_circuit_data;
+
+    // compute flattened hash of all messages
+
+    tracing::debug!("Running L1 messages linear hash simulation");
+
+    assert!(
+        deduplicated_to_l1_queue_simulator.num_items
+            <= geometry.limit_for_l1_messages_pudata_hasher,
+        "too many L1 messages to linearly hash by single circuit"
+    );
+
+    use crate::witness::individual_circuits::data_hasher_and_merklizer::compute_linear_keccak256;
+
+    let l1_messages_pubdata_hasher_data = compute_linear_keccak256(
+        &deduplicated_to_l1_queue_simulator,
+        geometry.limit_for_l1_messages_pudata_hasher as usize,
+        round_function,
+    );
+
+    this.l1_messages_linear_hash_data = l1_messages_pubdata_hasher_data;
+
+    // process the storage application
+
+    // and do the actual storage application
+    use crate::witness::individual_circuits::storage_application::decompose_into_storage_application_witnesses;
+
+    (
+        storage_application_circuits,
+        storage_application_compact_forms,
+    ) = decompose_into_storage_application_witnesses(
+        this,
+        tree,
+        round_function,
+        geometry.cycles_per_storage_application as usize,
+        geometry,
+        &mut cs_for_witness_generation,
+        &mut cycles_used,
+        &mut circuit_callback,
+        &mut recursion_queue_callback,
+    );
+
+    (
+        artifacts,
+        vm_memory_query_cycles,
+        log_demux_circuits,
+        ram_permutation_circuits,
+        storage_application_circuits,
+        log_demux_circuits_compact_forms_witnesses,
+        ram_permutation_circuits_compact_forms_witnesses,
+        storage_application_compact_forms,
+    )
 }
 
 pub fn create_artifacts_from_tracer<
@@ -941,7 +1335,7 @@ pub fn create_artifacts_from_tracer<
         callstack_values_witnesses,
         rollback_queue_head_segments,
         history_of_storage_log_states,
-        global_end_of_storage_log
+        global_end_of_storage_log,
     } = callstack_simulation(
         &callstack_with_aux_data,
         log_simulation_result,
@@ -970,357 +1364,33 @@ pub fn create_artifacts_from_tracer<
 
     mem_print("After cs creation");
 
-    let storage_application_circuits;
-    let storage_application_compact_forms;
-    let ram_permutation_circuits;
-    let ram_permutation_circuits_compact_forms_witnesses;
-    let log_demux_circuits;
-    let log_demux_circuits_compact_forms_witnesses;
-    let mut vm_memory_query_cycles = vec![];
-
-    let artifacts = {
-        let mut artifacts = FullBlockArtifacts::default();
-        artifacts.all_prepared_decommittment_queries = prepared_decommittment_queries;
-        artifacts.all_executed_decommittment_queries = executed_decommittment_queries;
-        artifacts.keccak_round_function_witnesses = keccak_round_function_witnesses;
-        artifacts.sha256_round_function_witnesses = sha256_round_function_witnesses;
-        artifacts.ecrecover_witnesses = ecrecover_witnesses;
-        artifacts.secp256r1_verify_witnesses = secp256r1_verify_witnesses;
-        artifacts.original_log_queue_simulator = log_simulation_queries_data
-            .original_log_queue_simulator
-            .unwrap_or(LogQueueSimulator::empty());
-        artifacts.original_log_queue_states = log_simulation_queries_data.original_log_queue_states;
-
-        artifacts.demuxed_rollup_storage_queries = log_simulation_queries_data
-            .demuxed_queries
-            .rollup_storage_queries;
-        artifacts.demuxed_event_queries = log_simulation_queries_data.demuxed_queries.event_queries;
-        artifacts.demuxed_to_l1_queries = log_simulation_queries_data.demuxed_queries.to_l1_queries;
-        artifacts.demuxed_keccak_precompile_queries = log_simulation_queries_data
-            .demuxed_queries
-            .keccak_precompile_queries;
-        artifacts.demuxed_sha256_precompile_queries = log_simulation_queries_data
-            .demuxed_queries
-            .sha256_precompile_queries;
-        artifacts.demuxed_ecrecover_queries = log_simulation_queries_data
-            .demuxed_queries
-            .ecrecover_queries;
-        artifacts.demuxed_secp256r1_verify_queries = log_simulation_queries_data
-            .demuxed_queries
-            .secp256r1_verify_queries;
-        artifacts.demuxed_transient_storage_queries = log_simulation_queries_data
-            .demuxed_queries
-            .transient_storage_queries;
-
-        tracing::debug!("Processing artifacts queue");
-
-        let ref mut this = artifacts;
-        let geometry = geometry;
-        // this is parallelizable internally by the factor of 3 in round function implementation later on
-
-        tracing::debug!("Running memory queue simulation");
-
-        for (cycle, query) in vm_memory_queries_accumulated {
-            this.all_memory_queries_accumulated.push(query.clone());
-
-            let (_old_tail, intermediate_info) = this
-                .memory_queue_simulator
-                .push_and_output_intermediate_data(query, round_function);
-
-            vm_memory_query_cycles.push(cycle);
-            this.all_memory_queue_states.push(intermediate_info);
-        }
-
-        assert!(
-            this.memory_queue_simulator.num_items as usize
-                == this.all_memory_queries_accumulated.len()
-        );
-
-        // ----------------------------
-
-        {
-            assert_eq!(
-                this.all_memory_queries_accumulated.len(),
-                this.all_memory_queue_states.len()
-            );
-            assert_eq!(
-                this.all_memory_queries_accumulated.len(),
-                this.memory_queue_simulator.num_items as usize
-            );
-        }
-
-        // ----------------------------
-
-        // direct VM related part is done, other subcircuit's functionality is moved to other functions
-        // that should properly do sorts and memory writes
-
-        use crate::witness::individual_circuits::sort_decommit_requests::compute_decommitts_sorter_circuit_snapshots;
-
-        tracing::debug!("Running code decommittments sorter simulation");
-
-        let mut deduplicated_decommitment_queue_simulator = Default::default();
-        let mut deduplicated_decommittment_queue_states = Default::default();
-        let mut deduplicated_decommit_requests_with_data = Default::default();
-
-        this.decommittments_deduplicator_circuits_data =
-            compute_decommitts_sorter_circuit_snapshots(
-                this,
-                &mut deduplicated_decommitment_queue_simulator,
-                &mut deduplicated_decommittment_queue_states,
-                &mut deduplicated_decommit_requests_with_data,
-                round_function,
-                geometry.cycles_code_decommitter_sorter as usize,
-            );
-
-        use crate::witness::individual_circuits::decommit_code::compute_decommitter_circuit_snapshots;
-
-        tracing::debug!("Running code code decommitter simulation");
-
-        let code_decommitter_circuits_data = compute_decommitter_circuit_snapshots(
-            this,
-            &mut deduplicated_decommitment_queue_simulator,
-            &mut deduplicated_decommittment_queue_states,
-            &mut deduplicated_decommit_requests_with_data,
-            round_function,
-            geometry.cycles_per_code_decommitter as usize,
-        );
-
-        this.code_decommitter_circuits_data = code_decommitter_circuits_data;
-
-        // demux log queue
-        use crate::witness::individual_circuits::log_demux::compute_logs_demux;
-
-        tracing::debug!("Running log demux simulation");
-
-        let (
-            log_demux_circuits_,
-            log_demux_circuits_compact_forms_witnesses_,
-            mut all_demuxed_queues,
-        ) = compute_logs_demux(
-            this,
-            geometry.cycles_per_log_demuxer as usize,
-            round_function,
-            geometry,
-            &mut cs_for_witness_generation,
-            &mut cycles_used,
-            &mut circuit_callback,
-            &mut recursion_queue_callback,
-        );
-        log_demux_circuits = log_demux_circuits_;
-        log_demux_circuits_compact_forms_witnesses = log_demux_circuits_compact_forms_witnesses_;
-
-        use crate::zkevm_circuits::demux_log_queue::DemuxOutput;
-
-        // keccak precompile
-
-        use crate::witness::individual_circuits::keccak256_round_function::keccak256_decompose_into_per_circuit_witness;
-
-        tracing::debug!("Running keccak simulation");
-
-        let demuxed_keccak_precompile_queue = std::mem::replace(
-            &mut all_demuxed_queues[DemuxOutput::Keccak as usize],
-            Default::default(),
-        );
-
-        let keccak256_circuits_data = keccak256_decompose_into_per_circuit_witness(
-            this,
-            demuxed_keccak_precompile_queue,
-            geometry.cycles_per_keccak256_circuit as usize,
-            round_function,
-        );
-        this.keccak256_circuits_data = keccak256_circuits_data;
-
-        // sha256 precompile
-
-        use crate::witness::individual_circuits::sha256_round_function::sha256_decompose_into_per_circuit_witness;
-
-        tracing::debug!("Running sha256 simulation");
-
-        let demuxed_sha256_precompile_queue = std::mem::replace(
-            &mut all_demuxed_queues[DemuxOutput::Sha256 as usize],
-            Default::default(),
-        );
-
-        let sha256_circuits_data = sha256_decompose_into_per_circuit_witness(
-            this,
-            demuxed_sha256_precompile_queue,
-            geometry.cycles_per_sha256_circuit as usize,
-            round_function,
-        );
-        this.sha256_circuits_data = sha256_circuits_data;
-
-        // ecrecover precompile
-
-        use crate::witness::individual_circuits::ecrecover::ecrecover_decompose_into_per_circuit_witness;
-
-        tracing::debug!("Running ecrecover simulation");
-
-        let demuxed_ecrecover_queue = std::mem::replace(
-            &mut all_demuxed_queues[DemuxOutput::ECRecover as usize],
-            Default::default(),
-        );
-
-        let ecrecover_circuits_data = ecrecover_decompose_into_per_circuit_witness(
-            this,
-            demuxed_ecrecover_queue,
-            geometry.cycles_per_ecrecover_circuit as usize,
-            round_function,
-        );
-        this.ecrecover_circuits_data = ecrecover_circuits_data;
-
-        use crate::witness::individual_circuits::secp256r1_verify::secp256r1_verify_decompose_into_per_circuit_witness;
-
-        tracing::debug!("Running secp256r1_simulation simulation");
-
-        let demuxed_secp256r1_verify_queue = std::mem::replace(
-            &mut all_demuxed_queues[DemuxOutput::Secp256r1Verify as usize],
-            Default::default(),
-        );
-
-        let secp256r1_verify_circuits_data = secp256r1_verify_decompose_into_per_circuit_witness(
-            this,
-            demuxed_secp256r1_verify_queue,
-            geometry.cycles_per_secp256r1_verify_circuit as usize,
-            round_function,
-        );
-        this.secp256r1_verify_circuits_data = secp256r1_verify_circuits_data;
-
-        // we are done with a memory and can do the processing and breaking of the logical arguments into individual circits
-
-        use crate::witness::individual_circuits::ram_permutation::compute_ram_circuit_snapshots;
-
-        tracing::debug!("Running RAM permutation simulation");
-
-        (
-            ram_permutation_circuits,
-            ram_permutation_circuits_compact_forms_witnesses,
-        ) = compute_ram_circuit_snapshots(
-            this,
-            round_function,
-            num_non_deterministic_heap_queries,
-            geometry.cycles_per_ram_permutation as usize,
-            geometry,
-            &mut cs_for_witness_generation,
-            &mut cycles_used,
-            &mut circuit_callback,
-            &mut recursion_queue_callback,
-        );
-
-        // now completely parallel process to reconstruct the states, with internally parallelism in each round function
-
-        use crate::witness::individual_circuits::storage_sort_dedup::compute_storage_dedup_and_sort;
-
-        tracing::debug!("Running storage deduplication simulation");
-
-        let demuxed_rollup_storage_queue = std::mem::replace(
-            &mut all_demuxed_queues[DemuxOutput::RollupStorage as usize],
-            Default::default(),
-        );
-
-        let storage_deduplicator_circuit_data = compute_storage_dedup_and_sort(
-            this,
-            demuxed_rollup_storage_queue,
-            geometry.cycles_per_storage_sorter as usize,
-            round_function,
-        );
-        this.storage_deduplicator_circuit_data = storage_deduplicator_circuit_data;
-
-        use crate::witness::individual_circuits::events_sort_dedup::compute_events_dedup_and_sort;
-
-        tracing::debug!("Running events deduplication simulation");
-
-        let demuxed_event_queue = std::mem::replace(
-            &mut all_demuxed_queues[DemuxOutput::Events as usize],
-            Default::default(),
-        );
-
-        let events_deduplicator_circuit_data = compute_events_dedup_and_sort(
-            &this.demuxed_event_queries,
-            &demuxed_event_queue,
-            &mut Default::default(),
-            geometry.cycles_per_events_or_l1_messages_sorter as usize,
-            round_function,
-        );
-
-        this.events_deduplicator_circuit_data = events_deduplicator_circuit_data;
-
-        tracing::debug!("Running L1 messages deduplication simulation");
-
-        let demuxed_to_l1_queue = std::mem::replace(
-            &mut all_demuxed_queues[DemuxOutput::L2ToL1Messages as usize],
-            Default::default(),
-        );
-
-        let mut deduplicated_to_l1_queue_simulator = Default::default();
-        let l1_messages_deduplicator_circuit_data = compute_events_dedup_and_sort(
-            &this.demuxed_to_l1_queries,
-            &demuxed_to_l1_queue,
-            &mut deduplicated_to_l1_queue_simulator,
-            geometry.cycles_per_events_or_l1_messages_sorter as usize,
-            round_function,
-        );
-
-        this.l1_messages_deduplicator_circuit_data = l1_messages_deduplicator_circuit_data;
-
-        use crate::witness::individual_circuits::transient_storage_sorter::compute_transient_storage_dedup_and_sort;
-
-        tracing::debug!("Running transient storage sorting simulation");
-
-        let demuxed_transient_storage_queue = std::mem::replace(
-            &mut all_demuxed_queues[DemuxOutput::TransientStorage as usize],
-            Default::default(),
-        );
-
-        let transient_storage_sorter_circuit_data = compute_transient_storage_dedup_and_sort(
-            this,
-            demuxed_transient_storage_queue,
-            geometry.cycles_per_transient_storage_sorter as usize,
-            round_function,
-        );
-        this.transient_storage_sorter_circuit_data = transient_storage_sorter_circuit_data;
-
-        // compute flattened hash of all messages
-
-        tracing::debug!("Running L1 messages linear hash simulation");
-
-        assert!(
-            deduplicated_to_l1_queue_simulator.num_items
-                <= geometry.limit_for_l1_messages_pudata_hasher,
-            "too many L1 messages to linearly hash by single circuit"
-        );
-
-        use crate::witness::individual_circuits::data_hasher_and_merklizer::compute_linear_keccak256;
-
-        let l1_messages_pubdata_hasher_data = compute_linear_keccak256(
-            &deduplicated_to_l1_queue_simulator,
-            geometry.limit_for_l1_messages_pudata_hasher as usize,
-            round_function,
-        );
-
-        this.l1_messages_linear_hash_data = l1_messages_pubdata_hasher_data;
-
-        // process the storage application
-
-        // and do the actual storage application
-        use crate::witness::individual_circuits::storage_application::decompose_into_storage_application_witnesses;
-
-        (
-            storage_application_circuits,
-            storage_application_compact_forms,
-        ) = decompose_into_storage_application_witnesses(
-            this,
-            tree,
-            round_function,
-            geometry.cycles_per_storage_application as usize,
-            geometry,
-            &mut cs_for_witness_generation,
-            &mut cycles_used,
-            &mut circuit_callback,
-            &mut recursion_queue_callback,
-        );
-
-        artifacts
-    };
+    let (
+        artifacts,
+        vm_memory_query_cycles,
+        log_demux_circuits,
+        ram_permutation_circuits,
+        storage_application_circuits,
+        log_demux_circuits_compact_forms_witnesses,
+        ram_permutation_circuits_compact_forms_witnesses,
+        storage_application_compact_forms,
+    ) = create_artifacts_inner(
+        geometry,
+        tree,
+        vm_memory_queries_accumulated,
+        prepared_decommittment_queries,
+        executed_decommittment_queries,
+        keccak_round_function_witnesses,
+        sha256_round_function_witnesses,
+        ecrecover_witnesses,
+        secp256r1_verify_witnesses,
+        log_simulation_queries_data,
+        round_function,
+        num_non_deterministic_heap_queries,
+        &mut cs_for_witness_generation,
+        &mut cycles_used,
+        &mut circuit_callback,
+        &mut recursion_queue_callback,
+    );
 
     mem_print("Artifacts created");
 
