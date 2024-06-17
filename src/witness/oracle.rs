@@ -16,6 +16,7 @@ use crate::witness::postprocessing::{CircuitMaker, FirstAndLastCircuit};
 use crate::witness::tracer::{QueryMarker, WitnessTracer};
 use crate::zk_evm::aux_structures::DecommittmentQuery;
 use crate::zk_evm::vm_state::{CallStackEntry, VmLocalState};
+use crate::zk_evm::aux_structures::LogQuery;
 use crate::zkevm_circuits::base_structures::vm_state::{
     GlobalContextWitness, FULL_SPONGE_QUEUE_STATE_WIDTH, QUEUE_STATE_WIDTH,
 };
@@ -30,7 +31,7 @@ use circuit_definitions::encodings::callstack_entry::ExtendedCallstackEntry;
 use circuit_definitions::encodings::recursion_request::{
     RecursionQueueSimulator, RecursionRequest,
 };
-use circuit_definitions::encodings::LogQueueSimulator;
+use circuit_definitions::encodings::{LogQueueSimulator, LogQueueState};
 use circuit_definitions::zk_evm::zkevm_opcode_defs::system_params::{
     SECP256R1_VERIFY_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS, TRANSIENT_STORAGE_AUX_BYTE,
 };
@@ -51,6 +52,19 @@ use crate::zk_evm::zkevm_opcode_defs::system_params::{
 use crate::zk_evm::zkevm_opcode_defs::system_params::{
     EVENT_AUX_BYTE, L1_MESSAGE_AUX_BYTE, PRECOMPILE_AUX_BYTE, STORAGE_AUX_BYTE,
 };
+
+use jemalloc_ctl::{epoch, stats};
+
+#[cfg(not(target_env = "msvc"))]
+#[global_allocator]
+static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
+
+fn mem_print(label: &str) {
+    epoch::advance().unwrap();
+    let allocated = stats::allocated::read().unwrap();
+    let resident = stats::resident::read().unwrap();
+    println!("{label}: {}", allocated);
+}
 
 #[derive(Derivative)]
 #[derivative(Clone(bound = ""), Copy(bound = ""), Debug, Default)]
@@ -177,107 +191,59 @@ struct FlattenedLogQueueIndexer<F: SmallField> {
 use crate::blake2::Blake2s256;
 use crate::witness::tree::*;
 
-pub fn create_artifacts_from_tracer<
-    CB: FnMut(ZkSyncBaseLayerCircuit),
-    QSCB: FnMut(
-        u64,
-        RecursionQueueSimulator<GoldilocksField>,
-        Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
-    ),
->(
-    tracer: WitnessTracer,
+struct LogSimulationResult<'a, F: SmallField> {
+    cycle_into_flat_sequence_index: BTreeMap<u32, (usize, Option<usize>)>,
+    chain_of_states: Vec<(
+        u32,
+        QueryMarker,
+        ([F; QUEUE_STATE_WIDTH], [F; QUEUE_STATE_WIDTH]),
+    )>,
+    global_beginnings_of_frames: BTreeMap<usize, u32>,
+    log_position_mapping: HashMap<&'a ExtendedLogQuery, isize>,
+    original_log_queue_simulator: Option<LogQueueSimulator<F>>,
+    original_log_queue_states: Vec<(u32, LogQueueState<F>)>,
+    demuxed_queries: DemuxedQueries,
+}
+
+#[derive(Derivative)]
+#[derivative(Default)]
+struct DemuxedQueries {
+    rollup_storage_queries: Vec<LogQuery>,
+    porter_storage_queries: Vec<LogQuery>,
+    event_queries: Vec<LogQuery>,
+    to_l1_queries: Vec<LogQuery>,
+    keccak_precompile_queries: Vec<LogQuery>,
+    sha256_precompile_queries: Vec<LogQuery>,
+    ecrecover_queries: Vec<LogQuery>,
+    secp256r1_verify_queries: Vec<LogQuery>,
+    transient_storage_queries: Vec<LogQuery>,
+}
+
+fn log_simulation<'a>(
+    callstack_with_aux_data: &'a CallstackWithAuxData,
     round_function: &Poseidon2Goldilocks,
-    geometry: &GeometryConfig,
-    entry_point_decommittment_query: (DecommittmentQuery, Vec<U256>),
-    tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
-    num_non_deterministic_heap_queries: usize,
-    zk_porter_is_available: bool,
-    default_aa_code_hash: U256,
-    evm_simulator_code_hash: U256,
-    eip_4844_repack_inputs: [Option<Vec<u8>>; MAX_4844_BLOBS_PER_BLOCK],
-    trusted_setup_path: &str,
-    mut circuit_callback: CB,
-    mut recursion_queue_callback: QSCB,
-) -> (
-    BlockFirstAndLastBasicCircuits,
-    Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
-    Vec<EIP4844CircuitInstanceWitness<GoldilocksField>>,
-) {
-    let WitnessTracer {
-        memory_queries: vm_memory_queries_accumulated,
-        storage_queries,
-        cold_warm_refunds_logs,
-        pubdata_cost_logs,
-        prepared_decommittment_queries,
-        executed_decommittment_queries,
-        keccak_round_function_witnesses,
-        sha256_round_function_witnesses,
-        ecrecover_witnesses,
-        secp256r1_verify_witnesses,
-        monotonic_query_counter: _,
-        callstack_with_aux_data,
-        vm_snapshots,
-        ..
-    } = tracer;
-
-    // we should have an initial query somewhat before the time
-    assert!(prepared_decommittment_queries.len() >= 1);
-    assert!(executed_decommittment_queries.len() >= 1);
-    assert!(prepared_decommittment_queries.len() >= executed_decommittment_queries.len());
-    let (ts, q, w) = &executed_decommittment_queries[0];
-    assert!(*ts < crate::zk_evm::zkevm_opcode_defs::STARTING_TIMESTAMP);
-    assert_eq!(q, &entry_point_decommittment_query.0);
-    assert_eq!(w, &entry_point_decommittment_query.1);
-
-    assert!(vm_snapshots.len() >= 2); // we need at least entry point and the last save (after exit)
-
+) -> LogSimulationResult<'a, GoldilocksField> {
     // segmentation of the log queue
     // - split into independent queues
     // - compute initial tail segments (with head == tail) for every new call frame
     // - also compute head segments for every write-like actions
 
-    let mut log_queue_simulator = LogQueueSimulator::empty();
     assert!(
         callstack_with_aux_data.depth == 0,
         "parent frame didn't exit"
     );
 
-    let forward = callstack_with_aux_data.current_entry.forward_queue.clone();
-    let rollbacks = callstack_with_aux_data.current_entry.rollback_queue.clone();
-
-    let mut query_id_into_cycle_index = BTreeMap::new();
-
-    for (cycle, marker) in callstack_with_aux_data.log_access_history.iter() {
-        query_id_into_cycle_index.insert(marker.query_id(), *cycle);
-    }
-
     let mut log_position_mapping = HashMap::new();
-
-    let mut demuxed_rollup_storage_queries = vec![];
-    let mut demuxed_porter_storage_queries = vec![];
-    let mut demuxed_event_queries = vec![];
-    let mut demuxed_to_l1_queries = vec![];
-    let mut demuxed_keccak_precompile_queries = vec![];
-    let mut demuxed_sha256_precompile_queries = vec![];
-    let mut demuxed_ecrecover_queries = vec![];
-    let mut demuxed_secp256r1_verify_queries = vec![];
-    let mut demuxed_transient_storage_queries = vec![];
+    let mut demuxed_queries = DemuxedQueries::default();
 
     let mut original_log_queue_states = vec![];
     let mut chain_of_states = vec![];
     let mut original_log_queue_simulator = None;
-    let mut marker_into_queue_position_renumeration_index: HashMap<QueryMarker, usize> =
-        HashMap::new();
 
     // we want to have some hashmap that will indicate
     // that on some specific VM cycle we either read or write
 
-    // from cycle into first two sponges (common), then tail-tail pair and 3rd sponge for forward, then head-head pair and 3rd sponge for rollback
-    let mut sponges_data: HashMap<u32, LogAccessSpongesInfo<GoldilocksField>> = HashMap::new();
-
     let mut global_beginnings_of_frames: BTreeMap<usize, u32> = BTreeMap::new();
-    let mut actions_in_each_frame: BTreeMap<usize, Vec<(u32, QueryMarker, usize)>> =
-        BTreeMap::new();
 
     for el in callstack_with_aux_data.full_history.iter() {
         match el.action {
@@ -309,13 +275,18 @@ pub fn create_artifacts_from_tracer<
 
     let mut cycle_into_flat_sequence_index = BTreeMap::<u32, (usize, Option<usize>)>::new();
 
-    tracing::debug!("Running storage log simulation");
+    // from cycle into first two sponges (common), then tail-tail pair and 3rd sponge for forward, then head-head pair and 3rd sponge for rollback
+    let mut sponges_data: HashMap<u32, LogAccessSpongesInfo<GoldilocksField>> = HashMap::new();
 
-    for (extended_query, was_applied) in forward.iter().cloned().zip(std::iter::repeat(true)).chain(
+    let mut log_queue_simulator = LogQueueSimulator::<GoldilocksField>::empty();
+
+    let forward = &callstack_with_aux_data.current_entry.forward_queue;
+    let rollbacks = &callstack_with_aux_data.current_entry.rollback_queue;
+
+    for (extended_query, was_applied) in forward.iter().zip(std::iter::repeat(true)).chain(
         rollbacks
             .iter()
             .rev()
-            .cloned()
             .zip(std::iter::repeat(false)),
     ) {
         if !was_applied {
@@ -353,18 +324,13 @@ pub fn create_artifacts_from_tracer<
         };
 
         let (_old_tail, intermediate_info) =
-            log_queue_simulator.push_and_output_intermediate_data(query, round_function);
+            log_queue_simulator.push_and_output_intermediate_data(*query, round_function);
 
         let pointer = chain_of_states.len();
         // we just log all chains of old tail -> new tail, and will interpret them later
-        chain_of_states.push((
-            cycle,
-            query_marker,
-            (intermediate_info.previous_tail, intermediate_info.tail),
-        ));
-
-        // add renumeration index
-        marker_into_queue_position_renumeration_index.insert(query_marker, pointer);
+        let prev_tail: [GoldilocksField; QUEUE_STATE_WIDTH] = intermediate_info.previous_tail;
+        let tail: [GoldilocksField; QUEUE_STATE_WIDTH] = intermediate_info.tail;
+        chain_of_states.push((*cycle, *query_marker, (prev_tail, tail)));
 
         let key = query.timestamp.0;
         if query.rollback {
@@ -421,11 +387,11 @@ pub fn create_artifacts_from_tracer<
                 exclusive_rf: intermediate_info.round_function_execution_pairs[2],
             };
 
-            entry.cycle = cycle;
+            entry.cycle = *cycle;
             entry.common_sponges = common_sponges_info;
             entry.forward_info = forward_info;
 
-            cycle_into_flat_sequence_index.entry(cycle).or_default().0 = pointer;
+            cycle_into_flat_sequence_index.entry(*cycle).or_default().0 = pointer;
 
             match query_marker {
                 QueryMarker::Forward {
@@ -450,54 +416,46 @@ pub fn create_artifacts_from_tracer<
             }
         }
 
-        let frame_index = query_marker.frame_index();
-
-        if let Some(existing) = actions_in_each_frame.get_mut(&frame_index) {
-            existing.push((cycle, query_marker, pointer));
-        } else {
-            actions_in_each_frame.insert(frame_index, vec![(cycle, query_marker, pointer)]);
-        }
-
         // and sort
         if was_applied {
             // push state
-            original_log_queue_states.push((cycle, intermediate_info));
+            original_log_queue_states.push((*cycle, intermediate_info));
             match query.aux_byte {
                 STORAGE_AUX_BYTE => {
                     // sort rollup and porter
                     match query.shard_id {
                         0 => {
-                            demuxed_rollup_storage_queries.push(query);
+                            demuxed_queries.rollup_storage_queries.push(*query);
                         }
                         1 => {
-                            demuxed_porter_storage_queries.push(query);
+                            demuxed_queries.porter_storage_queries.push(*query);
                         }
                         _ => unreachable!(),
                     }
                 }
                 TRANSIENT_STORAGE_AUX_BYTE => {
-                    demuxed_transient_storage_queries.push(query);
+                    demuxed_queries.transient_storage_queries.push(*query);
                 }
                 L1_MESSAGE_AUX_BYTE => {
-                    demuxed_to_l1_queries.push(query);
+                    demuxed_queries.to_l1_queries.push(*query);
                 }
                 EVENT_AUX_BYTE => {
-                    demuxed_event_queries.push(query);
+                    demuxed_queries.event_queries.push(*query);
                 }
                 PRECOMPILE_AUX_BYTE => {
                     assert!(!query.rollback);
                     match query.address {
                         a if a == *KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
-                            demuxed_keccak_precompile_queries.push(query);
+                            demuxed_queries.keccak_precompile_queries.push(*query);
                         }
                         a if a == *SHA256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
-                            demuxed_sha256_precompile_queries.push(query);
+                            demuxed_queries.sha256_precompile_queries.push(*query);
                         }
                         a if a == *ECRECOVER_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
-                            demuxed_ecrecover_queries.push(query);
+                            demuxed_queries.ecrecover_queries.push(*query);
                         }
                         a if a == *SECP256R1_VERIFY_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
-                            demuxed_secp256r1_verify_queries.push(query);
+                            demuxed_queries.secp256r1_verify_queries.push(*query);
                         }
                         _ => {
                             // just burn ergs
@@ -508,6 +466,87 @@ pub fn create_artifacts_from_tracer<
             }
         }
     }
+
+    LogSimulationResult {
+        cycle_into_flat_sequence_index,
+        chain_of_states,
+        global_beginnings_of_frames,
+        log_position_mapping,
+        original_log_queue_simulator,
+        original_log_queue_states,
+        demuxed_queries,
+    }
+}
+
+pub fn create_artifacts_from_tracer<
+    CB: FnMut(ZkSyncBaseLayerCircuit),
+    QSCB: FnMut(
+        u64,
+        RecursionQueueSimulator<GoldilocksField>,
+        Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
+    ),
+>(
+    tracer: WitnessTracer,
+    round_function: &Poseidon2Goldilocks,
+    geometry: &GeometryConfig,
+    entry_point_decommittment_query: (DecommittmentQuery, Vec<U256>),
+    tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
+    num_non_deterministic_heap_queries: usize,
+    zk_porter_is_available: bool,
+    default_aa_code_hash: U256,
+    evm_simulator_code_hash: U256,
+    eip_4844_repack_inputs: [Option<Vec<u8>>; MAX_4844_BLOBS_PER_BLOCK],
+    trusted_setup_path: &str,
+    mut circuit_callback: CB,
+    mut recursion_queue_callback: QSCB,
+) -> (
+    BlockFirstAndLastBasicCircuits,
+    Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
+    Vec<EIP4844CircuitInstanceWitness<GoldilocksField>>,
+) {
+    mem_print("Start");
+    let WitnessTracer {
+        memory_queries: vm_memory_queries_accumulated,
+        storage_queries,
+        cold_warm_refunds_logs,
+        pubdata_cost_logs,
+        prepared_decommittment_queries,
+        executed_decommittment_queries,
+        keccak_round_function_witnesses,
+        sha256_round_function_witnesses,
+        ecrecover_witnesses,
+        secp256r1_verify_witnesses,
+        monotonic_query_counter: _,
+        callstack_with_aux_data,
+        vm_snapshots,
+        ..
+    } = tracer;
+
+    // we should have an initial query somewhat before the time
+    assert!(prepared_decommittment_queries.len() >= 1);
+    assert!(executed_decommittment_queries.len() >= 1);
+    assert!(prepared_decommittment_queries.len() >= executed_decommittment_queries.len());
+    let (ts, q, w) = &executed_decommittment_queries[0];
+    assert!(*ts < crate::zk_evm::zkevm_opcode_defs::STARTING_TIMESTAMP);
+    assert_eq!(q, &entry_point_decommittment_query.0);
+    assert_eq!(w, &entry_point_decommittment_query.1);
+
+    assert!(vm_snapshots.len() >= 2); // we need at least entry point and the last save (after exit)
+
+    mem_print("Before log sim");
+    tracing::debug!("Running storage log simulation");
+
+    let LogSimulationResult {
+        cycle_into_flat_sequence_index,
+        chain_of_states,
+        global_beginnings_of_frames,
+        log_position_mapping,
+        original_log_queue_simulator,
+        original_log_queue_states,
+        demuxed_queries,
+    } = log_simulation(&callstack_with_aux_data, round_function);
+
+    mem_print("After log sim");
 
     use circuit_definitions::encodings::callstack_entry::CallstackSimulator;
     let mut callstack_argebraic_simulator = CallstackSimulator::empty();
@@ -595,6 +634,7 @@ pub fn create_artifacts_from_tracer<
 
     // and now do trivial simulation
 
+    mem_print("Before callstack sim");
     tracing::debug!("Running callstack sumulation");
 
     for (_idx, el) in callstack_with_aux_data
@@ -851,10 +891,14 @@ pub fn create_artifacts_from_tracer<
         }
     }
 
+    mem_print("After callstack sim");
+
     let CallstackWithAuxData {
         flat_new_frames_history,
         ..
     } = callstack_with_aux_data;
+
+    mem_print("Before cs creation");
 
     // we simulate a series of actions on the stack starting from the outermost frame
     // each history record contains an information on what was the stack state between points
@@ -866,6 +910,8 @@ pub fn create_artifacts_from_tracer<
             MAX_VARS_LOG_2_FOR_CALCULATION,
         );
     let mut cycles_used: usize = 0;
+
+    mem_print("After cs creation");
 
     let storage_application_circuits;
     let storage_application_compact_forms;
@@ -887,14 +933,14 @@ pub fn create_artifacts_from_tracer<
             original_log_queue_simulator.unwrap_or(LogQueueSimulator::empty());
         artifacts.original_log_queue_states = original_log_queue_states;
 
-        artifacts.demuxed_rollup_storage_queries = demuxed_rollup_storage_queries;
-        artifacts.demuxed_event_queries = demuxed_event_queries;
-        artifacts.demuxed_to_l1_queries = demuxed_to_l1_queries;
-        artifacts.demuxed_keccak_precompile_queries = demuxed_keccak_precompile_queries;
-        artifacts.demuxed_sha256_precompile_queries = demuxed_sha256_precompile_queries;
-        artifacts.demuxed_ecrecover_queries = demuxed_ecrecover_queries;
-        artifacts.demuxed_secp256r1_verify_queries = demuxed_secp256r1_verify_queries;
-        artifacts.demuxed_transient_storage_queries = demuxed_transient_storage_queries;
+        artifacts.demuxed_rollup_storage_queries = demuxed_queries.rollup_storage_queries;
+        artifacts.demuxed_event_queries = demuxed_queries.event_queries;
+        artifacts.demuxed_to_l1_queries = demuxed_queries.to_l1_queries;
+        artifacts.demuxed_keccak_precompile_queries = demuxed_queries.keccak_precompile_queries;
+        artifacts.demuxed_sha256_precompile_queries = demuxed_queries.sha256_precompile_queries;
+        artifacts.demuxed_ecrecover_queries = demuxed_queries.ecrecover_queries;
+        artifacts.demuxed_secp256r1_verify_queries = demuxed_queries.secp256r1_verify_queries;
+        artifacts.demuxed_transient_storage_queries = demuxed_queries.transient_storage_queries;
 
         tracing::debug!("Processing artifacts queue");
 
@@ -1206,6 +1252,8 @@ pub fn create_artifacts_from_tracer<
         artifacts
     };
 
+    mem_print("Artifacts created");
+
     // NOTE: here we have all the queues processed in the `process` function (actual pushing is done), so we can
     // just read from the corresponding states
 
@@ -1316,6 +1364,8 @@ pub fn create_artifacts_from_tracer<
     let mut callstack_values_witnesses_range = AdvancingRange::new(&callstack_values_witnesses);
     let mut rollback_queue_head_segments_range = AdvancingRange::new(&rollback_queue_head_segments);
     let mut flat_new_frames_history_range = AdvancingRange::new(&flat_new_frames_history);
+
+    mem_print("Before mainVM processing");
 
     for (_circuit_idx, pair) in vm_snapshots.windows(2).enumerate() {
         let initial_state = &pair[0];
@@ -1545,6 +1595,8 @@ pub fn create_artifacts_from_tracer<
         main_vm_circuits_compact_forms_witnesses.clone(),
     );
 
+    mem_print("After mainVM processing");
+
     {
         let FullBlockArtifacts {
             code_decommitter_circuits_data,
@@ -1570,6 +1622,8 @@ pub fn create_artifacts_from_tracer<
             &mut cs_for_witness_generation,
             &mut cycles_used,
         );
+
+        mem_print("Before additional circuits");
 
         for circuit_input in decommittments_deduplicator_circuits_data.into_iter() {
             circuit_callback(ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(
@@ -1915,6 +1969,8 @@ pub fn create_artifacts_from_tracer<
 
         // done!
 
+        mem_print("After additional circuits");
+
         let basic_circuits = BlockFirstAndLastBasicCircuits {
             main_vm_circuits,
             code_decommittments_sorter_circuits,
@@ -1952,6 +2008,8 @@ pub fn create_artifacts_from_tracer<
             .chain(transient_storage_sorter_circuits_compact_forms_witnesses)
             .chain(secp256r1_verify_circuits_compact_forms_witnesses)
             .collect();
+
+        mem_print("Final");
 
         (basic_circuits, all_compact_forms, eip_4844_circuits)
     }
