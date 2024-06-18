@@ -880,17 +880,16 @@ fn create_artifacts_inner<
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
 ) {
-    let mut vm_memory_query_cycles = vec![];
-
     let mut artifacts = FullBlockArtifacts::default();
     artifacts.all_prepared_decommittment_queries = prepared_decommittment_queries;
 
     tracing::debug!("Processing artifacts queue");
 
-    let geometry = geometry;
     // this is parallelizable internally by the factor of 3 in round function implementation later on
 
     tracing::debug!("Running memory queue simulation");
+
+    let mut vm_memory_query_cycles = vec![];
 
     for (cycle, query) in vm_memory_queries_accumulated {
         artifacts.all_memory_queries_accumulated.push(query.clone());
@@ -1356,16 +1355,17 @@ pub fn create_artifacts_from_tracer<
     // NOTE: here we have all the queues processed in the `process` function (actual pushing is done), so we can
     // just read from the corresponding states
 
-    let initial_cycle = vm_snapshots[0].at_cycle;
+    // first decommittment query (for bootloader) must come before the beginning of time
+    {   
+        let initial_cycle = vm_snapshots[0].at_cycle;
+        let decommittment_queue_states_before_start: Vec<_> = artifacts
+            .all_decommittment_queue_states
+            .iter()
+            .take_while(|el| el.0 < initial_cycle)
+            .collect();
 
-    // first decommittment query (for bootlaoder) must come before the beginning of time
-    let decommittment_queue_states_before_start: Vec<_> = artifacts
-        .all_decommittment_queue_states
-        .iter()
-        .take_while(|el| el.0 < initial_cycle)
-        .collect();
-
-    assert!(decommittment_queue_states_before_start.len() == 1);
+        assert!(decommittment_queue_states_before_start.len() == 1);
+    }
 
     tracing::debug!(
         "Processing VM snapshots queue (total {:?})",
@@ -1374,8 +1374,8 @@ pub fn create_artifacts_from_tracer<
 
     let in_circuit_global_context = GlobalContextWitness {
         zkporter_is_available: zk_porter_is_available,
-        default_aa_code_hash: default_aa_code_hash,
-        evm_simulator_code_hash: evm_simulator_code_hash,
+        default_aa_code_hash,
+        evm_simulator_code_hash,
     };
     let round_function = Arc::new(*round_function);
 
