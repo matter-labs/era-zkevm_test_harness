@@ -4,6 +4,8 @@ use crate::witness::full_block_artifact::LogQueue;
 use crate::zkevm_circuits::base_structures::log_query::*;
 use crate::zkevm_circuits::secp256r1_verify::*;
 use circuit_definitions::encodings::*;
+use crate::zk_evm::aux_structures::LogQuery as LogQuery_;
+use crate::zk_evm::zk_evm_abstractions::precompiles::secp256r1_verify::Secp256r1VerifyRoundWitness;
 
 // we want to simulate splitting of data into many separate instances of the same circuit.
 // So we basically need to reconstruct the FSM state on input/output, and passthrough data.
@@ -14,6 +16,7 @@ pub fn secp256r1_verify_decompose_into_per_circuit_witness<
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     artifacts: &mut FullBlockArtifacts<F>,
+    secp256r1_verify_witnesses: Vec<(u32, LogQuery_, Secp256r1VerifyRoundWitness)>,
     demuxed_queues: &mut DemuxedQueries,
     mut demuxed_secp256r1_verify_queue: LogQueue<F>,
     num_rounds_per_circuit: usize,
@@ -33,7 +36,7 @@ pub fn secp256r1_verify_decompose_into_per_circuit_witness<
     use crate::zk_evm::zk_evm_abstractions::precompiles::secp256r1_verify::Secp256r1VerifyRoundWitness;
     let mut memory_queries = vec![];
 
-    for (_cycle, _query, witness) in artifacts.secp256r1_verify_witnesses.iter() {
+    for (_cycle, _query, witness) in secp256r1_verify_witnesses.iter() {
         let Secp256r1VerifyRoundWitness {
             new_request: _,
             reads,
@@ -56,8 +59,7 @@ pub fn secp256r1_verify_decompose_into_per_circuit_witness<
         .witness
         .clone()
         .into();
-    let round_function_witness =
-        std::mem::replace(&mut artifacts.secp256r1_verify_witnesses, vec![]);
+    let round_function_witness = secp256r1_verify_witnesses;
 
     // check basic consistency
     assert!(precompile_calls.len() == precompile_calls_queue_states.len());

@@ -7,6 +7,8 @@ use crate::zkevm_circuits::base_structures::log_query::*;
 use crate::zkevm_circuits::sha256_round_function::input::*;
 use crate::zkevm_circuits::sha256_round_function::*;
 use circuit_definitions::encodings::*;
+use crate::zk_evm::aux_structures::LogQuery as LogQuery_;
+use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Sha256RoundWitness;
 use derivative::*;
 
 #[derive(Derivative)]
@@ -26,6 +28,7 @@ pub fn sha256_decompose_into_per_circuit_witness<
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     artifacts: &mut FullBlockArtifacts<F>,
+    sha256_round_function_witnesses: Vec<(u32, LogQuery_, Vec<Sha256RoundWitness>)>,
     demuxed_queues: &mut DemuxedQueries,
     mut demuxed_sha256_precompile_queue: LogQueue<F>,
     num_rounds_per_circuit: usize,
@@ -44,7 +47,7 @@ pub fn sha256_decompose_into_per_circuit_witness<
     use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Sha256RoundWitness;
     let mut sha256_memory_queries = vec![];
 
-    for (_cycle, _query, witness) in artifacts.sha256_round_function_witnesses.iter() {
+    for (_cycle, _query, witness) in sha256_round_function_witnesses.iter() {
         for el in witness.iter() {
             let Sha256RoundWitness {
                 new_request: _,
@@ -71,8 +74,7 @@ pub fn sha256_decompose_into_per_circuit_witness<
         .witness
         .clone()
         .into();
-    let round_function_witness =
-        std::mem::replace(&mut artifacts.sha256_round_function_witnesses, vec![]);
+    let round_function_witness = sha256_round_function_witnesses;
 
     let memory_queries = sha256_memory_queries;
 

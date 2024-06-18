@@ -3,6 +3,8 @@ use crate::witness::full_block_artifact::LogQueue;
 use crate::zkevm_circuits::base_structures::log_query::*;
 use crate::zkevm_circuits::ecrecover::*;
 use circuit_definitions::encodings::*;
+use crate::zk_evm::aux_structures::LogQuery as LogQuery_;
+use crate::zk_evm::zk_evm_abstractions::precompiles::ecrecover::ECRecoverRoundWitness;
 use full_block_artifact::DemuxedQueries;
 
 // we want to simulate splitting of data into many separate instances of the same circuit.
@@ -14,6 +16,7 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     artifacts: &mut FullBlockArtifacts<F>,
+    ecrecover_witnesses: Vec<(u32, LogQuery_, ECRecoverRoundWitness)>,
     demuxed_queues: &mut DemuxedQueries,
     mut demuxed_ecrecover_queue: LogQueue<F>,
     num_rounds_per_circuit: usize,
@@ -33,7 +36,7 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
     use crate::zk_evm::zk_evm_abstractions::precompiles::ecrecover::ECRecoverRoundWitness;
     let mut ecrecover_memory_queries = vec![];
 
-    for (_cycle, _query, witness) in artifacts.ecrecover_witnesses.iter() {
+    for (_cycle, _query, witness) in ecrecover_witnesses.iter() {
         let ECRecoverRoundWitness {
             new_request: _,
             reads,
@@ -52,7 +55,7 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
     let precompile_calls_queue_states =
         std::mem::replace(&mut demuxed_ecrecover_queue.states, vec![]);
     let simulator_witness: Vec<_> = demuxed_ecrecover_queue.simulator.witness.clone().into();
-    let round_function_witness = std::mem::replace(&mut artifacts.ecrecover_witnesses, vec![]);
+    let round_function_witness = ecrecover_witnesses;
 
     let memory_queries = ecrecover_memory_queries;
 

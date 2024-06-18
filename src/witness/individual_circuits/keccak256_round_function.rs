@@ -6,6 +6,8 @@ use crate::zkevm_circuits::keccak256_round_function::{
     input::*, Keccak256PrecompileCallParamsWitness,
 };
 use circuit_definitions::encodings::*;
+use crate::zk_evm::aux_structures::LogQuery as LogQuery_;
+use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::Keccak256RoundWitness;
 use derivative::*;
 
 #[derive(Derivative)]
@@ -26,6 +28,7 @@ pub fn keccak256_decompose_into_per_circuit_witness<
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     artifacts: &mut FullBlockArtifacts<F>,
+    keccak_round_function_witnesses: Vec<(u32, LogQuery_, Vec<Keccak256RoundWitness>)>,
     demuxed_queues: &mut DemuxedQueries,
     mut demuxed_keccak_precompile_queue: LogQueue<F>,
     num_rounds_per_circuit: usize,
@@ -41,11 +44,10 @@ pub fn keccak256_decompose_into_per_circuit_witness<
     );
 
     // split into aux witness, don't mix with the memory
-    use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::Keccak256RoundWitness;
 
     let mut keccak_256_memory_queries = vec![];
 
-    for (_cycle, _query, witness) in artifacts.keccak_round_function_witnesses.iter() {
+    for (_cycle, _query, witness) in keccak_round_function_witnesses.iter() {
         for el in witness.iter() {
             let Keccak256RoundWitness {
                 new_request: _,
@@ -72,8 +74,7 @@ pub fn keccak256_decompose_into_per_circuit_witness<
         std::mem::replace(&mut demuxed_queues.keccak_precompile_queries, vec![]);
     let keccak_precompile_calls_queue_states =
         std::mem::replace(&mut demuxed_keccak_precompile_queue.states, vec![]);
-    let round_function_witness =
-        std::mem::replace(&mut artifacts.keccak_round_function_witnesses, vec![]);
+    let round_function_witness = keccak_round_function_witnesses;
 
     let memory_queries = keccak_256_memory_queries;
 

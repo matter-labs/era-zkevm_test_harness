@@ -891,10 +891,6 @@ fn create_artifacts_inner<
     let mut artifacts = FullBlockArtifacts::default();
     artifacts.all_prepared_decommittment_queries = prepared_decommittment_queries;
     artifacts.all_executed_decommittment_queries = executed_decommittment_queries;
-    artifacts.keccak_round_function_witnesses = keccak_round_function_witnesses;
-    artifacts.sha256_round_function_witnesses = sha256_round_function_witnesses;
-    artifacts.ecrecover_witnesses = ecrecover_witnesses;
-    artifacts.secp256r1_verify_witnesses = secp256r1_verify_witnesses;
 
     tracing::debug!("Processing artifacts queue");
 
@@ -1014,6 +1010,7 @@ fn create_artifacts_inner<
 
     let keccak256_circuits_data = keccak256_decompose_into_per_circuit_witness(
         this,
+        keccak_round_function_witnesses,
         &mut log_simulation_queries_data.demuxed_queries,
         demuxed_keccak_precompile_queue,
         geometry.cycles_per_keccak256_circuit as usize,
@@ -1034,6 +1031,7 @@ fn create_artifacts_inner<
 
     let sha256_circuits_data = sha256_decompose_into_per_circuit_witness(
         this,
+        sha256_round_function_witnesses,
         &mut log_simulation_queries_data.demuxed_queries,
         demuxed_sha256_precompile_queue,
         geometry.cycles_per_sha256_circuit as usize,
@@ -1054,6 +1052,7 @@ fn create_artifacts_inner<
 
     let ecrecover_circuits_data = ecrecover_decompose_into_per_circuit_witness(
         this,
+        ecrecover_witnesses,
         &mut log_simulation_queries_data.demuxed_queries,
         demuxed_ecrecover_queue,
         geometry.cycles_per_ecrecover_circuit as usize,
@@ -1072,6 +1071,7 @@ fn create_artifacts_inner<
 
     let secp256r1_verify_circuits_data = secp256r1_verify_decompose_into_per_circuit_witness(
         this,
+        secp256r1_verify_witnesses,
         &mut log_simulation_queries_data.demuxed_queries,
         demuxed_secp256r1_verify_queue,
         geometry.cycles_per_secp256r1_verify_circuit as usize,
