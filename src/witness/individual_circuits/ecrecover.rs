@@ -1,10 +1,10 @@
 use super::*;
 use crate::witness::full_block_artifact::LogQueue;
+use crate::zk_evm::aux_structures::LogQuery as LogQuery_;
+use crate::zk_evm::zk_evm_abstractions::precompiles::ecrecover::ECRecoverRoundWitness;
 use crate::zkevm_circuits::base_structures::log_query::*;
 use crate::zkevm_circuits::ecrecover::*;
 use circuit_definitions::encodings::*;
-use crate::zk_evm::aux_structures::LogQuery as LogQuery_;
-use crate::zk_evm::zk_evm_abstractions::precompiles::ecrecover::ECRecoverRoundWitness;
 use full_block_artifact::DemuxedQueries;
 
 // we want to simulate splitting of data into many separate instances of the same circuit.
