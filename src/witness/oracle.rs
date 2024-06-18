@@ -198,7 +198,7 @@ struct LogSimulationResult<'a, F: SmallField> {
         QueryMarker,
         ([F; QUEUE_STATE_WIDTH], [F; QUEUE_STATE_WIDTH]),
     )>,
-    global_beginnings_of_frames: BTreeMap<usize, u32>,
+    global_beginnings_of_frames: Vec<u32>,
     log_position_mapping: HashMap<&'a ExtendedLogQuery, isize>,
 }
 
@@ -249,7 +249,7 @@ fn log_simulation<'a>(
     // we want to have some hashmap that will indicate
     // that on some specific VM cycle we either read or write
 
-    let mut global_beginnings_of_frames: BTreeMap<usize, u32> = BTreeMap::new();
+    let mut global_beginnings_of_frames = vec![0];
 
     for el in callstack_with_aux_data.full_history.iter() {
         match el.action {
@@ -259,15 +259,13 @@ fn log_simulation<'a>(
             CallstackAction::PopFromStack { panic: _ } => {}
             CallstackAction::OutOfScope(OutOfScopeReason::Fresh) => {
                 // fresh fram
-                global_beginnings_of_frames.insert(el.frame_index, el.beginning_cycle);
+                global_beginnings_of_frames.push(el.beginning_cycle);
             }
             CallstackAction::OutOfScope(OutOfScopeReason::Exited { panic: _ }) => {
                 el.end_cycle.expect("frame must end");
             }
         }
     }
-
-    global_beginnings_of_frames.insert(0, 0);
 
     // now it's going to be fun. We simultaneously will do the following indexing:
     // - simulate the state of callstack as a sponge
@@ -492,7 +490,7 @@ use circuit_definitions::encodings::callstack_entry::{
 
 struct CallstackSimulationResult<F: SmallField> {
     callstack_sponge_encoding_ranges: Vec<(u32, [F; FULL_SPONGE_QUEUE_STATE_WIDTH])>,
-    rollback_queue_initial_tails_for_new_frames: Vec<(u32, [F; QUEUE_STATE_WIDTH])>,
+    rollback_queue_tails_for_frames: Vec<(u32, [F; QUEUE_STATE_WIDTH])>,
     callstack_values_witnesses: Vec<(u32, (ExtendedCallstackEntry<F>, CallstackSimulatorState<F>))>,
     rollback_queue_head_segments: Vec<(u32, [F; QUEUE_STATE_WIDTH])>,
     history_of_storage_log_states: BTreeMap<u32, StorageLogDetailedState<F>>,
@@ -505,9 +503,11 @@ fn callstack_simulation<'a>(
     round_function: &Poseidon2Goldilocks,
 ) -> CallstackSimulationResult<GoldilocksField> {
     let mut callstack_argebraic_simulator = CallstackSimulator::empty();
-    let mut callstack_values_witnesses = vec![]; // index of cycle -> witness for callstack
-                                                 // we need to simultaneously follow the logic of pushes/joins of the storage queues,
-                                                 // and encoding of the current callstack state as the sponge state
+
+    // index of cycle -> witness for callstack
+    let mut callstack_values_witnesses = vec![];
+    // we need to simultaneously follow the logic of pushes/joins of the storage queues,
+    // and encoding of the current callstack state as the sponge state
 
     // here we are interested in "frozen" elements that are in the stack,
     // so we never follow the "current", but add on push/pop
@@ -529,18 +529,17 @@ fn callstack_simulation<'a>(
         .last()
         .map(|el| el.2 .1)
         .unwrap_or([GoldilocksField::ZERO; QUEUE_STATE_WIDTH]);
-    let mut frame_rollback_tails = BTreeMap::new();
 
-    let mut rollback_queue_initial_tails_for_new_frames = vec![];
     let max_frame_idx = callstack_with_aux_data.monotonic_frame_counter;
+    // beginning cycle and rollback queue tail for every frame
+    let mut rollback_queue_tails_for_frames = vec![];
 
     for frame_index in 0..max_frame_idx {
         if frame_index == 0 {
             let tail = global_end_of_storage_log;
-            frame_rollback_tails.insert(frame_index, tail);
             let frame_beginning_cycle =
-                log_simulation_result.global_beginnings_of_frames[&frame_index];
-            rollback_queue_initial_tails_for_new_frames.push((frame_beginning_cycle, tail));
+                log_simulation_result.global_beginnings_of_frames[frame_index];
+            rollback_queue_tails_for_frames.push((frame_beginning_cycle, tail));
             continue;
         }
 
@@ -557,10 +556,8 @@ fn callstack_simulation<'a>(
             element
         };
 
-        frame_rollback_tails.insert(frame_index, tail);
-
-        let frame_beginning_cycle = log_simulation_result.global_beginnings_of_frames[&frame_index];
-        rollback_queue_initial_tails_for_new_frames.push((frame_beginning_cycle, tail));
+        let frame_beginning_cycle = log_simulation_result.global_beginnings_of_frames[frame_index];
+        rollback_queue_tails_for_frames.push((frame_beginning_cycle, tail));
     }
 
     // we know for every cycle a pointer to the positions of item's forward and rollback action into
@@ -763,7 +760,7 @@ fn callstack_simulation<'a>(
             }
             CallstackAction::OutOfScope(OutOfScopeReason::Fresh) => {
                 // we already identified initial rollback tails for new frames
-                let rollback_tail = frame_rollback_tails[&frame_index];
+                let rollback_tail = rollback_queue_tails_for_frames[frame_index].1;
                 // do not reset forward length as it's easy to merge
                 current_storage_log_state.frame_idx = frame_index;
                 current_storage_log_state.rollback_length = 0;
@@ -855,7 +852,7 @@ fn callstack_simulation<'a>(
 
     CallstackSimulationResult {
         callstack_sponge_encoding_ranges,
-        rollback_queue_initial_tails_for_new_frames,
+        rollback_queue_tails_for_frames,
         callstack_values_witnesses,
         rollback_queue_head_segments,
         history_of_storage_log_states,
@@ -904,7 +901,7 @@ fn create_artifacts_inner<
     FirstAndLastCircuit<StorageApplicationInstanceSynthesisFunction>,
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
-    Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>
+    Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
 ) {
     let storage_application_circuits;
     let storage_application_compact_forms;
@@ -1331,7 +1328,7 @@ pub fn create_artifacts_from_tracer<
 
     let CallstackSimulationResult {
         callstack_sponge_encoding_ranges,
-        rollback_queue_initial_tails_for_new_frames,
+        rollback_queue_tails_for_frames,
         callstack_values_witnesses,
         rollback_queue_head_segments,
         history_of_storage_log_states,
@@ -1499,8 +1496,8 @@ pub fn create_artifacts_from_tracer<
     let mut pubdata_cost_logs_range = AdvancingRange::new(&pubdata_cost_logs);
     let mut prepared_decommittment_queries_range =
         AdvancingRange::new(&artifacts.all_prepared_decommittment_queries);
-    let mut rollback_queue_initial_tails_for_new_frames_range =
-        AdvancingRange::new(&rollback_queue_initial_tails_for_new_frames);
+    let mut rollback_queue_tails_for_frames_range =
+        AdvancingRange::new(&rollback_queue_tails_for_frames);
     let mut callstack_values_witnesses_range = AdvancingRange::new(&callstack_values_witnesses);
     let mut rollback_queue_head_segments_range = AdvancingRange::new(&rollback_queue_head_segments);
     let mut flat_new_frames_history_range = AdvancingRange::new(&flat_new_frames_history);
@@ -1580,10 +1577,9 @@ pub fn create_artifacts_from_tracer<
             .get_slice(cycle_range.clone())
             .to_vec();
 
-        let rollback_queue_initial_tails_for_new_frames =
-            rollback_queue_initial_tails_for_new_frames_range
-                .get_slice(cycle_range.clone())
-                .to_vec();
+        let rollback_queue_initial_tails_for_new_frames = rollback_queue_tails_for_frames_range
+            .get_slice(cycle_range.clone())
+            .to_vec();
 
         let callstack_values_witnesses = callstack_values_witnesses_range
             .get_slice(cycle_range.clone())
