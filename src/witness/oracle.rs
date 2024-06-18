@@ -192,7 +192,7 @@ use crate::blake2::Blake2s256;
 use crate::witness::tree::*;
 
 struct LogSimulationResult<'a, F: SmallField> {
-    cycle_into_flat_sequence_index: BTreeMap<u32, (usize, Option<usize>)>,
+    cycle_to_query_and_rollback: BTreeMap<u32, (usize, Option<usize>)>,
     chain_of_states: Vec<(
         u32,
         QueryMarker,
@@ -251,9 +251,7 @@ fn log_simulation<'a>(
 
     for el in callstack_with_aux_data.full_history.iter() {
         match el.action {
-            CallstackAction::PushToStack => {
-                // not imporatant, we count by the next one
-            }
+            CallstackAction::PushToStack => {}
             CallstackAction::PopFromStack { panic: _ } => {}
             CallstackAction::OutOfScope(OutOfScopeReason::Fresh) => {
                 // fresh frame
@@ -275,7 +273,7 @@ fn log_simulation<'a>(
     // first we need to hash the queue itself, and create an index of "where in the final flat queue did log access from this frame end up"
     // If we encounter "read" that implies no reverts we use "None"
 
-    let mut cycle_into_flat_sequence_index = BTreeMap::<u32, (usize, Option<usize>)>::new();
+    let mut cycle_to_query_and_rollback = BTreeMap::<u32, (usize, Option<usize>)>::new();
 
     // from cycle into first two sponges (common), then tail-tail pair and 3rd sponge for forward, then head-head pair and 3rd sponge for rollback
     let mut sponges_data: HashMap<u32, LogAccessSpongesInfo<GoldilocksField>> = HashMap::new();
@@ -358,7 +356,7 @@ fn log_simulation<'a>(
 
             entry.rollback_info = Some(rollback_info);
 
-            cycle_into_flat_sequence_index
+            cycle_to_query_and_rollback
                 .get_mut(&cycle)
                 .expect("rollbacks always happen after forward case")
                 .1 = Some(pointer);
@@ -394,7 +392,7 @@ fn log_simulation<'a>(
             entry.common_sponges = common_sponges_info;
             entry.forward_info = forward_info;
 
-            cycle_into_flat_sequence_index.entry(*cycle).or_default().0 = pointer;
+            cycle_to_query_and_rollback.entry(*cycle).or_default().0 = pointer;
 
             match query_marker {
                 QueryMarker::Forward {
@@ -477,7 +475,7 @@ fn log_simulation<'a>(
 
     (
         LogSimulationResult {
-            cycle_into_flat_sequence_index,
+            cycle_to_query_and_rollback,
             chain_of_states,
             rollback_queue_tails_for_frames
         },
@@ -542,7 +540,7 @@ fn callstack_simulation<'a>(
 
     let mut rollback_queue_head_segments: Vec<(u32, [GoldilocksField; QUEUE_STATE_WIDTH])> = vec![];
 
-    for (cycle, (_forward, rollback)) in log_simulation_result.cycle_into_flat_sequence_index.iter()
+    for (cycle, (_forward, rollback)) in log_simulation_result.cycle_to_query_and_rollback.iter()
     {
         if let Some(pointer) = rollback {
             let state = &log_simulation_result.chain_of_states[*pointer];
@@ -578,7 +576,7 @@ fn callstack_simulation<'a>(
 
                 let range_of_interest = (begin_at_cycle + 1)..=end_cycle; // begin_at_cycle is formally bound to the previous one
                 let frame_action_span = log_simulation_result
-                    .cycle_into_flat_sequence_index
+                    .cycle_to_query_and_rollback
                     .range(range_of_interest);
                 for (cycle, (_forward_pointer, rollback_pointer)) in frame_action_span {
                     // always add to the forward
@@ -779,7 +777,7 @@ fn callstack_simulation<'a>(
 
                 let range_of_interest = (begin_at_cycle + 1)..=end_cycle; // begin_at_cycle is formally bound to the previous one
                 let frame_action_span = log_simulation_result
-                    .cycle_into_flat_sequence_index
+                    .cycle_to_query_and_rollback
                     .range(range_of_interest);
                 for (cycle, (_forward_pointer, rollback_pointer)) in frame_action_span {
                     // always add to the forward
