@@ -198,8 +198,7 @@ struct LogSimulationResult<'a, F: SmallField> {
         QueryMarker,
         ([F; QUEUE_STATE_WIDTH], [F; QUEUE_STATE_WIDTH]),
     )>,
-    global_beginnings_of_frames: Vec<u32>,
-    log_position_mapping: HashMap<&'a ExtendedLogQuery, isize>,
+    rollback_queue_tails_for_frames: Vec<(u32, [F; QUEUE_STATE_WIDTH])>
 }
 
 struct LogSimulationQueriesData<F: SmallField> {
@@ -239,17 +238,16 @@ fn log_simulation<'a>(
         "parent frame didn't exit"
     );
 
-    let mut log_position_mapping = HashMap::new();
     let mut demuxed_queries = DemuxedQueries::default();
 
     let mut original_log_queue_states = vec![];
-    let mut chain_of_states = vec![];
+    let mut chain_of_states: Vec<(u32, QueryMarker, ([GoldilocksField; 4], [GoldilocksField; 4]))> = vec![];
     let mut original_log_queue_simulator = None;
 
     // we want to have some hashmap that will indicate
     // that on some specific VM cycle we either read or write
 
-    let mut global_beginnings_of_frames = vec![0];
+    let mut frames_beginnings_and_rollback_tails = vec![];
 
     for el in callstack_with_aux_data.full_history.iter() {
         match el.action {
@@ -258,8 +256,8 @@ fn log_simulation<'a>(
             }
             CallstackAction::PopFromStack { panic: _ } => {}
             CallstackAction::OutOfScope(OutOfScopeReason::Fresh) => {
-                // fresh fram
-                global_beginnings_of_frames.push(el.beginning_cycle);
+                // fresh frame
+                frames_beginnings_and_rollback_tails.push((el.beginning_cycle, None));
             }
             CallstackAction::OutOfScope(OutOfScopeReason::Exited { panic: _ }) => {
                 el.end_cycle.expect("frame must end");
@@ -308,20 +306,22 @@ fn log_simulation<'a>(
                 cycle,
                 query,
             } => (marker, cycle, query),
-            a @ ExtendedLogQuery::FrameForwardHeadMarker(..) => {
-                log_position_mapping.insert(a, chain_of_states.len() as isize - 1);
+            ExtendedLogQuery::FrameForwardHeadMarker(..) => {
                 continue;
             }
-            a @ ExtendedLogQuery::FrameForwardTailMarker(..) => {
-                log_position_mapping.insert(a, chain_of_states.len() as isize - 1);
+            ExtendedLogQuery::FrameForwardTailMarker(..) => {
                 continue;
             }
-            a @ ExtendedLogQuery::FrameRollbackHeadMarker(..) => {
-                log_position_mapping.insert(a, chain_of_states.len() as isize - 1);
+            ExtendedLogQuery::FrameRollbackHeadMarker(..) => {
                 continue;
             }
-            a @ ExtendedLogQuery::FrameRollbackTailMarker(..) => {
-                log_position_mapping.insert(a, chain_of_states.len() as isize - 1);
+            ExtendedLogQuery::FrameRollbackTailMarker(frame_index) => {
+                frames_beginnings_and_rollback_tails[*frame_index].1 = Some(
+                    chain_of_states.last()
+                    .map(|el| el.2.1)
+                    .unwrap_or([GoldilocksField::ZERO; QUEUE_STATE_WIDTH])
+                );
+
                 continue;
             }
         };
@@ -469,12 +469,17 @@ fn log_simulation<'a>(
             }
         }
     }
+
+    let rollback_queue_tails_for_frames = frames_beginnings_and_rollback_tails.iter().enumerate().map(|(frame_index, (beginning_cycle, optional_tail))| {
+        assert!(optional_tail.is_some(), "No rollback tail for frame {frame_index}");
+        (*beginning_cycle, optional_tail.unwrap())
+    }).collect();
+
     (
         LogSimulationResult {
             cycle_into_flat_sequence_index,
             chain_of_states,
-            global_beginnings_of_frames,
-            log_position_mapping,
+            rollback_queue_tails_for_frames
         },
         LogSimulationQueriesData {
             original_log_queue_simulator,
@@ -490,7 +495,6 @@ use circuit_definitions::encodings::callstack_entry::{
 
 struct CallstackSimulationResult<F: SmallField> {
     callstack_sponge_encoding_ranges: Vec<(u32, [F; FULL_SPONGE_QUEUE_STATE_WIDTH])>,
-    rollback_queue_tails_for_frames: Vec<(u32, [F; QUEUE_STATE_WIDTH])>,
     callstack_values_witnesses: Vec<(u32, (ExtendedCallstackEntry<F>, CallstackSimulatorState<F>))>,
     rollback_queue_head_segments: Vec<(u32, [F; QUEUE_STATE_WIDTH])>,
     history_of_storage_log_states: BTreeMap<u32, StorageLogDetailedState<F>>,
@@ -499,7 +503,7 @@ struct CallstackSimulationResult<F: SmallField> {
 
 fn callstack_simulation<'a>(
     callstack_with_aux_data: &'a CallstackWithAuxData,
-    log_simulation_result: LogSimulationResult<'a, GoldilocksField>,
+    log_simulation_result: &LogSimulationResult<'a, GoldilocksField>,
     round_function: &Poseidon2Goldilocks,
 ) -> CallstackSimulationResult<GoldilocksField> {
     let mut callstack_argebraic_simulator = CallstackSimulator::empty();
@@ -529,36 +533,6 @@ fn callstack_simulation<'a>(
         .last()
         .map(|el| el.2 .1)
         .unwrap_or([GoldilocksField::ZERO; QUEUE_STATE_WIDTH]);
-
-    let max_frame_idx = callstack_with_aux_data.monotonic_frame_counter;
-    // beginning cycle and rollback queue tail for every frame
-    let mut rollback_queue_tails_for_frames = vec![];
-
-    for frame_index in 0..max_frame_idx {
-        if frame_index == 0 {
-            let tail = global_end_of_storage_log;
-            let frame_beginning_cycle =
-                log_simulation_result.global_beginnings_of_frames[frame_index];
-            rollback_queue_tails_for_frames.push((frame_beginning_cycle, tail));
-            continue;
-        }
-
-        let rollback_tail_marker = ExtendedLogQuery::FrameRollbackTailMarker(frame_index);
-        // wherever we have this marker we should look at the tail of the item right before it
-        let pos = log_simulation_result.log_position_mapping[&rollback_tail_marker];
-        let tail = if pos == -1 {
-            // empty
-            global_end_of_storage_log
-        } else {
-            let pointer = pos as usize;
-            let element = log_simulation_result.chain_of_states[pointer].2 .1;
-
-            element
-        };
-
-        let frame_beginning_cycle = log_simulation_result.global_beginnings_of_frames[frame_index];
-        rollback_queue_tails_for_frames.push((frame_beginning_cycle, tail));
-    }
 
     // we know for every cycle a pointer to the positions of item's forward and rollback action into
     // the flattened queue
@@ -760,7 +734,7 @@ fn callstack_simulation<'a>(
             }
             CallstackAction::OutOfScope(OutOfScopeReason::Fresh) => {
                 // we already identified initial rollback tails for new frames
-                let rollback_tail = rollback_queue_tails_for_frames[frame_index].1;
+                let rollback_tail = log_simulation_result.rollback_queue_tails_for_frames[frame_index].1;
                 // do not reset forward length as it's easy to merge
                 current_storage_log_state.frame_idx = frame_index;
                 current_storage_log_state.rollback_length = 0;
@@ -852,7 +826,6 @@ fn callstack_simulation<'a>(
 
     CallstackSimulationResult {
         callstack_sponge_encoding_ranges,
-        rollback_queue_tails_for_frames,
         callstack_values_witnesses,
         rollback_queue_head_segments,
         history_of_storage_log_states,
@@ -1328,16 +1301,18 @@ pub fn create_artifacts_from_tracer<
 
     let CallstackSimulationResult {
         callstack_sponge_encoding_ranges,
-        rollback_queue_tails_for_frames,
         callstack_values_witnesses,
         rollback_queue_head_segments,
         history_of_storage_log_states,
         global_end_of_storage_log,
     } = callstack_simulation(
         &callstack_with_aux_data,
-        log_simulation_result,
+        &log_simulation_result,
         round_function,
     );
+
+    let rollback_queue_tails_for_frames = log_simulation_result.rollback_queue_tails_for_frames.clone();
+    drop(log_simulation_result);
 
     mem_print("After callstack sim");
 
