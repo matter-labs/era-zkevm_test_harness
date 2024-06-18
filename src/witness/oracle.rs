@@ -937,37 +937,40 @@ fn create_artifacts_inner<
     // direct VM related part is done, other subcircuit's functionality is moved to other functions
     // that should properly do sorts and memory writes
 
-    use crate::witness::individual_circuits::sort_decommit_requests::compute_decommitts_sorter_circuit_snapshots;
+    {
+        use crate::witness::individual_circuits::sort_decommit_requests::compute_decommitts_sorter_circuit_snapshots;
 
-    tracing::debug!("Running code decommittments sorter simulation");
+        tracing::debug!("Running code decommittments sorter simulation");
 
-    let mut deduplicated_decommitment_queue_simulator = Default::default();
-    let mut deduplicated_decommittment_queue_states = Default::default();
-    let mut deduplicated_decommit_requests_with_data = Default::default();
+        let mut deduplicated_decommitment_queue_simulator = Default::default();
+        let mut deduplicated_decommittment_queue_states = Default::default();
+        let mut deduplicated_decommit_requests_with_data = Default::default();
 
-    this.decommittments_deduplicator_circuits_data = compute_decommitts_sorter_circuit_snapshots(
-        this,
-        &mut deduplicated_decommitment_queue_simulator,
-        &mut deduplicated_decommittment_queue_states,
-        &mut deduplicated_decommit_requests_with_data,
-        round_function,
-        geometry.cycles_code_decommitter_sorter as usize,
-    );
+        this.decommittments_deduplicator_circuits_data =
+            compute_decommitts_sorter_circuit_snapshots(
+                this,
+                &mut deduplicated_decommitment_queue_simulator,
+                &mut deduplicated_decommittment_queue_states,
+                &mut deduplicated_decommit_requests_with_data,
+                round_function,
+                geometry.cycles_code_decommitter_sorter as usize,
+            );
 
-    use crate::witness::individual_circuits::decommit_code::compute_decommitter_circuit_snapshots;
+        use crate::witness::individual_circuits::decommit_code::compute_decommitter_circuit_snapshots;
 
-    tracing::debug!("Running code code decommitter simulation");
+        tracing::debug!("Running code code decommitter simulation");
 
-    let code_decommitter_circuits_data = compute_decommitter_circuit_snapshots(
-        this,
-        &mut deduplicated_decommitment_queue_simulator,
-        &mut deduplicated_decommittment_queue_states,
-        &mut deduplicated_decommit_requests_with_data,
-        round_function,
-        geometry.cycles_per_code_decommitter as usize,
-    );
+        let code_decommitter_circuits_data = compute_decommitter_circuit_snapshots(
+            this,
+            &mut deduplicated_decommitment_queue_simulator,
+            &mut deduplicated_decommittment_queue_states,
+            &mut deduplicated_decommit_requests_with_data,
+            round_function,
+            geometry.cycles_per_code_decommitter as usize,
+        );
 
-    this.code_decommitter_circuits_data = code_decommitter_circuits_data;
+        this.code_decommitter_circuits_data = code_decommitter_circuits_data;
+    }
 
     // demux log queue
     use crate::witness::individual_circuits::log_demux::{compute_logs_demux, LogDemuxArtifacts};
@@ -1108,8 +1111,11 @@ fn create_artifacts_inner<
         Default::default(),
     );
 
-    let storage_deduplicator_circuit_data = compute_storage_dedup_and_sort(
-        this,
+    let (
+        deduplicated_rollup_storage_queue_simulator,
+        deduplicated_rollup_storage_queries,
+        storage_deduplicator_circuit_data,
+    ) = compute_storage_dedup_and_sort(
         &mut log_simulation_queries_data.demuxed_queries,
         demuxed_rollup_storage_queue,
         geometry.cycles_per_storage_sorter as usize,
@@ -1200,7 +1206,8 @@ fn create_artifacts_inner<
         storage_application_circuits,
         storage_application_compact_forms,
     ) = decompose_into_storage_application_witnesses(
-        this,
+        deduplicated_rollup_storage_queue_simulator,
+        deduplicated_rollup_storage_queries,
         tree,
         round_function,
         geometry.cycles_per_storage_application as usize,

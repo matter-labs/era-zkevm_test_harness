@@ -51,11 +51,6 @@ pub struct FullBlockArtifacts<F: SmallField> {
     pub all_executed_decommittment_queries: Vec<(u32, DecommittmentQuery, Vec<U256>)>,
     pub all_decommittment_queue_states: Vec<(u32, DecommittmentQueueState<F>)>,
 
-    // deduplicated
-    pub deduplicated_rollup_storage_queries: Vec<LogQuery>,
-    pub deduplicated_rollup_storage_queue_simulator: LogQueueSimulator<F>,
-    pub deduplicated_to_l1_queue_simulator: LogQueueSimulator<F>,
-
     // keep precompile round functions data
     pub keccak_round_function_witnesses: Vec<(u32, LogQuery, Vec<Keccak256RoundWitness>)>,
     pub sha256_round_function_witnesses: Vec<(u32, LogQuery, Vec<Sha256RoundWitness>)>,

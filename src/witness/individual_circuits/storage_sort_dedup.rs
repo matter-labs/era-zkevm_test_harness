@@ -1,6 +1,9 @@
+use std::default;
+
 use super::*;
 use crate::witness::full_block_artifact::DemuxedQueries;
 use crate::witness::full_block_artifact::LogQueue;
+use crate::zk_evm::aux_structures::LogQuery;
 use crate::zkevm_circuits::base_structures::log_query::LOG_QUERY_PACKED_WIDTH;
 use crate::zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
 use crate::zkevm_circuits::storage_validity_by_grand_product::input::*;
@@ -11,18 +14,21 @@ pub fn compute_storage_dedup_and_sort<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
-    artifacts: &mut FullBlockArtifacts<F>,
     demuxed_queues: &mut DemuxedQueries,
     demuxed_rollup_storage_queue: LogQueue<F>,
     per_circuit_capacity: usize,
     round_function: &R,
-) -> Vec<StorageDeduplicatorInstanceWitness<F>> {
+) -> (
+    LogQueueSimulator<F>,
+    Vec<LogQuery>,
+    Vec<StorageDeduplicatorInstanceWitness<F>>,
+) {
     // trivial case if nothing to process
 
     const SHARD_ID_TO_PROCEED: u8 = 0; // rollup shard ID
 
     if demuxed_queues.rollup_storage_queries.is_empty() {
-        return vec![];
+        return (LogQueueSimulator::<F>::empty(), vec![], vec![]);
     }
 
     // first we sort the storage log (only storage now) by composite key
@@ -34,8 +40,7 @@ pub fn compute_storage_dedup_and_sort<
 
     // dbg!(&sorted_storage_queries_with_extra_timestamp);
     // dbg!(&deduplicated_rollup_storage_queries);
-
-    artifacts.deduplicated_rollup_storage_queries = deduplicated_rollup_storage_queries;
+    let deduplicated_rollup_storage_queries = deduplicated_rollup_storage_queries;
 
     let mut intermediate_sorted_log_simulator =
         LogWithExtendedEnumerationQueueSimulator::<F>::empty();
@@ -207,7 +212,7 @@ pub fn compute_storage_dedup_and_sort<
     let mut this_cell_current_value = U256::zero();
     let mut this_cell_current_depth = 0u32;
 
-    let mut deduplicated_queries_it = artifacts.deduplicated_rollup_storage_queries.iter();
+    let mut deduplicated_queries_it = deduplicated_rollup_storage_queries.iter();
 
     let mut current_final_sorted_queue_state =
         take_queue_state_from_simulator(&result_queue_simulator);
@@ -654,7 +659,9 @@ pub fn compute_storage_dedup_and_sort<
         .observable_output
         .final_sorted_queue_state = final_sorted_queue_state.clone();
 
-    artifacts.deduplicated_rollup_storage_queue_simulator = result_queue_simulator;
-
-    results
+    (
+        result_queue_simulator,
+        deduplicated_rollup_storage_queries,
+        results,
+    )
 }
