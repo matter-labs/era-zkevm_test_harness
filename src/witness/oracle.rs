@@ -11,7 +11,7 @@ use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 use crate::ethereum_types::U256;
 use crate::toolset::GeometryConfig;
 use crate::witness::advancing_range::AdvancingRange;
-use crate::witness::full_block_artifact::FullBlockArtifacts;
+use crate::witness::full_block_artifact::{DemuxedQueries, FullBlockArtifacts};
 use crate::witness::postprocessing::{CircuitMaker, FirstAndLastCircuit};
 use crate::witness::tracer::{QueryMarker, WitnessTracer};
 use crate::zk_evm::aux_structures::DecommittmentQuery;
@@ -198,27 +198,13 @@ struct LogSimulationResult<'a, F: SmallField> {
         QueryMarker,
         ([F; QUEUE_STATE_WIDTH], [F; QUEUE_STATE_WIDTH]),
     )>,
-    rollback_queue_tails_for_frames: Vec<(u32, [F; QUEUE_STATE_WIDTH])>
+    rollback_queue_tails_for_frames: Vec<(u32, [F; QUEUE_STATE_WIDTH])>,
 }
 
 struct LogSimulationQueriesData<F: SmallField> {
-    original_log_queue_simulator: Option<LogQueueSimulator<F>>,
-    original_log_queue_states: Vec<(u32, LogQueueState<F>)>,
+    applied_log_queue_simulator: Option<LogQueueSimulator<F>>,
+    applied_log_queue_states: Vec<(u32, LogQueueState<F>)>,
     demuxed_queries: DemuxedQueries,
-}
-
-#[derive(Derivative)]
-#[derivative(Default)]
-struct DemuxedQueries {
-    rollup_storage_queries: Vec<LogQuery>,
-    porter_storage_queries: Vec<LogQuery>,
-    event_queries: Vec<LogQuery>,
-    to_l1_queries: Vec<LogQuery>,
-    keccak_precompile_queries: Vec<LogQuery>,
-    sha256_precompile_queries: Vec<LogQuery>,
-    ecrecover_queries: Vec<LogQuery>,
-    secp256r1_verify_queries: Vec<LogQuery>,
-    transient_storage_queries: Vec<LogQuery>,
 }
 
 fn log_simulation<'a>(
@@ -238,11 +224,21 @@ fn log_simulation<'a>(
         "parent frame didn't exit"
     );
 
+    // including rollbacks
+    let total_queries_applied = callstack_with_aux_data.forward_flattened_counter
+        + callstack_with_aux_data.total_rolled_back;
+    let total_amount_of_queries =
+        total_queries_applied + callstack_with_aux_data.rollback_flattened_counter;
+
     let mut demuxed_queries = DemuxedQueries::default();
 
-    let mut original_log_queue_states = vec![];
-    let mut chain_of_states: Vec<(u32, QueryMarker, ([GoldilocksField; 4], [GoldilocksField; 4]))> = vec![];
-    let mut original_log_queue_simulator = None;
+    let mut applied_log_queue_states = vec![];
+    let mut chain_of_states: Vec<(
+        u32,
+        QueryMarker,
+        ([GoldilocksField; 4], [GoldilocksField; 4]),
+    )> = vec![];
+    let mut applied_log_queue_simulator = None;
 
     // we want to have some hashmap that will indicate
     // that on some specific VM cycle we either read or write
@@ -290,12 +286,12 @@ fn log_simulation<'a>(
     {
         if !was_applied {
             // save the latest "usefull"
-            if original_log_queue_simulator.is_none() {
-                original_log_queue_simulator = Some(log_queue_simulator.clone());
+            if applied_log_queue_simulator.is_none() {
+                applied_log_queue_simulator = Some(log_queue_simulator.clone());
             }
         } else {
             // check for no gaps
-            assert!(original_log_queue_simulator.is_none());
+            assert!(applied_log_queue_simulator.is_none());
         }
 
         let (query_marker, cycle, query) = match extended_query {
@@ -315,9 +311,10 @@ fn log_simulation<'a>(
             }
             ExtendedLogQuery::FrameRollbackTailMarker(frame_index) => {
                 frames_beginnings_and_rollback_tails[*frame_index].1 = Some(
-                    chain_of_states.last()
-                    .map(|el| el.2.1)
-                    .unwrap_or([GoldilocksField::ZERO; QUEUE_STATE_WIDTH])
+                    chain_of_states
+                        .last()
+                        .map(|el| el.2 .1)
+                        .unwrap_or([GoldilocksField::ZERO; QUEUE_STATE_WIDTH]),
                 );
 
                 continue;
@@ -327,11 +324,13 @@ fn log_simulation<'a>(
         let (_old_tail, intermediate_info) =
             log_queue_simulator.push_and_output_intermediate_data(*query, round_function);
 
-        let pointer = chain_of_states.len();
+        let pointer_to_chain_of_states = chain_of_states.len();
         // we just log all chains of old tail -> new tail, and will interpret them later
-        let prev_tail: [GoldilocksField; QUEUE_STATE_WIDTH] = intermediate_info.previous_tail;
-        let tail: [GoldilocksField; QUEUE_STATE_WIDTH] = intermediate_info.tail;
-        chain_of_states.push((*cycle, *query_marker, (prev_tail, tail)));
+        chain_of_states.push((
+            *cycle,
+            *query_marker,
+            (intermediate_info.previous_tail, intermediate_info.tail),
+        ));
 
         let key = query.timestamp.0;
         if query.rollback {
@@ -359,7 +358,7 @@ fn log_simulation<'a>(
             cycle_to_query_and_rollback
                 .get_mut(&cycle)
                 .expect("rollbacks always happen after forward case")
-                .1 = Some(pointer);
+                .1 = Some(pointer_to_chain_of_states);
 
             match query_marker {
                 QueryMarker::Rollback {
@@ -392,7 +391,7 @@ fn log_simulation<'a>(
             entry.common_sponges = common_sponges_info;
             entry.forward_info = forward_info;
 
-            cycle_to_query_and_rollback.entry(*cycle).or_default().0 = pointer;
+            cycle_to_query_and_rollback.entry(*cycle).or_default().0 = pointer_to_chain_of_states;
 
             match query_marker {
                 QueryMarker::Forward {
@@ -420,7 +419,7 @@ fn log_simulation<'a>(
         // and sort
         if was_applied {
             // push state
-            original_log_queue_states.push((*cycle, intermediate_info));
+            applied_log_queue_states.push((*cycle, intermediate_info));
             match query.aux_byte {
                 STORAGE_AUX_BYTE => {
                     // sort rollup and porter
@@ -468,20 +467,27 @@ fn log_simulation<'a>(
         }
     }
 
-    let rollback_queue_tails_for_frames = frames_beginnings_and_rollback_tails.iter().enumerate().map(|(frame_index, (beginning_cycle, optional_tail))| {
-        assert!(optional_tail.is_some(), "No rollback tail for frame {frame_index}");
-        (*beginning_cycle, optional_tail.unwrap())
-    }).collect();
+    let rollback_queue_tails_for_frames = frames_beginnings_and_rollback_tails
+        .iter()
+        .enumerate()
+        .map(|(frame_index, (beginning_cycle, optional_tail))| {
+            assert!(
+                optional_tail.is_some(),
+                "No rollback tail for frame {frame_index}"
+            );
+            (*beginning_cycle, optional_tail.unwrap())
+        })
+        .collect();
 
     (
         LogSimulationResult {
             cycle_to_query_and_rollback,
             chain_of_states,
-            rollback_queue_tails_for_frames
+            rollback_queue_tails_for_frames,
         },
         LogSimulationQueriesData {
-            original_log_queue_simulator,
-            original_log_queue_states,
+            applied_log_queue_simulator,
+            applied_log_queue_states,
             demuxed_queries,
         },
     )
@@ -540,8 +546,7 @@ fn callstack_simulation<'a>(
 
     let mut rollback_queue_head_segments: Vec<(u32, [GoldilocksField; QUEUE_STATE_WIDTH])> = vec![];
 
-    for (cycle, (_forward, rollback)) in log_simulation_result.cycle_to_query_and_rollback.iter()
-    {
+    for (cycle, (_forward, rollback)) in log_simulation_result.cycle_to_query_and_rollback.iter() {
         if let Some(pointer) = rollback {
             let state = &log_simulation_result.chain_of_states[*pointer];
             rollback_queue_head_segments.push((*cycle, state.2 .0));
@@ -732,7 +737,8 @@ fn callstack_simulation<'a>(
             }
             CallstackAction::OutOfScope(OutOfScopeReason::Fresh) => {
                 // we already identified initial rollback tails for new frames
-                let rollback_tail = log_simulation_result.rollback_queue_tails_for_frames[frame_index].1;
+                let rollback_tail =
+                    log_simulation_result.rollback_queue_tails_for_frames[frame_index].1;
                 // do not reset forward length as it's easy to merge
                 current_storage_log_state.frame_idx = frame_index;
                 current_storage_log_state.rollback_length = 0;
@@ -857,7 +863,7 @@ fn create_artifacts_inner<
     sha256_round_function_witnesses: Vec<(u32, LogQuery, Vec<Sha256RoundWitness>)>,
     ecrecover_witnesses: Vec<(u32, LogQuery, ECRecoverRoundWitness)>,
     secp256r1_verify_witnesses: Vec<(u32, LogQuery, Secp256r1VerifyRoundWitness)>,
-    log_simulation_queries_data: LogSimulationQueriesData<GoldilocksField>,
+    mut log_simulation_queries_data: LogSimulationQueriesData<GoldilocksField>,
     round_function: &Poseidon2Goldilocks,
     num_non_deterministic_heap_queries: usize,
     mut cs_for_witness_generation: &mut ConstraintSystemImpl<GoldilocksField, Poseidon2Goldilocks>,
@@ -889,31 +895,6 @@ fn create_artifacts_inner<
     artifacts.sha256_round_function_witnesses = sha256_round_function_witnesses;
     artifacts.ecrecover_witnesses = ecrecover_witnesses;
     artifacts.secp256r1_verify_witnesses = secp256r1_verify_witnesses;
-    artifacts.original_log_queue_simulator = log_simulation_queries_data
-        .original_log_queue_simulator
-        .unwrap_or(LogQueueSimulator::empty());
-    artifacts.original_log_queue_states = log_simulation_queries_data.original_log_queue_states;
-
-    artifacts.demuxed_rollup_storage_queries = log_simulation_queries_data
-        .demuxed_queries
-        .rollup_storage_queries;
-    artifacts.demuxed_event_queries = log_simulation_queries_data.demuxed_queries.event_queries;
-    artifacts.demuxed_to_l1_queries = log_simulation_queries_data.demuxed_queries.to_l1_queries;
-    artifacts.demuxed_keccak_precompile_queries = log_simulation_queries_data
-        .demuxed_queries
-        .keccak_precompile_queries;
-    artifacts.demuxed_sha256_precompile_queries = log_simulation_queries_data
-        .demuxed_queries
-        .sha256_precompile_queries;
-    artifacts.demuxed_ecrecover_queries = log_simulation_queries_data
-        .demuxed_queries
-        .ecrecover_queries;
-    artifacts.demuxed_secp256r1_verify_queries = log_simulation_queries_data
-        .demuxed_queries
-        .secp256r1_verify_queries;
-    artifacts.demuxed_transient_storage_queries = log_simulation_queries_data
-        .demuxed_queries
-        .transient_storage_queries;
 
     tracing::debug!("Processing artifacts queue");
 
@@ -989,13 +970,21 @@ fn create_artifacts_inner<
     this.code_decommitter_circuits_data = code_decommitter_circuits_data;
 
     // demux log queue
-    use crate::witness::individual_circuits::log_demux::compute_logs_demux;
+    use crate::witness::individual_circuits::log_demux::{compute_logs_demux, LogDemuxArtifacts};
 
     tracing::debug!("Running log demux simulation");
 
+    let log_demux_artifacts = LogDemuxArtifacts {
+        applied_log_queue_simulator: log_simulation_queries_data
+            .applied_log_queue_simulator
+            .unwrap_or(LogQueueSimulator::empty()),
+        applied_log_queue_states: log_simulation_queries_data.applied_log_queue_states,
+    };
+
     let (log_demux_circuits_, log_demux_circuits_compact_forms_witnesses_, mut all_demuxed_queues) =
         compute_logs_demux(
-            this,
+            log_demux_artifacts,
+            &log_simulation_queries_data.demuxed_queries,
             geometry.cycles_per_log_demuxer as usize,
             round_function,
             geometry,
@@ -1022,6 +1011,7 @@ fn create_artifacts_inner<
 
     let keccak256_circuits_data = keccak256_decompose_into_per_circuit_witness(
         this,
+        &mut log_simulation_queries_data.demuxed_queries,
         demuxed_keccak_precompile_queue,
         geometry.cycles_per_keccak256_circuit as usize,
         round_function,
@@ -1041,6 +1031,7 @@ fn create_artifacts_inner<
 
     let sha256_circuits_data = sha256_decompose_into_per_circuit_witness(
         this,
+        &mut log_simulation_queries_data.demuxed_queries,
         demuxed_sha256_precompile_queue,
         geometry.cycles_per_sha256_circuit as usize,
         round_function,
@@ -1060,6 +1051,7 @@ fn create_artifacts_inner<
 
     let ecrecover_circuits_data = ecrecover_decompose_into_per_circuit_witness(
         this,
+        &mut log_simulation_queries_data.demuxed_queries,
         demuxed_ecrecover_queue,
         geometry.cycles_per_ecrecover_circuit as usize,
         round_function,
@@ -1077,6 +1069,7 @@ fn create_artifacts_inner<
 
     let secp256r1_verify_circuits_data = secp256r1_verify_decompose_into_per_circuit_witness(
         this,
+        &mut log_simulation_queries_data.demuxed_queries,
         demuxed_secp256r1_verify_queue,
         geometry.cycles_per_secp256r1_verify_circuit as usize,
         round_function,
@@ -1117,6 +1110,7 @@ fn create_artifacts_inner<
 
     let storage_deduplicator_circuit_data = compute_storage_dedup_and_sort(
         this,
+        &mut log_simulation_queries_data.demuxed_queries,
         demuxed_rollup_storage_queue,
         geometry.cycles_per_storage_sorter as usize,
         round_function,
@@ -1133,7 +1127,7 @@ fn create_artifacts_inner<
     );
 
     let events_deduplicator_circuit_data = compute_events_dedup_and_sort(
-        &this.demuxed_event_queries,
+        &log_simulation_queries_data.demuxed_queries.event_queries,
         &demuxed_event_queue,
         &mut Default::default(),
         geometry.cycles_per_events_or_l1_messages_sorter as usize,
@@ -1151,7 +1145,7 @@ fn create_artifacts_inner<
 
     let mut deduplicated_to_l1_queue_simulator = Default::default();
     let l1_messages_deduplicator_circuit_data = compute_events_dedup_and_sort(
-        &this.demuxed_to_l1_queries,
+        &log_simulation_queries_data.demuxed_queries.to_l1_queries,
         &demuxed_to_l1_queue,
         &mut deduplicated_to_l1_queue_simulator,
         geometry.cycles_per_events_or_l1_messages_sorter as usize,
@@ -1170,7 +1164,7 @@ fn create_artifacts_inner<
     );
 
     let transient_storage_sorter_circuit_data = compute_transient_storage_dedup_and_sort(
-        this,
+        &mut log_simulation_queries_data.demuxed_queries,
         demuxed_transient_storage_queue,
         geometry.cycles_per_transient_storage_sorter as usize,
         round_function,
@@ -1309,7 +1303,9 @@ pub fn create_artifacts_from_tracer<
         round_function,
     );
 
-    let rollback_queue_tails_for_frames = log_simulation_result.rollback_queue_tails_for_frames.clone();
+    let rollback_queue_tails_for_frames = log_simulation_result
+        .rollback_queue_tails_for_frames
+        .clone();
     drop(log_simulation_result);
 
     mem_print("After callstack sim");

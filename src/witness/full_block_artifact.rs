@@ -24,6 +24,20 @@ use circuit_definitions::zkevm_circuits::transient_storage_validity_by_grand_pro
 use derivative::Derivative;
 
 #[derive(Derivative)]
+#[derivative(Default)]
+pub struct DemuxedQueries {
+    pub rollup_storage_queries: Vec<LogQuery>,
+    pub porter_storage_queries: Vec<LogQuery>,
+    pub event_queries: Vec<LogQuery>,
+    pub to_l1_queries: Vec<LogQuery>,
+    pub keccak_precompile_queries: Vec<LogQuery>,
+    pub sha256_precompile_queries: Vec<LogQuery>,
+    pub ecrecover_queries: Vec<LogQuery>,
+    pub secp256r1_verify_queries: Vec<LogQuery>,
+    pub transient_storage_queries: Vec<LogQuery>,
+}
+
+#[derive(Derivative)]
 #[derivative(Clone, Default(bound = ""))]
 pub struct FullBlockArtifacts<F: SmallField> {
     pub is_processed: bool,
@@ -36,20 +50,6 @@ pub struct FullBlockArtifacts<F: SmallField> {
     pub all_prepared_decommittment_queries: Vec<(u32, DecommittmentQuery)>,
     pub all_executed_decommittment_queries: Vec<(u32, DecommittmentQuery, Vec<U256>)>,
     pub all_decommittment_queue_states: Vec<(u32, DecommittmentQueueState<F>)>,
-
-    // log queue
-    pub original_log_queue_simulator: LogQueueSimulator<F>,
-    pub original_log_queue_states: Vec<(u32, LogQueueState<F>)>,
-
-    // demuxed log queues
-    pub demuxed_rollup_storage_queries: Vec<LogQuery>,
-    pub demuxed_event_queries: Vec<LogQuery>,
-    pub demuxed_to_l1_queries: Vec<LogQuery>,
-    pub demuxed_keccak_precompile_queries: Vec<LogQuery>,
-    pub demuxed_sha256_precompile_queries: Vec<LogQuery>,
-    pub demuxed_ecrecover_queries: Vec<LogQuery>,
-    pub demuxed_transient_storage_queries: Vec<LogQuery>,
-    pub demuxed_secp256r1_verify_queries: Vec<LogQuery>,
 
     // deduplicated
     pub deduplicated_rollup_storage_queries: Vec<LogQuery>,

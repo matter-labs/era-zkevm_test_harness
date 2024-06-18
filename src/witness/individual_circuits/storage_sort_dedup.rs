@@ -1,4 +1,5 @@
 use super::*;
+use crate::witness::full_block_artifact::DemuxedQueries;
 use crate::witness::full_block_artifact::LogQueue;
 use crate::zkevm_circuits::base_structures::log_query::LOG_QUERY_PACKED_WIDTH;
 use crate::zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
@@ -11,6 +12,7 @@ pub fn compute_storage_dedup_and_sort<
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     artifacts: &mut FullBlockArtifacts<F>,
+    demuxed_queues: &mut DemuxedQueries,
     demuxed_rollup_storage_queue: LogQueue<F>,
     per_circuit_capacity: usize,
     round_function: &R,
@@ -19,7 +21,7 @@ pub fn compute_storage_dedup_and_sort<
 
     const SHARD_ID_TO_PROCEED: u8 = 0; // rollup shard ID
 
-    if artifacts.demuxed_rollup_storage_queries.is_empty() {
+    if demuxed_queues.rollup_storage_queries.is_empty() {
         return vec![];
     }
 
@@ -28,7 +30,7 @@ pub fn compute_storage_dedup_and_sort<
     use crate::witness::sort_storage_access::sort_storage_access_queries;
 
     let (sorted_storage_queries_with_extra_timestamp, deduplicated_rollup_storage_queries) =
-        sort_storage_access_queries(&artifacts.demuxed_rollup_storage_queries);
+        sort_storage_access_queries(&demuxed_queues.rollup_storage_queries);
 
     // dbg!(&sorted_storage_queries_with_extra_timestamp);
     // dbg!(&deduplicated_rollup_storage_queries);
@@ -81,8 +83,8 @@ pub fn compute_storage_dedup_and_sort<
         intermediate_sorted_log_simulator_final_state.tail.length
     );
 
-    let lhs_contributions: Vec<_> = artifacts
-        .demuxed_rollup_storage_queries
+    let lhs_contributions: Vec<_> = demuxed_queues
+        .rollup_storage_queries
         .iter()
         .enumerate()
         .map(|(idx, el)| {

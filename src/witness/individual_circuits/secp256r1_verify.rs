@@ -1,4 +1,5 @@
 use super::*;
+use crate::witness::full_block_artifact::DemuxedQueries;
 use crate::witness::full_block_artifact::LogQueue;
 use crate::zkevm_circuits::base_structures::log_query::*;
 use crate::zkevm_circuits::secp256r1_verify::*;
@@ -13,6 +14,7 @@ pub fn secp256r1_verify_decompose_into_per_circuit_witness<
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     artifacts: &mut FullBlockArtifacts<F>,
+    demuxed_queues: &mut DemuxedQueries,
     mut demuxed_secp256r1_verify_queue: LogQueue<F>,
     num_rounds_per_circuit: usize,
     round_function: &R,
@@ -46,8 +48,7 @@ pub fn secp256r1_verify_decompose_into_per_circuit_witness<
 
     let mut result = vec![];
 
-    let precompile_calls =
-        std::mem::replace(&mut artifacts.demuxed_secp256r1_verify_queries, vec![]);
+    let precompile_calls = std::mem::replace(&mut demuxed_queues.secp256r1_verify_queries, vec![]);
     let precompile_calls_queue_states =
         std::mem::replace(&mut demuxed_secp256r1_verify_queue.states, vec![]);
     let simulator_witness: Vec<_> = demuxed_secp256r1_verify_queue

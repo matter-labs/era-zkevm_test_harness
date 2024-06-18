@@ -4,6 +4,7 @@ use self::toolset::GeometryConfig;
 use self::witness::postprocessing::FirstAndLastCircuit;
 
 use super::*;
+use crate::witness::full_block_artifact::DemuxedQueries;
 use crate::witness::full_block_artifact::LogQueue;
 use crate::witness::postprocessing::CircuitMaker;
 use crate::zkevm_circuits::base_structures::log_query::*;
@@ -17,12 +18,19 @@ use circuit_definitions::zkevm_circuits::demux_log_queue::DemuxOutput;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use circuit_definitions::{encodings::*, Field, RoundFunction};
 
+pub struct LogDemuxArtifacts<F: SmallField> {
+    // log queue
+    pub applied_log_queue_simulator: LogQueueSimulator<F>,
+    pub applied_log_queue_states: Vec<(u32, LogQueueState<F>)>,
+}
+
 /// Take a storage log, output logs separately for events, l1 messages, storage, etc
 pub fn compute_logs_demux<
     CB: FnMut(ZkSyncBaseLayerCircuit),
     QSCB: FnMut(u64, RecursionQueueSimulator<Field>, Vec<ClosedFormInputCompactFormWitness<Field>>),
 >(
-    artifacts: &mut FullBlockArtifacts<Field>,
+    mut log_demux_artifacts: LogDemuxArtifacts<Field>,
+    demuxed_queues: &DemuxedQueries,
     per_circuit_capacity: usize,
     round_function: &RoundFunction,
     geometry: &GeometryConfig,
@@ -35,8 +43,8 @@ pub fn compute_logs_demux<
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
     [LogQueue<Field>; NUM_DEMUX_OUTPUTS],
 ) {
-    let _ = artifacts
-        .original_log_queue_simulator
+    let _ = log_demux_artifacts
+        .applied_log_queue_simulator
         .witness
         .make_contiguous();
 
@@ -50,8 +58,8 @@ pub fn compute_logs_demux<
     );
 
     // trivial empty case
-    if artifacts
-        .original_log_queue_simulator
+    if log_demux_artifacts
+        .applied_log_queue_simulator
         .witness
         .as_slices()
         .0
@@ -75,22 +83,26 @@ pub fn compute_logs_demux<
 
     // parallelizable
 
-    assert!(artifacts
-        .original_log_queue_simulator
+    assert!(log_demux_artifacts
+        .applied_log_queue_simulator
         .witness
         .as_slices()
         .1
         .is_empty());
 
-    let input_queue_witness = &artifacts.original_log_queue_simulator.witness.as_slices().0;
-    let mut states_iter = artifacts.original_log_queue_states.iter();
+    let input_queue_witness = &log_demux_artifacts
+        .applied_log_queue_simulator
+        .witness
+        .as_slices()
+        .0;
+    let mut states_iter = log_demux_artifacts.applied_log_queue_states.iter();
 
     let num_chunks = input_queue_witness.chunks(per_circuit_capacity).len();
 
     let mut state_idx = 0;
 
     let full_log_queue_state =
-        take_queue_state_from_simulator(&artifacts.original_log_queue_simulator);
+        take_queue_state_from_simulator(&log_demux_artifacts.applied_log_queue_simulator);
 
     use crate::zk_evm::zkevm_opcode_defs::system_params::{
         ECRECOVER_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
@@ -104,21 +116,19 @@ pub fn compute_logs_demux<
         TRANSIENT_STORAGE_AUX_BYTE,
     };
 
-    let mut demuxed_rollup_storage_queries_it = artifacts.demuxed_rollup_storage_queries.iter();
-    let mut demuxed_event_queries_it = artifacts.demuxed_event_queries.iter();
-    let mut demuxed_to_l1_queries_it = artifacts.demuxed_to_l1_queries.iter();
-    let mut demuxed_keccak_precompile_queries_it =
-        artifacts.demuxed_keccak_precompile_queries.iter();
-    let mut demuxed_sha256_precompile_queries_it =
-        artifacts.demuxed_sha256_precompile_queries.iter();
-    let mut demuxed_ecrecover_queries_it = artifacts.demuxed_ecrecover_queries.iter();
-    let mut demuxed_secp256r1_verify_queries_it = artifacts.demuxed_secp256r1_verify_queries.iter();
-    let mut demuxed_transient_storage_it = artifacts.demuxed_transient_storage_queries.iter();
+    let mut demuxed_rollup_storage_queries_it = demuxed_queues.rollup_storage_queries.iter();
+    let mut demuxed_event_queries_it = demuxed_queues.event_queries.iter();
+    let mut demuxed_to_l1_queries_it = demuxed_queues.to_l1_queries.iter();
+    let mut demuxed_keccak_precompile_queries_it = demuxed_queues.keccak_precompile_queries.iter();
+    let mut demuxed_sha256_precompile_queries_it = demuxed_queues.sha256_precompile_queries.iter();
+    let mut demuxed_ecrecover_queries_it = demuxed_queues.ecrecover_queries.iter();
+    let mut demuxed_secp256r1_verify_queries_it = demuxed_queues.secp256r1_verify_queries.iter();
+    let mut demuxed_transient_storage_it = demuxed_queues.transient_storage_queries.iter();
 
     let mut input_passthrough_data = LogDemuxerInputData::placeholder_witness();
     // we only need the state of the original input
     input_passthrough_data.initial_log_queue_state =
-        take_queue_state_from_simulator(&artifacts.original_log_queue_simulator);
+        take_queue_state_from_simulator(&log_demux_artifacts.applied_log_queue_simulator);
 
     let output_passthrough_data = LogDemuxerOutputData::placeholder_witness();
     let mut output_queues = std::array::from_fn(|_| LogQueue::<Field>::default());
@@ -252,8 +262,8 @@ pub fn compute_logs_demux<
 
         // make the output
 
-        let input_witness: VecDeque<_> = artifacts
-            .original_log_queue_simulator
+        let input_witness: VecDeque<_> = log_demux_artifacts
+            .applied_log_queue_simulator
             .witness
             .iter()
             .skip(state_idx)
@@ -265,12 +275,17 @@ pub fn compute_logs_demux<
 
         state_idx += per_circuit_capacity;
 
-        let idx = std::cmp::min(artifacts.original_log_queue_states.len(), state_idx) - 1;
+        let idx = std::cmp::min(
+            log_demux_artifacts.applied_log_queue_states.len(),
+            state_idx,
+        ) - 1;
 
         let mut fsm_output = LogDemuxerFSMInputOutput::placeholder_witness();
         let mut initial_log_queue_state = full_log_queue_state.clone();
-        initial_log_queue_state.head = artifacts.original_log_queue_states[idx].1.tail;
-        initial_log_queue_state.tail.length -= artifacts.original_log_queue_states[idx].1.num_items;
+        initial_log_queue_state.head = log_demux_artifacts.applied_log_queue_states[idx].1.tail;
+        initial_log_queue_state.tail.length -= log_demux_artifacts.applied_log_queue_states[idx]
+            .1
+            .num_items;
 
         fsm_output.initial_log_queue_state = initial_log_queue_state;
         fsm_output.output_queue_states =

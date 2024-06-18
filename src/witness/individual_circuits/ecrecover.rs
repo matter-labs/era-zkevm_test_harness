@@ -3,6 +3,7 @@ use crate::witness::full_block_artifact::LogQueue;
 use crate::zkevm_circuits::base_structures::log_query::*;
 use crate::zkevm_circuits::ecrecover::*;
 use circuit_definitions::encodings::*;
+use full_block_artifact::DemuxedQueries;
 
 // we want to simulate splitting of data into many separate instances of the same circuit.
 // So we basically need to reconstruct the FSM state on input/output, and passthrough data.
@@ -13,6 +14,7 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     artifacts: &mut FullBlockArtifacts<F>,
+    demuxed_queues: &mut DemuxedQueries,
     mut demuxed_ecrecover_queue: LogQueue<F>,
     num_rounds_per_circuit: usize,
     round_function: &R,
@@ -46,7 +48,7 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
 
     let mut result = vec![];
 
-    let precompile_calls = std::mem::replace(&mut artifacts.demuxed_ecrecover_queries, vec![]);
+    let precompile_calls = std::mem::replace(&mut demuxed_queues.ecrecover_queries, vec![]);
     let precompile_calls_queue_states =
         std::mem::replace(&mut demuxed_ecrecover_queue.states, vec![]);
     let simulator_witness: Vec<_> = demuxed_ecrecover_queue.simulator.witness.clone().into();

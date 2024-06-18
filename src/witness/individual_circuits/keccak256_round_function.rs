@@ -1,4 +1,5 @@
 use super::*;
+use crate::witness::full_block_artifact::DemuxedQueries;
 use crate::witness::full_block_artifact::LogQueue;
 use crate::zkevm_circuits::base_structures::log_query::*;
 use crate::zkevm_circuits::keccak256_round_function::{
@@ -25,6 +26,7 @@ pub fn keccak256_decompose_into_per_circuit_witness<
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     artifacts: &mut FullBlockArtifacts<F>,
+    demuxed_queues: &mut DemuxedQueries,
     mut demuxed_keccak_precompile_queue: LogQueue<F>,
     num_rounds_per_circuit: usize,
     round_function: &R,
@@ -67,7 +69,7 @@ pub fn keccak256_decompose_into_per_circuit_witness<
     let mut result = vec![];
 
     let keccak_precompile_calls =
-        std::mem::replace(&mut artifacts.demuxed_keccak_precompile_queries, vec![]);
+        std::mem::replace(&mut demuxed_queues.keccak_precompile_queries, vec![]);
     let keccak_precompile_calls_queue_states =
         std::mem::replace(&mut demuxed_keccak_precompile_queue.states, vec![]);
     let round_function_witness =

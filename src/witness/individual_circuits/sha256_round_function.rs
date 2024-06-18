@@ -1,5 +1,6 @@
 use super::*;
 use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
+use crate::witness::full_block_artifact::DemuxedQueries;
 use crate::witness::full_block_artifact::LogQueue;
 use crate::zk_evm::zkevm_opcode_defs::ethereum_types::U256;
 use crate::zkevm_circuits::base_structures::log_query::*;
@@ -25,6 +26,7 @@ pub fn sha256_decompose_into_per_circuit_witness<
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     artifacts: &mut FullBlockArtifacts<F>,
+    demuxed_queues: &mut DemuxedQueries,
     mut demuxed_sha256_precompile_queue: LogQueue<F>,
     num_rounds_per_circuit: usize,
     round_function: &R,
@@ -61,8 +63,7 @@ pub fn sha256_decompose_into_per_circuit_witness<
 
     let mut result = vec![];
 
-    let precompile_calls =
-        std::mem::replace(&mut artifacts.demuxed_sha256_precompile_queries, vec![]);
+    let precompile_calls = std::mem::replace(&mut demuxed_queues.sha256_precompile_queries, vec![]);
     let precompile_calls_queue_states =
         std::mem::replace(&mut demuxed_sha256_precompile_queue.states, vec![]);
     let simulator_witness: Vec<_> = demuxed_sha256_precompile_queue
