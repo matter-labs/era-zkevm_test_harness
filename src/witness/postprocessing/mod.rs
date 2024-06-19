@@ -323,7 +323,7 @@ where
     round_function: Arc<Poseidon2Goldilocks>,
     observable_input: Option<<T::IN as CSAllocatable<GoldilocksField>>::Witness>,
     cs_for_witness_generation: &'a mut ConstraintSystemImpl<GoldilocksField, Poseidon2Goldilocks>,
-    cycles_used: &'a mut usize,
+    cs_for_witness_generation_use_counter: &'a mut usize,
     queue_simulator: RecursionQueueSimulator<GoldilocksField>,
     compact_form_witnesses: Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
     extremes: FirstAndLastCircuit<S>,
@@ -352,14 +352,14 @@ where
             GoldilocksField,
             Poseidon2Goldilocks,
         >,
-        cycles_used: &'a mut usize,
+        cs_for_witness_generation_use_counter: &'a mut usize,
     ) -> Self {
         Self {
             geometry,
             round_function,
             observable_input: None,
             cs_for_witness_generation,
-            cycles_used,
+            cs_for_witness_generation_use_counter,
             queue_simulator: RecursionQueueSimulator::empty(),
             compact_form_witnesses: vec![],
             extremes: FirstAndLastCircuit::default(),
@@ -385,14 +385,14 @@ where
             &*self.round_function,
         );
 
-        *self.cycles_used += 1;
-        if *self.cycles_used == CYCLES_PER_SCRATCH_SPACE {
+        *self.cs_for_witness_generation_use_counter += 1;
+        if *self.cs_for_witness_generation_use_counter == CYCLES_PER_SCRATCH_SPACE {
             *self.cs_for_witness_generation =
                 create_cs_for_witness_generation::<GoldilocksField, Poseidon2Goldilocks>(
                     TRACE_LEN_LOG_2_FOR_CALCULATION,
                     MAX_VARS_LOG_2_FOR_CALCULATION,
                 );
-            *self.cycles_used = 0;
+            *self.cs_for_witness_generation_use_counter = 0;
         }
 
         self.compact_form_witnesses.push(compact_form_witness);
