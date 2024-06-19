@@ -876,7 +876,6 @@ fn create_artifacts_inner<
 ) -> (
     CiruitArtifacts<GoldilocksField>,
     MemoryArtifacts<GoldilocksField>,
-    Vec<u32>,
     FirstAndLastCircuit<LogDemuxInstanceSynthesisFunction>,
     FirstAndLastCircuit<RAMPermutationInstanceSynthesisFunction>,
     FirstAndLastCircuit<StorageApplicationInstanceSynthesisFunction>,
@@ -893,16 +892,17 @@ fn create_artifacts_inner<
 
     tracing::debug!("Running memory queue simulation");
 
-    let mut vm_memory_query_cycles = vec![];
+    memory_artifacts.all_memory_queries_accumulated = Vec::with_capacity(vm_memory_queries_accumulated.len());
+    memory_artifacts.vm_memory_query_cycles = Vec::with_capacity(vm_memory_queries_accumulated.len());
+    memory_artifacts.all_memory_queue_states = Vec::with_capacity(vm_memory_queries_accumulated.len());
 
     for (cycle, query) in vm_memory_queries_accumulated {
-        memory_artifacts.all_memory_queries_accumulated.push(query.clone());
-
-        let (_old_tail, intermediate_info) = memory_artifacts
+        let (_, intermediate_info) = memory_artifacts
             .memory_queue_simulator
-            .push_and_output_intermediate_data(query, round_function);
+            .push_and_output_intermediate_data(query.clone(), round_function);
 
-        vm_memory_query_cycles.push(cycle);
+        memory_artifacts.all_memory_queries_accumulated.push(query);
+        memory_artifacts.vm_memory_query_cycles.push(cycle);
         memory_artifacts.all_memory_queue_states.push(intermediate_info);
     }
 
@@ -1207,7 +1207,6 @@ fn create_artifacts_inner<
     (
         artifacts,
         memory_artifacts,
-        vm_memory_query_cycles,
         log_demux_circuits,
         ram_permutation_circuits,
         storage_application_circuits,
@@ -1228,7 +1227,6 @@ QSCB: FnMut(
     geometry: &GeometryConfig,
     in_circuit_global_context: GlobalContextWitness<GoldilocksField>,
     memory_artifacts: MemoryArtifacts<GoldilocksField>,
-    vm_memory_query_cycles: Vec<u32>,
     storage_queries: Vec<(u32, LogQuery)>,
     cold_warm_refunds_logs: Vec<(u32, LogQuery, u32)>,
     pubdata_cost_logs: Vec<(u32, LogQuery, PubdataCost)>,
@@ -1321,7 +1319,7 @@ QSCB: FnMut(
         global_end_of_storage_log
     } = callstack_simulation_result;
 
-    let mut memory_query_cycles_range = AdvancingRange::new(&vm_memory_query_cycles);
+    let mut memory_query_cycles_range = AdvancingRange::new(&memory_artifacts.vm_memory_query_cycles);
     let mut decommittment_queue_states_range =
         AdvancingRange::new(&memory_artifacts.all_decommittment_queue_states);
     let mut callstack_sponge_encoding_ranges_range =
@@ -1384,7 +1382,7 @@ QSCB: FnMut(
         let mut per_instance_memory_read_witnesses = Vec::with_capacity(1 << 16);
         let mut per_instance_memory_write_witnesses = Vec::with_capacity(1 << 16);
 
-        for (&cycle, &query) in vm_memory_query_cycles[memory_query_range.clone()]
+        for (&cycle, &query) in memory_artifacts.vm_memory_query_cycles[memory_query_range.clone()]
             .iter()
             .zip(&memory_artifacts.all_memory_queries_accumulated[memory_query_range])
         {
@@ -1517,11 +1515,11 @@ QSCB: FnMut(
                 .clone(),
         );
 
-        let final_memory_queue_state = if vm_memory_query_cycles.is_empty() {
+        let final_memory_queue_state = if memory_artifacts.vm_memory_query_cycles.is_empty() {
             QueueState::placeholder_witness()
         } else {
             transform_sponge_like_queue_state(
-                memory_artifacts.all_memory_queue_states[vm_memory_query_cycles.len() - 1],
+                memory_artifacts.all_memory_queue_states[memory_artifacts.vm_memory_query_cycles.len() - 1],
             )
         };
 
@@ -1674,7 +1672,6 @@ pub fn create_artifacts_from_tracer<
     let (
         circuit_artifacts,
         memory_artifacts,
-        vm_memory_query_cycles,
         log_demux_circuits,
         ram_permutation_circuits,
         storage_application_circuits,
@@ -1734,7 +1731,6 @@ pub fn create_artifacts_from_tracer<
         geometry,
         in_circuit_global_context,
         memory_artifacts,
-        vm_memory_query_cycles,
         storage_queries,
         cold_warm_refunds_logs,
         pubdata_cost_logs,

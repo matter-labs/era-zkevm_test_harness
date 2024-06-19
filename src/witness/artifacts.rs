@@ -34,6 +34,7 @@ pub struct DemuxedQueries {
 #[derivative(Default)]
 pub struct MemoryArtifacts<F: SmallField> {
     pub memory_queue_simulator: MemoryQueueSimulator<F>,
+    pub vm_memory_query_cycles: Vec<u32>,
     //
     pub all_memory_queries_accumulated: Vec<MemoryQuery>,
     // all the RAM queue states
