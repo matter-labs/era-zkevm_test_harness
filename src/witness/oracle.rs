@@ -14,8 +14,10 @@ use crate::witness::advancing_range::AdvancingRange;
 use crate::witness::artifacts::{DemuxedQueries, CiruitArtifacts, MemoryArtifacts};
 use crate::witness::postprocessing::{CircuitMaker, FirstAndLastCircuit};
 use crate::witness::tracer::{QueryMarker, WitnessTracer};
+use crate::witness::vm_snapshot::VmSnapshot;
 use crate::zk_evm::aux_structures::DecommittmentQuery;
 use crate::zk_evm::aux_structures::LogQuery;
+use crate::zk_evm::aux_structures::PubdataCost;
 use crate::zk_evm::vm_state::{CallStackEntry, VmLocalState};
 use crate::zkevm_circuits::base_structures::vm_state::{
     GlobalContextWitness, FULL_SPONGE_QUEUE_STATE_WIDTH, QUEUE_STATE_WIDTH,
@@ -31,6 +33,7 @@ use circuit_definitions::encodings::callstack_entry::ExtendedCallstackEntry;
 use circuit_definitions::encodings::recursion_request::{
     RecursionQueueSimulator, RecursionRequest,
 };
+use circuit_definitions::circuit_definitions::base_layer::VmMainInstanceSynthesisFunction;
 use circuit_definitions::encodings::{LogQueueSimulator, LogQueueState};
 use circuit_definitions::zk_evm::zkevm_opcode_defs::system_params::{
     SECP256R1_VERIFY_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS, TRANSIENT_STORAGE_AUX_BYTE,
@@ -1219,170 +1222,31 @@ fn create_artifacts_inner<
     )
 }
 
-pub fn create_artifacts_from_tracer<
-    CB: FnMut(ZkSyncBaseLayerCircuit),
-    QSCB: FnMut(
-        u64,
-        RecursionQueueSimulator<GoldilocksField>,
-        Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
-    ),
->(
-    tracer: WitnessTracer,
-    round_function: &Poseidon2Goldilocks,
-    geometry: &GeometryConfig,
-    entry_point_decommittment_query: (DecommittmentQuery, Vec<U256>),
-    tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
-    num_non_deterministic_heap_queries: usize,
-    zk_porter_is_available: bool,
-    default_aa_code_hash: U256,
-    evm_simulator_code_hash: U256,
-    eip_4844_repack_inputs: [Option<Vec<u8>>; MAX_4844_BLOBS_PER_BLOCK],
-    trusted_setup_path: &str,
-    mut circuit_callback: CB,
-    mut recursion_queue_callback: QSCB,
-) -> (
-    BlockFirstAndLastBasicCircuits,
+fn process_main_vm<
+CB: FnMut(ZkSyncBaseLayerCircuit),
+QSCB: FnMut(
+    u64,
+    RecursionQueueSimulator<GoldilocksField>,
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
-    Vec<EIP4844CircuitInstanceWitness<GoldilocksField>>,
-) {
-    mem_print("Start");
-    let WitnessTracer {
-        memory_queries: vm_memory_queries_accumulated,
-        storage_queries,
-        cold_warm_refunds_logs,
-        pubdata_cost_logs,
-        prepared_decommittment_queries,
-        executed_decommittment_queries,
-        keccak_round_function_witnesses,
-        sha256_round_function_witnesses,
-        ecrecover_witnesses,
-        secp256r1_verify_witnesses,
-        monotonic_query_counter: _,
-        callstack_with_aux_data,
-        vm_snapshots,
-        ..
-    } = tracer;
-
-    // we should have an initial query somewhat before the time
-    assert!(prepared_decommittment_queries.len() >= 1);
-    assert!(executed_decommittment_queries.len() >= 1);
-    assert!(prepared_decommittment_queries.len() >= executed_decommittment_queries.len());
-    let (ts, q, w) = &executed_decommittment_queries[0];
-    assert!(*ts < crate::zk_evm::zkevm_opcode_defs::STARTING_TIMESTAMP);
-    assert_eq!(q, &entry_point_decommittment_query.0);
-    assert_eq!(w, &entry_point_decommittment_query.1);
-
-    assert!(vm_snapshots.len() >= 2); // we need at least entry point and the last save (after exit)
-
-    mem_print("Before log sim");
-    tracing::debug!("Running storage log simulation");
-
-    let (log_simulation_result, log_simulation_queries_data) =
-        log_simulation(&callstack_with_aux_data, round_function);
-
-    mem_print("After log sim");
-
-    // and now do trivial simulation
-
-    mem_print("Before callstack sim");
-    tracing::debug!("Running callstack sumulation");
-
-    let CallstackSimulationResult {
-        callstack_sponge_encoding_ranges,
-        callstack_values_witnesses,
-        rollback_queue_head_segments,
-        history_of_storage_log_states,
-        global_end_of_storage_log,
-    } = callstack_simulation(
-        &callstack_with_aux_data,
-        &log_simulation_result,
-        round_function,
-    );
-
-    let rollback_queue_tails_for_frames = log_simulation_result
-        .rollback_queue_tails_for_frames
-        .clone();
-    drop(log_simulation_result);
-
-    mem_print("After callstack sim");
-
-    let CallstackWithAuxData {
-        flat_new_frames_history,
-        ..
-    } = callstack_with_aux_data;
-
-    mem_print("Before cs creation");
-
-    // we simulate a series of actions on the stack starting from the outermost frame
-    // each history record contains an information on what was the stack state between points
-    // when it potentially came into and out of scope
-
-    let mut cs_for_witness_generation =
-        create_cs_for_witness_generation::<GoldilocksField, Poseidon2Goldilocks>(
-            TRACE_LEN_LOG_2_FOR_CALCULATION,
-            MAX_VARS_LOG_2_FOR_CALCULATION,
-        );
-    let mut cycles_used: usize = 0;
-
-    mem_print("After cs creation");
-
-    let (
-        circuit_artifacts,
-        memory_artifacts,
-        vm_memory_query_cycles,
-        log_demux_circuits,
-        ram_permutation_circuits,
-        storage_application_circuits,
-        log_demux_circuits_compact_forms_witnesses,
-        ram_permutation_circuits_compact_forms_witnesses,
-        storage_application_compact_forms,
-    ) = create_artifacts_inner(
-        geometry,
-        tree,
-        vm_memory_queries_accumulated,
-        prepared_decommittment_queries,
-        executed_decommittment_queries,
-        keccak_round_function_witnesses,
-        sha256_round_function_witnesses,
-        ecrecover_witnesses,
-        secp256r1_verify_witnesses,
-        log_simulation_queries_data,
-        round_function,
-        num_non_deterministic_heap_queries,
-        &mut cs_for_witness_generation,
-        &mut cycles_used,
-        &mut circuit_callback,
-        &mut recursion_queue_callback,
-    );
-
-    mem_print("Artifacts created");
-
-    // NOTE: here we have all the queues processed in the `process` function (actual pushing is done), so we can
-    // just read from the corresponding states
-
-    // first decommittment query (for bootloader) must come before the beginning of time
-    {   
-        let initial_cycle = vm_snapshots[0].at_cycle;
-        let decommittment_queue_states_before_start: Vec<_> = memory_artifacts
-            .all_decommittment_queue_states
-            .iter()
-            .take_while(|el| el.0 < initial_cycle)
-            .collect();
-
-        assert!(decommittment_queue_states_before_start.len() == 1);
-    }
-
-    tracing::debug!(
-        "Processing VM snapshots queue (total {:?})",
-        vm_snapshots.windows(2).len()
-    );
-
-    let in_circuit_global_context = GlobalContextWitness {
-        zkporter_is_available: zk_porter_is_available,
-        default_aa_code_hash,
-        evm_simulator_code_hash,
-    };
-    let round_function = Arc::new(*round_function);
+),
+>(  
+    geometry: &GeometryConfig,
+    in_circuit_global_context: GlobalContextWitness<GoldilocksField>,
+    memory_artifacts: MemoryArtifacts<GoldilocksField>,
+    vm_memory_query_cycles: Vec<u32>,
+    storage_queries: Vec<(u32, LogQuery)>,
+    cold_warm_refunds_logs: Vec<(u32, LogQuery, u32)>,
+    pubdata_cost_logs: Vec<(u32, LogQuery, PubdataCost)>,
+    rollback_queue_tails_for_frames: Vec<(u32, [GoldilocksField; QUEUE_STATE_WIDTH])>,
+    callstack_simulation_result: CallstackSimulationResult<GoldilocksField>,
+    flat_new_frames_history: Vec<(u32, CallStackEntry)>,
+    vm_snapshots: Vec<VmSnapshot>, 
+    round_function: Arc<Poseidon2Goldilocks>,  
+    cs_for_witness_generation: &mut ConstraintSystemImpl<GoldilocksField, Poseidon2Goldilocks>,
+    cycles_used: &mut usize,
+    circuit_callback: &mut CB,
+    recursion_queue_callback: &mut QSCB
+) -> (FirstAndLastCircuit<VmMainInstanceSynthesisFunction>, Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>){
 
     let mut main_vm_circuits = FirstAndLastCircuit::default();
     let mut main_vm_circuits_compact_forms_witnesses = vec![];
@@ -1406,19 +1270,19 @@ pub fn create_artifacts_from_tracer<
         }
 
         let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
-            &mut cs_for_witness_generation,
+            cs_for_witness_generation,
             circuit_input.closed_form_input.clone(),
             &*round_function,
         );
 
-        cycles_used += 1;
-        if cycles_used == CYCLES_PER_SCRATCH_SPACE {
-            cs_for_witness_generation =
+        *cycles_used += 1;
+        if *cycles_used == CYCLES_PER_SCRATCH_SPACE {
+            *cs_for_witness_generation =
                 create_cs_for_witness_generation::<GoldilocksField, Poseidon2Goldilocks>(
                     TRACE_LEN_LOG_2_FOR_CALCULATION,
                     MAX_VARS_LOG_2_FOR_CALCULATION,
                 );
-            cycles_used = 0;
+            *cycles_used = 0;
         }
 
         let instance = VMMainCircuit {
@@ -1452,6 +1316,15 @@ pub fn create_artifacts_from_tracer<
     let mut previous_instance_witness: Option<
         VmInstanceWitness<GoldilocksField, VmWitnessOracle<GoldilocksField>>,
     > = None;
+
+    // TODO do not move?
+    let CallstackSimulationResult { 
+        callstack_sponge_encoding_ranges ,
+        callstack_values_witnesses,
+        rollback_queue_head_segments,
+        history_of_storage_log_states,
+        global_end_of_storage_log
+    } = callstack_simulation_result;
 
     let mut memory_query_cycles_range = AdvancingRange::new(&vm_memory_query_cycles);
     let mut decommittment_queue_states_range =
@@ -1698,8 +1571,188 @@ pub fn create_artifacts_from_tracer<
         main_vm_circuits_compact_forms_witnesses.clone(),
     );
 
-    // todo replace with more idiomatic solution
-    drop(memory_artifacts);
+    (main_vm_circuits, main_vm_circuits_compact_forms_witnesses)
+}
+
+pub fn create_artifacts_from_tracer<
+    CB: FnMut(ZkSyncBaseLayerCircuit),
+    QSCB: FnMut(
+        u64,
+        RecursionQueueSimulator<GoldilocksField>,
+        Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
+    ),
+>(
+    tracer: WitnessTracer,
+    round_function: &Poseidon2Goldilocks,
+    geometry: &GeometryConfig,
+    entry_point_decommittment_query: (DecommittmentQuery, Vec<U256>),
+    tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
+    num_non_deterministic_heap_queries: usize,
+    zk_porter_is_available: bool,
+    default_aa_code_hash: U256,
+    evm_simulator_code_hash: U256,
+    eip_4844_repack_inputs: [Option<Vec<u8>>; MAX_4844_BLOBS_PER_BLOCK],
+    trusted_setup_path: &str,
+    mut circuit_callback: CB,
+    mut recursion_queue_callback: QSCB,
+) -> (
+    BlockFirstAndLastBasicCircuits,
+    Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
+    Vec<EIP4844CircuitInstanceWitness<GoldilocksField>>,
+) {
+    mem_print("Start");
+    let WitnessTracer {
+        memory_queries: vm_memory_queries_accumulated,
+        storage_queries,
+        cold_warm_refunds_logs,
+        pubdata_cost_logs,
+        prepared_decommittment_queries,
+        executed_decommittment_queries,
+        keccak_round_function_witnesses,
+        sha256_round_function_witnesses,
+        ecrecover_witnesses,
+        secp256r1_verify_witnesses,
+        monotonic_query_counter: _,
+        callstack_with_aux_data,
+        vm_snapshots,
+        ..
+    } = tracer;
+
+    // we should have an initial query somewhat before the time
+    assert!(prepared_decommittment_queries.len() >= 1);
+    assert!(executed_decommittment_queries.len() >= 1);
+    assert!(prepared_decommittment_queries.len() >= executed_decommittment_queries.len());
+    let (ts, q, w) = &executed_decommittment_queries[0];
+    assert!(*ts < crate::zk_evm::zkevm_opcode_defs::STARTING_TIMESTAMP);
+    assert_eq!(q, &entry_point_decommittment_query.0);
+    assert_eq!(w, &entry_point_decommittment_query.1);
+
+    assert!(vm_snapshots.len() >= 2); // we need at least entry point and the last save (after exit)
+
+    mem_print("Before log sim");
+    tracing::debug!("Running storage log simulation");
+
+    let (log_simulation_result, log_simulation_queries_data) =
+        log_simulation(&callstack_with_aux_data, round_function);
+
+    mem_print("After log sim");
+
+    // and now do trivial simulation
+
+    mem_print("Before callstack sim");
+    tracing::debug!("Running callstack sumulation");
+
+    let callstack_simulation_result = callstack_simulation(
+        &callstack_with_aux_data,
+        &log_simulation_result,
+        round_function,
+    );
+
+    let rollback_queue_tails_for_frames = log_simulation_result
+        .rollback_queue_tails_for_frames
+        .clone();
+    drop(log_simulation_result);
+
+    mem_print("After callstack sim");
+
+    let CallstackWithAuxData {
+        flat_new_frames_history,
+        ..
+    } = callstack_with_aux_data;
+
+    mem_print("Before cs creation");
+
+    // we simulate a series of actions on the stack starting from the outermost frame
+    // each history record contains an information on what was the stack state between points
+    // when it potentially came into and out of scope
+
+    let mut cs_for_witness_generation =
+        create_cs_for_witness_generation::<GoldilocksField, Poseidon2Goldilocks>(
+            TRACE_LEN_LOG_2_FOR_CALCULATION,
+            MAX_VARS_LOG_2_FOR_CALCULATION,
+        );
+
+    let mut cycles_used: usize = 0;
+
+    mem_print("After cs creation");
+
+    let (
+        circuit_artifacts,
+        memory_artifacts,
+        vm_memory_query_cycles,
+        log_demux_circuits,
+        ram_permutation_circuits,
+        storage_application_circuits,
+        log_demux_circuits_compact_forms_witnesses,
+        ram_permutation_circuits_compact_forms_witnesses,
+        storage_application_compact_forms,
+    ) = create_artifacts_inner(
+        geometry,
+        tree,
+        vm_memory_queries_accumulated,
+        prepared_decommittment_queries,
+        executed_decommittment_queries,
+        keccak_round_function_witnesses,
+        sha256_round_function_witnesses,
+        ecrecover_witnesses,
+        secp256r1_verify_witnesses,
+        log_simulation_queries_data,
+        round_function,
+        num_non_deterministic_heap_queries,
+        &mut cs_for_witness_generation,
+        &mut cycles_used,
+        &mut circuit_callback,
+        &mut recursion_queue_callback,
+    );
+
+    mem_print("Artifacts created");
+
+    // NOTE: here we have all the queues processed in the `process` function (actual pushing is done), so we can
+    // just read from the corresponding states
+
+    // first decommittment query (for bootloader) must come before the beginning of time
+    {   
+        let initial_cycle = vm_snapshots[0].at_cycle;
+        let decommittment_queue_states_before_start: Vec<_> = memory_artifacts
+            .all_decommittment_queue_states
+            .iter()
+            .take_while(|el| el.0 < initial_cycle)
+            .collect();
+
+        assert!(decommittment_queue_states_before_start.len() == 1);
+    }
+
+    tracing::debug!(
+        "Processing VM snapshots queue (total {:?})",
+        vm_snapshots.windows(2).len()
+    );
+
+    let in_circuit_global_context = GlobalContextWitness {
+        zkporter_is_available: zk_porter_is_available,
+        default_aa_code_hash,
+        evm_simulator_code_hash,
+    };
+
+    let round_function = Arc::new(*round_function);
+
+    let (main_vm_circuits, main_vm_circuits_compact_forms_witnesses) = process_main_vm(
+        geometry,
+        in_circuit_global_context,
+        memory_artifacts,
+        vm_memory_query_cycles,
+        storage_queries,
+        cold_warm_refunds_logs,
+        pubdata_cost_logs,
+        rollback_queue_tails_for_frames,
+        callstack_simulation_result,
+        flat_new_frames_history,
+        vm_snapshots,
+        round_function.clone(),        
+        &mut cs_for_witness_generation,
+        &mut cycles_used,
+        &mut circuit_callback,
+        &mut recursion_queue_callback
+    );
 
     mem_print("After mainVM processing");
 
