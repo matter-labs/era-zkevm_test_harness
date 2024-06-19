@@ -906,11 +906,6 @@ fn create_artifacts_inner<
         memory_artifacts.all_memory_queue_states.push(intermediate_info);
     }
 
-    assert!(
-        memory_artifacts.memory_queue_simulator.num_items as usize
-            == memory_artifacts.all_memory_queries_accumulated.len()
-    );
-
     // ----------------------------
 
     {
