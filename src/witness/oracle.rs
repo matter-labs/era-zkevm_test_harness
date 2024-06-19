@@ -11,7 +11,7 @@ use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 use crate::ethereum_types::U256;
 use crate::toolset::GeometryConfig;
 use crate::witness::advancing_range::AdvancingRange;
-use crate::witness::full_block_artifact::{DemuxedQueries, FullBlockArtifacts};
+use crate::witness::artifacts::{DemuxedQueries, CiruitArtifacts, MemoryArtifacts};
 use crate::witness::postprocessing::{CircuitMaker, FirstAndLastCircuit};
 use crate::witness::tracer::{QueryMarker, WitnessTracer};
 use crate::zk_evm::aux_structures::DecommittmentQuery;
@@ -871,7 +871,8 @@ fn create_artifacts_inner<
     mut circuit_callback: &mut CB,
     mut recursion_queue_callback: &mut QSCB,
 ) -> (
-    FullBlockArtifacts<GoldilocksField>,
+    CiruitArtifacts<GoldilocksField>,
+    MemoryArtifacts<GoldilocksField>,
     Vec<u32>,
     FirstAndLastCircuit<LogDemuxInstanceSynthesisFunction>,
     FirstAndLastCircuit<RAMPermutationInstanceSynthesisFunction>,
@@ -880,8 +881,8 @@ fn create_artifacts_inner<
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
 ) {
-    let mut artifacts = FullBlockArtifacts::default();
-    artifacts.all_prepared_decommittment_queries = prepared_decommittment_queries;
+    let mut memory_artifacts = MemoryArtifacts::default();
+    memory_artifacts.all_prepared_decommittment_queries = prepared_decommittment_queries;
 
     tracing::debug!("Processing artifacts queue");
 
@@ -892,31 +893,31 @@ fn create_artifacts_inner<
     let mut vm_memory_query_cycles = vec![];
 
     for (cycle, query) in vm_memory_queries_accumulated {
-        artifacts.all_memory_queries_accumulated.push(query.clone());
+        memory_artifacts.all_memory_queries_accumulated.push(query.clone());
 
-        let (_old_tail, intermediate_info) = artifacts
+        let (_old_tail, intermediate_info) = memory_artifacts
             .memory_queue_simulator
             .push_and_output_intermediate_data(query, round_function);
 
         vm_memory_query_cycles.push(cycle);
-        artifacts.all_memory_queue_states.push(intermediate_info);
+        memory_artifacts.all_memory_queue_states.push(intermediate_info);
     }
 
     assert!(
-        artifacts.memory_queue_simulator.num_items as usize
-            == artifacts.all_memory_queries_accumulated.len()
+        memory_artifacts.memory_queue_simulator.num_items as usize
+            == memory_artifacts.all_memory_queries_accumulated.len()
     );
 
     // ----------------------------
 
     {
         assert_eq!(
-            artifacts.all_memory_queries_accumulated.len(),
-            artifacts.all_memory_queue_states.len()
+            memory_artifacts.all_memory_queries_accumulated.len(),
+            memory_artifacts.all_memory_queue_states.len()
         );
         assert_eq!(
-            artifacts.all_memory_queries_accumulated.len(),
-            artifacts.memory_queue_simulator.num_items as usize
+            memory_artifacts.all_memory_queries_accumulated.len(),
+            memory_artifacts.memory_queue_simulator.num_items as usize
         );
     }
 
@@ -924,6 +925,8 @@ fn create_artifacts_inner<
 
     // direct VM related part is done, other subcircuit's functionality is moved to other functions
     // that should properly do sorts and memory writes
+
+    let mut artifacts = CiruitArtifacts::default();
 
     {
         use crate::witness::individual_circuits::sort_decommit_requests::compute_decommitts_sorter_circuit_snapshots;
@@ -936,7 +939,7 @@ fn create_artifacts_inner<
 
         artifacts.decommittments_deduplicator_circuits_data =
             compute_decommitts_sorter_circuit_snapshots(
-                &mut artifacts,
+                &mut memory_artifacts,
                 executed_decommittment_queries,
                 &mut deduplicated_decommitment_queue_simulator,
                 &mut deduplicated_decommittment_queue_states,
@@ -950,7 +953,7 @@ fn create_artifacts_inner<
         tracing::debug!("Running code code decommitter simulation");
 
         let code_decommitter_circuits_data = compute_decommitter_circuit_snapshots(
-            &mut artifacts,
+            &mut memory_artifacts,
             &mut deduplicated_decommitment_queue_simulator,
             &mut deduplicated_decommittment_queue_states,
             &mut deduplicated_decommit_requests_with_data,
@@ -1000,7 +1003,7 @@ fn create_artifacts_inner<
     );
 
     let keccak256_circuits_data = keccak256_decompose_into_per_circuit_witness(
-        &mut artifacts,
+        &mut memory_artifacts,
         keccak_round_function_witnesses,
         &mut log_simulation_queries_data.demuxed_queries,
         demuxed_keccak_precompile_queue,
@@ -1021,7 +1024,7 @@ fn create_artifacts_inner<
     );
 
     let sha256_circuits_data = sha256_decompose_into_per_circuit_witness(
-        &mut artifacts,
+        &mut memory_artifacts,
         sha256_round_function_witnesses,
         &mut log_simulation_queries_data.demuxed_queries,
         demuxed_sha256_precompile_queue,
@@ -1042,7 +1045,7 @@ fn create_artifacts_inner<
     );
 
     let ecrecover_circuits_data = ecrecover_decompose_into_per_circuit_witness(
-        &mut artifacts,
+        &mut memory_artifacts,
         ecrecover_witnesses,
         &mut log_simulation_queries_data.demuxed_queries,
         demuxed_ecrecover_queue,
@@ -1061,7 +1064,7 @@ fn create_artifacts_inner<
     );
 
     let secp256r1_verify_circuits_data = secp256r1_verify_decompose_into_per_circuit_witness(
-        &mut artifacts,
+        &mut memory_artifacts,
         secp256r1_verify_witnesses,
         &mut log_simulation_queries_data.demuxed_queries,
         demuxed_secp256r1_verify_queue,
@@ -1078,7 +1081,7 @@ fn create_artifacts_inner<
 
     let (ram_permutation_circuits, ram_permutation_circuits_compact_forms_witnesses) =
         compute_ram_circuit_snapshots(
-            &mut artifacts,
+            &mut memory_artifacts,
             round_function,
             num_non_deterministic_heap_queries,
             geometry.cycles_per_ram_permutation as usize,
@@ -1205,6 +1208,7 @@ fn create_artifacts_inner<
 
     (
         artifacts,
+        memory_artifacts,
         vm_memory_query_cycles,
         log_demux_circuits,
         ram_permutation_circuits,
@@ -1323,7 +1327,8 @@ pub fn create_artifacts_from_tracer<
     mem_print("After cs creation");
 
     let (
-        artifacts,
+        circuit_artifacts,
+        memory_artifacts,
         vm_memory_query_cycles,
         log_demux_circuits,
         ram_permutation_circuits,
@@ -1358,7 +1363,7 @@ pub fn create_artifacts_from_tracer<
     // first decommittment query (for bootloader) must come before the beginning of time
     {   
         let initial_cycle = vm_snapshots[0].at_cycle;
-        let decommittment_queue_states_before_start: Vec<_> = artifacts
+        let decommittment_queue_states_before_start: Vec<_> = memory_artifacts
             .all_decommittment_queue_states
             .iter()
             .take_while(|el| el.0 < initial_cycle)
@@ -1450,14 +1455,14 @@ pub fn create_artifacts_from_tracer<
 
     let mut memory_query_cycles_range = AdvancingRange::new(&vm_memory_query_cycles);
     let mut decommittment_queue_states_range =
-        AdvancingRange::new(&artifacts.all_decommittment_queue_states);
+        AdvancingRange::new(&memory_artifacts.all_decommittment_queue_states);
     let mut callstack_sponge_encoding_ranges_range =
         AdvancingRange::new(&callstack_sponge_encoding_ranges);
     let mut storage_queries_range = AdvancingRange::new(&storage_queries);
     let mut cold_warm_refunds_logs_range = AdvancingRange::new(&cold_warm_refunds_logs);
     let mut pubdata_cost_logs_range = AdvancingRange::new(&pubdata_cost_logs);
     let mut prepared_decommittment_queries_range =
-        AdvancingRange::new(&artifacts.all_prepared_decommittment_queries);
+        AdvancingRange::new(&memory_artifacts.all_prepared_decommittment_queries);
     let mut rollback_queue_tails_for_frames_range =
         AdvancingRange::new(&rollback_queue_tails_for_frames);
     let mut callstack_values_witnesses_range = AdvancingRange::new(&callstack_values_witnesses);
@@ -1488,7 +1493,7 @@ pub fn create_artifacts_from_tracer<
         let memory_queue_state_for_entry = if index_plus_one == 0 {
             QueueState::placeholder_witness()
         } else {
-            transform_sponge_like_queue_state(artifacts.all_memory_queue_states[index_plus_one - 1])
+            transform_sponge_like_queue_state(memory_artifacts.all_memory_queue_states[index_plus_one - 1])
         };
 
         let decommittment_queue_state_for_entry = decommittment_queue_states_range
@@ -1513,7 +1518,7 @@ pub fn create_artifacts_from_tracer<
 
         for (&cycle, &query) in vm_memory_query_cycles[memory_query_range.clone()]
             .iter()
-            .zip(&artifacts.all_memory_queries_accumulated[memory_query_range])
+            .zip(&memory_artifacts.all_memory_queries_accumulated[memory_query_range])
         {
             if query.rw_flag {
                 per_instance_memory_write_witnesses.push((cycle, query));
@@ -1648,11 +1653,11 @@ pub fn create_artifacts_from_tracer<
             QueueState::placeholder_witness()
         } else {
             transform_sponge_like_queue_state(
-                artifacts.all_memory_queue_states[vm_memory_query_cycles.len() - 1],
+                memory_artifacts.all_memory_queue_states[vm_memory_query_cycles.len() - 1],
             )
         };
 
-        let final_decommittment_queue_state = artifacts
+        let final_decommittment_queue_state = memory_artifacts
             .all_decommittment_queue_states
             .iter()
             .last()
@@ -1693,10 +1698,13 @@ pub fn create_artifacts_from_tracer<
         main_vm_circuits_compact_forms_witnesses.clone(),
     );
 
+    // todo replace with more idiomatic solution
+    drop(memory_artifacts);
+
     mem_print("After mainVM processing");
 
     {
-        let FullBlockArtifacts {
+        let CiruitArtifacts {
             code_decommitter_circuits_data,
             decommittments_deduplicator_circuits_data,
             storage_deduplicator_circuit_data,
@@ -1708,8 +1716,7 @@ pub fn create_artifacts_from_tracer<
             l1_messages_linear_hash_data,
             transient_storage_sorter_circuit_data,
             secp256r1_verify_circuits_data,
-            ..
-        } = artifacts;
+        } = circuit_artifacts;
 
         // Code decommitter sorter
         let circuit_type = BaseLayerCircuitType::DecommitmentsFilter;

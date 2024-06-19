@@ -2,7 +2,7 @@ use super::*;
 
 mod advancing_range;
 pub mod callstack_handler;
-pub mod full_block_artifact;
+pub mod artifacts;
 pub mod individual_circuits;
 pub mod oracle;
 pub mod postprocessing;

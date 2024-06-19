@@ -1,6 +1,6 @@
 use super::*;
 use crate::ethereum_types::U256;
-use crate::witness::full_block_artifact::LogQueue;
+use crate::witness::artifacts::LogQueue;
 use crate::zk_evm::aux_structures::*;
 use crate::zkevm_circuits::base_structures::log_query::LOG_QUERY_PACKED_WIDTH;
 use crate::zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;

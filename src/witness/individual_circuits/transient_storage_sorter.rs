@@ -1,6 +1,5 @@
 use super::*;
-use crate::witness::full_block_artifact::DemuxedQueries;
-use crate::witness::full_block_artifact::LogQueue;
+use crate::witness::artifacts::{DemuxedQueries, LogQueue};
 use crate::zkevm_circuits::base_structures::log_query::LOG_QUERY_PACKED_WIDTH;
 use crate::zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
 use crate::zkevm_circuits::transient_storage_validity_by_grand_product::input::*;

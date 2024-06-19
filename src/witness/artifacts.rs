@@ -1,11 +1,5 @@
 use crate::boojum::field::SmallField;
-use crate::ethereum_types::U256;
-use crate::zk_evm::aux_structures::DecommittmentQuery;
-use crate::zk_evm::aux_structures::LogQuery;
-use crate::zk_evm::aux_structures::MemoryQuery;
-use crate::zk_evm::zk_evm_abstractions::precompiles::ecrecover::ECRecoverRoundWitness;
-use crate::zk_evm::zk_evm_abstractions::precompiles::secp256r1_verify::Secp256r1VerifyRoundWitness;
-use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Sha256RoundWitness;
+use crate::zk_evm::aux_structures::{DecommittmentQuery, LogQuery, MemoryQuery};
 use crate::zkevm_circuits::code_unpacker_sha256::input::CodeDecommitterCircuitInstanceWitness;
 use crate::zkevm_circuits::ecrecover::EcrecoverCircuitInstanceWitness;
 use crate::zkevm_circuits::keccak256_round_function::input::Keccak256RoundFunctionCircuitInstanceWitness;
@@ -37,9 +31,8 @@ pub struct DemuxedQueries {
 }
 
 #[derive(Derivative)]
-#[derivative(Clone, Default(bound = ""))]
-pub struct FullBlockArtifacts<F: SmallField> {
-    pub is_processed: bool,
+#[derivative(Default)]
+pub struct MemoryArtifacts<F: SmallField> {
     pub memory_queue_simulator: MemoryQueueSimulator<F>,
     //
     pub all_memory_queries_accumulated: Vec<MemoryQuery>,
@@ -48,7 +41,11 @@ pub struct FullBlockArtifacts<F: SmallField> {
     // decommittment queue
     pub all_prepared_decommittment_queries: Vec<(u32, DecommittmentQuery)>,
     pub all_decommittment_queue_states: Vec<(u32, DecommittmentQueueState<F>)>,
+}
 
+#[derive(Derivative)]
+#[derivative(Default)]
+pub struct CiruitArtifacts<F: SmallField> {
     // processed code decommitter circuits, as well as sorting circuit
     pub code_decommitter_circuits_data: Vec<CodeDecommitterCircuitInstanceWitness<F>>,
     pub decommittments_deduplicator_circuits_data:

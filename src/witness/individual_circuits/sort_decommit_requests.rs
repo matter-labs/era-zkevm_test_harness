@@ -12,6 +12,7 @@ use crate::zkevm_circuits::DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS;
 use circuit_definitions::encodings::decommittment_request::*;
 use circuit_definitions::encodings::CircuitEquivalentReflection;
 use circuit_definitions::zk_evm::aux_structures::DecommittmentQuery;
+use artifacts::MemoryArtifacts;
 use rayon::prelude::*;
 use std::cmp::Ordering;
 
@@ -19,7 +20,7 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
-    artifacts: &mut FullBlockArtifacts<F>,
+    memory_artifacts: &mut MemoryArtifacts<F>,
     mut executed_decommittment_queries: Vec<(u32, DecommittmentQuery, Vec<U256>)>,
     deduplicated_decommittment_queue_simulator: &mut DecommittmentQueueSimulator<F>,
     deduplicated_decommittment_queue_states: &mut Vec<DecommittmentQueueState<F>>,
@@ -28,12 +29,12 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
     deduplicator_circuit_capacity: usize,
 ) -> Vec<CodeDecommittmentsDeduplicatorInstanceWitness<F>> {
     assert_eq!(
-        artifacts.all_memory_queries_accumulated.len(),
-        artifacts.all_memory_queue_states.len()
+        memory_artifacts.all_memory_queries_accumulated.len(),
+        memory_artifacts.all_memory_queue_states.len()
     );
     assert_eq!(
-        artifacts.all_memory_queries_accumulated.len(),
-        artifacts.memory_queue_simulator.num_items as usize
+        memory_artifacts.all_memory_queries_accumulated.len(),
+        memory_artifacts.memory_queue_simulator.num_items as usize
     );
 
     assert!(
@@ -65,7 +66,7 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
         let (_old_tail, intermediate_info) = unsorted_decommittment_queue_simulator
             .push_and_output_intermediate_data(*decommittment_request, round_function);
 
-        artifacts
+        memory_artifacts
             .all_decommittment_queue_states
             .push((*cycle, intermediate_info));
     }
@@ -188,8 +189,8 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
     }
 
     assert_eq!(
-        artifacts.all_memory_queue_states.len(),
-        artifacts.all_memory_queries_accumulated.len()
+        memory_artifacts.all_memory_queue_states.len(),
+        memory_artifacts.all_memory_queries_accumulated.len()
     );
 
     // create witnesses

@@ -4,8 +4,7 @@ use self::toolset::GeometryConfig;
 use self::witness::postprocessing::FirstAndLastCircuit;
 
 use super::*;
-use crate::witness::full_block_artifact::DemuxedQueries;
-use crate::witness::full_block_artifact::LogQueue;
+use crate::witness::artifacts::{DemuxedQueries, LogQueue};
 use crate::witness::postprocessing::CircuitMaker;
 use crate::zkevm_circuits::base_structures::log_query::*;
 use crate::zkevm_circuits::demux_log_queue::input::*;

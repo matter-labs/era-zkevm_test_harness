@@ -1,6 +1,5 @@
 use super::*;
-use crate::witness::full_block_artifact::DemuxedQueries;
-use crate::witness::full_block_artifact::LogQueue;
+use crate::witness::artifacts::{DemuxedQueries, LogQueue, MemoryArtifacts};
 use crate::zk_evm::aux_structures::LogQuery as LogQuery_;
 use crate::zk_evm::zk_evm_abstractions::precompiles::secp256r1_verify::Secp256r1VerifyRoundWitness;
 use crate::zkevm_circuits::base_structures::log_query::*;
@@ -15,7 +14,7 @@ pub fn secp256r1_verify_decompose_into_per_circuit_witness<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
-    artifacts: &mut FullBlockArtifacts<F>,
+    memory_artifacts: &mut MemoryArtifacts<F>,
     secp256r1_verify_witnesses: Vec<(u32, LogQuery_, Secp256r1VerifyRoundWitness)>,
     demuxed_queues: &mut DemuxedQueries,
     mut demuxed_secp256r1_verify_queue: LogQueue<F>,
@@ -23,12 +22,12 @@ pub fn secp256r1_verify_decompose_into_per_circuit_witness<
     round_function: &R,
 ) -> Vec<Secp256r1VerifyCircuitInstanceWitness<F>> {
     assert_eq!(
-        artifacts.all_memory_queries_accumulated.len(),
-        artifacts.all_memory_queue_states.len()
+        memory_artifacts.all_memory_queries_accumulated.len(),
+        memory_artifacts.all_memory_queue_states.len()
     );
     assert_eq!(
-        artifacts.all_memory_queries_accumulated.len(),
-        artifacts.memory_queue_simulator.num_items as usize
+        memory_artifacts.all_memory_queries_accumulated.len(),
+        memory_artifacts.memory_queue_simulator.num_items as usize
     );
 
     // split into aux witness, don't mix with the memory
@@ -81,7 +80,7 @@ pub fn secp256r1_verify_decompose_into_per_circuit_witness<
     let mut starting_request_idx = 0;
 
     let mut memory_queue_input_state =
-        take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
+        take_sponge_like_queue_state_from_simulator(&memory_artifacts.memory_queue_simulator);
     let mut current_memory_queue_state = memory_queue_input_state.clone();
 
     for (request_idx, ((request, _queue_transition_state), per_request_work)) in precompile_calls
@@ -93,7 +92,7 @@ pub fn secp256r1_verify_decompose_into_per_circuit_witness<
         let _ = demuxed_secp256r1_verify_queue
             .simulator
             .pop_and_output_intermediate_data(round_function);
-        let initial_memory_len = artifacts.memory_queue_simulator.num_items;
+        let initial_memory_len = memory_artifacts.memory_queue_simulator.num_items;
 
         let mut memory_reads_per_request = vec![];
 
@@ -111,13 +110,13 @@ pub fn secp256r1_verify_decompose_into_per_circuit_witness<
             assert!(read_query.rw_flag == false);
             memory_reads_per_request.push(read_query.value);
 
-            artifacts.all_memory_queries_accumulated.push(read);
-            let (_, intermediate_info) = artifacts
+            memory_artifacts.all_memory_queries_accumulated.push(read);
+            let (_, intermediate_info) = memory_artifacts
                 .memory_queue_simulator
                 .push_and_output_intermediate_data(read, round_function);
-            artifacts.all_memory_queue_states.push(intermediate_info);
+            memory_artifacts.all_memory_queue_states.push(intermediate_info);
             current_memory_queue_state =
-                take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
+                take_sponge_like_queue_state_from_simulator(&memory_artifacts.memory_queue_simulator);
 
             precompile_request.input_memory_offset += 1;
         }
@@ -128,19 +127,19 @@ pub fn secp256r1_verify_decompose_into_per_circuit_witness<
             assert!(write == write_query);
             assert!(write_query.rw_flag == true);
 
-            artifacts.all_memory_queries_accumulated.push(write);
-            let (_, intermediate_info) = artifacts
+            memory_artifacts.all_memory_queries_accumulated.push(write);
+            let (_, intermediate_info) = memory_artifacts
                 .memory_queue_simulator
                 .push_and_output_intermediate_data(write, round_function);
-            artifacts.all_memory_queue_states.push(intermediate_info);
+            memory_artifacts.all_memory_queue_states.push(intermediate_info);
             current_memory_queue_state =
-                take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
+                take_sponge_like_queue_state_from_simulator(&memory_artifacts.memory_queue_simulator);
 
             precompile_request.output_memory_offset += 1;
         }
 
         assert_eq!(
-            artifacts.memory_queue_simulator.num_items - initial_memory_len,
+            memory_artifacts.memory_queue_simulator.num_items - initial_memory_len,
             7
         );
         round_counter += 1;
