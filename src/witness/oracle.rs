@@ -1304,25 +1304,98 @@ QSCB: FnMut(
         global_end_of_storage_log
     } = callstack_simulation_result;
 
-    let mut memory_query_cycles_range = AdvancingRange::new(&memory_artifacts.vm_memory_query_cycles);
+    let MemoryArtifacts {
+        vm_memory_query_cycles,
+        all_decommittment_queue_states,
+        all_prepared_decommittment_queries,
+        all_memory_queue_states,
+        all_memory_queries_accumulated,
+        ..
+    } = memory_artifacts;
+
+    let mut memory_query_cycles_range = AdvancingRange::new(&vm_memory_query_cycles);
     let mut decommittment_queue_states_range =
-        AdvancingRange::new(&memory_artifacts.all_decommittment_queue_states);
+        AdvancingRange::new(&all_decommittment_queue_states);
     let mut callstack_sponge_encoding_ranges_range =
         AdvancingRange::new(&callstack_sponge_encoding_ranges);
+
+    mem_print("Before mainVM processing");
+
+    let mut memory_queue_states_for_entry = vec![];
+    let mut decommittment_queue_states_for_entry = vec![];
+    let mut callstack_states_for_entry = vec![];
+    let mut memory_query_cycles_range_per_circuit = vec![];
+
+    // prepare some inputs for MainVM circuits
+
+    for (_circuit_idx, pair) in vm_snapshots.windows(2).enumerate() {
+        let initial_state = &pair[0];
+        let final_state = &pair[1];
+        let cycle_range = initial_state.at_cycle..final_state.at_cycle;
+
+        let memory_query_range = memory_query_cycles_range.get_range(cycle_range);
+        memory_query_cycles_range_per_circuit.push(memory_query_range.clone());
+
+        let index_plus_one = memory_query_range.start;
+
+        let memory_queue_state_for_entry = if index_plus_one == 0 {
+            QueueState::placeholder_witness()
+        } else {
+            transform_sponge_like_queue_state(all_memory_queue_states[index_plus_one - 1])
+        };
+
+        memory_queue_states_for_entry.push(memory_queue_state_for_entry);
+
+        let decommitment_queue_state = decommittment_queue_states_range
+        .get_slice(0..initial_state.at_cycle)
+        .last().map(|el| transform_sponge_like_queue_state(el.1)).unwrap_or(QueueState::placeholder_witness());
+        decommittment_queue_states_for_entry.push(decommitment_queue_state);
+
+
+        let callstack_state_for_entry = callstack_sponge_encoding_ranges_range
+            .get_slice(0..initial_state.at_cycle)
+            .last()
+            .map(|el| el.1)
+            .unwrap_or([GoldilocksField::ZERO; FULL_SPONGE_QUEUE_STATE_WIDTH]);
+        callstack_states_for_entry.push(callstack_state_for_entry);
+    }
+
+    // special pass fo last one
+    {
+        let memory_queue_state_for_entry = if vm_memory_query_cycles.is_empty() {
+            QueueState::placeholder_witness()
+        } else {
+            transform_sponge_like_queue_state(all_memory_queue_states[vm_memory_query_cycles.len() - 1])
+        };
+        memory_queue_states_for_entry.push(memory_queue_state_for_entry);
+
+        let decommitment_queue_state = all_decommittment_queue_states
+        .iter()
+        .last()
+        .map(|el| transform_sponge_like_queue_state(el.1))
+        .unwrap_or(QueueState::placeholder_witness());
+        decommittment_queue_states_for_entry.push(decommitment_queue_state);
+
+        // always an empty one
+        callstack_states_for_entry.push([GoldilocksField::ZERO; FULL_SPONGE_QUEUE_STATE_WIDTH]);
+    }
+
+    drop(all_memory_queue_states);
+
+    let mut prepared_decommittment_queries_range =
+    AdvancingRange::new(&all_prepared_decommittment_queries);
     let mut storage_queries_range = AdvancingRange::new(&storage_queries);
     let mut cold_warm_refunds_logs_range = AdvancingRange::new(&cold_warm_refunds_logs);
     let mut pubdata_cost_logs_range = AdvancingRange::new(&pubdata_cost_logs);
-    let mut prepared_decommittment_queries_range =
-        AdvancingRange::new(&memory_artifacts.all_prepared_decommittment_queries);
     let mut rollback_queue_tails_for_frames_range =
         AdvancingRange::new(&rollback_queue_tails_for_frames);
     let mut callstack_values_witnesses_range = AdvancingRange::new(&callstack_values_witnesses);
     let mut rollback_queue_head_segments_range = AdvancingRange::new(&rollback_queue_head_segments);
     let mut flat_new_frames_history_range = AdvancingRange::new(&flat_new_frames_history);
 
-    mem_print("Before mainVM processing");
+    mem_print("Before mainVM processing cycle");
 
-    for (_circuit_idx, pair) in vm_snapshots.windows(2).enumerate() {
+    for (circuit_idx, pair) in vm_snapshots.windows(2).enumerate() {
         let initial_state = &pair[0];
         let final_state = &pair[1];
         let cycle_range = initial_state.at_cycle..final_state.at_cycle;
@@ -1338,28 +1411,14 @@ QSCB: FnMut(
 
         // first find the memory witness by finding the latest one with cycle index < current
 
-        let memory_query_range = memory_query_cycles_range.get_range(cycle_range.clone());
+        let memory_query_range = memory_query_cycles_range_per_circuit[circuit_idx].clone();
 
-        let index_plus_one = memory_query_range.start;
-        let memory_queue_state_for_entry = if index_plus_one == 0 {
-            QueueState::placeholder_witness()
-        } else {
-            transform_sponge_like_queue_state(memory_artifacts.all_memory_queue_states[index_plus_one - 1])
-        };
-
-        let decommittment_queue_state_for_entry = decommittment_queue_states_range
-            .get_slice(0..initial_state.at_cycle)
-            .last()
-            .map(|el| transform_sponge_like_queue_state(el.1))
-            .unwrap_or(QueueState::placeholder_witness());
+        let memory_queue_state_for_entry = memory_queue_states_for_entry[circuit_idx].clone();
+        let decommittment_queue_state_for_entry = decommittment_queue_states_for_entry[circuit_idx].clone();
 
         // and finally we need the callstack current state
 
-        let callstack_state_for_entry = callstack_sponge_encoding_ranges_range
-            .get_slice(0..initial_state.at_cycle)
-            .last()
-            .map(|el| el.1)
-            .unwrap_or([GoldilocksField::ZERO; FULL_SPONGE_QUEUE_STATE_WIDTH]);
+        let callstack_state_for_entry = callstack_states_for_entry[circuit_idx].clone();
 
         // initial state is kind of done, now
         // split the oracle witness
@@ -1367,9 +1426,9 @@ QSCB: FnMut(
         let mut per_instance_memory_read_witnesses = Vec::with_capacity(1 << 16);
         let mut per_instance_memory_write_witnesses = Vec::with_capacity(1 << 16);
 
-        for (&cycle, &query) in memory_artifacts.vm_memory_query_cycles[memory_query_range.clone()]
+        for (&cycle, &query) in vm_memory_query_cycles[memory_query_range.clone()]
             .iter()
-            .zip(&memory_artifacts.all_memory_queries_accumulated[memory_query_range])
+            .zip(&all_memory_queries_accumulated[memory_query_range])
         {
             if query.rw_flag {
                 per_instance_memory_write_witnesses.push((cycle, query));
@@ -1478,6 +1537,9 @@ QSCB: FnMut(
             auxilary_final_parameters: VmInCircuitAuxilaryParameters::default(), // we will use next circuit's initial as final here!
         };
 
+        let lbl = format!("MainVM processing cycle instance built {}", circuit_idx);
+        mem_print(&lbl);
+
         if let Some(mut prev) = previous_instance_witness {
             prev.auxilary_final_parameters = instance_witness.auxilary_initial_parameters.clone();
             process_vm_witness(prev, false);
@@ -1490,30 +1552,19 @@ QSCB: FnMut(
         let final_state = vm_snapshots.last().unwrap();
         let mut last = previous_instance_witness.unwrap();
 
+        let final_memory_queue_state = memory_queue_states_for_entry.last().unwrap().clone();
+        let final_decommittment_queue_state = decommittment_queue_states_for_entry.last().unwrap().clone();
+        let callstack_state_for_entry = callstack_states_for_entry.last().unwrap().clone();
+
         // always an empty one
         last.auxilary_final_parameters.callstack_state = (
-            [GoldilocksField::ZERO; FULL_SPONGE_QUEUE_STATE_WIDTH],
+            callstack_state_for_entry,
             final_state
                 .local_state
                 .callstack
                 .get_current_stack()
                 .clone(),
         );
-
-        let final_memory_queue_state = if memory_artifacts.vm_memory_query_cycles.is_empty() {
-            QueueState::placeholder_witness()
-        } else {
-            transform_sponge_like_queue_state(
-                memory_artifacts.all_memory_queue_states[memory_artifacts.vm_memory_query_cycles.len() - 1],
-            )
-        };
-
-        let final_decommittment_queue_state = memory_artifacts
-            .all_decommittment_queue_states
-            .iter()
-            .last()
-            .map(|el| transform_sponge_like_queue_state(el.1))
-            .unwrap_or(QueueState::placeholder_witness());
 
         let range = history_of_storage_log_states.range(..);
         let latest_log_queue_state = range
