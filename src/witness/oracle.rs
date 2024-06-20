@@ -1223,13 +1223,13 @@ QSCB: FnMut(
     geometry: &GeometryConfig,
     in_circuit_global_context: GlobalContextWitness<GoldilocksField>,
     memory_artifacts: MemoryArtifacts<GoldilocksField>,
-    storage_queries: Vec<(u32, LogQuery)>,
-    cold_warm_refunds_logs: Vec<(u32, LogQuery, u32)>,
-    pubdata_cost_logs: Vec<(u32, LogQuery, PubdataCost)>,
-    rollback_queue_tails_for_frames: Vec<(u32, [GoldilocksField; QUEUE_STATE_WIDTH])>,
+    mut storage_queries: Vec<(u32, LogQuery)>,
+    mut cold_warm_refunds_logs: Vec<(u32, LogQuery, u32)>,
+    mut pubdata_cost_logs: Vec<(u32, LogQuery, PubdataCost)>,
+    mut rollback_queue_tails_for_frames: Vec<(u32, [GoldilocksField; QUEUE_STATE_WIDTH])>,
     callstack_simulation_result: CallstackSimulationResult<GoldilocksField>,
-    flat_new_frames_history: Vec<(u32, CallStackEntry)>,
-    vm_snapshots: Vec<VmSnapshot>, 
+    mut flat_new_frames_history: Vec<(u32, CallStackEntry)>,
+    mut vm_snapshots: Vec<VmSnapshot>, 
     round_function: Arc<Poseidon2Goldilocks>,  
     cs_for_witness_generation: &mut CsForWitnessGeneration,
     circuit_callback: &mut CB,
@@ -1298,8 +1298,8 @@ QSCB: FnMut(
     // TODO do not move?
     let CallstackSimulationResult { 
         callstack_sponge_encoding_ranges ,
-        callstack_values_witnesses,
-        rollback_queue_head_segments,
+        mut callstack_values_witnesses,
+        mut rollback_queue_head_segments,
         history_of_storage_log_states,
         global_end_of_storage_log
     } = callstack_simulation_result;
@@ -1307,7 +1307,7 @@ QSCB: FnMut(
     let MemoryArtifacts {
         vm_memory_query_cycles,
         all_decommittment_queue_states,
-        all_prepared_decommittment_queries,
+        mut all_prepared_decommittment_queries,
         all_memory_queue_states,
         all_memory_queries_accumulated,
         ..
@@ -1325,6 +1325,25 @@ QSCB: FnMut(
     let mut decommittment_queue_states_for_entry = vec![];
     let mut callstack_states_for_entry = vec![];
     let mut memory_query_cycles_range_per_circuit = vec![];
+    let mut storage_log_queue_detailed_state_for_entry = vec![];
+
+    let mut per_instance_storage_queries_witnesses: Vec<Vec<(u32, LogQuery)>>  = vec![];
+    let mut per_instance_cold_warm_refund_logs: Vec<Vec<(u32, LogQuery, u32)>> = vec![];
+    let mut per_instance_pubdata_cost_logs: Vec<Vec<(u32, LogQuery, PubdataCost)>> = vec![];
+    let mut per_instance_decommittment_requests_witness: Vec<Vec<(u32, DecommittmentQuery)>> = vec![];
+    let mut per_instance_rollback_queue_initial_tails_for_new_frames: Vec<Vec<(u32, [GoldilocksField; QUEUE_STATE_WIDTH])>> = vec![];
+    let mut per_instance_callstack_values_witnesses: Vec<Vec<(u32, (ExtendedCallstackEntry<GoldilocksField>, CallstackSimulatorState<GoldilocksField>))>> = vec![];
+    let mut per_instance_rollback_queue_head_segments: Vec<Vec<(u32, [GoldilocksField; QUEUE_STATE_WIDTH])>> = vec![];
+    let mut per_instance_callstack_new_frames_witnesses: Vec<Vec<(u32, CallStackEntry)>> = vec![];
+
+    let mut per_instance_memory_read_witnesses: Vec<Vec<(u32, MemoryQuery)>> = vec![];
+    let mut per_instance_memory_write_witnesses: Vec<Vec<(u32, MemoryQuery)>> = vec![];
+
+    // split the oracle witness
+    let vm_memory_queries_accumulated: Vec<(u32, MemoryQuery)> = vm_memory_query_cycles.iter().copied().zip(all_memory_queries_accumulated).collect();
+    let mut memory_write_witnesses: Vec<(u32, MemoryQuery)> = vm_memory_queries_accumulated.iter().filter(|(_, query)| query.rw_flag).copied().collect();
+    let mut memory_read_witnesses: Vec<(u32, MemoryQuery)> = vm_memory_queries_accumulated.iter().filter(|(_, query)| !query.rw_flag).copied().collect();
+    drop(vm_memory_queries_accumulated);
 
     // prepare some inputs for MainVM circuits
 
@@ -1333,7 +1352,7 @@ QSCB: FnMut(
         let final_state = &pair[1];
         let cycle_range = initial_state.at_cycle..final_state.at_cycle;
 
-        let memory_query_range = memory_query_cycles_range.get_range(cycle_range);
+        let memory_query_range = memory_query_cycles_range.get_range(cycle_range.clone());
         memory_query_cycles_range_per_circuit.push(memory_query_range.clone());
 
         let index_plus_one = memory_query_range.start;
@@ -1351,6 +1370,17 @@ QSCB: FnMut(
         .last().map(|el| transform_sponge_like_queue_state(el.1)).unwrap_or(QueueState::placeholder_witness());
         decommittment_queue_states_for_entry.push(decommitment_queue_state);
 
+        let range = history_of_storage_log_states.range(..initial_state.at_cycle);
+        let storage_log_queue_detailed_state =
+            range.last().map(|el| el.1).copied().unwrap_or({
+                let mut initial = StorageLogDetailedState::default();
+                initial.rollback_tail = global_end_of_storage_log;
+                initial.rollback_head = global_end_of_storage_log;
+
+                initial
+            });
+        storage_log_queue_detailed_state_for_entry.push(storage_log_queue_detailed_state);
+
 
         let callstack_state_for_entry = callstack_sponge_encoding_ranges_range
             .get_slice(0..initial_state.at_cycle)
@@ -1358,6 +1388,36 @@ QSCB: FnMut(
             .map(|el| el.1)
             .unwrap_or([GoldilocksField::ZERO; FULL_SPONGE_QUEUE_STATE_WIDTH]);
         callstack_states_for_entry.push(callstack_state_for_entry);
+
+        let range = AdvancingRange::get_range_from(&memory_write_witnesses, cycle_range.clone());
+        per_instance_memory_write_witnesses.push(memory_write_witnesses.drain(range).collect());
+
+        let range = AdvancingRange::get_range_from(&memory_read_witnesses, cycle_range.clone());
+        per_instance_memory_read_witnesses.push(memory_read_witnesses.drain(range).collect());
+
+        let range = AdvancingRange::get_range_from(&storage_queries, cycle_range.clone());
+        per_instance_storage_queries_witnesses.push(storage_queries.drain(range).collect());
+
+        let range = AdvancingRange::get_range_from(&cold_warm_refunds_logs, cycle_range.clone());
+        per_instance_cold_warm_refund_logs.push(cold_warm_refunds_logs.drain(range).collect());
+
+        let range = AdvancingRange::get_range_from(&pubdata_cost_logs, cycle_range.clone());
+        per_instance_pubdata_cost_logs.push(pubdata_cost_logs.drain(range).collect());
+
+        let range = AdvancingRange::get_range_from(&all_prepared_decommittment_queries, cycle_range.clone());
+        per_instance_decommittment_requests_witness.push(all_prepared_decommittment_queries.drain(range).collect());
+
+        let range = AdvancingRange::get_range_from(&rollback_queue_tails_for_frames, cycle_range.clone());
+        per_instance_rollback_queue_initial_tails_for_new_frames.push(rollback_queue_tails_for_frames.drain(range).collect());
+
+        let range = AdvancingRange::get_range_from(&callstack_values_witnesses, cycle_range.clone());
+        per_instance_callstack_values_witnesses.push(callstack_values_witnesses.drain(range).collect());
+
+        let range = AdvancingRange::get_range_from(&rollback_queue_head_segments, cycle_range.clone());
+        per_instance_rollback_queue_head_segments.push(rollback_queue_head_segments.drain(range).collect());
+
+        let range = AdvancingRange::get_range_from(&flat_new_frames_history, cycle_range.clone());
+        per_instance_callstack_new_frames_witnesses.push(flat_new_frames_history.drain(range).collect());
     }
 
     // special pass fo last one
@@ -1378,29 +1438,30 @@ QSCB: FnMut(
 
         // always an empty one
         callstack_states_for_entry.push([GoldilocksField::ZERO; FULL_SPONGE_QUEUE_STATE_WIDTH]);
+
+        let range = history_of_storage_log_states.range(..);
+        let latest_log_queue_state = range
+            .last()
+            .map(|el| el.1)
+            .copied()
+            .unwrap_or(StorageLogDetailedState::default());
+        storage_log_queue_detailed_state_for_entry.push(latest_log_queue_state);
     }
 
     drop(all_memory_queue_states);
-
-    let mut prepared_decommittment_queries_range =
-    AdvancingRange::new(&all_prepared_decommittment_queries);
-    let mut storage_queries_range = AdvancingRange::new(&storage_queries);
-    let mut cold_warm_refunds_logs_range = AdvancingRange::new(&cold_warm_refunds_logs);
-    let mut pubdata_cost_logs_range = AdvancingRange::new(&pubdata_cost_logs);
-    let mut rollback_queue_tails_for_frames_range =
-        AdvancingRange::new(&rollback_queue_tails_for_frames);
-    let mut callstack_values_witnesses_range = AdvancingRange::new(&callstack_values_witnesses);
-    let mut rollback_queue_head_segments_range = AdvancingRange::new(&rollback_queue_head_segments);
-    let mut flat_new_frames_history_range = AdvancingRange::new(&flat_new_frames_history);
+    drop(history_of_storage_log_states);
 
     mem_print("Before mainVM processing cycle");
 
+    // duplicate last snapshot to process last circuit
+    vm_snapshots.push(vm_snapshots.last().unwrap().clone());
+    let circuits_len = vm_snapshots.windows(2).len();
+
     for (circuit_idx, pair) in vm_snapshots.windows(2).enumerate() {
+        let is_last = circuit_idx == circuits_len - 1;
+
         let initial_state = &pair[0];
         let final_state = &pair[1];
-        let cycle_range = initial_state.at_cycle..final_state.at_cycle;
-
-        // println!("Operating over range {:?}", initial_state.at_cycle..final_state.at_cycle);
 
         // we need to get chunks of
         // - memory read witnesses
@@ -1408,10 +1469,6 @@ QSCB: FnMut(
         // - decommittment witnesses
         // - callstack witnesses
         // - rollback queue witnesses
-
-        // first find the memory witness by finding the latest one with cycle index < current
-
-        let memory_query_range = memory_query_cycles_range_per_circuit[circuit_idx].clone();
 
         let memory_queue_state_for_entry = memory_queue_states_for_entry[circuit_idx].clone();
         let decommittment_queue_state_for_entry = decommittment_queue_states_for_entry[circuit_idx].clone();
@@ -1421,177 +1478,105 @@ QSCB: FnMut(
         let callstack_state_for_entry = callstack_states_for_entry[circuit_idx].clone();
 
         // initial state is kind of done, now
-        // split the oracle witness
 
-        let mut per_instance_memory_read_witnesses = Vec::with_capacity(1 << 16);
-        let mut per_instance_memory_write_witnesses = Vec::with_capacity(1 << 16);
-
-        for (&cycle, &query) in vm_memory_query_cycles[memory_query_range.clone()]
-            .iter()
-            .zip(&all_memory_queries_accumulated[memory_query_range])
-        {
-            if query.rw_flag {
-                per_instance_memory_write_witnesses.push((cycle, query));
-            } else {
-                per_instance_memory_read_witnesses.push((cycle, query));
-            }
-        }
-
-        let per_instance_storage_queries_witnesses = storage_queries_range
-            .get_slice(cycle_range.clone())
-            .to_vec();
-
-        let per_instance_cold_warm_refund_logs = cold_warm_refunds_logs_range
-            .get_slice(cycle_range.clone())
-            .to_vec();
-
-        let per_instance_pubdata_cost_logs = pubdata_cost_logs_range
-            .get_slice(cycle_range.clone())
-            .to_vec();
-
-        // here we need all answers from the oracle, not just ones that will be executed
-        let decommittment_requests_witness = prepared_decommittment_queries_range
-            .get_slice(cycle_range.clone())
-            .to_vec();
-
-        let rollback_queue_initial_tails_for_new_frames = rollback_queue_tails_for_frames_range
-            .get_slice(cycle_range.clone())
-            .to_vec();
-
-        let callstack_values_witnesses = callstack_values_witnesses_range
-            .get_slice(cycle_range.clone())
-            .to_vec()
-            .into();
-
-        let rollback_queue_head_segments = rollback_queue_head_segments_range
-            .get_slice(cycle_range.clone())
-            .to_vec()
-            .into();
-
-        let callstack_new_frames_witnesses = flat_new_frames_history_range
-            .get_slice(cycle_range)
-            .to_vec()
-            .into();
-
-        // construct an oracle
-        let witness_oracle = VmWitnessOracle {
-            initial_cycle: initial_state.at_cycle,
-            final_cycle_inclusive: final_state.at_cycle - 1,
-            memory_read_witness: per_instance_memory_read_witnesses.into(),
-            memory_write_witness: Some(per_instance_memory_write_witnesses.into()),
-            rollback_queue_head_segments,
-            decommittment_requests_witness: decommittment_requests_witness.into(),
-            rollback_queue_initial_tails_for_new_frames:
-                rollback_queue_initial_tails_for_new_frames.into(),
-            storage_queries: per_instance_storage_queries_witnesses.into(),
-            storage_access_cold_warm_refunds: per_instance_cold_warm_refund_logs.into(),
-            storage_pubdata_queries: per_instance_pubdata_cost_logs.into(),
-            callstack_values_witnesses,
-            callstack_new_frames_witnesses,
-        };
-
-        let range = history_of_storage_log_states.range(..initial_state.at_cycle);
-        let storage_log_queue_detailed_state_for_entry =
-            range.last().map(|el| el.1).copied().unwrap_or({
-                let mut initial = StorageLogDetailedState::default();
-                initial.rollback_tail = global_end_of_storage_log;
-                initial.rollback_head = global_end_of_storage_log;
-
-                initial
-            });
-
+        let storage_log_queue_detailed_state = storage_log_queue_detailed_state_for_entry[circuit_idx];
         let storage_log_queue_state_for_entry = QueueStateWitness {
             head: [GoldilocksField::ZERO; QUEUE_STATE_WIDTH],
             tail: QueueTailStateWitness {
-                tail: storage_log_queue_detailed_state_for_entry.forward_tail,
-                length: storage_log_queue_detailed_state_for_entry.forward_length,
+                tail: storage_log_queue_detailed_state.forward_tail,
+                length: storage_log_queue_detailed_state.forward_length,
             },
         };
 
-        // for current head it's a little bit more complex, as we need to find
-
-        let instance_witness = VmInstanceWitness {
-            initial_state: initial_state.local_state.clone(),
-            witness_oracle,
-            auxilary_initial_parameters: VmInCircuitAuxilaryParameters {
-                callstack_state: (
-                    callstack_state_for_entry,
-                    initial_state
-                        .local_state
-                        .callstack
-                        .get_current_stack()
-                        .clone(),
-                ),
-                decommittment_queue_state: decommittment_queue_state_for_entry,
-                memory_queue_state: memory_queue_state_for_entry,
-                storage_log_queue_state: storage_log_queue_state_for_entry,
-                current_frame_rollback_queue_tail: storage_log_queue_detailed_state_for_entry
-                    .rollback_tail,
-                current_frame_rollback_queue_head: storage_log_queue_detailed_state_for_entry
-                    .rollback_head,
-                current_frame_rollback_queue_segment_length:
-                    storage_log_queue_detailed_state_for_entry.rollback_length,
-            },
-            cycles_range: initial_state.at_cycle..final_state.at_cycle,
-            final_state: final_state.local_state.clone(),
-            auxilary_final_parameters: VmInCircuitAuxilaryParameters::default(), // we will use next circuit's initial as final here!
+        let auxilary_initial_parameters = VmInCircuitAuxilaryParameters {
+            callstack_state: (
+                callstack_state_for_entry,
+                initial_state
+                    .local_state
+                    .callstack
+                    .get_current_stack()
+                    .clone(),
+            ),
+            decommittment_queue_state: decommittment_queue_state_for_entry,
+            memory_queue_state: memory_queue_state_for_entry,
+            storage_log_queue_state: storage_log_queue_state_for_entry,
+            current_frame_rollback_queue_tail: storage_log_queue_detailed_state
+                .rollback_tail,
+            current_frame_rollback_queue_head: storage_log_queue_detailed_state
+                .rollback_head,
+            current_frame_rollback_queue_segment_length:
+            storage_log_queue_detailed_state.rollback_length,
         };
-
-        let lbl = format!("MainVM processing cycle instance built {}", circuit_idx);
-        mem_print(&lbl);
 
         if let Some(mut prev) = previous_instance_witness {
-            prev.auxilary_final_parameters = instance_witness.auxilary_initial_parameters.clone();
-            process_vm_witness(prev, false);
+            prev.auxilary_final_parameters = auxilary_initial_parameters.clone();
+            process_vm_witness(prev, is_last);
         }
-        previous_instance_witness = Some(instance_witness);
-    }
 
-    // special pass for the last one
-    {
-        let final_state = vm_snapshots.last().unwrap();
-        let mut last = previous_instance_witness.unwrap();
+        if !is_last {
+            let storage_queries_witnesses = per_instance_storage_queries_witnesses[circuit_idx].clone();
+            per_instance_storage_queries_witnesses[circuit_idx] = vec![];
 
-        let final_memory_queue_state = memory_queue_states_for_entry.last().unwrap().clone();
-        let final_decommittment_queue_state = decommittment_queue_states_for_entry.last().unwrap().clone();
-        let callstack_state_for_entry = callstack_states_for_entry.last().unwrap().clone();
+            let cold_warm_refund_logs = per_instance_cold_warm_refund_logs[circuit_idx].clone();
+            per_instance_cold_warm_refund_logs[circuit_idx] = vec![];
+            
+            let pubdata_cost_logs = per_instance_pubdata_cost_logs[circuit_idx].clone();
+            per_instance_pubdata_cost_logs[circuit_idx] = vec![];
 
-        // always an empty one
-        last.auxilary_final_parameters.callstack_state = (
-            callstack_state_for_entry,
-            final_state
-                .local_state
-                .callstack
-                .get_current_stack()
-                .clone(),
-        );
+            // here we need all answers from the oracle, not just ones that will be executed
+            let decommittment_requests_witness = per_instance_decommittment_requests_witness[circuit_idx].clone();
+            per_instance_decommittment_requests_witness[circuit_idx] = vec![];
 
-        let range = history_of_storage_log_states.range(..);
-        let latest_log_queue_state = range
-            .last()
-            .map(|el| el.1)
-            .copied()
-            .unwrap_or(StorageLogDetailedState::default());
+            let rollback_queue_initial_tails_for_new_frames = per_instance_rollback_queue_initial_tails_for_new_frames[circuit_idx].clone();
+            per_instance_rollback_queue_initial_tails_for_new_frames[circuit_idx] = vec![];
+            
+            let callstack_values_witnesses = per_instance_callstack_values_witnesses[circuit_idx].clone();
+            per_instance_callstack_values_witnesses[circuit_idx] = vec![];
 
-        let final_storage_log_queue_state = QueueStateWitness {
-            head: [GoldilocksField::ZERO; QUEUE_STATE_WIDTH],
-            tail: QueueTailStateWitness {
-                tail: latest_log_queue_state.forward_tail,
-                length: latest_log_queue_state.forward_length,
-            },
-        };
+            let rollback_queue_head_segments = per_instance_rollback_queue_head_segments[circuit_idx].clone();
+            per_instance_rollback_queue_head_segments[circuit_idx] = vec![];
 
-        last.auxilary_final_parameters.decommittment_queue_state = final_decommittment_queue_state;
-        last.auxilary_final_parameters.memory_queue_state = final_memory_queue_state;
-        last.auxilary_final_parameters.storage_log_queue_state = final_storage_log_queue_state;
-        last.auxilary_final_parameters
-            .current_frame_rollback_queue_tail = latest_log_queue_state.rollback_tail;
-        last.auxilary_final_parameters
-            .current_frame_rollback_queue_head = latest_log_queue_state.rollback_head;
-        last.auxilary_final_parameters
-            .current_frame_rollback_queue_segment_length = latest_log_queue_state.rollback_length;
+            let callstack_new_frames_witnesses = per_instance_callstack_new_frames_witnesses[circuit_idx].clone();
+            per_instance_callstack_new_frames_witnesses[circuit_idx] = vec![];
 
-        process_vm_witness(last, true);
+            let memory_read_witnesses = per_instance_memory_read_witnesses[circuit_idx].clone();
+            per_instance_memory_read_witnesses[circuit_idx] = vec![];
+
+            let memory_write_witnesses = per_instance_memory_write_witnesses[circuit_idx].clone();
+            per_instance_memory_write_witnesses[circuit_idx] = vec![];
+
+            // construct an oracle
+            let witness_oracle = VmWitnessOracle {
+                initial_cycle: initial_state.at_cycle,
+                final_cycle_inclusive: final_state.at_cycle - 1,
+                memory_read_witness: memory_read_witnesses.into(),
+                memory_write_witness: Some(memory_write_witnesses.into()),
+                rollback_queue_head_segments: rollback_queue_head_segments.into(),
+                decommittment_requests_witness: decommittment_requests_witness.into(),
+                rollback_queue_initial_tails_for_new_frames:
+                    rollback_queue_initial_tails_for_new_frames.into(),
+                storage_queries: storage_queries_witnesses.into(),
+                storage_access_cold_warm_refunds: cold_warm_refund_logs.into(),
+                storage_pubdata_queries: pubdata_cost_logs.into(),
+                callstack_values_witnesses: callstack_values_witnesses.into(),
+                callstack_new_frames_witnesses: callstack_new_frames_witnesses.into(),
+            };
+
+            let instance_witness = VmInstanceWitness {
+                initial_state: initial_state.local_state.clone(),
+                witness_oracle,
+                auxilary_initial_parameters,
+                cycles_range: initial_state.at_cycle..final_state.at_cycle,
+                final_state: final_state.local_state.clone(),
+                auxilary_final_parameters: VmInCircuitAuxilaryParameters::default(), // we will use next circuit's initial as final here!
+            };
+            previous_instance_witness = Some(instance_witness);
+
+            let lbl = format!("MainVM processing cycle instance built {}", circuit_idx);
+            mem_print(&lbl);
+        } else {
+            previous_instance_witness = None;
+        }
     }
 
     recursion_queue_callback(

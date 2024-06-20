@@ -32,18 +32,40 @@ impl<'a, T: TupleFirst> AdvancingRange<'a, T> {
         assert!(acceptable_range.end >= self.previous_range.end);
         self.previous_range = acceptable_range.clone();
 
-        for x in self.data[self.start..].iter() {
+        let range = Self::get_range_inner(&self.data, self.start, self.end, acceptable_range);
+        self.start = range.start;
+        self.end = range.end;
+        
+        range
+    }
+
+    pub fn get_range_from(data: & [T], acceptable_range: Range<u32>) -> Range<usize> {
+        Self::get_range_inner(data, 0, 0, acceptable_range)
+    }
+
+    fn get_range_inner(data: & [T], last_start: usize, last_end: usize, acceptable_range: Range<u32>)  -> Range<usize> {
+        let mut start = last_start;
+        for x in data[last_start..].iter() {
             if x.first() < acceptable_range.start {
-                self.start += 1;
-            }
-        }
-        for x in self.data[self.end..].iter() {
-            if x.first() < acceptable_range.end {
-                self.end += 1;
+                start += 1;
+            } else {
+                break;
             }
         }
 
-        self.start..self.end
+        let mut end = last_end;
+        if end < start {
+            end = start;
+        }
+        for x in data[end..].iter() {
+            if x.first() < acceptable_range.end {
+                end += 1;
+            } else {
+                break;
+            }
+        }
+
+        start..end
     }
 
     /// Returns a slice to the elements within `acceptable_range`, assuming
