@@ -16,6 +16,7 @@ use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use circuit_definitions::{encodings::*, Field, RoundFunction};
 use artifacts::MemoryArtifacts;
+use postprocessing::CsForWitnessGeneration;
 use rayon::prelude::*;
 use snark_wrapper::boojum::field::Field as _;
 use std::cmp::Ordering;
@@ -32,8 +33,7 @@ pub fn compute_ram_circuit_snapshots<
     num_non_deterministic_heap_queries: usize,
     per_circuit_capacity: usize,
     geometry: &GeometryConfig,
-    cs_for_witness_generation: &mut ConstraintSystemImpl<Field, Poseidon2Goldilocks>,
-    cycles_used: &mut usize,
+    cs_for_witness_generation: &mut CsForWitnessGeneration,
     mut circuit_callback: CB,
     mut recursion_queue_callback: QSCB,
 ) -> (
@@ -252,8 +252,7 @@ pub fn compute_ram_circuit_snapshots<
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_ram_permutation,
         Arc::new(*round_function),
-        cs_for_witness_generation,
-        cycles_used,
+        cs_for_witness_generation
     );
 
     for (

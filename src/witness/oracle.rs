@@ -3,7 +3,7 @@
 // and then during specialized circuits execution
 
 use super::callstack_handler::*;
-use super::postprocessing::BlockFirstAndLastBasicCircuits;
+use super::postprocessing::{BlockFirstAndLastBasicCircuits, CsForWitnessGeneration};
 use super::utils::*;
 use crate::boojum::field::SmallField;
 use crate::boojum::gadgets::queue::{QueueState, QueueStateWitness, QueueTailStateWitness};
@@ -869,8 +869,7 @@ fn create_artifacts_inner<
     mut log_simulation_queries_data: LogSimulationQueriesData<GoldilocksField>,
     round_function: &Poseidon2Goldilocks,
     num_non_deterministic_heap_queries: usize,
-    mut cs_for_witness_generation: &mut ConstraintSystemImpl<GoldilocksField, Poseidon2Goldilocks>,
-    mut cycles_used: &mut usize,
+    mut cs_for_witness_generation: &mut CsForWitnessGeneration,
     mut circuit_callback: &mut CB,
     mut recursion_queue_callback: &mut QSCB,
 ) -> (
@@ -982,7 +981,6 @@ fn create_artifacts_inner<
             round_function,
             geometry,
             &mut cs_for_witness_generation,
-            &mut cycles_used,
             &mut circuit_callback,
             &mut recursion_queue_callback,
         );
@@ -1085,7 +1083,6 @@ fn create_artifacts_inner<
             geometry.cycles_per_ram_permutation as usize,
             geometry,
             &mut cs_for_witness_generation,
-            &mut cycles_used,
             &mut circuit_callback,
             &mut recursion_queue_callback,
         );
@@ -1199,7 +1196,6 @@ fn create_artifacts_inner<
             geometry.cycles_per_storage_application as usize,
             geometry,
             &mut cs_for_witness_generation,
-            &mut cycles_used,
             &mut circuit_callback,
             &mut recursion_queue_callback,
         );
@@ -1235,8 +1231,7 @@ QSCB: FnMut(
     flat_new_frames_history: Vec<(u32, CallStackEntry)>,
     vm_snapshots: Vec<VmSnapshot>, 
     round_function: Arc<Poseidon2Goldilocks>,  
-    cs_for_witness_generation: &mut ConstraintSystemImpl<GoldilocksField, Poseidon2Goldilocks>,
-    cs_for_witness_generation_use_counter: &mut usize,
+    cs_for_witness_generation: &mut CsForWitnessGeneration,
     circuit_callback: &mut CB,
     recursion_queue_callback: &mut QSCB
 ) -> (FirstAndLastCircuit<VmMainInstanceSynthesisFunction>, Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>){
@@ -1263,20 +1258,10 @@ QSCB: FnMut(
         }
 
         let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
-            cs_for_witness_generation,
+            cs_for_witness_generation.take_cs(),
             circuit_input.closed_form_input.clone(),
             &*round_function,
         );
-
-        *cs_for_witness_generation_use_counter += 1;
-        if *cs_for_witness_generation_use_counter == CYCLES_PER_SCRATCH_SPACE {
-            *cs_for_witness_generation =
-                create_cs_for_witness_generation::<GoldilocksField, Poseidon2Goldilocks>(
-                    TRACE_LEN_LOG_2_FOR_CALCULATION,
-                    MAX_VARS_LOG_2_FOR_CALCULATION,
-                );
-            *cs_for_witness_generation_use_counter = 0;
-        }
 
         let instance = VMMainCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
@@ -1659,12 +1644,7 @@ pub fn create_artifacts_from_tracer<
     // each history record contains an information on what was the stack state between points
     // when it potentially came into and out of scope
 
-    let mut cs_for_witness_generation_use_counter: usize = 0;
-    let mut cs_for_witness_generation =
-        create_cs_for_witness_generation::<GoldilocksField, Poseidon2Goldilocks>(
-            TRACE_LEN_LOG_2_FOR_CALCULATION,
-            MAX_VARS_LOG_2_FOR_CALCULATION,
-        );
+    let mut cs_for_witness_generation = CsForWitnessGeneration::new();
 
     mem_print("After cs creation");
 
@@ -1691,7 +1671,6 @@ pub fn create_artifacts_from_tracer<
         round_function,
         num_non_deterministic_heap_queries,
         &mut cs_for_witness_generation,
-        &mut cs_for_witness_generation_use_counter,
         &mut circuit_callback,
         &mut recursion_queue_callback,
     );
@@ -1739,7 +1718,6 @@ pub fn create_artifacts_from_tracer<
         vm_snapshots,
         round_function.clone(),        
         &mut cs_for_witness_generation,
-        &mut cs_for_witness_generation_use_counter,
         &mut circuit_callback,
         &mut recursion_queue_callback
     );
@@ -1767,8 +1745,7 @@ pub fn create_artifacts_from_tracer<
         let mut maker = CircuitMaker::new(
             geometry.cycles_code_decommitter_sorter,
             round_function.clone(),
-            &mut cs_for_witness_generation,
-            &mut cs_for_witness_generation_use_counter,
+            &mut cs_for_witness_generation
         );
 
         mem_print("Before additional circuits");
@@ -1797,7 +1774,6 @@ pub fn create_artifacts_from_tracer<
             geometry.cycles_per_code_decommitter,
             round_function.clone(),
             &mut cs_for_witness_generation,
-            &mut cs_for_witness_generation_use_counter,
         );
 
         for circuit_input in code_decommitter_circuits_data.into_iter() {
@@ -1823,8 +1799,7 @@ pub fn create_artifacts_from_tracer<
         let mut maker = CircuitMaker::new(
             geometry.cycles_per_keccak256_circuit,
             round_function.clone(),
-            &mut cs_for_witness_generation,
-            &mut cs_for_witness_generation_use_counter,
+            &mut cs_for_witness_generation
         );
 
         for circuit_input in keccak256_circuits_data.into_iter() {
@@ -1850,8 +1825,7 @@ pub fn create_artifacts_from_tracer<
         let mut maker = CircuitMaker::new(
             geometry.cycles_per_sha256_circuit,
             round_function.clone(),
-            &mut cs_for_witness_generation,
-            &mut cs_for_witness_generation_use_counter,
+            &mut cs_for_witness_generation
         );
 
         for circuit_input in sha256_circuits_data.into_iter() {
@@ -1877,8 +1851,7 @@ pub fn create_artifacts_from_tracer<
         let mut maker = CircuitMaker::new(
             geometry.cycles_per_ecrecover_circuit,
             round_function.clone(),
-            &mut cs_for_witness_generation,
-            &mut cs_for_witness_generation_use_counter,
+            &mut cs_for_witness_generation
         );
 
         for circuit_input in ecrecover_circuits_data.into_iter() {
@@ -1904,8 +1877,7 @@ pub fn create_artifacts_from_tracer<
         let mut maker = CircuitMaker::new(
             geometry.cycles_per_storage_sorter,
             round_function.clone(),
-            &mut cs_for_witness_generation,
-            &mut cs_for_witness_generation_use_counter,
+            &mut cs_for_witness_generation
         );
 
         for circuit_input in storage_deduplicator_circuit_data.into_iter() {
@@ -1931,8 +1903,7 @@ pub fn create_artifacts_from_tracer<
         let mut maker = CircuitMaker::new(
             geometry.cycles_per_events_or_l1_messages_sorter,
             round_function.clone(),
-            &mut cs_for_witness_generation,
-            &mut cs_for_witness_generation_use_counter,
+            &mut cs_for_witness_generation
         );
 
         for circuit_input in events_deduplicator_circuit_data.into_iter() {
@@ -1958,8 +1929,7 @@ pub fn create_artifacts_from_tracer<
         let mut maker = CircuitMaker::new(
             geometry.cycles_per_events_or_l1_messages_sorter,
             round_function.clone(),
-            &mut cs_for_witness_generation,
-            &mut cs_for_witness_generation_use_counter,
+            &mut cs_for_witness_generation
         );
 
         for circuit_input in l1_messages_deduplicator_circuit_data.into_iter() {
@@ -1985,8 +1955,7 @@ pub fn create_artifacts_from_tracer<
         let mut maker = CircuitMaker::new(
             geometry.limit_for_l1_messages_pudata_hasher,
             round_function.clone(),
-            &mut cs_for_witness_generation,
-            &mut cs_for_witness_generation_use_counter,
+            &mut cs_for_witness_generation
         );
 
         for circuit_input in l1_messages_linear_hash_data.into_iter() {
@@ -2012,8 +1981,7 @@ pub fn create_artifacts_from_tracer<
         let mut maker = CircuitMaker::new(
             geometry.cycles_per_transient_storage_sorter,
             round_function.clone(),
-            &mut cs_for_witness_generation,
-            &mut cs_for_witness_generation_use_counter,
+            &mut cs_for_witness_generation
         );
 
         for circuit_input in transient_storage_sorter_circuit_data.into_iter() {
@@ -2039,8 +2007,7 @@ pub fn create_artifacts_from_tracer<
         let mut maker = CircuitMaker::new(
             geometry.cycles_per_secp256r1_verify_circuit,
             round_function.clone(),
-            &mut cs_for_witness_generation,
-            &mut cs_for_witness_generation_use_counter,
+            &mut cs_for_witness_generation
         );
 
         for circuit_input in secp256r1_verify_circuits_data.into_iter() {
@@ -2065,8 +2032,7 @@ pub fn create_artifacts_from_tracer<
         let mut maker = CircuitMaker::new(
             4096,
             round_function.clone(),
-            &mut cs_for_witness_generation,
-            &mut cs_for_witness_generation_use_counter,
+            &mut cs_for_witness_generation
         );
 
         let mut eip_4844_circuits = Vec::new();

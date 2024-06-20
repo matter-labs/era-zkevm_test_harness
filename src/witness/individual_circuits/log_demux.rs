@@ -16,6 +16,7 @@ use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::zkevm_circuits::demux_log_queue::DemuxOutput;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use circuit_definitions::{encodings::*, Field, RoundFunction};
+use postprocessing::CsForWitnessGeneration;
 
 pub struct LogDemuxArtifacts<F: SmallField> {
     // log queue
@@ -33,8 +34,7 @@ pub fn compute_logs_demux<
     per_circuit_capacity: usize,
     round_function: &RoundFunction,
     geometry: &GeometryConfig,
-    cs_for_witness_generation: &mut ConstraintSystemImpl<Field, RoundFunction>,
-    cycles_used: &mut usize,
+    cs_for_witness_generation: &mut CsForWitnessGeneration,
     mut circuit_callback: CB,
     mut recursion_queue_callback: QSCB,
 ) -> (
@@ -52,8 +52,7 @@ pub fn compute_logs_demux<
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_log_demuxer,
         Arc::new(round_function.clone()),
-        cs_for_witness_generation,
-        cycles_used,
+        cs_for_witness_generation
     );
 
     // trivial empty case
