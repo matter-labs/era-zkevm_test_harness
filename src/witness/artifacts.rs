@@ -46,7 +46,7 @@ pub struct MemoryArtifacts<F: SmallField> {
 
 #[derive(Derivative)]
 #[derivative(Default)]
-pub struct CiruitArtifacts<F: SmallField> {
+pub struct CircuitArtifacts<F: SmallField> {
     // processed code decommitter circuits, as well as sorting circuit
     pub code_decommitter_circuits_data: Vec<CodeDecommitterCircuitInstanceWitness<F>>,
     pub decommittments_deduplicator_circuits_data:

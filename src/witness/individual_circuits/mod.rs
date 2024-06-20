@@ -6,7 +6,7 @@ use crate::boojum::field::SmallField;
 use crate::boojum::gadgets::queue::CircuitQueueRawWitness;
 use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 use crate::boojum::gadgets::traits::round_function::*;
-use crate::witness::artifacts::CiruitArtifacts;
+use crate::witness::artifacts::CircuitArtifacts;
 use crate::zkevm_circuits::base_structures::precompile_input_outputs::*;
 use crate::zkevm_circuits::base_structures::vm_state::FULL_SPONGE_QUEUE_STATE_WIDTH;
 use crate::zkevm_circuits::fsm_input_output::*;

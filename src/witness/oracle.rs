@@ -11,7 +11,7 @@ use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 use crate::ethereum_types::U256;
 use crate::toolset::GeometryConfig;
 use crate::witness::advancing_range::AdvancingRange;
-use crate::witness::artifacts::{DemuxedQueries, CiruitArtifacts, MemoryArtifacts};
+use crate::witness::artifacts::{DemuxedQueries, CircuitArtifacts, MemoryArtifacts};
 use crate::witness::postprocessing::{CircuitMaker, FirstAndLastCircuit};
 use crate::witness::tracer::{QueryMarker, WitnessTracer};
 use crate::witness::vm_snapshot::VmSnapshot;
@@ -873,7 +873,7 @@ fn create_artifacts_inner<
     mut circuit_callback: &mut CB,
     mut recursion_queue_callback: &mut QSCB,
 ) -> (
-    CiruitArtifacts<GoldilocksField>,
+    CircuitArtifacts<GoldilocksField>,
     MemoryArtifacts<GoldilocksField>,
     FirstAndLastCircuit<LogDemuxInstanceSynthesisFunction>,
     FirstAndLastCircuit<RAMPermutationInstanceSynthesisFunction>,
@@ -923,7 +923,7 @@ fn create_artifacts_inner<
     // direct VM related part is done, other subcircuit's functionality is moved to other functions
     // that should properly do sorts and memory writes
 
-    let mut artifacts = CiruitArtifacts::default();
+    let mut artifacts = CircuitArtifacts::default();
 
     {
         use crate::witness::individual_circuits::sort_decommit_requests::compute_decommitts_sorter_circuit_snapshots;
@@ -1725,7 +1725,7 @@ pub fn create_artifacts_from_tracer<
     mem_print("After mainVM processing");
 
     {
-        let CiruitArtifacts {
+        let CircuitArtifacts {
             code_decommitter_circuits_data,
             decommittments_deduplicator_circuits_data,
             storage_deduplicator_circuit_data,
