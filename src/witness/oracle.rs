@@ -1210,8 +1210,6 @@ fn create_artifacts_inner<
     )
 }
 
-use std::ops::Range;
-
 struct MainVmSimulationInput {
     memory_queue_states_for_entry:
         QueueStateWitness<GoldilocksField, FULL_SPONGE_QUEUE_STATE_WIDTH>,
@@ -1393,7 +1391,7 @@ fn repack_input_for_main_vm(
         main_vm_inputs.push(main_vm_input);
     }
 
-    // special pass fo last one
+    // special pass for last one
     {
         let memory_queue_state_for_entry = if vm_memory_query_cycles.is_empty() {
             QueueState::placeholder_witness()
