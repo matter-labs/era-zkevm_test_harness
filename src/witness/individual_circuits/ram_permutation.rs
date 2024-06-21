@@ -29,6 +29,7 @@ pub fn compute_ram_circuit_snapshots<
     QSCB: FnMut(u64, RecursionQueueSimulator<Field>, Vec<ClosedFormInputCompactFormWitness<Field>>),
 >(
     memory_artifacts: &mut MemoryArtifacts<Field>,
+    memory_queue_simulator: &MemoryQueueSimulator<Field>,
     round_function: &RoundFunction,
     num_non_deterministic_heap_queries: usize,
     per_circuit_capacity: usize,
@@ -73,7 +74,7 @@ pub fn compute_ram_circuit_snapshots<
 
     assert_eq!(
         sorted_memory_queries_simulator.num_items,
-        memory_artifacts.memory_queue_simulator.num_items
+        memory_queue_simulator.num_items
     );
 
     // now we should chunk it by circuits but briefly simulating their logic
@@ -85,7 +86,7 @@ pub fn compute_ram_circuit_snapshots<
         { MEMORY_QUERY_PACKED_WIDTH + 1 },
         2,
     >(
-        take_sponge_like_queue_state_from_simulator(&memory_artifacts.memory_queue_simulator).tail,
+        take_sponge_like_queue_state_from_simulator(&memory_queue_simulator).tail,
         take_sponge_like_queue_state_from_simulator(&sorted_memory_queries_simulator).tail,
         round_function,
     );
@@ -94,12 +95,11 @@ pub fn compute_ram_circuit_snapshots<
     // we use them naively
 
     assert_eq!(
-        memory_artifacts.memory_queue_simulator.num_items as usize,
+        memory_queue_simulator.num_items as usize,
         memory_artifacts.all_memory_queries_accumulated.len()
     );
 
-    let lhs_contributions: Vec<_> = memory_artifacts
-        .memory_queue_simulator
+    let lhs_contributions: Vec<_> = memory_queue_simulator
         .witness
         .iter()
         .map(|el| el.0)
@@ -127,7 +127,7 @@ pub fn compute_ram_circuit_snapshots<
         );
         assert_eq!(
             lhs_grand_product_chain.len(),
-            memory_artifacts.memory_queue_simulator.witness.len()
+            memory_queue_simulator.witness.len()
         );
         assert_eq!(
             rhs_grand_product_chain.len(),
@@ -146,8 +146,7 @@ pub fn compute_ram_circuit_snapshots<
 
     // we also want to have chunks of witness for each of all the intermediate states
 
-    assert!(memory_artifacts
-        .memory_queue_simulator
+    assert!(memory_queue_simulator
         .witness
         .as_slices()
         .1
@@ -176,8 +175,7 @@ pub fn compute_ram_circuit_snapshots<
             .all_memory_queue_states
             .chunks(per_circuit_capacity)
             .len(),
-        memory_artifacts
-            .memory_queue_simulator
+        memory_queue_simulator
             .witness
             .as_slices()
             .0
@@ -219,8 +217,7 @@ pub fn compute_ram_circuit_snapshots<
         .zip(transposed_lhs_chains.into_iter())
         .zip(transposed_rhs_chains.into_iter())
         .zip(
-            memory_artifacts
-                .memory_queue_simulator
+            memory_queue_simulator
                 .witness
                 .as_slices()
                 .0

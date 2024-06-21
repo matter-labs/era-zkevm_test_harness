@@ -10,6 +10,7 @@ use artifacts::MemoryArtifacts;
 use circuit_definitions::encodings::decommittment_request::normalized_preimage_as_u256;
 use circuit_definitions::encodings::decommittment_request::DecommittmentQueueSimulator;
 use circuit_definitions::encodings::decommittment_request::DecommittmentQueueState;
+use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 use circuit_definitions::zk_evm::aux_structures::DecommittmentQuery;
 use std::collections::VecDeque;
 
@@ -18,6 +19,7 @@ pub fn compute_decommitter_circuit_snapshots<
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     memory_artifacts: &mut MemoryArtifacts<F>,
+    memory_queue_simulator: &mut MemoryQueueSimulator<F>,
     deduplicated_decommittment_queue_simulator: &mut DecommittmentQueueSimulator<F>,
     deduplicated_decommittment_queue_states: &mut Vec<DecommittmentQueueState<F>>,
     deduplicated_decommit_requests_with_data: &mut Vec<(DecommittmentQuery, Vec<U256>)>,
@@ -30,13 +32,13 @@ pub fn compute_decommitter_circuit_snapshots<
     );
     assert_eq!(
         memory_artifacts.all_memory_queries_accumulated.len(),
-        memory_artifacts.memory_queue_simulator.num_items as usize
+        memory_queue_simulator.num_items as usize
     );
 
     let start_idx_for_memory_accumulator = memory_artifacts.all_memory_queue_states.len();
 
     let initial_memory_queue_state =
-        take_sponge_like_queue_state_from_simulator(&memory_artifacts.memory_queue_simulator);
+        take_sponge_like_queue_state_from_simulator(&memory_queue_simulator);
 
     // now we should start chunking the requests into separate decommittment circuits by running a micro-simulator
 
@@ -68,8 +70,7 @@ pub fn compute_decommitter_circuit_snapshots<
 
         // fill up the memory queue
         for query in as_queries.iter() {
-            let (_old_tail, intermediate_info) = memory_artifacts
-                .memory_queue_simulator
+            let (_old_tail, intermediate_info) = memory_queue_simulator
                 .push_and_output_intermediate_data(*query, round_function);
 
             memory_artifacts
@@ -428,7 +429,7 @@ pub fn compute_decommitter_circuit_snapshots<
     );
     assert_eq!(
         memory_artifacts.all_memory_queries_accumulated.len(),
-        memory_artifacts.memory_queue_simulator.num_items as usize
+        memory_queue_simulator.num_items as usize
     );
 
     results

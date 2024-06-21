@@ -841,6 +841,7 @@ use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Sha256RoundWitness;
 use circuit_definitions::circuit_definitions::base_layer::LogDemuxInstanceSynthesisFunction;
 use circuit_definitions::circuit_definitions::base_layer::RAMPermutationInstanceSynthesisFunction;
 use circuit_definitions::circuit_definitions::base_layer::StorageApplicationInstanceSynthesisFunction;
+use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 
 fn create_artifacts_inner<
     CB: FnMut(ZkSyncBaseLayerCircuit),
@@ -891,9 +892,10 @@ fn create_artifacts_inner<
     memory_artifacts.all_memory_queue_states =
         Vec::with_capacity(vm_memory_queries_accumulated.len());
 
+    let mut  memory_queue_simulator: MemoryQueueSimulator<GoldilocksField> = MemoryQueueSimulator::default();
+
     for (cycle, query) in vm_memory_queries_accumulated {
-        let (_, intermediate_info) = memory_artifacts
-            .memory_queue_simulator
+        let (_, intermediate_info) = memory_queue_simulator
             .push_and_output_intermediate_data(query.clone(), round_function);
 
         memory_artifacts.all_memory_queries_accumulated.push(query);
@@ -912,7 +914,7 @@ fn create_artifacts_inner<
         );
         assert_eq!(
             memory_artifacts.all_memory_queries_accumulated.len(),
-            memory_artifacts.memory_queue_simulator.num_items as usize
+            memory_queue_simulator.num_items as usize
         );
     }
 
@@ -935,6 +937,7 @@ fn create_artifacts_inner<
         artifacts.decommittments_deduplicator_circuits_data =
             compute_decommitts_sorter_circuit_snapshots(
                 &mut memory_artifacts,
+                &memory_queue_simulator,
                 executed_decommittment_queries,
                 &mut deduplicated_decommitment_queue_simulator,
                 &mut deduplicated_decommittment_queue_states,
@@ -949,6 +952,7 @@ fn create_artifacts_inner<
 
         let code_decommitter_circuits_data = compute_decommitter_circuit_snapshots(
             &mut memory_artifacts,
+            &mut memory_queue_simulator,
             &mut deduplicated_decommitment_queue_simulator,
             &mut deduplicated_decommittment_queue_states,
             &mut deduplicated_decommit_requests_with_data,
@@ -998,6 +1002,7 @@ fn create_artifacts_inner<
 
     let keccak256_circuits_data = keccak256_decompose_into_per_circuit_witness(
         &mut memory_artifacts,
+        &mut memory_queue_simulator,
         keccak_round_function_witnesses,
         &mut log_simulation_queries_data.demuxed_queries,
         demuxed_keccak_precompile_queue,
@@ -1019,6 +1024,7 @@ fn create_artifacts_inner<
 
     let sha256_circuits_data = sha256_decompose_into_per_circuit_witness(
         &mut memory_artifacts,
+        &mut memory_queue_simulator,
         sha256_round_function_witnesses,
         &mut log_simulation_queries_data.demuxed_queries,
         demuxed_sha256_precompile_queue,
@@ -1040,6 +1046,7 @@ fn create_artifacts_inner<
 
     let ecrecover_circuits_data = ecrecover_decompose_into_per_circuit_witness(
         &mut memory_artifacts,
+        &mut memory_queue_simulator,
         ecrecover_witnesses,
         &mut log_simulation_queries_data.demuxed_queries,
         demuxed_ecrecover_queue,
@@ -1059,6 +1066,7 @@ fn create_artifacts_inner<
 
     let secp256r1_verify_circuits_data = secp256r1_verify_decompose_into_per_circuit_witness(
         &mut memory_artifacts,
+        &mut memory_queue_simulator,
         secp256r1_verify_witnesses,
         &mut log_simulation_queries_data.demuxed_queries,
         demuxed_secp256r1_verify_queue,
@@ -1076,6 +1084,7 @@ fn create_artifacts_inner<
     let (ram_permutation_circuits, ram_permutation_circuits_compact_forms_witnesses) =
         compute_ram_circuit_snapshots(
             &mut memory_artifacts,
+            &memory_queue_simulator,
             round_function,
             num_non_deterministic_heap_queries,
             geometry.cycles_per_ram_permutation as usize,
@@ -1084,6 +1093,8 @@ fn create_artifacts_inner<
             &mut circuit_callback,
             &mut recursion_queue_callback,
         );
+
+    drop(memory_queue_simulator);
 
     // now completely parallel process to reconstruct the states, with internally parallelism in each round function
 
