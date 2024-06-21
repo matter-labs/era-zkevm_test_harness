@@ -56,6 +56,8 @@ pub fn compute_ram_circuit_snapshots<
 
     // extend it in place to reduce memory usage
     memory_artifacts
+        .all_memory_queue_states.reserve_exact(implicit_memory_artifacts.memory_queue_states.len());
+    memory_artifacts
         .all_memory_queue_states
         .extend(implicit_memory_artifacts.memory_queue_states.into_iter());
 
