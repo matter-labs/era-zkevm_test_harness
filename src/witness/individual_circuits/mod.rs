@@ -16,6 +16,7 @@ use std::collections::VecDeque;
 pub mod data_hasher_and_merklizer;
 pub mod decommit_code;
 pub mod ecrecover;
+pub mod eip4844_repack;
 pub mod events_sort_dedup;
 pub mod keccak256_round_function;
 pub mod log_demux;

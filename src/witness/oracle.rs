@@ -2161,42 +2161,13 @@ pub fn create_artifacts_from_tracer<
 
         // eip 4844 circuits are basic, but they do not need closed form input commitments
         let circuit_type = BaseLayerCircuitType::EIP4844Repack;
+
         let mut maker =
             CircuitMaker::new(4096, round_function.clone(), &mut cs_for_witness_generation);
 
-        let mut eip_4844_circuits = Vec::new();
-        for el in eip_4844_repack_inputs.into_iter() {
-            let Some(input_witness) = el else {
-                continue;
-            };
-            use crate::generate_eip4844_witness;
-            let (chunks, linear_hash, versioned_hash, output_hash) =
-                generate_eip4844_witness::<GoldilocksField>(&input_witness[..], trusted_setup_path);
-            let data_chunks: VecDeque<_> = chunks
-                .iter()
-                .map(|el| BlobChunkWitness { inner: *el })
-                .collect();
-            use crate::zkevm_circuits::eip_4844::input::*;
-            use crate::zkevm_circuits::fsm_input_output::ClosedFormInputWitness;
-            let output_data = EIP4844OutputDataWitness {
-                linear_hash,
-                output_hash,
-            };
-            let eip_4844_circuit_input = EIP4844CircuitInstanceWitness::<GoldilocksField> {
-                closed_form_input: ClosedFormInputWitness {
-                    start_flag: true,
-                    completion_flag: true,
-                    observable_input: (),
-                    observable_output: output_data,
-                    hidden_fsm_input: (),
-                    hidden_fsm_output: (),
-                },
-                versioned_hash,
-                linear_hash_output: linear_hash,
-                data_chunks,
-            };
-            eip_4844_circuits.push(eip_4844_circuit_input);
-        }
+        use crate::witness::individual_circuits::eip4844_repack::compute_eip_4844;
+        let eip_4844_circuits = compute_eip_4844(eip_4844_repack_inputs, trusted_setup_path);
+        
         for circuit_input in eip_4844_circuits.iter().cloned() {
             circuit_callback(ZkSyncBaseLayerCircuit::EIP4844Repack(
                 maker.process(circuit_input, circuit_type),
