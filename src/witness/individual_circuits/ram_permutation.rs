@@ -16,9 +16,11 @@ use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use circuit_definitions::{encodings::*, Field, RoundFunction};
+use crate::zk_evm::aux_structures::{MemoryQuery};
 use postprocessing::CsForWitnessGeneration;
 use rayon::prelude::*;
 use snark_wrapper::boojum::field::Field as _;
+use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::sync::Arc;
 use zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
@@ -58,12 +60,13 @@ pub fn compute_ram_circuit_snapshots<
         .extend(implicit_memory_artifacts.memory_queue_states.into_iter());
 
     // sort by memory location, and then by timestamp
-    let mut sorted_memory_queries_accumulated =
-        memory_artifacts.all_memory_queries_accumulated.clone();
+    let mut sorted_memory_queries_accumulated: Vec<&MemoryQuery> =
+        memory_artifacts.all_memory_queries_accumulated.iter().collect();
+
     sorted_memory_queries_accumulated.extend(
         implicit_memory_artifacts
             .memory_queries_accumulated
-            .into_iter(),
+            .iter(),
     );
 
     sorted_memory_queries_accumulated.par_sort_by(|a, b| match a.location.cmp(&b.location) {
@@ -83,13 +86,15 @@ pub fn compute_ram_circuit_snapshots<
 
     for (i, query) in sorted_memory_queries_accumulated.into_iter().enumerate() {
         let (_, intermediate_info) = sorted_memory_queries_simulator
-            .push_and_output_intermediate_data(query, round_function);
+            .push_and_output_intermediate_data(*query, round_function);
 
         if i % per_circuit_capacity == per_circuit_capacity - 1 || i == total_amount_of_queries - 1
         {
             sorted_memory_queue_chunk_final_states.push(intermediate_info);
         }
     }
+
+    drop(implicit_memory_artifacts.memory_queries_accumulated);
 
     mem_print("Inside RAM permutation circuit computing 2");
 
