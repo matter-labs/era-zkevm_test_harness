@@ -934,9 +934,9 @@ fn create_artifacts_inner<
         let mut deduplicated_decommittment_queue_states = Default::default();
         let mut deduplicated_decommit_requests_with_data = Default::default();
 
-        artifacts.decommittments_deduplicator_circuits_data =
+        let (all_decommittment_queue_states, decommittments_deduplicator_circuits_data) =
             compute_decommitts_sorter_circuit_snapshots(
-                &mut memory_artifacts,
+                &memory_artifacts,
                 &memory_queue_simulator,
                 executed_decommittment_queries,
                 &mut deduplicated_decommitment_queue_simulator,
@@ -945,6 +945,8 @@ fn create_artifacts_inner<
                 round_function,
                 geometry.cycles_code_decommitter_sorter as usize,
             );
+        memory_artifacts.all_decommittment_queue_states = all_decommittment_queue_states;
+        artifacts.decommittments_deduplicator_circuits_data = decommittments_deduplicator_circuits_data;
 
         use crate::witness::individual_circuits::decommit_code::compute_decommitter_circuit_snapshots;
 
