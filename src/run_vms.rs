@@ -360,7 +360,7 @@ pub fn run_vms<
 
         // VM can not be skipped
 
-        use crate::witness::full_block_artifact::LogQueue;
+        use crate::witness::artifacts::LogQueue;
         use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 
         let empty_log_queue_state =

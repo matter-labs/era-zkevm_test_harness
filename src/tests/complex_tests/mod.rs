@@ -60,7 +60,6 @@ use utils::read_basic_test_artifact;
 
 use zkevm_assembly::Assembly;
 
-#[ignore = "Too slow"]
 #[test]
 fn basic_test() {
     let test_artifact = read_basic_test_artifact();
@@ -127,7 +126,7 @@ use crate::boojum::algebraic_props::round_function::AbsorptionModeOverwrite;
 use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
 use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
 use crate::data_source::in_memory_data_source::InMemoryDataSource;
-use crate::witness::full_block_artifact::*;
+use crate::witness::artifacts::*;
 
 /// Lover memory requirements
 /// Used only for base layer debugging
@@ -397,7 +396,7 @@ fn run_and_try_create_witness_inner(
         }
     }
 
-    let worker = Worker::new_with_num_threads(8);
+    let worker = Worker::new_with_num_threads(1);
 
     let mut previous_circuit_type = 0;
 

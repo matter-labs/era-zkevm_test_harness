@@ -11,7 +11,9 @@ use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 use crate::ethereum_types::U256;
 use crate::toolset::GeometryConfig;
 use crate::witness::advancing_range::AdvancingRange;
-use crate::witness::artifacts::{CircuitArtifacts, DemuxedQueries, MemoryArtifacts, ImplicitMemoryArtifacts};
+use crate::witness::artifacts::{
+    CircuitArtifacts, DemuxedQueries, ImplicitMemoryArtifacts, MemoryArtifacts,
+};
 use crate::witness::postprocessing::{CircuitMaker, FirstAndLastCircuit};
 use crate::witness::tracer::{QueryMarker, WitnessTracer};
 use crate::witness::vm_snapshot::VmSnapshot;
@@ -892,11 +894,12 @@ fn create_artifacts_inner<
     memory_artifacts.all_memory_queue_states =
         Vec::with_capacity(vm_memory_queries_accumulated.len());
 
-    let mut  memory_queue_simulator: MemoryQueueSimulator<GoldilocksField> = MemoryQueueSimulator::default();
+    let mut memory_queue_simulator: MemoryQueueSimulator<GoldilocksField> =
+        MemoryQueueSimulator::default();
 
     for (cycle, query) in vm_memory_queries_accumulated {
-        let (_, intermediate_info) = memory_queue_simulator
-            .push_and_output_intermediate_data(query.clone(), round_function);
+        let (_, intermediate_info) =
+            memory_queue_simulator.push_and_output_intermediate_data(query.clone(), round_function);
 
         memory_artifacts.all_memory_queries_accumulated.push(query);
         memory_artifacts.vm_memory_query_cycles.push(cycle);
@@ -926,7 +929,8 @@ fn create_artifacts_inner<
     let mut artifacts = CircuitArtifacts::default();
 
     // precompiles and decommiter will produce additional implicit memory queries
-    let mut implicit_memory_artifacts: ImplicitMemoryArtifacts<GoldilocksField> = ImplicitMemoryArtifacts::default();
+    let mut implicit_memory_artifacts: ImplicitMemoryArtifacts<GoldilocksField> =
+        ImplicitMemoryArtifacts::default();
 
     {
         use crate::witness::individual_circuits::sort_decommit_requests::compute_decommitts_sorter_circuit_snapshots;
@@ -949,7 +953,8 @@ fn create_artifacts_inner<
                 geometry.cycles_code_decommitter_sorter as usize,
             );
         memory_artifacts.all_decommittment_queue_states = all_decommittment_queue_states;
-        artifacts.decommittments_deduplicator_circuits_data = decommittments_deduplicator_circuits_data;
+        artifacts.decommittments_deduplicator_circuits_data =
+            decommittments_deduplicator_circuits_data;
 
         use crate::witness::individual_circuits::decommit_code::compute_decommitter_circuit_snapshots;
 

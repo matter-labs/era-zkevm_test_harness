@@ -46,7 +46,7 @@ pub struct MemoryArtifacts<F: SmallField> {
 #[derivative(Default)]
 pub struct ImplicitMemoryArtifacts<F: SmallField> {
     pub memory_queries_accumulated: Vec<MemoryQuery>,
-    pub memory_queue_states: Vec<MemoryQueueState<F>>
+    pub memory_queue_states: Vec<MemoryQueueState<F>>,
 }
 
 #[derive(Derivative)]

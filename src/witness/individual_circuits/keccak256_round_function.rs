@@ -1,13 +1,15 @@
 use super::*;
-use crate::witness::artifacts::{DemuxedQueries, LogQueue, MemoryArtifacts, ImplicitMemoryArtifacts};
+use crate::witness::artifacts::{
+    DemuxedQueries, ImplicitMemoryArtifacts, LogQueue, MemoryArtifacts,
+};
 use crate::zk_evm::aux_structures::LogQuery as LogQuery_;
 use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::Keccak256RoundWitness;
 use crate::zkevm_circuits::base_structures::log_query::*;
 use crate::zkevm_circuits::keccak256_round_function::{
     input::*, Keccak256PrecompileCallParamsWitness,
 };
-use circuit_definitions::encodings::*;
 use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
+use circuit_definitions::encodings::*;
 use derivative::*;
 
 #[derive(Derivative)]
@@ -37,11 +39,14 @@ pub fn keccak256_decompose_into_per_circuit_witness<
     round_function: &R,
 ) -> Vec<Keccak256RoundFunctionCircuitInstanceWitness<F>> {
     assert_eq!(
-        memory_artifacts.all_memory_queries_accumulated.len() + implicit_memory_artifacts.memory_queries_accumulated.len(),
-        memory_artifacts.all_memory_queue_states.len() + implicit_memory_artifacts.memory_queue_states.len()
+        memory_artifacts.all_memory_queries_accumulated.len()
+            + implicit_memory_artifacts.memory_queries_accumulated.len(),
+        memory_artifacts.all_memory_queue_states.len()
+            + implicit_memory_artifacts.memory_queue_states.len()
     );
     assert_eq!(
-        memory_artifacts.all_memory_queries_accumulated.len() + implicit_memory_artifacts.memory_queries_accumulated.len(),
+        memory_artifacts.all_memory_queries_accumulated.len()
+            + implicit_memory_artifacts.memory_queries_accumulated.len(),
         memory_queue_simulator.num_items as usize
     );
 
@@ -232,15 +237,16 @@ pub fn keccak256_decompose_into_per_circuit_witness<
                 assert_eq!(read, read_query);
                 memory_reads_per_circuit.push_back(read_query.value);
 
-                implicit_memory_artifacts.memory_queries_accumulated.push(read);
-                let (_, intermediate_info) = memory_queue_simulator
-                    .push_and_output_intermediate_data(read, round_function);
+                implicit_memory_artifacts
+                    .memory_queries_accumulated
+                    .push(read);
+                let (_, intermediate_info) =
+                    memory_queue_simulator.push_and_output_intermediate_data(read, round_function);
                 implicit_memory_artifacts
                     .memory_queue_states
                     .push(intermediate_info);
-                current_memory_queue_state = take_sponge_like_queue_state_from_simulator(
-                    &memory_queue_simulator,
-                );
+                current_memory_queue_state =
+                    take_sponge_like_queue_state_from_simulator(&memory_queue_simulator);
 
                 input_buffer.fill_with_bytes(
                     &bytes32_buffer,
@@ -290,15 +296,16 @@ pub fn keccak256_decompose_into_per_circuit_witness<
                 let write_query = memory_queries_it.next().unwrap();
                 assert_eq!(write, write_query);
 
-                implicit_memory_artifacts.memory_queries_accumulated.push(write);
-                let (_, intermediate_info) = memory_queue_simulator
-                    .push_and_output_intermediate_data(write, round_function);
+                implicit_memory_artifacts
+                    .memory_queries_accumulated
+                    .push(write);
+                let (_, intermediate_info) =
+                    memory_queue_simulator.push_and_output_intermediate_data(write, round_function);
                 implicit_memory_artifacts
                     .memory_queue_states
                     .push(intermediate_info);
-                current_memory_queue_state = take_sponge_like_queue_state_from_simulator(
-                    &memory_queue_simulator,
-                );
+                current_memory_queue_state =
+                    take_sponge_like_queue_state_from_simulator(&memory_queue_simulator);
 
                 if is_last_request {
                     precompile_state = Keccak256PrecompileState::Finished;
@@ -457,11 +464,14 @@ pub fn keccak256_decompose_into_per_circuit_witness<
     }
 
     assert_eq!(
-        memory_artifacts.all_memory_queries_accumulated.len() + implicit_memory_artifacts.memory_queries_accumulated.len(),
-        memory_artifacts.all_memory_queue_states.len() + implicit_memory_artifacts.memory_queue_states.len()
+        memory_artifacts.all_memory_queries_accumulated.len()
+            + implicit_memory_artifacts.memory_queries_accumulated.len(),
+        memory_artifacts.all_memory_queue_states.len()
+            + implicit_memory_artifacts.memory_queue_states.len()
     );
     assert_eq!(
-        memory_artifacts.all_memory_queries_accumulated.len() + implicit_memory_artifacts.memory_queries_accumulated.len(),
+        memory_artifacts.all_memory_queries_accumulated.len()
+            + implicit_memory_artifacts.memory_queries_accumulated.len(),
         memory_queue_simulator.num_items as usize
     );
 

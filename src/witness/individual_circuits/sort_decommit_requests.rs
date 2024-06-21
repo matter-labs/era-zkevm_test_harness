@@ -11,8 +11,8 @@ use crate::zkevm_circuits::sort_decommittment_requests::input::*;
 use crate::zkevm_circuits::DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS;
 use artifacts::MemoryArtifacts;
 use circuit_definitions::encodings::decommittment_request::*;
-use circuit_definitions::encodings::CircuitEquivalentReflection;
 use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
+use circuit_definitions::encodings::CircuitEquivalentReflection;
 use circuit_definitions::zk_evm::aux_structures::DecommittmentQuery;
 use rayon::prelude::*;
 use std::cmp::Ordering;
@@ -29,7 +29,10 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
     deduplicated_decommit_requests_with_data: &mut Vec<(DecommittmentQuery, Vec<U256>)>,
     round_function: &R,
     deduplicator_circuit_capacity: usize,
-) -> (Vec<(u32, DecommittmentQueueState<F>)>, Vec<CodeDecommittmentsDeduplicatorInstanceWitness<F>>) {
+) -> (
+    Vec<(u32, DecommittmentQueueState<F>)>,
+    Vec<CodeDecommittmentsDeduplicatorInstanceWitness<F>>,
+) {
     assert_eq!(
         memory_artifacts.all_memory_queries_accumulated.len(),
         memory_artifacts.all_memory_queue_states.len()
@@ -44,7 +47,8 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
         "VM should have made some code decommits"
     );
 
-    let mut all_decommittment_queue_states: Vec<(u32, DecommittmentQueueState<F>)> = Vec::with_capacity(executed_decommittment_queries.len());
+    let mut all_decommittment_queue_states: Vec<(u32, DecommittmentQueueState<F>)> =
+        Vec::with_capacity(executed_decommittment_queries.len());
 
     // we produce witness for two circuits at once
 
@@ -70,8 +74,7 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
         let (_, intermediate_info) = unsorted_decommittment_queue_simulator
             .push_and_output_intermediate_data(*decommittment_request, round_function);
 
-        all_decommittment_queue_states
-            .push((*cycle, intermediate_info));
+        all_decommittment_queue_states.push((*cycle, intermediate_info));
     }
 
     // sort queries
@@ -430,7 +433,10 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
         decommittments_deduplicator_witness.push(current_witness);
     }
 
-    (all_decommittment_queue_states, decommittments_deduplicator_witness)
+    (
+        all_decommittment_queue_states,
+        decommittments_deduplicator_witness,
+    )
 }
 
 fn concatenate_key(hash: U256, timestamp: u32) -> [u32; PACKED_KEY_LENGTH] {
