@@ -6,7 +6,7 @@ use crate::zk_evm::ethereum_types::U256;
 use crate::zkevm_circuits::base_structures::decommit_query::DecommitQueryWitness;
 use crate::zkevm_circuits::base_structures::decommit_query::DECOMMIT_QUERY_PACKED_WIDTH;
 use crate::zkevm_circuits::code_unpacker_sha256::input::*;
-use artifacts::MemoryArtifacts;
+use artifacts::{MemoryArtifacts, ImplicitMemoryArtifacts};
 use circuit_definitions::encodings::decommittment_request::normalized_preimage_as_u256;
 use circuit_definitions::encodings::decommittment_request::DecommittmentQueueSimulator;
 use circuit_definitions::encodings::decommittment_request::DecommittmentQueueState;
@@ -18,24 +18,25 @@ pub fn compute_decommitter_circuit_snapshots<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
-    memory_artifacts: &mut MemoryArtifacts<F>,
+    memory_artifacts: &MemoryArtifacts<F>,
+    implicit_memory_artifacts: &mut ImplicitMemoryArtifacts<F>,
     memory_queue_simulator: &mut MemoryQueueSimulator<F>,
-    deduplicated_decommittment_queue_simulator: &mut DecommittmentQueueSimulator<F>,
-    deduplicated_decommittment_queue_states: &mut Vec<DecommittmentQueueState<F>>,
-    deduplicated_decommit_requests_with_data: &mut Vec<(DecommittmentQuery, Vec<U256>)>,
+    deduplicated_decommittment_queue_simulator: DecommittmentQueueSimulator<F>,
+    deduplicated_decommittment_queue_states: Vec<DecommittmentQueueState<F>>,
+    mut deduplicated_decommit_requests_with_data: Vec<(DecommittmentQuery, Vec<U256>)>,
     round_function: &R,
     decommiter_circuit_capacity: usize,
 ) -> Vec<CodeDecommitterCircuitInstanceWitness<F>> {
     assert_eq!(
-        memory_artifacts.all_memory_queries_accumulated.len(),
-        memory_artifacts.all_memory_queue_states.len()
+        memory_artifacts.all_memory_queries_accumulated.len() + implicit_memory_artifacts.memory_queries_accumulated.len(),
+        memory_artifacts.all_memory_queue_states.len() + implicit_memory_artifacts.memory_queue_states.len()
     );
     assert_eq!(
-        memory_artifacts.all_memory_queries_accumulated.len(),
+        memory_artifacts.all_memory_queries_accumulated.len() + implicit_memory_artifacts.memory_queries_accumulated.len(),
         memory_queue_simulator.num_items as usize
     );
 
-    let start_idx_for_memory_accumulator = memory_artifacts.all_memory_queue_states.len();
+    let start_idx_for_memory_accumulator = implicit_memory_artifacts.memory_queue_states.len();
 
     let initial_memory_queue_state =
         take_sponge_like_queue_state_from_simulator(&memory_queue_simulator);
@@ -73,20 +74,20 @@ pub fn compute_decommitter_circuit_snapshots<
             let (_old_tail, intermediate_info) = memory_queue_simulator
                 .push_and_output_intermediate_data(*query, round_function);
 
-            memory_artifacts
-                .all_memory_queue_states
+                implicit_memory_artifacts
+                .memory_queue_states
                 .push(intermediate_info);
         }
 
         // and plain test memory queues
-        memory_artifacts
-            .all_memory_queries_accumulated
+        implicit_memory_artifacts
+            .memory_queries_accumulated
             .extend(as_queries);
     }
 
     assert_eq!(
-        memory_artifacts.all_memory_queue_states.len(),
-        memory_artifacts.all_memory_queries_accumulated.len()
+        implicit_memory_artifacts.memory_queries_accumulated.len(),
+        implicit_memory_artifacts.memory_queue_states.len()
     );
 
     // our simulator is simple: it will try to take an element from the queue, run some number of rounds, and compare the results
@@ -166,18 +167,16 @@ pub fn compute_decommitter_circuit_snapshots<
             code_words: vec![],
         };
 
+        let wintess_state = if start_idx_for_memory_accumulator + memory_queue_state_offset == 0 {
+            memory_artifacts.all_memory_queue_states.last().unwrap()
+        } else {
+            implicit_memory_artifacts.memory_queue_states.get(start_idx_for_memory_accumulator + memory_queue_state_offset - 1).unwrap()
+        };
+
         current_circuit_witness
             .closed_form_input
             .hidden_fsm_input
-            .memory_queue_state = transform_sponge_like_queue_state(
-            memory_artifacts
-                .all_memory_queue_states
-                .iter()
-                .skip(start_idx_for_memory_accumulator + memory_queue_state_offset - 1)
-                .next()
-                .unwrap()
-                .clone(),
-        );
+            .memory_queue_state = transform_sponge_like_queue_state(wintess_state.clone());
 
         let initial_decommittment_queue_state = results
             .last()
@@ -380,18 +379,18 @@ pub fn compute_decommitter_circuit_snapshots<
             .decommittment_requests_queue_state = take_sponge_like_queue_state_from_simulator(
             &current_decommittment_requests_queue_simulator,
         );
+
+        let wintess_state = if start_idx_for_memory_accumulator + memory_queue_state_offset == 0 {
+            memory_artifacts.all_memory_queue_states.last().unwrap()
+        } else {
+            implicit_memory_artifacts.memory_queue_states.get(start_idx_for_memory_accumulator + memory_queue_state_offset - 1).unwrap()
+        };
+
         current_circuit_witness
             .closed_form_input
             .hidden_fsm_output
-            .memory_queue_state = transform_sponge_like_queue_state(
-            memory_artifacts
-                .all_memory_queue_states
-                .iter()
-                .skip(start_idx_for_memory_accumulator + memory_queue_state_offset - 1)
-                .next()
-                .unwrap()
-                .clone(),
-        );
+            .memory_queue_state = transform_sponge_like_queue_state(wintess_state.clone());
+
         current_circuit_witness
             .closed_form_input
             .hidden_fsm_output
@@ -424,11 +423,11 @@ pub fn compute_decommitter_circuit_snapshots<
     }
 
     assert_eq!(
-        memory_artifacts.all_memory_queries_accumulated.len(),
-        memory_artifacts.all_memory_queue_states.len()
+        memory_artifacts.all_memory_queries_accumulated.len() + implicit_memory_artifacts.memory_queries_accumulated.len(),
+        memory_artifacts.all_memory_queue_states.len() + implicit_memory_artifacts.memory_queue_states.len()
     );
     assert_eq!(
-        memory_artifacts.all_memory_queries_accumulated.len(),
+        memory_artifacts.all_memory_queries_accumulated.len() + implicit_memory_artifacts.memory_queries_accumulated.len(),
         memory_queue_simulator.num_items as usize
     );
 

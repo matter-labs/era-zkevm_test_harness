@@ -11,7 +11,7 @@ use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 use crate::ethereum_types::U256;
 use crate::toolset::GeometryConfig;
 use crate::witness::advancing_range::AdvancingRange;
-use crate::witness::artifacts::{CircuitArtifacts, DemuxedQueries, MemoryArtifacts, PrecompileMemoryArtifacts};
+use crate::witness::artifacts::{CircuitArtifacts, DemuxedQueries, MemoryArtifacts, ImplicitMemoryArtifacts};
 use crate::witness::postprocessing::{CircuitMaker, FirstAndLastCircuit};
 use crate::witness::tracer::{QueryMarker, WitnessTracer};
 use crate::witness::vm_snapshot::VmSnapshot;
@@ -925,6 +925,9 @@ fn create_artifacts_inner<
 
     let mut artifacts = CircuitArtifacts::default();
 
+    // precompiles and decommiter will produce additional implicit memory queries
+    let mut implicit_memory_artifacts: ImplicitMemoryArtifacts<GoldilocksField> = ImplicitMemoryArtifacts::default();
+
     {
         use crate::witness::individual_circuits::sort_decommit_requests::compute_decommitts_sorter_circuit_snapshots;
 
@@ -953,11 +956,12 @@ fn create_artifacts_inner<
         tracing::debug!("Running code code decommitter simulation");
 
         let code_decommitter_circuits_data = compute_decommitter_circuit_snapshots(
-            &mut memory_artifacts,
+            &memory_artifacts,
+            &mut implicit_memory_artifacts,
             &mut memory_queue_simulator,
-            &mut deduplicated_decommitment_queue_simulator,
-            &mut deduplicated_decommittment_queue_states,
-            &mut deduplicated_decommit_requests_with_data,
+            deduplicated_decommitment_queue_simulator,
+            deduplicated_decommittment_queue_states,
+            deduplicated_decommit_requests_with_data,
             round_function,
             geometry.cycles_per_code_decommitter as usize,
         );
@@ -990,9 +994,6 @@ fn create_artifacts_inner<
         );
 
     use crate::zkevm_circuits::demux_log_queue::DemuxOutput;
-    
-    // precompiles will produce additional memory queries
-    let mut precompile_memory_artifacts: PrecompileMemoryArtifacts<GoldilocksField> = PrecompileMemoryArtifacts::default();
 
     // keccak precompile
 
@@ -1007,7 +1008,7 @@ fn create_artifacts_inner<
 
     let keccak256_circuits_data = keccak256_decompose_into_per_circuit_witness(
         &memory_artifacts,
-        &mut precompile_memory_artifacts,
+        &mut implicit_memory_artifacts,
         &mut memory_queue_simulator,
         keccak_round_function_witnesses,
         &mut log_simulation_queries_data.demuxed_queries,
@@ -1030,7 +1031,7 @@ fn create_artifacts_inner<
 
     let sha256_circuits_data = sha256_decompose_into_per_circuit_witness(
         &memory_artifacts,
-        &mut precompile_memory_artifacts,
+        &mut implicit_memory_artifacts,
         &mut memory_queue_simulator,
         sha256_round_function_witnesses,
         &mut log_simulation_queries_data.demuxed_queries,
@@ -1053,7 +1054,7 @@ fn create_artifacts_inner<
 
     let ecrecover_circuits_data = ecrecover_decompose_into_per_circuit_witness(
         &memory_artifacts,
-        &mut precompile_memory_artifacts,
+        &mut implicit_memory_artifacts,
         &mut memory_queue_simulator,
         ecrecover_witnesses,
         &mut log_simulation_queries_data.demuxed_queries,
@@ -1074,7 +1075,7 @@ fn create_artifacts_inner<
 
     let secp256r1_verify_circuits_data = secp256r1_verify_decompose_into_per_circuit_witness(
         &memory_artifacts,
-        &mut precompile_memory_artifacts,
+        &mut implicit_memory_artifacts,
         &mut memory_queue_simulator,
         secp256r1_verify_witnesses,
         &mut log_simulation_queries_data.demuxed_queries,
@@ -1093,7 +1094,7 @@ fn create_artifacts_inner<
     let (ram_permutation_circuits, ram_permutation_circuits_compact_forms_witnesses) =
         compute_ram_circuit_snapshots(
             &mut memory_artifacts,
-            precompile_memory_artifacts,
+            implicit_memory_artifacts,
             memory_queue_simulator,
             round_function,
             num_non_deterministic_heap_queries,

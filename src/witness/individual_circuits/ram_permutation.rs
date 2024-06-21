@@ -8,7 +8,7 @@ use crate::zk_evm::ethereum_types::U256;
 use crate::zkevm_circuits::{
     base_structures::memory_query::MEMORY_QUERY_PACKED_WIDTH, ram_permutation::input::*,
 };
-use artifacts::{MemoryArtifacts, PrecompileMemoryArtifacts};
+use artifacts::{MemoryArtifacts, ImplicitMemoryArtifacts};
 use circuit_definitions::circuit_definitions::base_layer::{
     RAMPermutationInstanceSynthesisFunction, ZkSyncBaseLayerCircuit,
 };
@@ -30,7 +30,7 @@ pub fn compute_ram_circuit_snapshots<
     QSCB: FnMut(u64, RecursionQueueSimulator<Field>, Vec<ClosedFormInputCompactFormWitness<Field>>),
 >(
     memory_artifacts: &mut MemoryArtifacts<Field>,
-    precompile_memory_artifacts: PrecompileMemoryArtifacts<Field>,
+    implicit_memory_artifacts: ImplicitMemoryArtifacts<Field>,
     memory_queue_simulator: MemoryQueueSimulator<Field>,
     round_function: &RoundFunction,
     num_non_deterministic_heap_queries: usize,
@@ -44,7 +44,7 @@ pub fn compute_ram_circuit_snapshots<
     Vec<ClosedFormInputCompactFormWitness<Field>>,
 ) {
     // including additional queries from precompiles
-    let total_amount_of_queries = memory_artifacts.all_memory_queries_accumulated.len() + precompile_memory_artifacts.memory_queries_accumulated.len(); 
+    let total_amount_of_queries = memory_artifacts.all_memory_queries_accumulated.len() + implicit_memory_artifacts.memory_queries_accumulated.len(); 
 
     assert!(
         total_amount_of_queries > 0,
@@ -52,12 +52,12 @@ pub fn compute_ram_circuit_snapshots<
     );
 
     // extend it in place to reduce memory usage
-    memory_artifacts.all_memory_queue_states.extend(precompile_memory_artifacts.memory_queue_states.into_iter());
+    memory_artifacts.all_memory_queue_states.extend(implicit_memory_artifacts.memory_queue_states.into_iter());
 
     // sort by memory location, and then by timestamp
     let mut sorted_memory_queries_accumulated =
         memory_artifacts.all_memory_queries_accumulated.clone();
-    sorted_memory_queries_accumulated.extend(precompile_memory_artifacts.memory_queries_accumulated.into_iter());
+    sorted_memory_queries_accumulated.extend(implicit_memory_artifacts.memory_queries_accumulated.into_iter());
 
     sorted_memory_queries_accumulated.par_sort_by(|a, b| match a.location.cmp(&b.location) {
         Ordering::Equal => a.timestamp.cmp(&b.timestamp),
