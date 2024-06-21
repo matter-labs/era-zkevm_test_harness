@@ -52,7 +52,7 @@ pub fn compute_logs_demux<
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_log_demuxer,
         Arc::new(round_function.clone()),
-        cs_for_witness_generation
+        cs_for_witness_generation,
     );
 
     // trivial empty case

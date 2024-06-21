@@ -114,9 +114,12 @@ pub fn secp256r1_verify_decompose_into_per_circuit_witness<
             let (_, intermediate_info) = memory_artifacts
                 .memory_queue_simulator
                 .push_and_output_intermediate_data(read, round_function);
-            memory_artifacts.all_memory_queue_states.push(intermediate_info);
-            current_memory_queue_state =
-                take_sponge_like_queue_state_from_simulator(&memory_artifacts.memory_queue_simulator);
+            memory_artifacts
+                .all_memory_queue_states
+                .push(intermediate_info);
+            current_memory_queue_state = take_sponge_like_queue_state_from_simulator(
+                &memory_artifacts.memory_queue_simulator,
+            );
 
             precompile_request.input_memory_offset += 1;
         }
@@ -131,9 +134,12 @@ pub fn secp256r1_verify_decompose_into_per_circuit_witness<
             let (_, intermediate_info) = memory_artifacts
                 .memory_queue_simulator
                 .push_and_output_intermediate_data(write, round_function);
-            memory_artifacts.all_memory_queue_states.push(intermediate_info);
-            current_memory_queue_state =
-                take_sponge_like_queue_state_from_simulator(&memory_artifacts.memory_queue_simulator);
+            memory_artifacts
+                .all_memory_queue_states
+                .push(intermediate_info);
+            current_memory_queue_state = take_sponge_like_queue_state_from_simulator(
+                &memory_artifacts.memory_queue_simulator,
+            );
 
             precompile_request.output_memory_offset += 1;
         }

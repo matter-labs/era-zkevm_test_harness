@@ -9,10 +9,10 @@ use crate::zkevm_circuits::base_structures::decommit_query::DECOMMIT_QUERY_PACKE
 use crate::zkevm_circuits::base_structures::vm_state::FULL_SPONGE_QUEUE_STATE_WIDTH;
 use crate::zkevm_circuits::sort_decommittment_requests::input::*;
 use crate::zkevm_circuits::DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS;
+use artifacts::MemoryArtifacts;
 use circuit_definitions::encodings::decommittment_request::*;
 use circuit_definitions::encodings::CircuitEquivalentReflection;
 use circuit_definitions::zk_evm::aux_structures::DecommittmentQuery;
-use artifacts::MemoryArtifacts;
 use rayon::prelude::*;
 use std::cmp::Ordering;
 

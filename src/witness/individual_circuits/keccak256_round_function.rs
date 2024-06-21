@@ -233,9 +233,12 @@ pub fn keccak256_decompose_into_per_circuit_witness<
                 let (_, intermediate_info) = memory_artifacts
                     .memory_queue_simulator
                     .push_and_output_intermediate_data(read, round_function);
-                memory_artifacts.all_memory_queue_states.push(intermediate_info);
-                current_memory_queue_state =
-                    take_sponge_like_queue_state_from_simulator(&memory_artifacts.memory_queue_simulator);
+                memory_artifacts
+                    .all_memory_queue_states
+                    .push(intermediate_info);
+                current_memory_queue_state = take_sponge_like_queue_state_from_simulator(
+                    &memory_artifacts.memory_queue_simulator,
+                );
 
                 input_buffer.fill_with_bytes(
                     &bytes32_buffer,
@@ -289,9 +292,12 @@ pub fn keccak256_decompose_into_per_circuit_witness<
                 let (_, intermediate_info) = memory_artifacts
                     .memory_queue_simulator
                     .push_and_output_intermediate_data(write, round_function);
-                memory_artifacts.all_memory_queue_states.push(intermediate_info);
-                current_memory_queue_state =
-                    take_sponge_like_queue_state_from_simulator(&memory_artifacts.memory_queue_simulator);
+                memory_artifacts
+                    .all_memory_queue_states
+                    .push(intermediate_info);
+                current_memory_queue_state = take_sponge_like_queue_state_from_simulator(
+                    &memory_artifacts.memory_queue_simulator,
+                );
 
                 if is_last_request {
                     precompile_state = Keccak256PrecompileState::Finished;

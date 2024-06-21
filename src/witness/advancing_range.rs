@@ -35,15 +35,20 @@ impl<'a, T: TupleFirst> AdvancingRange<'a, T> {
         let range = Self::get_range_inner(&self.data, self.start, self.end, acceptable_range);
         self.start = range.start;
         self.end = range.end;
-        
+
         range
     }
 
-    pub fn get_range_from(data: & [T], acceptable_range: Range<u32>) -> Range<usize> {
+    pub fn get_range_from(data: &[T], acceptable_range: Range<u32>) -> Range<usize> {
         Self::get_range_inner(data, 0, 0, acceptable_range)
     }
 
-    fn get_range_inner(data: & [T], last_start: usize, last_end: usize, acceptable_range: Range<u32>)  -> Range<usize> {
+    fn get_range_inner(
+        data: &[T],
+        last_start: usize,
+        last_end: usize,
+        acceptable_range: Range<u32>,
+    ) -> Range<usize> {
         let mut start = last_start;
         for x in data[last_start..].iter() {
             if x.first() < acceptable_range.start {

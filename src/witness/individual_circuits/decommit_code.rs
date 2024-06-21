@@ -6,11 +6,11 @@ use crate::zk_evm::ethereum_types::U256;
 use crate::zkevm_circuits::base_structures::decommit_query::DecommitQueryWitness;
 use crate::zkevm_circuits::base_structures::decommit_query::DECOMMIT_QUERY_PACKED_WIDTH;
 use crate::zkevm_circuits::code_unpacker_sha256::input::*;
+use artifacts::MemoryArtifacts;
 use circuit_definitions::encodings::decommittment_request::normalized_preimage_as_u256;
 use circuit_definitions::encodings::decommittment_request::DecommittmentQueueSimulator;
 use circuit_definitions::encodings::decommittment_request::DecommittmentQueueState;
 use circuit_definitions::zk_evm::aux_structures::DecommittmentQuery;
-use artifacts::MemoryArtifacts;
 use std::collections::VecDeque;
 
 pub fn compute_decommitter_circuit_snapshots<
@@ -72,11 +72,15 @@ pub fn compute_decommitter_circuit_snapshots<
                 .memory_queue_simulator
                 .push_and_output_intermediate_data(*query, round_function);
 
-                memory_artifacts.all_memory_queue_states.push(intermediate_info);
+            memory_artifacts
+                .all_memory_queue_states
+                .push(intermediate_info);
         }
 
         // and plain test memory queues
-        memory_artifacts.all_memory_queries_accumulated.extend(as_queries);
+        memory_artifacts
+            .all_memory_queries_accumulated
+            .extend(as_queries);
     }
 
     assert_eq!(
@@ -165,7 +169,7 @@ pub fn compute_decommitter_circuit_snapshots<
             .closed_form_input
             .hidden_fsm_input
             .memory_queue_state = transform_sponge_like_queue_state(
-                memory_artifacts
+            memory_artifacts
                 .all_memory_queue_states
                 .iter()
                 .skip(start_idx_for_memory_accumulator + memory_queue_state_offset - 1)
@@ -379,7 +383,7 @@ pub fn compute_decommitter_circuit_snapshots<
             .closed_form_input
             .hidden_fsm_output
             .memory_queue_state = transform_sponge_like_queue_state(
-                memory_artifacts
+            memory_artifacts
                 .all_memory_queue_states
                 .iter()
                 .skip(start_idx_for_memory_accumulator + memory_queue_state_offset - 1)

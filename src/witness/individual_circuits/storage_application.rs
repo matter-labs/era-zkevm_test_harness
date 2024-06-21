@@ -53,7 +53,7 @@ pub fn decompose_into_storage_application_witnesses<
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_storage_application,
         Arc::new(round_function.clone()),
-        cs_for_witness_generation
+        cs_for_witness_generation,
     );
 
     if deduplicated_rollup_storage_queries.is_empty() {

@@ -33,6 +33,14 @@ use circuit_definitions::encodings::*;
 
 use super::*;
 
+use jemalloc_ctl::{epoch, stats};
+pub fn mem_print(label: &str) {
+    epoch::advance().unwrap();
+    let allocated = stats::allocated::read().unwrap();
+    let resident = stats::resident::read().unwrap();
+    println!("{label}: {}", allocated);
+}
+
 pub fn log_queries_into_states<
     F: SmallField,
     R: CircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,

@@ -8,6 +8,7 @@ use crate::zk_evm::ethereum_types::U256;
 use crate::zkevm_circuits::{
     base_structures::memory_query::MEMORY_QUERY_PACKED_WIDTH, ram_permutation::input::*,
 };
+use artifacts::MemoryArtifacts;
 use circuit_definitions::circuit_definitions::base_layer::{
     RAMPermutationInstanceSynthesisFunction, ZkSyncBaseLayerCircuit,
 };
@@ -15,7 +16,6 @@ use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use circuit_definitions::{encodings::*, Field, RoundFunction};
-use artifacts::MemoryArtifacts;
 use postprocessing::CsForWitnessGeneration;
 use rayon::prelude::*;
 use snark_wrapper::boojum::field::Field as _;
@@ -46,7 +46,8 @@ pub fn compute_ram_circuit_snapshots<
     );
 
     // sort by memory location, and then by timestamp
-    let mut sorted_memory_queries_accumulated = memory_artifacts.all_memory_queries_accumulated.clone();
+    let mut sorted_memory_queries_accumulated =
+        memory_artifacts.all_memory_queries_accumulated.clone();
     sorted_memory_queries_accumulated.par_sort_by(|a, b| match a.location.cmp(&b.location) {
         Ordering::Equal => a.timestamp.cmp(&b.timestamp),
         a @ _ => a,
@@ -196,7 +197,11 @@ pub fn compute_ram_circuit_snapshots<
             .len()
     );
 
-    let unsorted_global_final_state = memory_artifacts.all_memory_queue_states.last().unwrap().clone();
+    let unsorted_global_final_state = memory_artifacts
+        .all_memory_queue_states
+        .last()
+        .unwrap()
+        .clone();
     let sorted_global_final_state = sorted_memory_queue_chunk_final_states
         .last()
         .unwrap()
@@ -252,7 +257,7 @@ pub fn compute_ram_circuit_snapshots<
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_ram_permutation,
         Arc::new(*round_function),
-        cs_for_witness_generation
+        cs_for_witness_generation,
     );
 
     for (
