@@ -44,6 +44,13 @@ pub struct MemoryArtifacts<F: SmallField> {
 
 #[derive(Derivative)]
 #[derivative(Default)]
+pub struct PrecompileMemoryArtifacts<F: SmallField> {
+    pub memory_queries_accumulated: Vec<MemoryQuery>,
+    pub memory_queue_states: Vec<MemoryQueueState<F>>
+}
+
+#[derive(Derivative)]
+#[derivative(Default)]
 pub struct CircuitArtifacts<F: SmallField> {
     // processed code decommitter circuits, as well as sorting circuit
     pub code_decommitter_circuits_data: Vec<CodeDecommitterCircuitInstanceWitness<F>>,

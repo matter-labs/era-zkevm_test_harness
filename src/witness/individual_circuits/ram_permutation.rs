@@ -8,7 +8,7 @@ use crate::zk_evm::ethereum_types::U256;
 use crate::zkevm_circuits::{
     base_structures::memory_query::MEMORY_QUERY_PACKED_WIDTH, ram_permutation::input::*,
 };
-use artifacts::MemoryArtifacts;
+use artifacts::{MemoryArtifacts, PrecompileMemoryArtifacts};
 use circuit_definitions::circuit_definitions::base_layer::{
     RAMPermutationInstanceSynthesisFunction, ZkSyncBaseLayerCircuit,
 };
@@ -19,6 +19,7 @@ use circuit_definitions::{encodings::*, Field, RoundFunction};
 use postprocessing::CsForWitnessGeneration;
 use rayon::prelude::*;
 use snark_wrapper::boojum::field::Field as _;
+use zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
 use std::cmp::Ordering;
 use std::sync::Arc;
 
@@ -29,7 +30,8 @@ pub fn compute_ram_circuit_snapshots<
     QSCB: FnMut(u64, RecursionQueueSimulator<Field>, Vec<ClosedFormInputCompactFormWitness<Field>>),
 >(
     memory_artifacts: &mut MemoryArtifacts<Field>,
-    memory_queue_simulator: &MemoryQueueSimulator<Field>,
+    precompile_memory_artifacts: PrecompileMemoryArtifacts<Field>,
+    memory_queue_simulator: MemoryQueueSimulator<Field>,
     round_function: &RoundFunction,
     num_non_deterministic_heap_queries: usize,
     per_circuit_capacity: usize,
@@ -41,18 +43,28 @@ pub fn compute_ram_circuit_snapshots<
     FirstAndLastCircuit<RAMPermutationInstanceSynthesisFunction>,
     Vec<ClosedFormInputCompactFormWitness<Field>>,
 ) {
+    // including additional queries from precompiles
+    let total_amount_of_queries = memory_artifacts.all_memory_queries_accumulated.len() + precompile_memory_artifacts.memory_queries_accumulated.len(); 
+
     assert!(
-        memory_artifacts.all_memory_queries_accumulated.len() > 0,
+        total_amount_of_queries > 0,
         "VM should have made some memory requests"
     );
+
+    // extend it in place to reduce memory usage
+    memory_artifacts.all_memory_queue_states.extend(precompile_memory_artifacts.memory_queue_states.into_iter());
 
     // sort by memory location, and then by timestamp
     let mut sorted_memory_queries_accumulated =
         memory_artifacts.all_memory_queries_accumulated.clone();
+    sorted_memory_queries_accumulated.extend(precompile_memory_artifacts.memory_queries_accumulated.into_iter());
+
     sorted_memory_queries_accumulated.par_sort_by(|a, b| match a.location.cmp(&b.location) {
         Ordering::Equal => a.timestamp.cmp(&b.timestamp),
         a @ _ => a,
     });
+    
+    mem_print("Inside RAM permutation circuit computing");
 
     // those two thins are parallelizable, and can be internally parallelized too
 
@@ -66,11 +78,13 @@ pub fn compute_ram_circuit_snapshots<
             .push_and_output_intermediate_data(query, round_function);
 
         if i % per_circuit_capacity == per_circuit_capacity - 1
-            || i == memory_artifacts.all_memory_queries_accumulated.len() - 1
+            || i == total_amount_of_queries - 1
         {
             sorted_memory_queue_chunk_final_states.push(intermediate_info);
         }
     }
+
+    mem_print("Inside RAM permutation circuit computing 2");
 
     assert_eq!(
         sorted_memory_queries_simulator.num_items,
@@ -96,7 +110,7 @@ pub fn compute_ram_circuit_snapshots<
 
     assert_eq!(
         memory_queue_simulator.num_items as usize,
-        memory_artifacts.all_memory_queries_accumulated.len()
+        total_amount_of_queries
     );
 
     let lhs_contributions: Vec<_> = memory_queue_simulator
@@ -119,11 +133,11 @@ pub fn compute_ram_circuit_snapshots<
 
         assert_eq!(
             lhs_grand_product_chain.len(),
-            memory_artifacts.all_memory_queries_accumulated.len()
+            total_amount_of_queries
         );
         assert_eq!(
             rhs_grand_product_chain.len(),
-            memory_artifacts.all_memory_queries_accumulated.len()
+            total_amount_of_queries
         );
         assert_eq!(
             lhs_grand_product_chain.len(),
@@ -452,6 +466,15 @@ pub fn compute_ram_circuit_snapshots<
             maker.process(instance_witness, circuit_type),
         ));
     }
+
+    // remove additional queries from precompiles 
+    memory_artifacts.all_memory_queue_states.truncate(memory_artifacts.all_memory_queries_accumulated.len());
+    memory_artifacts.all_memory_queue_states.shrink_to_fit();
+
+    assert_eq!(
+        memory_artifacts.all_memory_queries_accumulated.len(),
+        memory_artifacts.all_memory_queue_states.len()
+    );
 
     let (
         ram_permutation_circuits,

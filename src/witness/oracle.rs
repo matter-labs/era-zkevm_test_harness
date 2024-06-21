@@ -11,7 +11,7 @@ use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 use crate::ethereum_types::U256;
 use crate::toolset::GeometryConfig;
 use crate::witness::advancing_range::AdvancingRange;
-use crate::witness::artifacts::{CircuitArtifacts, DemuxedQueries, MemoryArtifacts};
+use crate::witness::artifacts::{CircuitArtifacts, DemuxedQueries, MemoryArtifacts, PrecompileMemoryArtifacts};
 use crate::witness::postprocessing::{CircuitMaker, FirstAndLastCircuit};
 use crate::witness::tracer::{QueryMarker, WitnessTracer};
 use crate::witness::vm_snapshot::VmSnapshot;
@@ -988,6 +988,9 @@ fn create_artifacts_inner<
         );
 
     use crate::zkevm_circuits::demux_log_queue::DemuxOutput;
+    
+    // precompiles will produce additional memory queries
+    let mut precompile_memory_artifacts: PrecompileMemoryArtifacts<GoldilocksField> = PrecompileMemoryArtifacts::default();
 
     // keccak precompile
 
@@ -1001,7 +1004,8 @@ fn create_artifacts_inner<
     );
 
     let keccak256_circuits_data = keccak256_decompose_into_per_circuit_witness(
-        &mut memory_artifacts,
+        &memory_artifacts,
+        &mut precompile_memory_artifacts,
         &mut memory_queue_simulator,
         keccak_round_function_witnesses,
         &mut log_simulation_queries_data.demuxed_queries,
@@ -1023,7 +1027,8 @@ fn create_artifacts_inner<
     );
 
     let sha256_circuits_data = sha256_decompose_into_per_circuit_witness(
-        &mut memory_artifacts,
+        &memory_artifacts,
+        &mut precompile_memory_artifacts,
         &mut memory_queue_simulator,
         sha256_round_function_witnesses,
         &mut log_simulation_queries_data.demuxed_queries,
@@ -1045,7 +1050,8 @@ fn create_artifacts_inner<
     );
 
     let ecrecover_circuits_data = ecrecover_decompose_into_per_circuit_witness(
-        &mut memory_artifacts,
+        &memory_artifacts,
+        &mut precompile_memory_artifacts,
         &mut memory_queue_simulator,
         ecrecover_witnesses,
         &mut log_simulation_queries_data.demuxed_queries,
@@ -1065,7 +1071,8 @@ fn create_artifacts_inner<
     );
 
     let secp256r1_verify_circuits_data = secp256r1_verify_decompose_into_per_circuit_witness(
-        &mut memory_artifacts,
+        &memory_artifacts,
+        &mut precompile_memory_artifacts,
         &mut memory_queue_simulator,
         secp256r1_verify_witnesses,
         &mut log_simulation_queries_data.demuxed_queries,
@@ -1084,7 +1091,8 @@ fn create_artifacts_inner<
     let (ram_permutation_circuits, ram_permutation_circuits_compact_forms_witnesses) =
         compute_ram_circuit_snapshots(
             &mut memory_artifacts,
-            &memory_queue_simulator,
+            precompile_memory_artifacts,
+            memory_queue_simulator,
             round_function,
             num_non_deterministic_heap_queries,
             geometry.cycles_per_ram_permutation as usize,
@@ -1093,8 +1101,6 @@ fn create_artifacts_inner<
             &mut circuit_callback,
             &mut recursion_queue_callback,
         );
-
-    drop(memory_queue_simulator);
 
     // now completely parallel process to reconstruct the states, with internally parallelism in each round function
 

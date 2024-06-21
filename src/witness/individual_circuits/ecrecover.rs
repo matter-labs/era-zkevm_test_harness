@@ -1,5 +1,5 @@
 use super::*;
-use crate::witness::artifacts::{DemuxedQueries, LogQueue, MemoryArtifacts};
+use crate::witness::artifacts::{DemuxedQueries, LogQueue, MemoryArtifacts, PrecompileMemoryArtifacts};
 use crate::zk_evm::aux_structures::LogQuery as LogQuery_;
 use crate::zk_evm::zk_evm_abstractions::precompiles::ecrecover::ECRecoverRoundWitness;
 use crate::zkevm_circuits::base_structures::log_query::*;
@@ -15,7 +15,8 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
-    memory_artifacts: &mut MemoryArtifacts<F>,
+    memory_artifacts: &MemoryArtifacts<F>,
+    precompile_memory_artifacts: &mut PrecompileMemoryArtifacts<F>,
     memory_queue_simulator: &mut MemoryQueueSimulator<F>,
     ecrecover_witnesses: Vec<(u32, LogQuery_, ECRecoverRoundWitness)>,
     demuxed_queues: &mut DemuxedQueries,
@@ -24,11 +25,11 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
     round_function: &R,
 ) -> Vec<EcrecoverCircuitInstanceWitness<F>> {
     assert_eq!(
-        memory_artifacts.all_memory_queries_accumulated.len(),
-        memory_artifacts.all_memory_queue_states.len()
+        memory_artifacts.all_memory_queries_accumulated.len() + precompile_memory_artifacts.memory_queries_accumulated.len(),
+        memory_artifacts.all_memory_queue_states.len() + precompile_memory_artifacts.memory_queue_states.len()
     );
     assert_eq!(
-        memory_artifacts.all_memory_queries_accumulated.len(),
+        memory_artifacts.all_memory_queries_accumulated.len() + precompile_memory_artifacts.memory_queries_accumulated.len(),
         memory_queue_simulator.num_items as usize
     );
 
@@ -110,11 +111,11 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
             assert!(read_query.rw_flag == false);
             memory_reads_per_request.push(read_query.value);
 
-            memory_artifacts.all_memory_queries_accumulated.push(read);
+            precompile_memory_artifacts.memory_queries_accumulated.push(read);
             let (_, intermediate_info) = memory_queue_simulator
                 .push_and_output_intermediate_data(read, round_function);
-            memory_artifacts
-                .all_memory_queue_states
+            precompile_memory_artifacts
+                .memory_queue_states
                 .push(intermediate_info);
             current_memory_queue_state = take_sponge_like_queue_state_from_simulator(
                 &memory_queue_simulator,
@@ -129,11 +130,11 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
             assert!(write == write_query);
             assert!(write_query.rw_flag == true);
 
-            memory_artifacts.all_memory_queries_accumulated.push(write);
+            precompile_memory_artifacts.memory_queries_accumulated.push(write);
             let (_, intermediate_info) = memory_queue_simulator
                 .push_and_output_intermediate_data(write, round_function);
-            memory_artifacts
-                .all_memory_queue_states
+            precompile_memory_artifacts
+                .memory_queue_states
                 .push(intermediate_info);
             current_memory_queue_state = take_sponge_like_queue_state_from_simulator(
                 &memory_queue_simulator,
@@ -223,6 +224,15 @@ pub fn ecrecover_decompose_into_per_circuit_witness<
             memory_read_witnesses.push(memory_reads_per_request);
         }
     }
+
+    assert_eq!(
+        memory_artifacts.all_memory_queries_accumulated.len() + precompile_memory_artifacts.memory_queries_accumulated.len(),
+        memory_artifacts.all_memory_queue_states.len() + precompile_memory_artifacts.memory_queue_states.len()
+    );
+    assert_eq!(
+        memory_artifacts.all_memory_queries_accumulated.len() + precompile_memory_artifacts.memory_queries_accumulated.len(),
+        memory_queue_simulator.num_items as usize
+    );
 
     result
 }
