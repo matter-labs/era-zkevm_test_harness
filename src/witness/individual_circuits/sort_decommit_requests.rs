@@ -61,7 +61,7 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
 
     let mut unsorted_decommittment_requests_with_data = vec![];
     for (_cycle, decommittment_request, writes) in executed_decommittment_queries.iter_mut() {
-        let data = std::mem::replace(writes, vec![]);
+        let data = std::mem::take(writes);
         unsorted_decommittment_requests_with_data.push((*decommittment_request, data));
     }
 
@@ -286,7 +286,7 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
 
         unsorted_decommittment_queue_simulator.pop_and_output_intermediate_data(round_function);
         if input_witness_chunk.len() == deduplicator_circuit_capacity {
-            let completed_chunk = std::mem::replace(&mut input_witness_chunk, VecDeque::new());
+            let completed_chunk = std::mem::take(&mut input_witness_chunk);
             for j in 0..DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS {
                 input_products[j] = lhs_grand_product_chains[j][i as usize];
             }
@@ -330,7 +330,7 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
 
         sorted_decommittment_queue_simulator.pop_and_output_intermediate_data(round_function);
         if sorted_witness_chunk.len() == deduplicator_circuit_capacity {
-            let completed_chunk = std::mem::replace(&mut sorted_witness_chunk, VecDeque::new());
+            let completed_chunk = std::mem::take(&mut sorted_witness_chunk);
             sorted_witness.push(completed_chunk);
             for j in 0..DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS {
                 sorted_products[j] = rhs_grand_product_chains[j][i as usize];

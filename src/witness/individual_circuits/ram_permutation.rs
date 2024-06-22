@@ -4,6 +4,7 @@ use self::witness::postprocessing::FirstAndLastCircuit;
 use super::*;
 use crate::boojum::gadgets::queue::full_state_queue::FullStateCircuitQueueRawWitness;
 use crate::witness::postprocessing::CircuitMaker;
+use crate::zk_evm::aux_structures::MemoryQuery;
 use crate::zk_evm::ethereum_types::U256;
 use crate::zkevm_circuits::{
     base_structures::memory_query::MEMORY_QUERY_PACKED_WIDTH, ram_permutation::input::*,
@@ -16,7 +17,6 @@ use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use circuit_definitions::{encodings::*, Field, RoundFunction};
-use crate::zk_evm::aux_structures::MemoryQuery;
 use postprocessing::CsForWitnessGeneration;
 use rayon::prelude::*;
 use snark_wrapper::boojum::field::Field as _;
@@ -56,20 +56,20 @@ pub fn compute_ram_circuit_snapshots<
 
     // extend it in place to reduce memory usage
     memory_artifacts
-        .all_memory_queue_states.reserve_exact(implicit_memory_artifacts.memory_queue_states.len());
+        .all_memory_queue_states
+        .reserve_exact(implicit_memory_artifacts.memory_queue_states.len());
     memory_artifacts
         .all_memory_queue_states
         .extend(implicit_memory_artifacts.memory_queue_states.into_iter());
 
     // sort by memory location, and then by timestamp
-    let mut sorted_memory_queries_accumulated: Vec<&MemoryQuery> =
-        memory_artifacts.all_memory_queries_accumulated.iter().collect();
+    let mut sorted_memory_queries_accumulated: Vec<&MemoryQuery> = memory_artifacts
+        .all_memory_queries_accumulated
+        .iter()
+        .collect();
 
-    sorted_memory_queries_accumulated.extend(
-        implicit_memory_artifacts
-            .memory_queries_accumulated
-            .iter(),
-    );
+    sorted_memory_queries_accumulated
+        .extend(implicit_memory_artifacts.memory_queries_accumulated.iter());
 
     sorted_memory_queries_accumulated.par_sort_by(|a, b| match a.location.cmp(&b.location) {
         Ordering::Equal => a.timestamp.cmp(&b.timestamp),

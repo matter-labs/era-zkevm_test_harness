@@ -73,9 +73,8 @@ pub fn sha256_decompose_into_per_circuit_witness<
 
     let mut result = vec![];
 
-    let precompile_calls = std::mem::replace(&mut demuxed_queues.sha256_precompile_queries, vec![]);
-    let precompile_calls_queue_states =
-        std::mem::replace(&mut demuxed_sha256_precompile_queue.states, vec![]);
+    let precompile_calls = std::mem::take(&mut demuxed_queues.sha256_precompile_queries);
+    let precompile_calls_queue_states = std::mem::take(&mut demuxed_sha256_precompile_queue.states);
     let simulator_witness: Vec<_> = demuxed_sha256_precompile_queue
         .simulator
         .witness
@@ -276,8 +275,8 @@ pub fn sha256_decompose_into_per_circuit_witness<
                     .map(|el| (log_query_into_circuit_log_query_witness(&el.2), el.1))
                     .collect();
 
-                let current_reads = std::mem::replace(&mut memory_reads_per_request, vec![]);
-                let mut current_witness = std::mem::replace(&mut memory_read_witnesses, vec![]);
+                let current_reads = std::mem::take(&mut memory_reads_per_request);
+                let mut current_witness = std::mem::take(&mut memory_read_witnesses);
                 current_witness.push(current_reads);
 
                 let mut observable_input_data = PrecompileFunctionInputData::placeholder_witness();

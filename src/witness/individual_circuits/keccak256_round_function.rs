@@ -77,10 +77,9 @@ pub fn keccak256_decompose_into_per_circuit_witness<
 
     let mut result = vec![];
 
-    let keccak_precompile_calls =
-        std::mem::replace(&mut demuxed_queues.keccak_precompile_queries, vec![]);
+    let keccak_precompile_calls = std::mem::take(&mut demuxed_queues.keccak_precompile_queries);
     let keccak_precompile_calls_queue_states =
-        std::mem::replace(&mut demuxed_keccak_precompile_queue.states, vec![]);
+        std::mem::take(&mut demuxed_keccak_precompile_queue.states);
     let round_function_witness = keccak_round_function_witnesses;
 
     let memory_queries = keccak_256_memory_queries;
@@ -419,8 +418,7 @@ pub fn keccak256_decompose_into_per_circuit_witness<
                     observable_output_data.final_memory_state = current_memory_queue_state.clone();
                 }
 
-                let memory_reads_witness =
-                    std::mem::replace(&mut memory_reads_per_circuit, VecDeque::new());
+                let memory_reads_witness = std::mem::take(&mut memory_reads_per_circuit);
 
                 let witness = Keccak256RoundFunctionCircuitInstanceWitness::<F> {
                     closed_form_input: Keccak256RoundFunctionCircuitInputOutputWitness::<F> {

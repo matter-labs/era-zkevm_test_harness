@@ -1006,10 +1006,8 @@ fn process_log_circuits<
 
     tracing::debug!("Running keccak simulation");
 
-    let demuxed_keccak_precompile_queue = std::mem::replace(
-        &mut all_demuxed_queues[DemuxOutput::Keccak as usize],
-        Default::default(),
-    );
+    let demuxed_keccak_precompile_queue =
+        std::mem::take(&mut all_demuxed_queues[DemuxOutput::Keccak as usize]);
 
     let keccak256_circuits_data = keccak256_decompose_into_per_circuit_witness(
         &memory_artifacts,
@@ -1029,10 +1027,8 @@ fn process_log_circuits<
 
     tracing::debug!("Running sha256 simulation");
 
-    let demuxed_sha256_precompile_queue = std::mem::replace(
-        &mut all_demuxed_queues[DemuxOutput::Sha256 as usize],
-        Default::default(),
-    );
+    let demuxed_sha256_precompile_queue =
+        std::mem::take(&mut all_demuxed_queues[DemuxOutput::Sha256 as usize]);
 
     let sha256_circuits_data = sha256_decompose_into_per_circuit_witness(
         &memory_artifacts,
@@ -1052,10 +1048,8 @@ fn process_log_circuits<
 
     tracing::debug!("Running ecrecover simulation");
 
-    let demuxed_ecrecover_queue = std::mem::replace(
-        &mut all_demuxed_queues[DemuxOutput::ECRecover as usize],
-        Default::default(),
-    );
+    let demuxed_ecrecover_queue =
+        std::mem::take(&mut all_demuxed_queues[DemuxOutput::ECRecover as usize]);
 
     let ecrecover_circuits_data = ecrecover_decompose_into_per_circuit_witness(
         &memory_artifacts,
@@ -1073,10 +1067,8 @@ fn process_log_circuits<
 
     tracing::debug!("Running secp256r1_simulation simulation");
 
-    let demuxed_secp256r1_verify_queue = std::mem::replace(
-        &mut all_demuxed_queues[DemuxOutput::Secp256r1Verify as usize],
-        Default::default(),
-    );
+    let demuxed_secp256r1_verify_queue =
+        std::mem::take(&mut all_demuxed_queues[DemuxOutput::Secp256r1Verify as usize]);
 
     let secp256r1_verify_circuits_data = secp256r1_verify_decompose_into_per_circuit_witness(
         &memory_artifacts,
@@ -1116,10 +1108,8 @@ fn process_log_circuits<
 
     tracing::debug!("Running storage deduplication simulation");
 
-    let demuxed_rollup_storage_queue = std::mem::replace(
-        &mut all_demuxed_queues[DemuxOutput::RollupStorage as usize],
-        Default::default(),
-    );
+    let demuxed_rollup_storage_queue =
+        std::mem::take(&mut all_demuxed_queues[DemuxOutput::RollupStorage as usize]);
 
     let (
         deduplicated_rollup_storage_queue_simulator,
@@ -1137,10 +1127,7 @@ fn process_log_circuits<
 
     tracing::debug!("Running events deduplication simulation");
 
-    let demuxed_event_queue = std::mem::replace(
-        &mut all_demuxed_queues[DemuxOutput::Events as usize],
-        Default::default(),
-    );
+    let demuxed_event_queue = std::mem::take(&mut all_demuxed_queues[DemuxOutput::Events as usize]);
 
     let events_deduplicator_circuit_data = compute_events_dedup_and_sort(
         &log_simulation_queries_data.demuxed_queries.event_queries,
@@ -1154,10 +1141,8 @@ fn process_log_circuits<
 
     tracing::debug!("Running L1 messages deduplication simulation");
 
-    let demuxed_to_l1_queue = std::mem::replace(
-        &mut all_demuxed_queues[DemuxOutput::L2ToL1Messages as usize],
-        Default::default(),
-    );
+    let demuxed_to_l1_queue =
+        std::mem::take(&mut all_demuxed_queues[DemuxOutput::L2ToL1Messages as usize]);
 
     let mut deduplicated_to_l1_queue_simulator = Default::default();
     let l1_messages_deduplicator_circuit_data = compute_events_dedup_and_sort(
@@ -1173,10 +1158,8 @@ fn process_log_circuits<
 
     tracing::debug!("Running transient storage sorting simulation");
 
-    let demuxed_transient_storage_queue = std::mem::replace(
-        &mut all_demuxed_queues[DemuxOutput::TransientStorage as usize],
-        Default::default(),
-    );
+    let demuxed_transient_storage_queue =
+        std::mem::take(&mut all_demuxed_queues[DemuxOutput::TransientStorage as usize]);
 
     let transient_storage_sorter_circuit_data = compute_transient_storage_dedup_and_sort(
         &mut log_simulation_queries_data.demuxed_queries,
@@ -1837,7 +1820,6 @@ pub fn create_artifacts_from_tracer<
         evm_simulator_code_hash,
     };
 
-
     let (main_vm_circuits, main_vm_circuits_compact_forms_witnesses) = process_main_vm(
         geometry,
         in_circuit_global_context,
@@ -2168,7 +2150,7 @@ pub fn create_artifacts_from_tracer<
 
         use crate::witness::individual_circuits::eip4844_repack::compute_eip_4844;
         let eip_4844_circuits = compute_eip_4844(eip_4844_repack_inputs, trusted_setup_path);
-        
+
         for circuit_input in eip_4844_circuits.iter().cloned() {
             circuit_callback(ZkSyncBaseLayerCircuit::EIP4844Repack(
                 maker.process(circuit_input, circuit_type),

@@ -88,7 +88,7 @@ pub fn decompose_into_storage_application_witnesses<
 
         // we leave 1 to make a final application of "write"
         if total_tree_queries >= num_rounds_per_circuit - 1 {
-            let current = std::mem::replace(&mut current_chunk, vec![]);
+            let current = std::mem::take(&mut current_chunk);
             assert!(current.len() <= num_rounds_per_circuit);
             chunks.push(current);
             total_tree_queries = 0;
@@ -96,7 +96,7 @@ pub fn decompose_into_storage_application_witnesses<
     }
 
     if total_tree_queries != 0 {
-        let current = std::mem::replace(&mut current_chunk, vec![]);
+        let current = std::mem::take(&mut current_chunk);
         assert!(current.len() <= num_rounds_per_circuit);
         chunks.push(current);
     }

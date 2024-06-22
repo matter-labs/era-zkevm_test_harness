@@ -1,11 +1,11 @@
 use super::*;
+use crate::generate_eip4844_witness;
 use crate::zkevm_circuits::eip_4844::input::EIP4844CircuitInstanceWitness;
 use crate::zkevm_circuits::eip_4844::input::*;
-use crate::zkevm_circuits::scheduler::block_header::MAX_4844_BLOBS_PER_BLOCK;
 use crate::zkevm_circuits::fsm_input_output::ClosedFormInputWitness;
-use crate::generate_eip4844_witness;
-use std::sync::Arc;
+use crate::zkevm_circuits::scheduler::block_header::MAX_4844_BLOBS_PER_BLOCK;
 use circuit_definitions::{Field, RoundFunction};
+use std::sync::Arc;
 
 pub fn compute_eip_4844(
     eip_4844_repack_inputs: [Option<Vec<u8>>; MAX_4844_BLOBS_PER_BLOCK],
