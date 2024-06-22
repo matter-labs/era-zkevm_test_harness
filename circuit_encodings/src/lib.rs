@@ -119,6 +119,12 @@ impl<
         }
     }
 
+    pub fn with_capacity(capacity: usize) -> Self {
+        let mut new = Self::empty();
+        new.witness.reserve_exact(capacity);
+        new
+    }
+
     pub fn split(mut self, at: u32) -> (Self, Self) {
         if at >= self.num_items {
             let mut artificial_empty = Self::empty();
@@ -360,6 +366,12 @@ impl<
             num_items: 0,
             witness: VecDeque::new(),
         }
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        let mut new = Self::empty();
+        new.witness.reserve_exact(capacity);
+        new
     }
 
     pub fn merge(first: Self, second: Self) -> Self {
