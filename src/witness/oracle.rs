@@ -58,12 +58,6 @@ use crate::zk_evm::zkevm_opcode_defs::system_params::{
     EVENT_AUX_BYTE, L1_MESSAGE_AUX_BYTE, PRECOMPILE_AUX_BYTE, STORAGE_AUX_BYTE,
 };
 
-use jemalloc_ctl::{epoch, stats};
-
-#[cfg(not(target_env = "msvc"))]
-#[global_allocator]
-static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
-
 #[derive(Derivative)]
 #[derivative(Clone(bound = ""), Copy(bound = ""), Debug, Default)]
 struct CallframeLogState {
@@ -1693,7 +1687,6 @@ pub fn create_artifacts_from_tracer<
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
     Vec<EIP4844CircuitInstanceWitness<GoldilocksField>>,
 ) {
-    mem_print("Start");
     let WitnessTracer {
         memory_queries: vm_memory_queries_accumulated,
         storage_queries,

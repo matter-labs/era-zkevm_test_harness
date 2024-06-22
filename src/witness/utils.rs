@@ -33,12 +33,20 @@ use circuit_definitions::encodings::*;
 
 use super::*;
 
-use jemalloc_ctl::{epoch, stats};
+use peak_alloc::PeakAlloc;
+
+#[global_allocator]
+static PEAK_ALLOC: PeakAlloc = PeakAlloc;
+
 pub fn mem_print(label: &str) {
-    epoch::advance().unwrap();
-    let allocated = stats::allocated::read().unwrap();
-    let resident = stats::resident::read().unwrap();
-    println!("{label}: {}", allocated);
+    let current_mem = PEAK_ALLOC.current_usage_as_mb();
+    println!("{label}: {}", current_mem);
+    peak_mem_print();
+}
+
+pub fn peak_mem_print() {
+    let peak_mem = PEAK_ALLOC.peak_usage_as_mb();
+    println!("PEAK MEM {}", peak_mem);
 }
 
 pub fn log_queries_into_states<

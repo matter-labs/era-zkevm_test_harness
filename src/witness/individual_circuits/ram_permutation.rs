@@ -277,6 +277,8 @@ pub fn compute_ram_circuit_snapshots<
         cs_for_witness_generation,
     );
 
+    mem_print("Inside RAM permutation circuit computing before cycle");
+
     for (
         idx,
         (
@@ -494,6 +496,8 @@ pub fn compute_ram_circuit_snapshots<
         queue_simulator,
         ram_permutation_circuits_compact_forms_witnesses.clone(),
     );
+
+    mem_print("After RAM permutation circuit computing");
 
     (
         ram_permutation_circuits,
