@@ -16,7 +16,7 @@ use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use circuit_definitions::{encodings::*, Field, RoundFunction};
-use crate::zk_evm::aux_structures::{MemoryQuery};
+use crate::zk_evm::aux_structures::MemoryQuery;
 use postprocessing::CsForWitnessGeneration;
 use rayon::prelude::*;
 use snark_wrapper::boojum::field::Field as _;
@@ -271,7 +271,7 @@ pub fn compute_ram_circuit_snapshots<
     let circuit_type = BaseLayerCircuitType::RamValidation;
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_ram_permutation,
-        Arc::new(*round_function),
+        round_function.clone(),
         cs_for_witness_generation,
     );
 

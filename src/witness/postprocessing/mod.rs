@@ -350,7 +350,7 @@ where
     >,
 {
     geometry: u32,
-    round_function: Arc<Poseidon2Goldilocks>,
+    round_function: Poseidon2Goldilocks,
     observable_input: Option<<T::IN as CSAllocatable<GoldilocksField>>::Witness>,
     cs_for_witness_generation: &'a mut CsForWitnessGeneration,
     queue_simulator: RecursionQueueSimulator<GoldilocksField>,
@@ -376,7 +376,7 @@ where
 {
     pub(crate) fn new(
         geometry: u32,
-        round_function: Arc<Poseidon2Goldilocks>,
+        round_function: Poseidon2Goldilocks,
         cs_for_witness_generation: &'a mut CsForWitnessGeneration,
     ) -> Self {
         Self {
@@ -406,7 +406,7 @@ where
         let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
             self.cs_for_witness_generation.take_cs(),
             circuit_input.closed_form_input().clone(),
-            &*self.round_function,
+            &self.round_function,
         );
 
         self.compact_form_witnesses.push(compact_form_witness);
@@ -414,7 +414,7 @@ where
         let circuit = ZkSyncUniformCircuitInstance {
             witness: AtomicCell::new(Some(circuit_input)),
             config: Arc::new(self.geometry as usize),
-            round_function: self.round_function.clone(),
+            round_function: Arc::new(self.round_function),
             expected_public_input: Some(proof_system_input),
         };
 
@@ -429,7 +429,7 @@ where
         };
         let _ = self
             .queue_simulator
-            .push(recursive_request, &*self.round_function);
+            .push(recursive_request, &self.round_function);
 
         circuit
     }

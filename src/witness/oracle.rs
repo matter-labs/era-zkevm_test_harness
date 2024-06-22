@@ -1483,7 +1483,7 @@ fn process_main_vm<
     callstack_simulation_result: CallstackSimulationResult<GoldilocksField>,
     flat_new_frames_history: Vec<(u32, CallStackEntry)>,
     mut vm_snapshots: Vec<VmSnapshot>,
-    round_function: Arc<Poseidon2Goldilocks>,
+    round_function: Poseidon2Goldilocks,
     cs_for_witness_generation: &mut CsForWitnessGeneration,
     circuit_callback: &mut CB,
     recursion_queue_callback: &mut QSCB,
@@ -1515,13 +1515,13 @@ fn process_main_vm<
         let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
             cs_for_witness_generation.take_cs(),
             circuit_input.closed_form_input.clone(),
-            &*round_function,
+            &round_function,
         );
 
         let instance = VMMainCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
             config: Arc::new(geometry.cycles_per_vm_snapshot as usize),
-            round_function: round_function.clone(),
+            round_function: Arc::new(round_function),
             expected_public_input: Some(proof_system_input),
         };
 
@@ -1540,7 +1540,7 @@ fn process_main_vm<
             ),
             public_input: proof_system_input,
         };
-        let _ = queue_simulator.push(recursive_request, &*round_function);
+        let _ = queue_simulator.push(recursive_request, &round_function);
 
         circuit_callback(instance);
         main_vm_circuits_compact_forms_witnesses.push(compact_form_witness);
@@ -1837,7 +1837,6 @@ pub fn create_artifacts_from_tracer<
         evm_simulator_code_hash,
     };
 
-    let round_function = Arc::new(*round_function);
 
     let (main_vm_circuits, main_vm_circuits_compact_forms_witnesses) = process_main_vm(
         geometry,
