@@ -845,7 +845,7 @@ use circuit_definitions::circuit_definitions::base_layer::RAMPermutationInstance
 use circuit_definitions::circuit_definitions::base_layer::StorageApplicationInstanceSynthesisFunction;
 use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 
-fn create_artifacts_inner<
+fn process_log_circuits<
     CB: FnMut(ZkSyncBaseLayerCircuit),
     QSCB: FnMut(
         u64,
@@ -1752,6 +1752,7 @@ pub fn create_artifacts_from_tracer<
     mem_print("Before callstack sim");
     tracing::debug!("Running callstack sumulation");
 
+    // TODO can be moved after process_log_circuits
     let callstack_simulation_result = callstack_simulation(
         &callstack_with_aux_data,
         &log_simulation_result,
@@ -1780,8 +1781,9 @@ pub fn create_artifacts_from_tracer<
 
     mem_print("After cs creation");
 
+    // process all circuits related to logs
     let (
-        circuit_artifacts,
+        log_circuits_artifacts,
         memory_artifacts,
         log_demux_circuits,
         ram_permutation_circuits,
@@ -1789,7 +1791,7 @@ pub fn create_artifacts_from_tracer<
         log_demux_circuits_compact_forms_witnesses,
         ram_permutation_circuits_compact_forms_witnesses,
         storage_application_compact_forms,
-    ) = create_artifacts_inner(
+    ) = process_log_circuits(
         geometry,
         tree,
         vm_memory_queries_accumulated,
@@ -1869,7 +1871,7 @@ pub fn create_artifacts_from_tracer<
             l1_messages_linear_hash_data,
             transient_storage_sorter_circuit_data,
             secp256r1_verify_circuits_data,
-        } = circuit_artifacts;
+        } = log_circuits_artifacts;
 
         // Code decommitter sorter
         let circuit_type = BaseLayerCircuitType::DecommitmentsFilter;
