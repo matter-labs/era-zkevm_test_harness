@@ -42,7 +42,7 @@ pub fn compute_storage_dedup_and_sort<
     let deduplicated_rollup_storage_queries = deduplicated_rollup_storage_queries;
 
     let mut intermediate_sorted_log_simulator =
-        LogWithExtendedEnumerationQueueSimulator::<F>::empty();
+        LogWithExtendedEnumerationQueueSimulator::<F>::with_capacity(sorted_storage_queries_with_extra_timestamp.len());
     let mut intermediate_sorted_log_simulator_states =
         Vec::with_capacity(sorted_storage_queries_with_extra_timestamp.len());
     for el in sorted_storage_queries_with_extra_timestamp.iter() {

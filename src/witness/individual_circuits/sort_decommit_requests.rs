@@ -42,24 +42,26 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
         memory_queue_simulator.num_items as usize
     );
 
+    let total_executed_queries = executed_decommittment_queries.len();
+
     assert!(
-        executed_decommittment_queries.len() > 0,
+        total_executed_queries > 0,
         "VM should have made some code decommits"
     );
 
     let mut all_decommittment_queue_states: Vec<(u32, DecommittmentQueueState<F>)> =
-        Vec::with_capacity(executed_decommittment_queries.len());
+        Vec::with_capacity(total_executed_queries);
 
     // we produce witness for two circuits at once
 
-    let mut unsorted_decommittment_queue_simulator = DecommittmentQueueSimulator::<F>::empty();
-    let mut sorted_decommittment_queue_simulator = DecommittmentQueueSimulator::<F>::empty();
+    let mut unsorted_decommittment_queue_simulator = DecommittmentQueueSimulator::<F>::with_capacity(total_executed_queries);
+    let mut sorted_decommittment_queue_simulator = DecommittmentQueueSimulator::<F>::with_capacity(total_executed_queries);
 
     // sort decommittment requests
 
-    let mut sorted_decommittment_queue_states = vec![];
+    let mut sorted_decommittment_queue_states = Vec::with_capacity(total_executed_queries);
+    let mut unsorted_decommittment_requests_with_data = Vec::with_capacity(total_executed_queries);
 
-    let mut unsorted_decommittment_requests_with_data = vec![];
     for (_cycle, decommittment_request, writes) in executed_decommittment_queries.iter_mut() {
         let data = std::mem::take(writes);
         unsorted_decommittment_requests_with_data.push((*decommittment_request, data));

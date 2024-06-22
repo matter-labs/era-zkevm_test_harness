@@ -33,6 +33,8 @@ pub fn compute_events_dedup_and_sort<
 
     let mut sorted_queries: Vec<_> = unsorted_queries.clone();
 
+    let total_amount_of_queries = sorted_queries.len();
+
     sorted_queries.par_sort_by(|a, b| match a.timestamp.0.cmp(&b.timestamp.0) {
         Ordering::Equal => {
             if b.rollback {
@@ -44,8 +46,8 @@ pub fn compute_events_dedup_and_sort<
         r @ _ => r,
     });
 
-    let mut intermediate_sorted_simulator = LogQueueSimulator::<F>::empty();
-    let mut intermediate_sorted_log_simulator_states = Vec::with_capacity(sorted_queries.len());
+    let mut intermediate_sorted_simulator = LogQueueSimulator::<F>::with_capacity(total_amount_of_queries);
+    let mut intermediate_sorted_log_simulator_states = Vec::with_capacity(total_amount_of_queries);
     for el in sorted_queries.iter() {
         let (_, states) =
             intermediate_sorted_simulator.push_and_output_intermediate_data(*el, round_function);
@@ -556,7 +558,7 @@ pub fn simulate_events_log_for_commitment<
 
     let net_history = sort_and_dedup_events_log(sorted_history);
 
-    let mut simulator = LogQueueSimulator::<F>::empty();
+    let mut simulator = LogQueueSimulator::<F>::with_capacity(net_history.len());
     for el in net_history.iter().copied() {
         simulator.push(el, round_function);
     }

@@ -17,6 +17,7 @@ use circuit_definitions::zkevm_circuits::demux_log_queue::DemuxOutput;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use circuit_definitions::{encodings::*, Field, RoundFunction};
 use postprocessing::CsForWitnessGeneration;
+use zk_evm::zkevm_opcode_defs::SECP256R1_VERIFY_PRECOMPILE_ADDRESS;
 
 pub struct LogDemuxArtifacts<F: SmallField> {
     // log queue
@@ -129,12 +130,35 @@ pub fn compute_logs_demux<
         take_queue_state_from_simulator(&log_demux_artifacts.applied_log_queue_simulator);
 
     let output_passthrough_data = LogDemuxerOutputData::placeholder_witness();
-    let mut output_queues = std::array::from_fn(|_| LogQueue::<Field>::default());
     let mut previous_hidden_fsm_output = None;
+
+    let mut amounts_of_queries: [usize; NUM_DEMUX_OUTPUTS] = std::array::from_fn(|_| 0);
+    for (_, _, query) in input_queue_witness.iter() {
+        match query.aux_byte {
+            STORAGE_AUX_BYTE => amounts_of_queries[DemuxOutput::RollupStorage as usize] += 1,
+            TRANSIENT_STORAGE_AUX_BYTE => amounts_of_queries[DemuxOutput::TransientStorage as usize] += 1,
+            L1_MESSAGE_AUX_BYTE => amounts_of_queries[DemuxOutput::L2ToL1Messages as usize] += 1, 
+            EVENT_AUX_BYTE => amounts_of_queries[DemuxOutput::Events as usize] += 1,
+            PRECOMPILE_AUX_BYTE => {
+                match query.address {
+                    a if a == *KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => amounts_of_queries[DemuxOutput::Keccak as usize] += 1,
+                    a if a == *SHA256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => amounts_of_queries[DemuxOutput::Sha256 as usize] += 1,
+                    a if a == *ECRECOVER_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => amounts_of_queries[DemuxOutput::ECRecover as usize] += 1,
+                    a if a == *SECP256R1_VERIFY_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => amounts_of_queries[DemuxOutput::Secp256r1Verify as usize] += 1,
+                    _ => {}
+                }
+            },
+            _ => {}
+        }
+    }
+
+    let mut output_queues = std::array::from_fn(|index| LogQueue::<Field>::with_capacity(amounts_of_queries[index]));
 
     for (idx, input_chunk) in input_queue_witness.chunks(per_circuit_capacity).enumerate() {
         let is_first = idx == 0;
         let is_last = idx == num_chunks - 1;
+
+        // TODO preallocate memory
 
         // simulate the circuit
         for (_encoding, _previous_tail, query) in input_chunk.iter() {

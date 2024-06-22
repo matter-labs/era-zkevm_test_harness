@@ -79,3 +79,12 @@ pub struct LogQueue<F: SmallField> {
     pub states: Vec<LogQueueState<F>>,
     pub simulator: LogQueueSimulator<F>,
 }
+
+impl<F: SmallField> LogQueue<F>  {
+    pub fn with_capacity(capacitty: usize) -> Self {
+        Self {
+            states: Vec::with_capacity(capacitty),
+            simulator: LogQueueSimulator::<F>::with_capacity(capacitty)
+        }
+    }
+}

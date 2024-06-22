@@ -84,7 +84,9 @@ pub fn compute_ram_circuit_snapshots<
 
     // reconstruct sorted one in full
     let mut sorted_memory_queue_chunk_final_states = vec![];
-    let mut sorted_memory_queries_simulator = MemoryQueueSimulator::<Field>::empty();
+    let mut sorted_memory_queries_simulator = MemoryQueueSimulator::<Field>::with_capacity(
+        total_amount_of_queries
+    );
 
     for (i, query) in sorted_memory_queries_accumulated.into_iter().enumerate() {
         let (_, intermediate_info) = sorted_memory_queries_simulator

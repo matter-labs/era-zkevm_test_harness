@@ -272,10 +272,10 @@ fn log_simulation<'a>(
     // from cycle into first two sponges (common), then tail-tail pair and 3rd sponge for forward, then head-head pair and 3rd sponge for rollback
     let mut sponges_data: HashMap<u32, LogAccessSpongesInfo<GoldilocksField>> = HashMap::new();
 
-    let mut log_queue_simulator = LogQueueSimulator::<GoldilocksField>::empty();
-
     let forward = &callstack_with_aux_data.current_entry.forward_queue;
     let rollbacks = &callstack_with_aux_data.current_entry.rollback_queue;
+
+    let mut log_queue_simulator = LogQueueSimulator::<GoldilocksField>::with_capacity(forward.len());
 
     for (extended_query, was_applied) in forward
         .iter()
