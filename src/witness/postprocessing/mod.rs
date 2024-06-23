@@ -60,49 +60,53 @@ use circuit_definitions::zkevm_circuits::storage_validity_by_grand_product::inpu
 use circuit_definitions::zkevm_circuits::transient_storage_validity_by_grand_product::input::TransientStorageDeduplicatorInstanceWitness;
 use circuit_definitions::zkevm_circuits::transient_storage_validity_by_grand_product::input::*;
 use circuit_definitions::Field;
+use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use crossbeam::atomic::AtomicCell;
+
 use std::sync::Arc;
+
+use zkevm_circuits::fsm_input_output::circuit_inputs::main_vm::{VmCircuitInputOutputWitness, VmCircuitWitness, VmInputData, VmOutputData};
+use crate::zkevm_circuits::base_structures::vm_state::VmLocalState;
 
 pub const L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH: bool = false;
 
 use crate::boojum::field::SmallField;
 
 pub struct BlockFirstAndLastBasicCircuits {
-    pub main_vm_circuits: FirstAndLastCircuit<VmMainInstanceSynthesisFunction>,
+    pub main_vm_circuits: FirstAndLastCircuit<VmCircuitWitness<Field, VmWitnessOracle<Field>>>,
     pub code_decommittments_sorter_circuits:
-        FirstAndLastCircuit<CodeDecommittmentsSorterSynthesisFunction>,
-    pub code_decommitter_circuits: FirstAndLastCircuit<CodeDecommitterInstanceSynthesisFunction>,
-    pub log_demux_circuits: FirstAndLastCircuit<LogDemuxInstanceSynthesisFunction>,
+        FirstAndLastCircuit<CodeDecommittmentsDeduplicatorInstanceWitness<Field>>,
+    pub code_decommitter_circuits: FirstAndLastCircuit<CodeDecommitterCircuitInstanceWitness<Field>>,
+    pub log_demux_circuits: FirstAndLastCircuit<LogDemuxerCircuitInstanceWitness<Field>>,
     pub keccak_precompile_circuits:
-        FirstAndLastCircuit<Keccak256RoundFunctionInstanceSynthesisFunction>,
+        FirstAndLastCircuit<Keccak256RoundFunctionCircuitInstanceWitness<Field>>,
     pub sha256_precompile_circuits:
-        FirstAndLastCircuit<Sha256RoundFunctionInstanceSynthesisFunction>,
+        FirstAndLastCircuit<Sha256RoundFunctionCircuitInstanceWitness<Field>>,
     pub ecrecover_precompile_circuits:
-        FirstAndLastCircuit<ECRecoverFunctionInstanceSynthesisFunction>,
-    pub ram_permutation_circuits: FirstAndLastCircuit<RAMPermutationInstanceSynthesisFunction>,
-    pub storage_sorter_circuits: FirstAndLastCircuit<StorageSortAndDedupInstanceSynthesisFunction>,
+        FirstAndLastCircuit<EcrecoverCircuitInstanceWitness<Field>>,
+    pub ram_permutation_circuits: FirstAndLastCircuit<RamPermutationCircuitInstanceWitness<Field>>,
+    pub storage_sorter_circuits: FirstAndLastCircuit<StorageDeduplicatorInstanceWitness<Field>>,
     pub storage_application_circuits:
-        FirstAndLastCircuit<StorageApplicationInstanceSynthesisFunction>,
+        FirstAndLastCircuit<StorageApplicationCircuitInstanceWitness<Field>>,
     pub events_sorter_circuits:
-        FirstAndLastCircuit<EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction>,
+        FirstAndLastCircuit<EventsDeduplicatorInstanceWitness<Field>>,
     pub l1_messages_sorter_circuits:
-        FirstAndLastCircuit<EventsAndL1MessagesSortAndDedupInstanceSynthesisFunction>,
-    pub l1_messages_hasher_circuits: FirstAndLastCircuit<LinearHasherInstanceSynthesisFunction>,
+        FirstAndLastCircuit<EventsDeduplicatorInstanceWitness<Field>>,
+    pub l1_messages_hasher_circuits: FirstAndLastCircuit<LinearHasherCircuitInstanceWitness<Field>>,
     pub transient_storage_sorter_circuits:
-        FirstAndLastCircuit<TransientStorageSortAndDedupInstanceSynthesisFunction>,
+        FirstAndLastCircuit<TransientStorageDeduplicatorInstanceWitness<Field>>,
     pub secp256r1_verify_circuits:
-        FirstAndLastCircuit<Secp256r1VerifyFunctionInstanceSynthesisFunction>,
+        FirstAndLastCircuit<Secp256r1VerifyCircuitInstanceWitness<Field>>,
 }
 
-pub struct FirstAndLastCircuit<S>
-where
-    S: ZkSyncUniformSynthesisFunction<Field>,
+pub struct FirstAndLastCircuit<T: ClosedFormInputField<GoldilocksField>>
 {
-    pub first: Option<ZkSyncUniformCircuitInstance<GoldilocksField, S>>,
-    pub last: Option<ZkSyncUniformCircuitInstance<GoldilocksField, S>>,
+    pub first: Option<T>,
+    pub last: Option<T>,
 }
 
-impl<S: ZkSyncUniformSynthesisFunction<Field>> Default for FirstAndLastCircuit<S> {
+impl<T: ClosedFormInputField<GoldilocksField>> Default for FirstAndLastCircuit<T> 
+{
     fn default() -> Self {
         Self {
             first: None,
@@ -139,6 +143,18 @@ pub(crate) trait ClosedFormInputField<F: SmallField> {
             serde::Serialize + serde::de::DeserializeOwned + Eq,
         <Self::OUT as CSAllocatable<F>>::Witness:
             serde::Serialize + serde::de::DeserializeOwned + Eq;
+}
+
+impl<F: SmallField> ClosedFormInputField<F> for VmCircuitWitness<F, VmWitnessOracle<F>> {
+    type T = VmLocalState<F>;
+    type IN = VmInputData<F>;
+    type OUT = VmOutputData<F>;
+
+    fn closed_form_input(
+        &mut self,
+    ) -> &mut ClosedFormInputWitness<F, Self::T, Self::IN, Self::OUT> {
+        &mut self.closed_form_input
+    }
 }
 
 impl<F: SmallField> ClosedFormInputField<F> for LinearHasherCircuitInstanceWitness<F> {
@@ -339,15 +355,7 @@ impl CsForWitnessGeneration {
     }
 }
 
-pub(crate) struct CircuitMaker<'a, T, S>
-where
-    T: ClosedFormInputField<GoldilocksField>,
-    S: ZkSyncUniformSynthesisFunction<
-        GoldilocksField,
-        Config = usize,
-        Witness = T,
-        RoundFunction = Poseidon2Goldilocks,
-    >,
+pub(crate) struct CircuitMaker<'a, T: ClosedFormInputField<GoldilocksField>>
 {
     geometry: u32,
     round_function: Poseidon2Goldilocks,
@@ -355,10 +363,10 @@ where
     cs_for_witness_generation: &'a mut CsForWitnessGeneration,
     queue_simulator: RecursionQueueSimulator<GoldilocksField>,
     compact_form_witnesses: Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
-    extremes: FirstAndLastCircuit<S>,
+    extremes: FirstAndLastCircuit<T>,
 }
 
-impl<'a, T, S> CircuitMaker<'a, T, S>
+impl<'a, T> CircuitMaker<'a, T>
 where
     T: ClosedFormInputField<GoldilocksField>,
     <T::T as CSAllocatable<GoldilocksField>>::Witness:
@@ -366,13 +374,7 @@ where
     <T::IN as CSAllocatable<GoldilocksField>>::Witness:
         serde::Serialize + serde::de::DeserializeOwned + Eq,
     <T::OUT as CSAllocatable<GoldilocksField>>::Witness:
-        serde::Serialize + serde::de::DeserializeOwned + Eq,
-    S: ZkSyncUniformSynthesisFunction<
-        GoldilocksField,
-        Config = usize,
-        Witness = T,
-        RoundFunction = Poseidon2Goldilocks,
-    >,
+        serde::Serialize + serde::de::DeserializeOwned + Eq
 {
     pub(crate) fn new(
         geometry: u32,
@@ -390,11 +392,19 @@ where
         }
     }
 
-    pub(crate) fn process(
+    pub(crate) fn process<S: ZkSyncUniformSynthesisFunction<GoldilocksField>>(
         &mut self,
         mut circuit_input: T,
         circuit_type: BaseLayerCircuitType,
-    ) -> ZkSyncUniformCircuitInstance<GoldilocksField, S> {
+    ) -> ZkSyncUniformCircuitInstance<GoldilocksField, S> 
+    where 
+    S: ZkSyncUniformSynthesisFunction<
+    GoldilocksField,
+    Config = usize,
+    Witness = T,
+    RoundFunction = Poseidon2Goldilocks,
+    >,
+{
         if self.observable_input.is_none() {
             self.observable_input =
                 Some(circuit_input.closed_form_input().observable_input.clone());
@@ -419,9 +429,9 @@ where
         };
 
         if self.extremes.first.is_none() {
-            self.extremes.first = Some(circuit.clone());
+            self.extremes.first = circuit.clone_witness();
         }
-        self.extremes.last = Some(circuit.clone());
+        self.extremes.last = circuit.clone_witness();
 
         let recursive_request = RecursionRequest {
             circuit_type: GoldilocksField::from_u64_unchecked(circuit_type as u64),
@@ -437,7 +447,7 @@ where
     pub(crate) fn into_results(
         self,
     ) -> (
-        FirstAndLastCircuit<S>,
+        FirstAndLastCircuit<T>,
         RecursionQueueSimulator<GoldilocksField>,
         Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
     ) {

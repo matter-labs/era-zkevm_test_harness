@@ -39,8 +39,8 @@ pub fn compute_logs_demux<
     mut circuit_callback: CB,
     mut recursion_queue_callback: QSCB,
 ) -> (
-    FirstAndLastCircuit<LogDemuxInstanceSynthesisFunction>,
-    Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
+    FirstAndLastCircuit<LogDemuxerCircuitInstanceWitness<Field>>,
+    Vec<ClosedFormInputCompactFormWitness<Field>>,
     [LogQueue<Field>; NUM_DEMUX_OUTPUTS],
 ) {
     let _ = log_demux_artifacts

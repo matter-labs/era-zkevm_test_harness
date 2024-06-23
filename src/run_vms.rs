@@ -290,8 +290,7 @@ pub fn run_vms<
             .events_sorter_circuits
             .last
             .clone()
-            .map(|el| {
-                let wit = el.clone_witness().unwrap();
+            .map(|wit| {
                 wit.closed_form_input
                     .observable_output
                     .final_queue_state
@@ -310,8 +309,7 @@ pub fn run_vms<
             .main_vm_circuits
             .first
             .clone()
-            .map(|el| {
-                let wit = el.clone_witness().unwrap();
+            .map(|wit| {
                 wit.closed_form_input
                     .observable_input
                     .memory_queue_initial_state
@@ -327,8 +325,7 @@ pub fn run_vms<
             .storage_application_circuits
             .last
             .clone()
-            .map(|el| {
-                let wit = el.clone_witness().unwrap();
+            .map(|wit| {
                 wit.closed_form_input
                     .observable_output
                     .state_diffs_keccak256_hash
@@ -339,8 +336,7 @@ pub fn run_vms<
             .l1_messages_hasher_circuits
             .last
             .clone()
-            .map(|el| {
-                let wit = el.clone_witness().unwrap();
+            .map(|wit| {
                 wit.closed_form_input.observable_output.keccak256_hash
             })
             .unwrap_or([0u8; 32]);
@@ -374,8 +370,6 @@ pub fn run_vms<
             basic_circuits.code_decommittments_sorter_circuits.last
         {
             let observable_output = last
-                .clone_witness()
-                .unwrap()
                 .closed_form_input
                 .observable_output;
 
@@ -393,8 +387,6 @@ pub fn run_vms<
             basic_circuits.code_decommitter_circuits.last
         {
             let observable_output = last
-                .clone_witness()
-                .unwrap()
                 .closed_form_input
                 .observable_output;
 
@@ -411,8 +403,6 @@ pub fn run_vms<
         let log_demuxer_observable_output =
             if let Some(last) = basic_circuits.log_demux_circuits.last {
                 let observable_output = last
-                    .clone_witness()
-                    .unwrap()
                     .closed_form_input
                     .observable_output;
 
@@ -440,41 +430,37 @@ pub fn run_vms<
                 .keccak_precompile_circuits
                 .last
                 .as_ref()
-                .map(|el| {
-                    el.clone_witness()
-                        .unwrap()
+                .map(|wit| {
+                    wit
                         .closed_form_input
-                        .observable_output
+                        .observable_output.clone()
                 }),
             basic_circuits
                 .sha256_precompile_circuits
                 .last
                 .as_ref()
-                .map(|el| {
-                    el.clone_witness()
-                        .unwrap()
+                .map(|wit| {
+                    wit
                         .closed_form_input
-                        .observable_output
+                        .observable_output.clone()
                 }),
             basic_circuits
                 .ecrecover_precompile_circuits
                 .last
                 .as_ref()
-                .map(|el| {
-                    el.clone_witness()
-                        .unwrap()
+                .map(|wit| {
+                    wit
                         .closed_form_input
-                        .observable_output
+                        .observable_output.clone()
                 }),
             basic_circuits
                 .secp256r1_verify_circuits
                 .last
                 .as_ref()
-                .map(|el| {
-                    el.clone_witness()
-                        .unwrap()
+                .map(|wit| {
+                    wit
                         .closed_form_input
-                        .observable_output
+                        .observable_output.clone()
                 }),
         ];
 
@@ -497,8 +483,6 @@ pub fn run_vms<
             basic_circuits.storage_sorter_circuits.last
         {
             let observable_output = last
-                .clone_witness()
-                .unwrap()
                 .closed_form_input
                 .observable_output;
 
@@ -516,8 +500,6 @@ pub fn run_vms<
             basic_circuits.storage_application_circuits.last
         {
             let observable_output = last
-                .clone_witness()
-                .unwrap()
                 .closed_form_input
                 .observable_output;
 
@@ -536,8 +518,6 @@ pub fn run_vms<
         let events_sorter_observable_output =
             if let Some(last) = basic_circuits.events_sorter_circuits.last {
                 let observable_output = last
-                    .clone_witness()
-                    .unwrap()
                     .closed_form_input
                     .observable_output;
 
@@ -554,8 +534,6 @@ pub fn run_vms<
         let l1messages_sorter_observable_output =
             if let Some(last) = basic_circuits.l1_messages_sorter_circuits.last {
                 let observable_output = last
-                    .clone_witness()
-                    .unwrap()
                     .closed_form_input
                     .observable_output;
 
@@ -570,9 +548,8 @@ pub fn run_vms<
 
         // also create intermediate queue states if needed
         let ram_sorted_queue_state = if let Some(state) =
-            basic_circuits.ram_permutation_circuits.first.map(|el| {
-                el.clone_witness()
-                    .unwrap()
+            basic_circuits.ram_permutation_circuits.first.map(|wit| {
+                wit
                     .closed_form_input
                     .observable_input
                     .sorted_queue_initial_state
@@ -585,9 +562,8 @@ pub fn run_vms<
         let decommits_sorter_intermediate_queue_state = if let Some(state) = basic_circuits
             .code_decommittments_sorter_circuits
             .first
-            .map(|el| {
-                el.clone_witness()
-                    .unwrap()
+            .map(|wit| {
+                wit
                     .closed_form_input
                     .observable_input
                     .sorted_queue_initial_state
@@ -598,9 +574,8 @@ pub fn run_vms<
         };
 
         let events_sorter_intermediate_queue_state = if let Some(state) =
-            basic_circuits.events_sorter_circuits.first.map(|el| {
-                el.clone_witness()
-                    .unwrap()
+            basic_circuits.events_sorter_circuits.first.map(|wit| {
+                wit
                     .closed_form_input
                     .observable_input
                     .intermediate_sorted_queue_state
@@ -611,9 +586,8 @@ pub fn run_vms<
         };
 
         let l1messages_sorter_intermediate_queue_state = if let Some(state) =
-            basic_circuits.l1_messages_sorter_circuits.first.map(|el| {
-                el.clone_witness()
-                    .unwrap()
+            basic_circuits.l1_messages_sorter_circuits.first.map(|wit| {
+                wit
                     .closed_form_input
                     .observable_input
                     .intermediate_sorted_queue_state
@@ -624,9 +598,8 @@ pub fn run_vms<
         };
 
         let rollup_storage_sorter_intermediate_queue_state = if let Some(state) =
-            basic_circuits.storage_sorter_circuits.first.map(|el| {
-                el.clone_witness()
-                    .unwrap()
+            basic_circuits.storage_sorter_circuits.first.map(|wit| {
+                wit
                     .closed_form_input
                     .observable_input
                     .intermediate_sorted_queue_state
@@ -639,9 +612,8 @@ pub fn run_vms<
         let transient_storage_sorter_intermediate_queue_state = if let Some(state) = basic_circuits
             .transient_storage_sorter_circuits
             .first
-            .map(|el| {
-                el.clone_witness()
-                    .unwrap()
+            .map(|wit| {
+                wit
                     .closed_form_input
                     .observable_input
                     .intermediate_sorted_queue_state
@@ -653,8 +625,7 @@ pub fn run_vms<
 
         let l1messages_linear_hasher_observable_output =
             if let Some(last) = basic_circuits.l1_messages_hasher_circuits.last {
-                last.clone_witness()
-                    .unwrap()
+                last
                     .closed_form_input
                     .observable_output
             } else {
@@ -686,8 +657,6 @@ pub fn run_vms<
                 .main_vm_circuits
                 .last
                 .unwrap()
-                .clone_witness()
-                .unwrap()
                 .closed_form_input
                 .observable_output,
             decommits_sorter_observable_output,
@@ -708,8 +677,6 @@ pub fn run_vms<
                 .first
                 .clone()
                 .unwrap()
-                .clone_witness()
-                .unwrap()
                 .closed_form_input
                 .observable_input
                 .rollback_queue_tail_for_block,
@@ -719,8 +686,6 @@ pub fn run_vms<
             bootloader_heap_memory_state: basic_circuits
                 .main_vm_circuits
                 .first
-                .unwrap()
-                .clone_witness()
                 .unwrap()
                 .closed_form_input
                 .observable_input

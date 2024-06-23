@@ -839,6 +839,10 @@ use circuit_definitions::circuit_definitions::base_layer::RAMPermutationInstance
 use circuit_definitions::circuit_definitions::base_layer::StorageApplicationInstanceSynthesisFunction;
 use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 
+use crate::zkevm_circuits::demux_log_queue::input::LogDemuxerCircuitInstanceWitness;
+use crate::zkevm_circuits::ram_permutation::input::RamPermutationCircuitInstanceWitness;
+use crate::zkevm_circuits::storage_application::input::StorageApplicationCircuitInstanceWitness;
+
 fn process_log_circuits<
     CB: FnMut(ZkSyncBaseLayerCircuit),
     QSCB: FnMut(
@@ -865,9 +869,9 @@ fn process_log_circuits<
 ) -> (
     CircuitArtifacts<GoldilocksField>,
     MemoryArtifacts<GoldilocksField>,
-    FirstAndLastCircuit<LogDemuxInstanceSynthesisFunction>,
-    FirstAndLastCircuit<RAMPermutationInstanceSynthesisFunction>,
-    FirstAndLastCircuit<StorageApplicationInstanceSynthesisFunction>,
+    FirstAndLastCircuit<LogDemuxerCircuitInstanceWitness<GoldilocksField>>,
+    FirstAndLastCircuit<RamPermutationCircuitInstanceWitness<GoldilocksField>>,
+    FirstAndLastCircuit<StorageApplicationCircuitInstanceWitness<GoldilocksField>>,
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
@@ -1442,6 +1446,8 @@ fn repack_input_for_main_vm(
     main_vm_inputs
 }
 
+use crate::zkevm_circuits::fsm_input_output::circuit_inputs::main_vm::VmCircuitWitness;
+
 fn process_main_vm<
     CB: FnMut(ZkSyncBaseLayerCircuit),
     QSCB: FnMut(
@@ -1465,7 +1471,7 @@ fn process_main_vm<
     circuit_callback: &mut CB,
     recursion_queue_callback: &mut QSCB,
 ) -> (
-    FirstAndLastCircuit<VmMainInstanceSynthesisFunction>,
+    FirstAndLastCircuit<VmCircuitWitness<GoldilocksField, VmWitnessOracle<GoldilocksField>>>,
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
 ) {
     let mut main_vm_circuits = FirstAndLastCircuit::default();
@@ -1503,10 +1509,10 @@ fn process_main_vm<
         };
 
         if is_first {
-            main_vm_circuits.first = Some(instance.clone());
+            main_vm_circuits.first = instance.clone_witness();
         }
         if is_last {
-            main_vm_circuits.last = Some(instance.clone());
+            main_vm_circuits.last = instance.clone_witness();
         }
 
         let instance = ZkSyncBaseLayerCircuit::MainVM(instance);
