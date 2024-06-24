@@ -1,7 +1,7 @@
 use std::default;
 
 use super::*;
-use crate::witness::artifacts::{DemuxedQueries, LogQueue};
+use crate::witness::artifacts::LogQueue;
 use crate::zk_evm::aux_structures::LogQuery;
 use crate::zkevm_circuits::base_structures::log_query::LOG_QUERY_PACKED_WIDTH;
 use crate::zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
@@ -13,7 +13,7 @@ pub(crate) fn compute_storage_dedup_and_sort<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
-    demuxed_queues: &mut DemuxedQueries,
+    rollup_storage_queries: Vec<LogQuery>,
     demuxed_rollup_storage_queue: LogQueue<F>,
     per_circuit_capacity: usize,
     round_function: &R,
@@ -26,7 +26,7 @@ pub(crate) fn compute_storage_dedup_and_sort<
 
     const SHARD_ID_TO_PROCEED: u8 = 0; // rollup shard ID
 
-    if demuxed_queues.rollup_storage_queries.is_empty() {
+    if rollup_storage_queries.is_empty() {
         return (LogQueueSimulator::<F>::empty(), vec![], vec![]);
     }
 
@@ -34,11 +34,11 @@ pub(crate) fn compute_storage_dedup_and_sort<
 
     use crate::witness::sort_storage_access::sort_storage_access_queries;
 
-    let total_amount_of_queries = demuxed_queues.rollup_storage_queries.len();
+    let total_amount_of_queries = rollup_storage_queries.len();
     let amount_of_circuits = (total_amount_of_queries + per_circuit_capacity - 1) / per_circuit_capacity;
 
     let (sorted_storage_queries_with_extra_timestamp, deduplicated_rollup_storage_queries) =
-        sort_storage_access_queries(&demuxed_queues.rollup_storage_queries);
+        sort_storage_access_queries(&rollup_storage_queries);
 
     let mut sorted_log_simulator_states_chunk_final_states = Vec::with_capacity(amount_of_circuits);
     let mut intermediate_sorted_log_simulator =
@@ -95,13 +95,12 @@ pub(crate) fn compute_storage_dedup_and_sort<
         intermediate_sorted_log_simulator_final_state.tail.length
     );
 
-    let lhs_contributions: Vec<_> = demuxed_queues
-        .rollup_storage_queries
-        .iter()
+    let lhs_contributions: Vec<_> = rollup_storage_queries
+        .into_iter()
         .enumerate()
         .map(|(idx, el)| {
             let extended_query = LogQueryWithExtendedEnumeration {
-                raw_query: *el,
+                raw_query: el,
                 extended_timestamp: idx as u32,
             };
 

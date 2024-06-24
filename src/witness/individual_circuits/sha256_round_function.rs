@@ -33,7 +33,7 @@ pub(crate) fn sha256_decompose_into_per_circuit_witness<
     implicit_memory_artifacts: &mut ImplicitMemoryArtifacts<F>,
     memory_queue_simulator: &mut MemoryQueueSimulator<F>,
     sha256_round_function_witnesses: Vec<(u32, LogQuery_, Vec<Sha256RoundWitness>)>,
-    demuxed_queues: &mut DemuxedQueries,
+    sha256_precompile_queries: Vec<LogQuery_>,
     mut demuxed_sha256_precompile_queue: LogQueue<F>,
     num_rounds_per_circuit: usize,
     round_function: &R,
@@ -73,8 +73,8 @@ pub(crate) fn sha256_decompose_into_per_circuit_witness<
 
     let mut result = vec![];
 
-    let precompile_calls = std::mem::take(&mut demuxed_queues.sha256_precompile_queries);
-    let precompile_calls_queue_states = std::mem::take(&mut demuxed_sha256_precompile_queue.states);
+    let precompile_calls = sha256_precompile_queries;
+    let precompile_calls_queue_states = demuxed_sha256_precompile_queue.states;
     let simulator_witness: Vec<_> = demuxed_sha256_precompile_queue
         .simulator
         .witness

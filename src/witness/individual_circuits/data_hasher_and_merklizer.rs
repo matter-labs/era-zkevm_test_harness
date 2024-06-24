@@ -8,7 +8,7 @@ pub(crate)  fn compute_linear_keccak256<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
-    simulator: &LogQueueSimulator<F>,
+    simulator: LogQueueSimulator<F>,
     capacity: usize,
     _round_function: &R,
 ) -> Vec<LinearHasherCircuitInstanceWitness<F>> {

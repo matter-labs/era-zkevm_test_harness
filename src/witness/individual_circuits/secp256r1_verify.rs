@@ -21,7 +21,7 @@ pub(crate)  fn secp256r1_verify_decompose_into_per_circuit_witness<
     implicit_memory_artifacts: &mut ImplicitMemoryArtifacts<F>,
     memory_queue_simulator: &mut MemoryQueueSimulator<F>,
     secp256r1_verify_witnesses: Vec<(u32, LogQuery_, Secp256r1VerifyRoundWitness)>,
-    demuxed_queues: &mut DemuxedQueries,
+    secp256r1_verify_queries: Vec<LogQuery_>,
     mut demuxed_secp256r1_verify_queue: LogQueue<F>,
     num_rounds_per_circuit: usize,
     round_function: &R,
@@ -58,8 +58,8 @@ pub(crate)  fn secp256r1_verify_decompose_into_per_circuit_witness<
 
     let mut result = vec![];
 
-    let precompile_calls = std::mem::take(&mut demuxed_queues.secp256r1_verify_queries);
-    let precompile_calls_queue_states = std::mem::take(&mut demuxed_secp256r1_verify_queue.states);
+    let precompile_calls = secp256r1_verify_queries;
+    let precompile_calls_queue_states = demuxed_secp256r1_verify_queue.states;
     let simulator_witness: Vec<_> = demuxed_secp256r1_verify_queue
         .simulator
         .witness

@@ -21,7 +21,7 @@ pub(crate)  fn ecrecover_decompose_into_per_circuit_witness<
     implicit_memory_artifacts: &mut ImplicitMemoryArtifacts<F>,
     memory_queue_simulator: &mut MemoryQueueSimulator<F>,
     ecrecover_witnesses: Vec<(u32, LogQuery_, ECRecoverRoundWitness)>,
-    demuxed_queues: &mut DemuxedQueries,
+    ecrecover_queries: Vec<LogQuery_>,
     mut demuxed_ecrecover_queue: LogQueue<F>,
     num_rounds_per_circuit: usize,
     round_function: &R,
@@ -58,8 +58,8 @@ pub(crate)  fn ecrecover_decompose_into_per_circuit_witness<
 
     let mut result = vec![];
 
-    let precompile_calls = std::mem::take(&mut demuxed_queues.ecrecover_queries);
-    let precompile_calls_queue_states = std::mem::take(&mut demuxed_ecrecover_queue.states);
+    let precompile_calls = ecrecover_queries;
+    let precompile_calls_queue_states = demuxed_ecrecover_queue.states;
     let simulator_witness: Vec<_> = demuxed_ecrecover_queue.simulator.witness.clone().into();
     let round_function_witness = ecrecover_witnesses;
 

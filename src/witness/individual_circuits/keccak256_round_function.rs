@@ -33,7 +33,7 @@ pub(crate) fn keccak256_decompose_into_per_circuit_witness<
     implicit_memory_artifacts: &mut ImplicitMemoryArtifacts<F>,
     memory_queue_simulator: &mut MemoryQueueSimulator<F>,
     keccak_round_function_witnesses: Vec<(u32, LogQuery_, Vec<Keccak256RoundWitness>)>,
-    demuxed_queues: &mut DemuxedQueries,
+    keccak_precompile_queries: Vec<LogQuery_>,
     mut demuxed_keccak_precompile_queue: LogQueue<F>,
     num_rounds_per_circuit: usize,
     round_function: &R,
@@ -77,9 +77,8 @@ pub(crate) fn keccak256_decompose_into_per_circuit_witness<
 
     let mut result = vec![];
 
-    let keccak_precompile_calls = std::mem::take(&mut demuxed_queues.keccak_precompile_queries);
-    let keccak_precompile_calls_queue_states =
-        std::mem::take(&mut demuxed_keccak_precompile_queue.states);
+    let keccak_precompile_calls = keccak_precompile_queries;
+    let keccak_precompile_calls_queue_states = demuxed_keccak_precompile_queue.states;
     let round_function_witness = keccak_round_function_witnesses;
 
     let memory_queries = keccak_256_memory_queries;

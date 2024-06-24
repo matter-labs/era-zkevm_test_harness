@@ -860,7 +860,7 @@ fn process_log_circuits<
     sha256_round_function_witnesses: Vec<(u32, LogQuery, Vec<Sha256RoundWitness>)>,
     ecrecover_witnesses: Vec<(u32, LogQuery, ECRecoverRoundWitness)>,
     secp256r1_verify_witnesses: Vec<(u32, LogQuery, Secp256r1VerifyRoundWitness)>,
-    mut log_simulation_queries_data: LogSimulationQueriesData<GoldilocksField>,
+    log_simulation_queries_data: LogSimulationQueriesData<GoldilocksField>,
     round_function: &Poseidon2Goldilocks,
     num_non_deterministic_heap_queries: usize,
     mut cs_for_witness_generation: &mut CsForWitnessGeneration,
@@ -1012,7 +1012,7 @@ fn process_log_circuits<
         &mut implicit_memory_artifacts,
         &mut memory_queue_simulator,
         keccak_round_function_witnesses,
-        &mut log_simulation_queries_data.demuxed_queries,
+        log_simulation_queries_data.demuxed_queries.keccak_precompile_queries,
         demuxed_keccak_precompile_queue,
         geometry.cycles_per_keccak256_circuit as usize,
         round_function,
@@ -1033,7 +1033,7 @@ fn process_log_circuits<
         &mut implicit_memory_artifacts,
         &mut memory_queue_simulator,
         sha256_round_function_witnesses,
-        &mut log_simulation_queries_data.demuxed_queries,
+        log_simulation_queries_data.demuxed_queries.sha256_precompile_queries,
         demuxed_sha256_precompile_queue,
         geometry.cycles_per_sha256_circuit as usize,
         round_function,
@@ -1054,7 +1054,7 @@ fn process_log_circuits<
         &mut implicit_memory_artifacts,
         &mut memory_queue_simulator,
         ecrecover_witnesses,
-        &mut log_simulation_queries_data.demuxed_queries,
+        log_simulation_queries_data.demuxed_queries.ecrecover_queries,
         demuxed_ecrecover_queue,
         geometry.cycles_per_ecrecover_circuit as usize,
         round_function,
@@ -1073,7 +1073,7 @@ fn process_log_circuits<
         &mut implicit_memory_artifacts,
         &mut memory_queue_simulator,
         secp256r1_verify_witnesses,
-        &mut log_simulation_queries_data.demuxed_queries,
+        log_simulation_queries_data.demuxed_queries.secp256r1_verify_queries,
         demuxed_secp256r1_verify_queue,
         geometry.cycles_per_secp256r1_verify_circuit as usize,
         round_function,
@@ -1088,7 +1088,7 @@ fn process_log_circuits<
 
     let (ram_permutation_circuits, ram_permutation_circuits_compact_forms_witnesses) =
         compute_ram_circuit_snapshots(
-            & memory_artifacts,
+            &memory_artifacts,
             implicit_memory_artifacts,
             memory_queue_simulator,
             round_function,
@@ -1114,7 +1114,7 @@ fn process_log_circuits<
         deduplicated_rollup_storage_queries,
         storage_deduplicator_circuit_data,
     ) = compute_storage_dedup_and_sort(
-        &mut log_simulation_queries_data.demuxed_queries,
+        log_simulation_queries_data.demuxed_queries.rollup_storage_queries,
         demuxed_rollup_storage_queue,
         geometry.cycles_per_storage_sorter as usize,
         round_function,
@@ -1128,8 +1128,8 @@ fn process_log_circuits<
     let demuxed_event_queue = std::mem::take(&mut all_demuxed_queues[DemuxOutput::Events as usize]);
 
     let events_deduplicator_circuit_data = compute_events_dedup_and_sort(
-        &log_simulation_queries_data.demuxed_queries.event_queries,
-        &demuxed_event_queue,
+        log_simulation_queries_data.demuxed_queries.event_queries,
+        demuxed_event_queue,
         &mut Default::default(),
         geometry.cycles_per_events_or_l1_messages_sorter as usize,
         round_function,
@@ -1144,8 +1144,8 @@ fn process_log_circuits<
 
     let mut deduplicated_to_l1_queue_simulator = Default::default();
     let l1_messages_deduplicator_circuit_data = compute_events_dedup_and_sort(
-        &log_simulation_queries_data.demuxed_queries.to_l1_queries,
-        &demuxed_to_l1_queue,
+        log_simulation_queries_data.demuxed_queries.to_l1_queries,
+        demuxed_to_l1_queue,
         &mut deduplicated_to_l1_queue_simulator,
         geometry.cycles_per_events_or_l1_messages_sorter as usize,
         round_function,
@@ -1160,7 +1160,7 @@ fn process_log_circuits<
         std::mem::take(&mut all_demuxed_queues[DemuxOutput::TransientStorage as usize]);
 
     let transient_storage_sorter_circuit_data = compute_transient_storage_dedup_and_sort(
-        &mut log_simulation_queries_data.demuxed_queries,
+        log_simulation_queries_data.demuxed_queries.transient_storage_queries,
         demuxed_transient_storage_queue,
         geometry.cycles_per_transient_storage_sorter as usize,
         round_function,
@@ -1180,7 +1180,7 @@ fn process_log_circuits<
     use crate::witness::individual_circuits::data_hasher_and_merklizer::compute_linear_keccak256;
 
     let l1_messages_pubdata_hasher_data = compute_linear_keccak256(
-        &deduplicated_to_l1_queue_simulator,
+        deduplicated_to_l1_queue_simulator,
         geometry.limit_for_l1_messages_pudata_hasher as usize,
         round_function,
     );
