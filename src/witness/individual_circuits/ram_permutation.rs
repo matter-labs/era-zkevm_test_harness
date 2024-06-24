@@ -149,37 +149,39 @@ pub(crate)  fn compute_ram_circuit_snapshots<
         memory_queue_simulator.num_items as usize,
         total_amount_of_queries
     );
-    let lhs_contributions: Vec<_> = memory_queue_simulator
-        .witness
-        .iter()
-        .map(|el| el.0)
-        .collect();
-    let rhs_contributions: Vec<_> = sorted_memory_queries_simulator
-        .witness
-        .iter()
-        .map(|el| el.0)
-        .collect();
 
     let mut lhs_grand_product_chains = Vec::with_capacity(DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS);
     let mut rhs_grand_product_chains = Vec::with_capacity(DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS);
+    {
+        let lhs_contributions: Vec<_> = memory_queue_simulator
+            .witness
+            .iter()
+            .map(|el| el.0)
+            .collect();
+        let rhs_contributions: Vec<_> = sorted_memory_queries_simulator
+            .witness
+            .iter()
+            .map(|el| el.0)
+            .collect();
 
-    for idx in 0..DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS {
-        let (lhs_grand_product_chain, rhs_grand_product_chain) =
-            compute_grand_product_chains(&lhs_contributions, &rhs_contributions, &challenges[idx]);
+        for idx in 0..DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS {
+            let (lhs_grand_product_chain, rhs_grand_product_chain) =
+                compute_grand_product_chains(&lhs_contributions, &rhs_contributions, &challenges[idx]);
 
-        assert_eq!(lhs_grand_product_chain.len(), total_amount_of_queries);
-        assert_eq!(rhs_grand_product_chain.len(), total_amount_of_queries);
-        assert_eq!(
-            lhs_grand_product_chain.len(),
-            memory_queue_simulator.witness.len()
-        );
-        assert_eq!(
-            rhs_grand_product_chain.len(),
-            sorted_memory_queries_simulator.witness.len()
-        );
+            assert_eq!(lhs_grand_product_chain.len(), total_amount_of_queries);
+            assert_eq!(rhs_grand_product_chain.len(), total_amount_of_queries);
+            assert_eq!(
+                lhs_grand_product_chain.len(),
+                memory_queue_simulator.witness.len()
+            );
+            assert_eq!(
+                rhs_grand_product_chain.len(),
+                sorted_memory_queries_simulator.witness.len()
+            );
 
-        lhs_grand_product_chains.push(lhs_grand_product_chain);
-        rhs_grand_product_chains.push(rhs_grand_product_chain);
+            lhs_grand_product_chains.push(lhs_grand_product_chain);
+            rhs_grand_product_chains.push(rhs_grand_product_chain);
+        }
     }
 
     let transposed_lhs_chains = transpose_chunks(&lhs_grand_product_chains, per_circuit_capacity);
@@ -356,14 +358,14 @@ pub(crate)  fn compute_ram_circuit_snapshots<
 
         let accumulated_lhs: [Field; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS] =
             lhs_grand_product
-                .iter()
+                .into_iter()
                 .map(|el| *el.last().unwrap())
                 .collect::<Vec<_>>()
                 .try_into()
                 .unwrap();
         let accumulated_rhs: [Field; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS] =
             rhs_grand_product
-                .iter()
+                .into_iter()
                 .map(|el| *el.last().unwrap())
                 .collect::<Vec<_>>()
                 .try_into()
@@ -483,6 +485,11 @@ pub(crate)  fn compute_ram_circuit_snapshots<
             maker.process(instance_witness, circuit_type),
         ));
     }
+    
+    drop(lhs_grand_product_chains);
+    drop(rhs_grand_product_chains);
+    drop(sorted_witness);
+    drop(unsorted_witness);
 
     let (
         ram_permutation_circuits,

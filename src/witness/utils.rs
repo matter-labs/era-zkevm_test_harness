@@ -702,6 +702,7 @@ pub(crate) fn compute_grand_product_chains<F: SmallField, const N: usize, const 
     (lhs_grand_product_chain, rhs_grand_product_chain)
 }
 
+// TODO move instead of borrow?
 pub fn transpose_chunks<T: Clone>(original: &Vec<Vec<T>>, chunk_size: usize) -> Vec<Vec<&[T]>> {
     let capacity = original[0].chunks(chunk_size).len();
     let mut transposed = vec![Vec::with_capacity(original.len()); capacity];
