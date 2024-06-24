@@ -42,7 +42,7 @@ pub fn compute_ram_circuit_snapshots<
     mut circuit_callback: CB,
     mut recursion_queue_callback: QSCB,
 ) -> (
-    FirstAndLastCircuit<RAMPermutationInstanceSynthesisFunction>,
+    FirstAndLastCircuit<RamPermutationCircuitInstanceWitness<Field>>,
     Vec<ClosedFormInputCompactFormWitness<Field>>,
 ) {
     assert_eq!(

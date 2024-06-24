@@ -44,7 +44,7 @@ pub fn decompose_into_storage_application_witnesses<
     mut circuit_callback: CB,
     mut recursion_queue_callback: QSCB,
 ) -> (
-    FirstAndLastCircuit<StorageApplicationInstanceSynthesisFunction>,
+    FirstAndLastCircuit<StorageApplicationCircuitInstanceWitness<GoldilocksField>>,
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
 ) {
     const SHARD_ID_TO_PROCEED: u8 = 0; // rollup shard ID
