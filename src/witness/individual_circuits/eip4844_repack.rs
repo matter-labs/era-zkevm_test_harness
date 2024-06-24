@@ -7,7 +7,7 @@ use crate::zkevm_circuits::scheduler::block_header::MAX_4844_BLOBS_PER_BLOCK;
 use circuit_definitions::{Field, RoundFunction};
 use std::sync::Arc;
 
-pub fn compute_eip_4844(
+pub(crate)  fn compute_eip_4844(
     eip_4844_repack_inputs: [Option<Vec<u8>>; MAX_4844_BLOBS_PER_BLOCK],
     trusted_setup_path: &str,
 ) -> Vec<EIP4844CircuitInstanceWitness<Field>> {

@@ -13,7 +13,7 @@ use circuit_definitions::encodings::*;
 // So we basically need to reconstruct the FSM state on input/output, and passthrough data.
 // In practice the only difficulty is buffer state, everything else is provided by out-of-circuit VM
 
-pub fn ecrecover_decompose_into_per_circuit_witness<
+pub(crate)  fn ecrecover_decompose_into_per_circuit_witness<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(

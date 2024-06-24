@@ -6,7 +6,7 @@ use crate::zkevm_circuits::transient_storage_validity_by_grand_product::input::*
 use crate::zkevm_circuits::DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS;
 use circuit_definitions::encodings::*;
 
-pub fn compute_transient_storage_dedup_and_sort<
+pub(crate) fn compute_transient_storage_dedup_and_sort<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(

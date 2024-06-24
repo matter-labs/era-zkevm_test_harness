@@ -20,14 +20,14 @@ use circuit_definitions::{encodings::*, Field, RoundFunction};
 use postprocessing::CsForWitnessGeneration;
 use zk_evm::zkevm_opcode_defs::SECP256R1_VERIFY_PRECOMPILE_ADDRESS;
 
-pub struct LogDemuxArtifacts<F: SmallField> {
+pub(crate)  struct LogDemuxArtifacts<F: SmallField> {
     // log queue
     pub applied_log_queue_simulator: LogQueueSimulator<F>,
     pub applied_log_queue_states: Vec<(u32, LogQueueState<F>)>,
 }
 
 /// Take a storage log, output logs separately for events, l1 messages, storage, etc
-pub fn compute_logs_demux<
+pub(crate)  fn compute_logs_demux<
     CB: FnMut(ZkSyncBaseLayerCircuit),
     QSCB: FnMut(u64, RecursionQueueSimulator<Field>, Vec<ClosedFormInputCompactFormWitness<Field>>),
 >(

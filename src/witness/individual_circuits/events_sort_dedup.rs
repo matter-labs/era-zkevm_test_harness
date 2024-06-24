@@ -11,7 +11,7 @@ use rayon::prelude::*;
 use smallvec::SmallVec;
 use std::cmp::Ordering;
 
-pub fn compute_events_dedup_and_sort<
+pub(crate)  fn compute_events_dedup_and_sort<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
@@ -461,7 +461,7 @@ pub fn compute_events_dedup_and_sort<
     results
 }
 
-pub fn sort_and_dedup_events_log(sorted_history: Vec<LogQuery>) -> Vec<LogQuery> {
+pub(crate) fn sort_and_dedup_events_log(sorted_history: Vec<LogQuery>) -> Vec<LogQuery> {
     let mut stack = SmallVec::<[LogQuery; 2]>::new();
 
     let mut net_history = vec![];

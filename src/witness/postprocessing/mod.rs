@@ -66,7 +66,7 @@ use observable_witness::ObservableWitness;
 
 use std::sync::Arc;
 
-use zkevm_circuits::fsm_input_output::circuit_inputs::main_vm::{VmCircuitInputOutputWitness, VmCircuitWitness, VmInputData, VmOutputData};
+use zkevm_circuits::fsm_input_output::circuit_inputs::main_vm::{VmCircuitWitness, VmInputData, VmOutputData};
 use crate::zkevm_circuits::base_structures::vm_state::VmLocalState;
 
 pub const L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH: bool = false;
@@ -74,6 +74,7 @@ pub const L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH: bool = false;
 use crate::boojum::field::SmallField;
 
 pub mod observable_witness;
+
 use crate::witness::postprocessing::observable_witness::*;
 
 pub(crate) struct BlockFirstAndLastBasicCircuitsObservableWitnesses {

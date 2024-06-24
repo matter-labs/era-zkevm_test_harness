@@ -27,7 +27,7 @@ use zk_evm::aux_structures::LogQuery;
 
 use crate::sha3::Digest;
 
-pub fn decompose_into_storage_application_witnesses<
+pub(crate) fn decompose_into_storage_application_witnesses<
     CB: FnMut(ZkSyncBaseLayerCircuit),
     QSCB: FnMut(
         u64,
