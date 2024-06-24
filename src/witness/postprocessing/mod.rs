@@ -76,7 +76,7 @@ use crate::boojum::field::SmallField;
 pub mod observable_witness;
 use crate::witness::postprocessing::observable_witness::*;
 
-pub(crate) struct BlockFirstAndLastBasicCircuits {
+pub(crate) struct BlockFirstAndLastBasicCircuitsObservableWitnesses {
     pub main_vm_circuits: FirstAndLastCircuitWitness<VmObservableWitness<Field>>,
     pub code_decommittments_sorter_circuits:
     FirstAndLastCircuitWitness<CodeDecommittmentsDeduplicatorObservableWitness<Field>>,

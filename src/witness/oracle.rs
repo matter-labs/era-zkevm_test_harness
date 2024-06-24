@@ -3,7 +3,7 @@
 // and then during specialized circuits execution
 
 use super::callstack_handler::*;
-use super::postprocessing::{BlockFirstAndLastBasicCircuits, ClosedFormInputField, CsForWitnessGeneration, FirstAndLastCircuitWitness};
+use super::postprocessing::{BlockFirstAndLastBasicCircuitsObservableWitnesses, ClosedFormInputField, CsForWitnessGeneration, FirstAndLastCircuitWitness};
 use super::utils::*;
 use crate::boojum::field::SmallField;
 use crate::boojum::gadgets::queue::{QueueState, QueueStateWitness, QueueTailStateWitness};
@@ -1706,7 +1706,7 @@ pub(crate) fn create_artifacts_from_tracer<
     mut circuit_callback: CB,
     mut recursion_queue_callback: QSCB,
 ) -> (
-    BlockFirstAndLastBasicCircuits,
+    BlockFirstAndLastBasicCircuitsObservableWitnesses,
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
     Vec<EIP4844CircuitInstanceWitness<GoldilocksField>>,
 ) {
@@ -2184,7 +2184,7 @@ pub(crate) fn create_artifacts_from_tracer<
 
         mem_print("After additional circuits");
 
-        let basic_circuits = BlockFirstAndLastBasicCircuits {
+        let basic_circuits = BlockFirstAndLastBasicCircuitsObservableWitnesses {
             main_vm_circuits,
             code_decommittments_sorter_circuits,
             code_decommitter_circuits,
