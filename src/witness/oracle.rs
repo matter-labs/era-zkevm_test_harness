@@ -1084,7 +1084,7 @@ fn process_log_circuits<
 
     let (ram_permutation_circuits, ram_permutation_circuits_compact_forms_witnesses) =
         compute_ram_circuit_snapshots(
-            &mut memory_artifacts,
+            & memory_artifacts,
             implicit_memory_artifacts,
             memory_queue_simulator,
             round_function,
