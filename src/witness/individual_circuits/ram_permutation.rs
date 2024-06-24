@@ -65,7 +65,7 @@ pub(crate)  fn compute_ram_circuit_snapshots<
         "VM should have made some memory requests"
     );
 
-    mem_print("Inside RAM permutation circuit computing");
+    snapshot_mem("Inside RAM permutation circuit computing");
 
     let amount_of_circuits = (total_amount_of_queries + per_circuit_capacity - 1) / per_circuit_capacity;
 
@@ -116,7 +116,7 @@ pub(crate)  fn compute_ram_circuit_snapshots<
     }
     drop(implicit_memory_artifacts.memory_queries_accumulated);
 
-    mem_print("Inside RAM permutation circuit computing 2");
+    snapshot_mem("Inside RAM permutation circuit computing 2");
 
     assert_eq!(
         unsorted_memory_queue_chunk_final_states.len(),
@@ -288,7 +288,7 @@ pub(crate)  fn compute_ram_circuit_snapshots<
         cs_for_witness_generation,
     );
 
-    mem_print("Inside RAM permutation circuit computing before cycle");
+    snapshot_mem("Inside RAM permutation circuit computing before cycle");
 
     for (
         idx,
@@ -502,7 +502,7 @@ pub(crate)  fn compute_ram_circuit_snapshots<
         ram_permutation_circuits_compact_forms_witnesses.clone(),
     );
 
-    mem_print("After RAM permutation circuit computing");
+    snapshot_mem("After RAM permutation circuit computing");
 
     (
         ram_permutation_circuits,

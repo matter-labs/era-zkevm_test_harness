@@ -1544,7 +1544,7 @@ fn process_main_vm<
         VmInstanceWitness<GoldilocksField, VmWitnessOracle<GoldilocksField>>,
     > = None;
 
-    mem_print("Before mainVM processing");
+    snapshot_mem("Before mainVM processing");
 
     let main_vm_inputs = repack_input_for_main_vm(
         &vm_snapshots,
@@ -1561,7 +1561,7 @@ fn process_main_vm<
     vm_snapshots.push(vm_snapshots.last().unwrap().clone());
     let circuits_len = vm_snapshots.windows(2).len();
 
-    mem_print("Before mainVM processing cycle");
+    snapshot_mem("Before mainVM processing cycle");
 
     // parallelizable
     for ((circuit_idx, pair), main_vm_input) in
@@ -1663,7 +1663,7 @@ fn process_main_vm<
             previous_instance_witness = Some(instance_witness);
 
             let lbl = format!("MainVM processing cycle instance built {}", circuit_idx);
-            mem_print(&lbl);
+            snapshot_mem(&lbl);
         } else {
             previous_instance_witness = None;
         }
@@ -1732,17 +1732,17 @@ pub(crate) fn create_artifacts_from_tracer<
 
     assert!(vm_snapshots.len() >= 2); // we need at least entry point and the last save (after exit)
 
-    mem_print("Before log sim");
+    snapshot_mem("Before log sim");
     tracing::debug!("Running storage log simulation");
 
     let (log_simulation_result, log_simulation_queries_data) =
         log_simulation(&callstack_with_aux_data, round_function);
 
-    mem_print("After log sim");
+    snapshot_mem("After log sim");
 
     // and now do trivial simulation
 
-    mem_print("Before callstack sim");
+    snapshot_mem("Before callstack sim");
     tracing::debug!("Running callstack sumulation");
 
     // TODO can be moved after process_log_circuits
@@ -1757,14 +1757,14 @@ pub(crate) fn create_artifacts_from_tracer<
         .clone();
     drop(log_simulation_result);
 
-    mem_print("After callstack sim");
+    snapshot_mem("After callstack sim");
 
     let CallstackWithAuxData {
         flat_new_frames_history,
         ..
     } = callstack_with_aux_data;
 
-    mem_print("Before cs creation");
+    snapshot_mem("Before cs creation");
 
     // we simulate a series of actions on the stack starting from the outermost frame
     // each history record contains an information on what was the stack state between points
@@ -1772,7 +1772,7 @@ pub(crate) fn create_artifacts_from_tracer<
 
     let mut cs_for_witness_generation = CsForWitnessGeneration::new();
 
-    mem_print("After cs creation");
+    snapshot_mem("After cs creation");
 
     // process all circuits related to logs
     let (
@@ -1802,7 +1802,7 @@ pub(crate) fn create_artifacts_from_tracer<
         &mut recursion_queue_callback,
     );
 
-    mem_print("Artifacts created");
+    snapshot_mem("Artifacts created");
 
     // NOTE: here we have all the queues processed in the `process` function (actual pushing is done), so we can
     // just read from the corresponding states
@@ -1847,7 +1847,7 @@ pub(crate) fn create_artifacts_from_tracer<
         &mut recursion_queue_callback,
     );
 
-    mem_print("After mainVM processing");
+    snapshot_mem("After mainVM processing");
 
     {
         let CircuitArtifacts {
@@ -1873,7 +1873,7 @@ pub(crate) fn create_artifacts_from_tracer<
             &mut cs_for_witness_generation,
         );
 
-        mem_print("Before additional circuits");
+        snapshot_mem("Before additional circuits");
 
         for circuit_input in decommittments_deduplicator_circuits_data.into_iter() {
             circuit_callback(ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(
@@ -2176,7 +2176,7 @@ pub(crate) fn create_artifacts_from_tracer<
 
         // done!
 
-        mem_print("After additional circuits");
+        snapshot_mem("After additional circuits");
 
         let basic_circuits = BlockFirstAndLastBasicCircuitsObservableWitnesses {
             main_vm_circuits,
@@ -2216,7 +2216,7 @@ pub(crate) fn create_artifacts_from_tracer<
             .chain(secp256r1_verify_circuits_compact_forms_witnesses)
             .collect();
 
-        mem_print("Final");
+        snapshot_mem("Final");
 
         (basic_circuits, all_compact_forms, eip_4844_circuits)
     }

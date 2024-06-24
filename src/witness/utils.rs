@@ -34,20 +34,55 @@ use circuit_definitions::encodings::*;
 use super::*;
 
 use peak_alloc::PeakAlloc;
+use std::sync::{Mutex, OnceLock};
 
 #[global_allocator]
 static PEAK_ALLOC: PeakAlloc = PeakAlloc;
 
-pub fn mem_print(label: &str) {
-    let current_mem = PEAK_ALLOC.current_usage_as_mb();
-    println!("{label}: {}", current_mem);
-    peak_mem_print();
+fn mem_array() -> &'static Mutex<Vec<(String, f32)>> {
+    static MEM_ARRAY: OnceLock<Mutex<Vec<(String, f32)>>> = OnceLock::new();
+    MEM_ARRAY.get_or_init(|| Mutex::new(vec![]))
 }
 
-pub fn peak_mem_print() {
-    let peak_mem = PEAK_ALLOC.peak_usage_as_mb();
-    println!("PEAK MEM {}", peak_mem);
+fn peak_mem_array() -> &'static Mutex<Vec<(String, f32)>> {
+    static PEAK_MEM_ARRAY: OnceLock<Mutex<Vec<(String, f32)>>> = OnceLock::new();
+    PEAK_MEM_ARRAY.get_or_init(|| Mutex::new(vec![]))
 }
+
+fn peak_snapshot_mem(label: &str) {
+    let peak_mem = PEAK_ALLOC.peak_usage_as_mb();
+    peak_mem_array().lock().unwrap().push((label.to_owned(), peak_mem));
+}
+
+pub fn print_mem_snapshots() {
+    let mem = mem_array().lock().unwrap();
+    println!("MEMORY SNAPSHOTS");
+    for snapshot in mem.clone() {
+        println!("{}: {}", snapshot.0, snapshot.1);
+    }
+    println!();
+}
+
+pub fn print_peak_mem_snapshots() {
+    let mem = peak_mem_array().lock().unwrap();
+    println!("PEAK MEMORY SNAPSHOTS");
+    for snapshot in mem.clone() {
+        println!("{}: {}", snapshot.0, snapshot.1);
+    }
+    println!();
+}
+
+pub fn snapshot_mem(label: &str) {
+    let current_mem = PEAK_ALLOC.current_usage_as_mb();
+    mem_array().lock().unwrap().push((label.to_owned(), current_mem));
+    peak_snapshot_mem(label);
+    reset_peak_snapshot_mem();
+}
+
+pub fn reset_peak_snapshot_mem() {
+    PEAK_ALLOC.reset_peak_usage();
+}
+
 
 pub fn log_queries_into_states<
     F: SmallField,
