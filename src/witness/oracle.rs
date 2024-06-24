@@ -217,20 +217,17 @@ fn log_simulation<'a>(
         "parent frame didn't exit"
     );
 
-    // including rollbacks
-    let total_queries_applied = callstack_with_aux_data.forward_flattened_counter
-        + callstack_with_aux_data.total_rolled_back;
-    let total_amount_of_queries =
-        total_queries_applied + callstack_with_aux_data.rollback_flattened_counter;
+    let applied_queries = &callstack_with_aux_data.current_entry.forward_queue;
+    let not_applied_queries = &callstack_with_aux_data.current_entry.rollback_queue;
 
     let mut demuxed_queries = DemuxedQueries::default();
 
-    let mut applied_log_queue_states = vec![];
+    let mut applied_log_queue_states = Vec::with_capacity(applied_queries.len());
     let mut chain_of_states: Vec<(
         u32,
         QueryMarker,
         ([GoldilocksField; 4], [GoldilocksField; 4]),
-    )> = vec![];
+    )> = Vec::with_capacity(applied_queries.len() + not_applied_queries.len());
     let mut applied_log_queue_simulator = None;
 
     // we want to have some hashmap that will indicate
@@ -267,15 +264,12 @@ fn log_simulation<'a>(
     // from cycle into first two sponges (common), then tail-tail pair and 3rd sponge for forward, then head-head pair and 3rd sponge for rollback
     let mut sponges_data: HashMap<u32, LogAccessSpongesInfo<GoldilocksField>> = HashMap::new();
 
-    let forward = &callstack_with_aux_data.current_entry.forward_queue;
-    let rollbacks = &callstack_with_aux_data.current_entry.rollback_queue;
+    let mut log_queue_simulator = LogQueueSimulator::<GoldilocksField>::with_capacity(applied_queries.len());
 
-    let mut log_queue_simulator = LogQueueSimulator::<GoldilocksField>::with_capacity(forward.len());
-
-    for (extended_query, was_applied) in forward
+    for (extended_query, was_applied) in applied_queries
         .iter()
         .zip(std::iter::repeat(true))
-        .chain(rollbacks.iter().rev().zip(std::iter::repeat(false)))
+        .chain(not_applied_queries.iter().rev().zip(std::iter::repeat(false)))
     {
         if !was_applied {
             // save the latest "usefull"

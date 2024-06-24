@@ -159,8 +159,6 @@ pub(crate)  fn compute_logs_demux<
         let is_first = idx == 0;
         let is_last = idx == num_chunks - 1;
 
-        // TODO preallocate memory
-
         // simulate the circuit
         for (_encoding, _previous_tail, query) in input_chunk.iter() {
             let (_, _states) = states_iter.next().unwrap();
