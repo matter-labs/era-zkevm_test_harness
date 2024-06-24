@@ -94,6 +94,30 @@ fn get_all_basic_circuits(geometry: &GeometryConfig) -> Vec<ZkSyncBaseLayerCircu
             round_function: Arc::new(Poseidon2Goldilocks),
             expected_public_input: None,
         }),
+        ZkSyncBaseLayerCircuit::ECAdd(ZkSyncUniformCircuitInstance {
+            witness: AtomicCell::new(None),
+            config: Arc::new(geometry.cycles_per_ecrecover_circuit as usize),
+            round_function: Arc::new(Poseidon2Goldilocks),
+            expected_public_input: None,
+        }),
+        ZkSyncBaseLayerCircuit::ECMul(ZkSyncUniformCircuitInstance {
+            witness: AtomicCell::new(None),
+            config: Arc::new(geometry.cycles_per_ecrecover_circuit as usize),
+            round_function: Arc::new(Poseidon2Goldilocks),
+            expected_public_input: None,
+        }),
+        ZkSyncBaseLayerCircuit::ECPairing(ZkSyncUniformCircuitInstance {
+            witness: AtomicCell::new(None),
+            config: Arc::new(geometry.cycles_per_ecrecover_circuit as usize),
+            round_function: Arc::new(Poseidon2Goldilocks),
+            expected_public_input: None,
+        }),
+        ZkSyncBaseLayerCircuit::Modexp(ZkSyncUniformCircuitInstance {
+            witness: AtomicCell::new(None),
+            config: Arc::new(geometry.cycles_per_ecrecover_circuit as usize),
+            round_function: Arc::new(Poseidon2Goldilocks),
+            expected_public_input: None,
+        }),
         ZkSyncBaseLayerCircuit::RAMPermutation(ZkSyncUniformCircuitInstance {
             witness: AtomicCell::new(None),
             config: Arc::new(geometry.cycles_per_ram_permutation as usize),

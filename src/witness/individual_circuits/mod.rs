@@ -26,3 +26,7 @@ pub mod sort_decommit_requests;
 pub mod storage_application;
 pub mod storage_sort_dedup;
 pub mod transient_storage_sorter;
+pub mod ecadd;
+pub mod ecmul;
+pub mod ecpairing;
+pub mod modexp;

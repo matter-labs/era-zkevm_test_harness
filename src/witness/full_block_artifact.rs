@@ -22,6 +22,14 @@ use circuit_definitions::encodings::*;
 use circuit_definitions::zkevm_circuits::secp256r1_verify::Secp256r1VerifyCircuitInstanceWitness;
 use circuit_definitions::zkevm_circuits::transient_storage_validity_by_grand_product::input::TransientStorageDeduplicatorInstanceWitness;
 use derivative::Derivative;
+use crate::zk_evm::zk_evm_abstractions::precompiles::ecadd::ECAddRoundWitness;
+use crate::zk_evm::zk_evm_abstractions::precompiles::ecmul::ECMulRoundWitness;
+use crate::zk_evm::zk_evm_abstractions::precompiles::ecpairing::ECPairingRoundWitness;
+use crate::zk_evm::zk_evm_abstractions::precompiles::modexp::ModexpRoundWitness;
+use crate::zkevm_circuits::bn254::ec_add::input::EcAddCircuitInstanceWitness;
+use crate::zkevm_circuits::bn254::ec_mul::input::EcMulCircuitInstanceWitness;
+use crate::zkevm_circuits::bn254::ec_pairing::input::EcPairingCircuitInstanceWitness;
+use crate::zkevm_circuits::modexp::input::ModexpCircuitInstanceWitness;
 
 #[derive(Derivative)]
 #[derivative(Clone, Default(bound = ""))]
@@ -48,6 +56,10 @@ pub struct FullBlockArtifacts<F: SmallField> {
     pub demuxed_keccak_precompile_queries: Vec<LogQuery>,
     pub demuxed_sha256_precompile_queries: Vec<LogQuery>,
     pub demuxed_ecrecover_queries: Vec<LogQuery>,
+    pub demuxed_ecadd_queries: Vec<LogQuery>,
+    pub demuxed_ecmul_queries: Vec<LogQuery>,
+    pub demuxed_ecpairing_queries: Vec<LogQuery>,
+    pub demuxed_modexp_queries: Vec<LogQuery>,
     pub demuxed_transient_storage_queries: Vec<LogQuery>,
     pub demuxed_secp256r1_verify_queries: Vec<LogQuery>,
 
@@ -61,6 +73,10 @@ pub struct FullBlockArtifacts<F: SmallField> {
     pub sha256_round_function_witnesses: Vec<(u32, LogQuery, Vec<Sha256RoundWitness>)>,
     pub ecrecover_witnesses: Vec<(u32, LogQuery, ECRecoverRoundWitness)>,
     pub secp256r1_verify_witnesses: Vec<(u32, LogQuery, Secp256r1VerifyRoundWitness)>,
+    pub ecadd_witnesses: Vec<(u32, LogQuery, ECAddRoundWitness)>,
+    pub ecmul_witnesses: Vec<(u32, LogQuery, ECMulRoundWitness)>,
+    pub ecpairing_witnesses: Vec<(u32, LogQuery, Vec<ECPairingRoundWitness>)>,
+    pub modexp_witnesses: Vec<(u32, LogQuery, ModexpRoundWitness)>,
 
     // processed code decommitter circuits, as well as sorting circuit
     pub code_decommitter_circuits_data: Vec<CodeDecommitterCircuitInstanceWitness<F>>,
@@ -77,6 +93,14 @@ pub struct FullBlockArtifacts<F: SmallField> {
     pub sha256_circuits_data: Vec<Sha256RoundFunctionCircuitInstanceWitness<F>>,
     //
     pub ecrecover_circuits_data: Vec<EcrecoverCircuitInstanceWitness<F>>,
+    //
+    pub ecadd_circuits_data: Vec<EcAddCircuitInstanceWitness<F>>,
+    //
+    pub ecmul_circuits_data: Vec<EcMulCircuitInstanceWitness<F>>,
+    //
+    pub ecpairing_circuits_data: Vec<EcPairingCircuitInstanceWitness<F>>,
+    //
+    pub modexp_circuits_data: Vec<ModexpCircuitInstanceWitness<F>>,
     //
     pub secp256r1_verify_circuits_data: Vec<Secp256r1VerifyCircuitInstanceWitness<F>>,
     //

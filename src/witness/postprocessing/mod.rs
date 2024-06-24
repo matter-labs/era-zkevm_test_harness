@@ -62,10 +62,18 @@ use circuit_definitions::zkevm_circuits::transient_storage_validity_by_grand_pro
 use circuit_definitions::Field;
 use crossbeam::atomic::AtomicCell;
 use std::sync::Arc;
+use circuit_definitions::circuit_definitions::base_layer::ecadd::ECAddFunctionInstanceSynthesisFunction;
+use circuit_definitions::circuit_definitions::base_layer::ecmul::ECMulFunctionInstanceSynthesisFunction;
+use circuit_definitions::circuit_definitions::base_layer::ecpairing::ECPairingFunctionInstanceSynthesisFunction;
+use circuit_definitions::circuit_definitions::base_layer::modexp::ModexpFunctionInstanceSynthesisFunction;
 
 pub const L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH: bool = false;
 
 use crate::boojum::field::SmallField;
+use crate::zkevm_circuits::bn254::ec_add::input::{EcAddCircuitFSMInputOutput, EcAddCircuitInstanceWitness};
+use crate::zkevm_circuits::bn254::ec_mul::input::{EcMulCircuitFSMInputOutput, EcMulCircuitInstanceWitness};
+use crate::zkevm_circuits::bn254::ec_pairing::input::{EcPairingCircuitFSMInputOutput, EcPairingCircuitInstanceWitness};
+use crate::zkevm_circuits::modexp::input::{ModexpCircuitFSMInputOutput, ModexpCircuitInstanceWitness};
 
 pub struct BlockFirstAndLastBasicCircuits {
     pub main_vm_circuits: FirstAndLastCircuit<VmMainInstanceSynthesisFunction>,
@@ -92,6 +100,14 @@ pub struct BlockFirstAndLastBasicCircuits {
         FirstAndLastCircuit<TransientStorageSortAndDedupInstanceSynthesisFunction>,
     pub secp256r1_verify_circuits:
         FirstAndLastCircuit<Secp256r1VerifyFunctionInstanceSynthesisFunction>,
+    pub ecadd_precompile_circuits:
+        FirstAndLastCircuit<ECAddFunctionInstanceSynthesisFunction>,
+    pub ecmul_precompile_circuits:
+        FirstAndLastCircuit<ECMulFunctionInstanceSynthesisFunction>,
+    pub ecpairing_precompile_circuits:
+        FirstAndLastCircuit<ECPairingFunctionInstanceSynthesisFunction>,
+    pub modexp_precompile_circuits:
+        FirstAndLastCircuit<ModexpFunctionInstanceSynthesisFunction>
 }
 
 pub struct FirstAndLastCircuit<S>
@@ -215,6 +231,54 @@ impl<F: SmallField> ClosedFormInputField<F> for Sha256RoundFunctionCircuitInstan
 
 impl<F: SmallField> ClosedFormInputField<F> for EcrecoverCircuitInstanceWitness<F> {
     type T = EcrecoverCircuitFSMInputOutput<F>;
+    type IN = PrecompileFunctionInputData<F>;
+    type OUT = PrecompileFunctionOutputData<F>;
+
+    fn closed_form_input(
+        &mut self,
+    ) -> &mut ClosedFormInputWitness<F, Self::T, Self::IN, Self::OUT> {
+        &mut self.closed_form_input
+    }
+}
+
+impl<F: SmallField> ClosedFormInputField<F> for EcAddCircuitInstanceWitness<F> {
+    type T = EcAddCircuitFSMInputOutput<F>;
+    type IN = PrecompileFunctionInputData<F>;
+    type OUT = PrecompileFunctionOutputData<F>;
+
+    fn closed_form_input(
+        &mut self,
+    ) -> &mut ClosedFormInputWitness<F, Self::T, Self::IN, Self::OUT> {
+        &mut self.closed_form_input
+    }
+}
+
+impl<F: SmallField> ClosedFormInputField<F> for EcMulCircuitInstanceWitness<F> {
+    type T = EcMulCircuitFSMInputOutput<F>;
+    type IN = PrecompileFunctionInputData<F>;
+    type OUT = PrecompileFunctionOutputData<F>;
+
+    fn closed_form_input(
+        &mut self,
+    ) -> &mut ClosedFormInputWitness<F, Self::T, Self::IN, Self::OUT> {
+        &mut self.closed_form_input
+    }
+}
+
+impl<F: SmallField> ClosedFormInputField<F> for EcPairingCircuitInstanceWitness<F> {
+    type T = EcPairingCircuitFSMInputOutput<F>;
+    type IN = PrecompileFunctionInputData<F>;
+    type OUT = PrecompileFunctionOutputData<F>;
+
+    fn closed_form_input(
+        &mut self,
+    ) -> &mut ClosedFormInputWitness<F, Self::T, Self::IN, Self::OUT> {
+        &mut self.closed_form_input
+    }
+}
+
+impl<F: SmallField> ClosedFormInputField<F> for ModexpCircuitInstanceWitness<F> {
+    type T = ModexpCircuitFSMInputOutput<F>;
     type IN = PrecompileFunctionInputData<F>;
     type OUT = PrecompileFunctionOutputData<F>;
 

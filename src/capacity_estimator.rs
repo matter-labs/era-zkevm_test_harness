@@ -5,6 +5,7 @@ use crate::boojum::field::goldilocks::GoldilocksField;
 
 use crate::boojum::cs::traits::circuit::CircuitBuilder;
 use circuit_definitions::circuit_definitions::base_layer::*;
+use circuit_definitions::circuit_definitions::base_layer::modexp::ModexpFunctionInstanceSynthesisFunction;
 use circuit_definitions::circuit_definitions::ZkSyncUniformSynthesisFunction;
 use circuit_definitions::ZkSyncDefaultRoundFunction;
 
@@ -172,6 +173,30 @@ pub fn sha256_rf_capacity() -> usize {
 
 pub fn ecrecover_capacity() -> usize {
     type SF = ECRecoverFunctionInstanceSynthesisFunction;
+
+    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(2), |x: usize| x)
+}
+
+pub fn ecadd_capacity() -> usize {
+    type SF = ECAddFunctionInstanceSynthesisFunction;
+
+    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(2), |x: usize| x)
+}
+
+pub fn ecmul_capacity() -> usize {
+    type SF = ECMulFunctionInstanceSynthesisFunction;
+
+    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(2), |x: usize| x)
+}
+
+pub fn ecpairing_capacity() -> usize {
+    type SF = ECPairingFunctionInstanceSynthesisFunction;
+
+    compute_size_inner::<SF, _>(SF::geometry(), 20, Some(2), |x: usize| x)
+}
+
+pub fn modexp_capacity() -> usize {
+    type SF = ModexpFunctionInstanceSynthesisFunction;
 
     compute_size_inner::<SF, _>(SF::geometry(), 20, Some(2), |x: usize| x)
 }

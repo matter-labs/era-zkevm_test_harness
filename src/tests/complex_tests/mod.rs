@@ -128,6 +128,7 @@ use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
 use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
 use crate::data_source::in_memory_data_source::InMemoryDataSource;
 use crate::witness::full_block_artifact::*;
+use crate::zkevm_circuits::recursion::NUM_BASE_LAYER_CIRCUITS;
 
 /// Lover memory requirements
 /// Used only for base layer debugging
@@ -141,6 +142,11 @@ fn get_testing_geometry_config() -> GeometryConfig {
         cycles_per_keccak256_circuit: 7,
         cycles_per_sha256_circuit: 7,
         cycles_per_ecrecover_circuit: 2,
+        cycles_per_ecadd_circuit: 2,
+        cycles_per_ecmul_circuit: 2,
+        cycles_per_ecpairing_circuit: 2,
+        cycles_per_modexp_circuit: 2,
+
         // cycles_code_decommitter_sorter: 512,
         cycles_code_decommitter_sorter: 3,
         cycles_per_log_demuxer: 16,
@@ -1083,7 +1089,7 @@ fn run_and_try_create_witness_inner(
     let node_vk = source.get_recursion_layer_node_vk().unwrap();
     // leaf params
     use crate::zkevm_circuits::recursion::leaf_layer::input::RecursionLeafParametersWitness;
-    let leaf_layer_params: [RecursionLeafParametersWitness<GoldilocksField>; 16] = leaf_vk_commits
+    let leaf_layer_params: [RecursionLeafParametersWitness<GoldilocksField>; NUM_BASE_LAYER_CIRCUITS] = leaf_vk_commits
         .iter()
         .map(|el| el.1.clone())
         .collect::<Vec<_>>()

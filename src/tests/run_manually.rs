@@ -230,6 +230,10 @@ pub(crate) fn run_with_options(entry_point_bytecode: Vec<[u8; 32]>, options: Opt
         cycles_per_keccak256_circuit: 1,
         cycles_per_sha256_circuit: 1,
         cycles_per_ecrecover_circuit: 1,
+        cycles_per_ecadd_circuit: 1,
+        cycles_per_ecmul_circuit: 1,
+        cycles_per_ecpairing_circuit: 1,
+        cycles_per_modexp_circuit: 1,
         cycles_per_secp256r1_verify_circuit: 1,
         cycles_per_transient_storage_sorter: 4,
 
@@ -302,7 +306,24 @@ pub(crate) fn run_with_options(entry_point_bytecode: Vec<[u8; 32]>, options: Opt
 
     for el in basic_block_circuits {
         println!("Doing {} circuit", el.short_description());
-        base_test_circuit(el);
+        match el {
+            ZkSyncBaseLayerCircuit::ECAdd(_) => {
+                base_test_circuit(el);
+            }
+            ZkSyncBaseLayerCircuit::ECMul(_) => {
+                base_test_circuit(el);
+            }
+            ZkSyncBaseLayerCircuit::ECPairing(_) => {
+                base_test_circuit(el);
+            }
+            ZkSyncBaseLayerCircuit::Modexp(_) => {
+                base_test_circuit(el);
+            }
+            _ => {
+                continue;
+            }
+        }
+        // base_test_circuit(el);
     }
 
     // // for el in flattened.into_iter() {

@@ -42,11 +42,7 @@ use derivative::Derivative;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::sync::Arc;
 
-use crate::zk_evm::zkevm_opcode_defs::system_params::{
-    ECRECOVER_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
-    KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
-    SHA256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
-};
+use crate::zk_evm::zkevm_opcode_defs::system_params::{ECADD_INNER_FUNCTION_PRECOMPILE_ADDRESS, ECADD_PRECOMPILE_FORMAL_ADDRESS, ECMUL_PRECOMPILE_FORMAL_ADDRESS, ECPAIRING_PRECOMPILE_FORMAL_ADDRESS, ECRECOVER_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS, KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS, MODEXP_PRECOMPILE_FORMAL_ADDRESS, SHA256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS};
 
 use crate::zk_evm::zkevm_opcode_defs::system_params::{
     EVENT_AUX_BYTE, L1_MESSAGE_AUX_BYTE, PRECOMPILE_AUX_BYTE, STORAGE_AUX_BYTE,
@@ -213,6 +209,10 @@ pub fn create_artifacts_from_tracer<
         keccak_round_function_witnesses,
         sha256_round_function_witnesses,
         ecrecover_witnesses,
+        ecadd_witnesses,
+        ecmul_witnesses,
+        ecpairing_witnesses,
+        modexp_witnesses,
         secp256r1_verify_witnesses,
         monotonic_query_counter: _,
         callstack_with_aux_data,
@@ -260,6 +260,10 @@ pub fn create_artifacts_from_tracer<
     let mut demuxed_keccak_precompile_queries = vec![];
     let mut demuxed_sha256_precompile_queries = vec![];
     let mut demuxed_ecrecover_queries = vec![];
+    let mut demuxed_ecadd_queries = vec![];
+    let mut demuxed_ecmul_queries = vec![];
+    let mut demuxed_ecpairing_queries = vec![];
+    let mut demuxed_modexp_queries = vec![];
     let mut demuxed_secp256r1_verify_queries = vec![];
     let mut demuxed_transient_storage_queries = vec![];
 
@@ -498,6 +502,18 @@ pub fn create_artifacts_from_tracer<
                         }
                         a if a == *SECP256R1_VERIFY_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
                             demuxed_secp256r1_verify_queries.push(query);
+                        }
+                        a if a == *ECADD_PRECOMPILE_FORMAL_ADDRESS => {
+                            demuxed_ecadd_queries.push(query);
+                        }
+                        a if a == *ECMUL_PRECOMPILE_FORMAL_ADDRESS => {
+                            demuxed_ecmul_queries.push(query);
+                        }
+                        a if a == *ECPAIRING_PRECOMPILE_FORMAL_ADDRESS => {
+                            demuxed_ecpairing_queries.push(query);
+                        }
+                        a if a == *MODEXP_PRECOMPILE_FORMAL_ADDRESS => {
+                            demuxed_modexp_queries.push(query);
                         }
                         _ => {
                             // just burn ergs
@@ -882,6 +898,10 @@ pub fn create_artifacts_from_tracer<
         artifacts.keccak_round_function_witnesses = keccak_round_function_witnesses;
         artifacts.sha256_round_function_witnesses = sha256_round_function_witnesses;
         artifacts.ecrecover_witnesses = ecrecover_witnesses;
+        artifacts.ecadd_witnesses = ecadd_witnesses;
+        artifacts.ecmul_witnesses = ecmul_witnesses;
+        artifacts.ecpairing_witnesses = ecpairing_witnesses;
+        artifacts.modexp_witnesses = modexp_witnesses;
         artifacts.secp256r1_verify_witnesses = secp256r1_verify_witnesses;
         artifacts.original_log_queue_simulator =
             original_log_queue_simulator.unwrap_or(LogQueueSimulator::empty());
@@ -1051,6 +1071,82 @@ pub fn create_artifacts_from_tracer<
             round_function,
         );
         this.ecrecover_circuits_data = ecrecover_circuits_data;
+
+        // ecadd precompile
+
+        use crate::witness::individual_circuits::ecadd::ecadd_decompose_into_per_circuit_witness;
+
+        tracing::debug!("Running ecadd simulation");
+
+        let demuxed_ecadd_queue = std::mem::replace(
+            &mut all_demuxed_queues[DemuxOutput::ECAdd as usize],
+            Default::default(),
+        );
+
+        let ecadd_circuits_data = ecadd_decompose_into_per_circuit_witness(
+            this,
+            demuxed_ecadd_queue,
+            geometry.cycles_per_ecadd_circuit as usize,
+            round_function,
+        );
+        this.ecadd_circuits_data = ecadd_circuits_data;
+
+        // ecmul precompile
+
+        use crate::witness::individual_circuits::ecmul::ecmul_decompose_into_per_circuit_witness;
+
+        tracing::debug!("Running ecmul simulation");
+
+        let demuxed_ecmul_queue = std::mem::replace(
+            &mut all_demuxed_queues[DemuxOutput::ECMul as usize],
+            Default::default(),
+        );
+
+        let ecmul_circuits_data = ecmul_decompose_into_per_circuit_witness(
+            this,
+            demuxed_ecmul_queue,
+            geometry.cycles_per_ecmul_circuit as usize,
+            round_function,
+        );
+        this.ecmul_circuits_data = ecmul_circuits_data;
+
+        // ecpairing precompile
+
+        use crate::witness::individual_circuits::ecpairing::ecpairing_decompose_into_per_circuit_witness;
+
+        tracing::debug!("Running ecpairing simulation");
+
+        let demuxed_ecpairing_queue = std::mem::replace(
+            &mut all_demuxed_queues[DemuxOutput::ECPairing as usize],
+            Default::default(),
+        );
+
+        let ecpairing_circuits_data = ecpairing_decompose_into_per_circuit_witness(
+            this,
+            demuxed_ecpairing_queue,
+            geometry.cycles_per_ecpairing_circuit as usize,
+            round_function,
+        );
+        this.ecpairing_circuits_data = ecpairing_circuits_data;
+
+        // modexp precompile
+
+        use crate::witness::individual_circuits::modexp::modexp_decompose_into_per_circuit_witness;
+
+        tracing::debug!("Running modexp simulation");
+
+        let demuxed_modexp_queue = std::mem::replace(
+            &mut all_demuxed_queues[DemuxOutput::Modexp as usize],
+            Default::default(),
+        );
+
+        let modexp_circuits_data = modexp_decompose_into_per_circuit_witness(
+            this,
+            demuxed_modexp_queue,
+            geometry.cycles_per_modexp_circuit as usize,
+            round_function,
+        );
+        this.modexp_circuits_data = modexp_circuits_data;
 
         use crate::witness::individual_circuits::secp256r1_verify::secp256r1_verify_decompose_into_per_circuit_witness;
 
@@ -1555,6 +1651,10 @@ pub fn create_artifacts_from_tracer<
             keccak256_circuits_data,
             sha256_circuits_data,
             ecrecover_circuits_data,
+            ecadd_circuits_data,
+            ecmul_circuits_data,
+            ecpairing_circuits_data,
+            modexp_circuits_data,
             l1_messages_linear_hash_data,
             transient_storage_sorter_circuit_data,
             secp256r1_verify_circuits_data,
@@ -1696,6 +1796,113 @@ pub fn create_artifacts_from_tracer<
             ecrecover_precompile_circuits_compact_forms_witnesses.clone(),
         );
 
+        // ecadd precompiles
+        let circuit_type = BaseLayerCircuitType::ECAddPrecompile;
+
+        let mut maker = CircuitMaker::new(
+            geometry.cycles_per_ecadd_circuit,
+            round_function.clone(),
+            &mut cs_for_witness_generation,
+            &mut cycles_used,
+        );
+
+        for circuit_input in ecadd_circuits_data.into_iter() {
+            circuit_callback(ZkSyncBaseLayerCircuit::ECAdd(
+                maker.process(circuit_input, circuit_type),
+            ));
+        }
+
+        let (
+            ecadd_precompile_circuits,
+            queue_simulator,
+            ecadd_precompile_circuits_compact_forms_witnesses,
+        ) = maker.into_results();
+        recursion_queue_callback(
+            circuit_type as u64,
+            queue_simulator,
+            ecadd_precompile_circuits_compact_forms_witnesses.clone(),
+        );
+
+        // ecmul precompiles
+        let circuit_type = BaseLayerCircuitType::ECMulPrecompile;
+
+        let mut maker = CircuitMaker::new(
+            geometry.cycles_per_ecmul_circuit,
+            round_function.clone(),
+            &mut cs_for_witness_generation,
+            &mut cycles_used,
+        );
+
+        for circuit_input in ecmul_circuits_data.into_iter() {
+            circuit_callback(ZkSyncBaseLayerCircuit::ECMul(
+                maker.process(circuit_input, circuit_type),
+            ));
+        }
+
+        let (
+            ecmul_precompile_circuits,
+            queue_simulator,
+            ecmul_precompile_circuits_compact_forms_witnesses,
+        ) = maker.into_results();
+        recursion_queue_callback(
+            circuit_type as u64,
+            queue_simulator,
+            ecmul_precompile_circuits_compact_forms_witnesses.clone(),
+        );
+
+        // ecpairing precompiles
+        let circuit_type = BaseLayerCircuitType::ECPairingPrecompile;
+
+        let mut maker = CircuitMaker::new(
+            geometry.cycles_per_ecpairing_circuit,
+            round_function.clone(),
+            &mut cs_for_witness_generation,
+            &mut cycles_used,
+        );
+
+        for circuit_input in ecpairing_circuits_data.into_iter() {
+            circuit_callback(ZkSyncBaseLayerCircuit::ECPairing(
+                maker.process(circuit_input, circuit_type),
+            ));
+        }
+
+        let (
+            ecpairing_precompile_circuits,
+            queue_simulator,
+            ecpairing_precompile_circuits_compact_forms_witnesses,
+        ) = maker.into_results();
+        recursion_queue_callback(
+            circuit_type as u64,
+            queue_simulator,
+            ecpairing_precompile_circuits_compact_forms_witnesses.clone(),
+        );
+
+        // modexp precompiles
+        let circuit_type = BaseLayerCircuitType::ModExpPrecompile;
+
+        let mut maker = CircuitMaker::new(
+            geometry.cycles_per_modexp_circuit,
+            round_function.clone(),
+            &mut cs_for_witness_generation,
+            &mut cycles_used,
+        );
+
+        for circuit_input in modexp_circuits_data.into_iter() {
+            circuit_callback(ZkSyncBaseLayerCircuit::Modexp(
+                maker.process(circuit_input, circuit_type),
+            ));
+        }
+
+        let (
+            modexp_precompile_circuits,
+            queue_simulator,
+            modexp_precompile_circuits_compact_forms_witnesses,
+        ) = maker.into_results();
+        recursion_queue_callback(
+            circuit_type as u64,
+            queue_simulator,
+            modexp_precompile_circuits_compact_forms_witnesses.clone(),
+        );
         // storage sorter
         let circuit_type = BaseLayerCircuitType::StorageFilter;
 
@@ -1923,6 +2130,10 @@ pub fn create_artifacts_from_tracer<
             keccak_precompile_circuits,
             sha256_precompile_circuits,
             ecrecover_precompile_circuits,
+            ecadd_precompile_circuits,
+            ecmul_precompile_circuits,
+            ecpairing_precompile_circuits,
+            modexp_precompile_circuits,
             ram_permutation_circuits,
             storage_sorter_circuits,
             storage_application_circuits,
@@ -1943,6 +2154,10 @@ pub fn create_artifacts_from_tracer<
             .chain(keccak_precompile_circuits_compact_forms_witnesses)
             .chain(sha256_precompile_circuits_compact_forms_witnesses)
             .chain(ecrecover_precompile_circuits_compact_forms_witnesses)
+            .chain(ecadd_precompile_circuits_compact_forms_witnesses)
+            .chain(ecmul_precompile_circuits_compact_forms_witnesses)
+            .chain(ecpairing_precompile_circuits_compact_forms_witnesses)
+            .chain(modexp_precompile_circuits_compact_forms_witnesses)
             .chain(ram_permutation_circuits_compact_forms_witnesses)
             .chain(storage_sorter_circuit_compact_form_witnesses)
             .chain(storage_application_compact_forms)

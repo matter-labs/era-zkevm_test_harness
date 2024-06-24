@@ -4,13 +4,7 @@ use std::io::Write;
 use codegen::Scope;
 use rayon::prelude::*;
 
-use zkevm_test_harness::capacity_estimator::{
-    code_decommitter_capacity, code_decommittments_sorter_capacity, ecrecover_capacity,
-    event_sorter_capacity, keccak256_rf_capacity, l1_messages_hasher_capacity,
-    log_demuxer_capacity, main_vm_capacity, ram_permutation_capacity, secp256r1_verify_capacity,
-    sha256_rf_capacity, storage_application_capacity, storage_sorter_capacity,
-    transient_storage_sorter_capacity,
-};
+use zkevm_test_harness::capacity_estimator::{code_decommitter_capacity, code_decommittments_sorter_capacity, ecadd_capacity, ecmul_capacity, ecpairing_capacity, ecrecover_capacity, event_sorter_capacity, keccak256_rf_capacity, l1_messages_hasher_capacity, log_demuxer_capacity, main_vm_capacity, modexp_capacity, ram_permutation_capacity, secp256r1_verify_capacity, sha256_rf_capacity, storage_application_capacity, storage_sorter_capacity, transient_storage_sorter_capacity};
 use zkevm_test_harness::toolset::GeometryConfig;
 
 fn save_geometry_config_file(geometry_config: String, filepath: &str) {
@@ -30,6 +24,10 @@ fn all_runners() -> Vec<Box<dyn Fn() -> usize + Send>> {
         Box::new(keccak256_rf_capacity),
         Box::new(sha256_rf_capacity),
         Box::new(ecrecover_capacity),
+        Box::new(ecadd_capacity),
+        Box::new(ecmul_capacity),
+        Box::new(ecpairing_capacity),
+        Box::new(modexp_capacity),
         Box::new(ram_permutation_capacity),
         Box::new(event_sorter_capacity),
         Box::new(storage_sorter_capacity),
@@ -57,6 +55,10 @@ pub fn compute_config() -> GeometryConfig {
     let cycles_per_keccak256_circuit = sizes.pop().unwrap();
     let cycles_per_sha256_circuit = sizes.pop().unwrap();
     let cycles_per_ecrecover_circuit = sizes.pop().unwrap();
+    let cycles_per_ecadd_circuit = sizes.pop().unwrap();
+    let cycles_per_ecmul_circuit = sizes.pop().unwrap();
+    let cycles_per_ecpairing_circuit = sizes.pop().unwrap();
+    let cycles_per_modexp_circuit = sizes.pop().unwrap();
     let cycles_per_ram_permutation = sizes.pop().unwrap();
     let cycles_per_events_or_l1_messages_sorter = sizes.pop().unwrap();
     let cycles_per_storage_sorter = sizes.pop().unwrap();
@@ -79,6 +81,10 @@ pub fn compute_config() -> GeometryConfig {
         cycles_per_keccak256_circuit,
         cycles_per_sha256_circuit,
         cycles_per_ecrecover_circuit,
+        cycles_per_ecadd_circuit,
+        cycles_per_ecmul_circuit,
+        cycles_per_ecpairing_circuit,
+        cycles_per_modexp_circuit,
         cycles_per_secp256r1_verify_circuit,
         cycles_per_transient_storage_sorter,
         limit_for_l1_messages_pudata_hasher,
@@ -137,6 +143,22 @@ fn main() {
     function.line(format!(
         "    cycles_per_ecrecover_circuit: {},",
         computed_config.cycles_per_ecrecover_circuit
+    ));
+    function.line(format!(
+        "    cycles_per_ecadd_circuit: {},",
+        computed_config.cycles_per_ecadd_circuit
+    ));
+    function.line(format!(
+        "    cycles_per_ecmul_circuit: {},",
+        computed_config.cycles_per_ecmul_circuit
+    ));
+    function.line(format!(
+        "    cycles_per_ecpairing_circuit: {},",
+        computed_config.cycles_per_ecpairing_circuit
+    ));
+    function.line(format!(
+        "    cycles_per_modexp_circuit: {},",
+        computed_config.cycles_per_modexp_circuit
     ));
     function.line(format!(
         "    limit_for_l1_messages_pudata_hasher: {},",

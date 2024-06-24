@@ -7,8 +7,10 @@ license = "MIT OR Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-snark_wrapper = {git = "https://github.com/matter-labs/snark-wrapper.git", branch = "main"}
-# snark_wrapper = {path = "../../snark_wrapper"}
+# TODO: change to use matter-labs when everything is merged:
+# snark_wrapper = {git = "https://github.com/matter-labs/snark-wrapper.git", branch = "main"}
+snark_wrapper = {git = "https://github.com/distributed-lab/snark-wrapper.git", branch = "feature/ec-and-modexp-precompiles"}
+# snark_wrapper = {path = "../../snark-wrapper"}
 
 circuit_encodings = {path = "../circuit_encodings"}
 

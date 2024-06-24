@@ -7,8 +7,15 @@ license = "MIT OR Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-zkevm_circuits = {git = "https://github.com/matter-labs/era-zkevm_circuits.git", branch = "v1.5.0"}
-zk_evm = {git = "https://github.com/matter-labs/era-zk_evm.git", branch = "v1.5.0"}
+# TODO: change to use matter-labs when everything is merged:
+# zkevm_circuits = {git = "https://github.com/matter-labs/era-zkevm_circuits", branch = "dl-precompiles"}
+zkevm_circuits = {git = "https://github.com/distributed-lab/era-zkevm_circuits", branch = "feature/bn254-circuits"}
+# zkevm_circuits = {path = "../../era-zkevm_circuits"}
+
+# TODO: change to use matter-labs when everything is merged:
+# zk_evm = {git = "https://github.com/matter-labs/era-zk_evm.git", branch = "dl-precompiles"}
+zk_evm = {git = "https://github.com/distributed-lab/era-zk_evm.git", branch = "feature/ec-and-modexp-precompiles"}
+# zk_evm = {path = "../../era-zk_evm"}
 
 
 derivative = "*"

@@ -15,6 +15,10 @@ pub const fn get_geometry_config() -> GeometryConfig {
         cycles_per_keccak256_circuit: 293,
         cycles_per_sha256_circuit: 2206,
         cycles_per_ecrecover_circuit: 7,
+        cycles_per_ecadd_circuit: 1, // this was added manually to ensure code compiles
+        cycles_per_ecmul_circuit: 1, // this was added manually to ensure code compiles
+        cycles_per_ecpairing_circuit: 1, // this was added manually to ensure code compiles
+        cycles_per_modexp_circuit: 1, // this was added manually to ensure code compiles
         limit_for_l1_messages_pudata_hasher: 774,
         cycles_per_transient_storage_sorter: 50875,
         cycles_per_secp256r1_verify_circuit: 4,

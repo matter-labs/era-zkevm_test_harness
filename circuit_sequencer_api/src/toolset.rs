@@ -14,6 +14,10 @@ pub struct GeometryConfig {
     pub cycles_per_keccak256_circuit: u32,
     pub cycles_per_sha256_circuit: u32,
     pub cycles_per_ecrecover_circuit: u32,
+    pub cycles_per_ecadd_circuit: u32,
+    pub cycles_per_ecmul_circuit: u32,
+    pub cycles_per_ecpairing_circuit: u32,
+    pub cycles_per_modexp_circuit: u32,
     pub cycles_per_secp256r1_verify_circuit: u32,
     pub cycles_per_transient_storage_sorter: u32,
 
