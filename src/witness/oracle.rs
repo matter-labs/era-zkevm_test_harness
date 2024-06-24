@@ -3,7 +3,7 @@
 // and then during specialized circuits execution
 
 use super::callstack_handler::*;
-use super::postprocessing::{BlockFirstAndLastBasicCircuits, CsForWitnessGeneration};
+use super::postprocessing::{BlockFirstAndLastBasicCircuits, ClosedFormInputField, CsForWitnessGeneration, FirstAndLastCircuitWitness};
 use super::utils::*;
 use crate::boojum::field::SmallField;
 use crate::boojum::gadgets::queue::{QueueState, QueueStateWitness, QueueTailStateWitness};
@@ -14,7 +14,7 @@ use crate::witness::advancing_range::AdvancingRange;
 use crate::witness::artifacts::{
     CircuitArtifacts, DemuxedQueries, ImplicitMemoryArtifacts, MemoryArtifacts,
 };
-use crate::witness::postprocessing::{CircuitMaker, FirstAndLastCircuit};
+use crate::witness::postprocessing::CircuitMaker;
 use crate::witness::tracer::{QueryMarker, WitnessTracer};
 use crate::witness::vm_snapshot::VmSnapshot;
 use crate::zk_evm::aux_structures::DecommittmentQuery;
@@ -43,6 +43,7 @@ use circuit_definitions::zk_evm::zkevm_opcode_defs::system_params::{
 use circuit_definitions::zkevm_circuits::eip_4844::input::EIP4844CircuitInstanceWitness;
 use circuit_definitions::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
+use circuit_definitions::zkevm_circuits::scheduler::input;
 use crossbeam::atomic::AtomicCell;
 use derivative::Derivative;
 use std::collections::{BTreeMap, HashMap, VecDeque};
@@ -843,6 +844,11 @@ use crate::zkevm_circuits::demux_log_queue::input::LogDemuxerCircuitInstanceWitn
 use crate::zkevm_circuits::ram_permutation::input::RamPermutationCircuitInstanceWitness;
 use crate::zkevm_circuits::storage_application::input::StorageApplicationCircuitInstanceWitness;
 
+
+use crate::witness::postprocessing::observable_witness::LogDemuxerObservableWitness;
+use crate::witness::postprocessing::observable_witness::RamPermutationObservableWitness;
+use crate::witness::postprocessing::observable_witness::StorageApplicationObservableWitness;
+
 fn process_log_circuits<
     CB: FnMut(ZkSyncBaseLayerCircuit),
     QSCB: FnMut(
@@ -869,9 +875,9 @@ fn process_log_circuits<
 ) -> (
     CircuitArtifacts<GoldilocksField>,
     MemoryArtifacts<GoldilocksField>,
-    FirstAndLastCircuit<LogDemuxerCircuitInstanceWitness<GoldilocksField>>,
-    FirstAndLastCircuit<RamPermutationCircuitInstanceWitness<GoldilocksField>>,
-    FirstAndLastCircuit<StorageApplicationCircuitInstanceWitness<GoldilocksField>>,
+    FirstAndLastCircuitWitness<LogDemuxerObservableWitness<GoldilocksField>>,
+    FirstAndLastCircuitWitness<RamPermutationObservableWitness<GoldilocksField>>,
+    FirstAndLastCircuitWitness<StorageApplicationObservableWitness<GoldilocksField>>,
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
@@ -1447,6 +1453,7 @@ fn repack_input_for_main_vm(
 }
 
 use crate::zkevm_circuits::fsm_input_output::circuit_inputs::main_vm::VmCircuitWitness;
+use crate::witness::postprocessing::observable_witness::VmObservableWitness;
 
 fn process_main_vm<
     CB: FnMut(ZkSyncBaseLayerCircuit),
@@ -1471,10 +1478,10 @@ fn process_main_vm<
     circuit_callback: &mut CB,
     recursion_queue_callback: &mut QSCB,
 ) -> (
-    FirstAndLastCircuit<VmCircuitWitness<GoldilocksField, VmWitnessOracle<GoldilocksField>>>,
+    FirstAndLastCircuitWitness<VmObservableWitness<GoldilocksField>>,
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
 ) {
-    let mut main_vm_circuits = FirstAndLastCircuit::default();
+    let mut main_vm_circuits = FirstAndLastCircuitWitness::default();
     let mut main_vm_circuits_compact_forms_witnesses = vec![];
     let mut queue_simulator = RecursionQueueSimulator::empty();
     let mut observable_input = None;
@@ -1509,10 +1516,20 @@ fn process_main_vm<
         };
 
         if is_first {
-            main_vm_circuits.first = instance.clone_witness();
+            let mut wit = instance.clone_witness().unwrap();
+            let wit = wit.closed_form_input();
+            main_vm_circuits.first = Some(VmObservableWitness {
+                observable_input: wit.observable_input.clone(),
+                observable_output: wit.observable_output.clone(),
+            });
         }
         if is_last {
-            main_vm_circuits.last = instance.clone_witness();
+            let mut wit = instance.clone_witness().unwrap();
+            let wit = wit.closed_form_input();
+            main_vm_circuits.last = Some(VmObservableWitness {
+                observable_input: wit.observable_input.clone(),
+                observable_output: wit.observable_output.clone(),
+            });
         }
 
         let instance = ZkSyncBaseLayerCircuit::MainVM(instance);
@@ -1667,7 +1684,7 @@ fn process_main_vm<
     (main_vm_circuits, main_vm_circuits_compact_forms_witnesses)
 }
 
-pub fn create_artifacts_from_tracer<
+pub(crate) fn create_artifacts_from_tracer<
     CB: FnMut(ZkSyncBaseLayerCircuit),
     QSCB: FnMut(
         u64,

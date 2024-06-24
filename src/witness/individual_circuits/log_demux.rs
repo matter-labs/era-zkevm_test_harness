@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use self::toolset::GeometryConfig;
-use self::witness::postprocessing::FirstAndLastCircuit;
+use self::witness::postprocessing::FirstAndLastCircuitWitness;
+use crate::witness::postprocessing::observable_witness::LogDemuxerObservableWitness;
 
 use super::*;
 use crate::witness::artifacts::{DemuxedQueries, LogQueue};
@@ -39,7 +40,7 @@ pub fn compute_logs_demux<
     mut circuit_callback: CB,
     mut recursion_queue_callback: QSCB,
 ) -> (
-    FirstAndLastCircuit<LogDemuxerCircuitInstanceWitness<Field>>,
+    FirstAndLastCircuitWitness<LogDemuxerObservableWitness<Field>>,
     Vec<ClosedFormInputCompactFormWitness<Field>>,
     [LogQueue<Field>; NUM_DEMUX_OUTPUTS],
 ) {

@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use self::toolset::GeometryConfig;
-use self::witness::postprocessing::FirstAndLastCircuit;
+use self::witness::postprocessing::FirstAndLastCircuitWitness;
+use crate::witness::postprocessing::observable_witness::StorageApplicationObservableWitness;
 
 use super::*;
 use crate::boojum::gadgets::keccak256::{self};
@@ -44,7 +45,7 @@ pub fn decompose_into_storage_application_witnesses<
     mut circuit_callback: CB,
     mut recursion_queue_callback: QSCB,
 ) -> (
-    FirstAndLastCircuit<StorageApplicationCircuitInstanceWitness<GoldilocksField>>,
+    FirstAndLastCircuitWitness<StorageApplicationObservableWitness<GoldilocksField>>,
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
 ) {
     const SHARD_ID_TO_PROCEED: u8 = 0; // rollup shard ID

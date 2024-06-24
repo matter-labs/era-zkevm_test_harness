@@ -1,5 +1,4 @@
 use self::toolset::GeometryConfig;
-use self::witness::postprocessing::FirstAndLastCircuit;
 
 use super::*;
 use crate::boojum::gadgets::queue::full_state_queue::FullStateCircuitQueueRawWitness;
@@ -17,7 +16,9 @@ use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use circuit_definitions::{encodings::*, Field, RoundFunction};
-use postprocessing::CsForWitnessGeneration;
+use postprocessing::{CsForWitnessGeneration, FirstAndLastCircuitWitness};
+use crate::witness::postprocessing::observable_witness::RamPermutationObservableWitness;
+
 use rayon::prelude::*;
 use snark_wrapper::boojum::field::Field as _;
 use std::borrow::Borrow;
@@ -42,7 +43,7 @@ pub fn compute_ram_circuit_snapshots<
     mut circuit_callback: CB,
     mut recursion_queue_callback: QSCB,
 ) -> (
-    FirstAndLastCircuit<RamPermutationCircuitInstanceWitness<Field>>,
+    FirstAndLastCircuitWitness<RamPermutationObservableWitness<Field>>,
     Vec<ClosedFormInputCompactFormWitness<Field>>,
 ) {
     assert_eq!(

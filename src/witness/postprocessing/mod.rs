@@ -62,6 +62,7 @@ use circuit_definitions::zkevm_circuits::transient_storage_validity_by_grand_pro
 use circuit_definitions::Field;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use crossbeam::atomic::AtomicCell;
+use observable_witness::ObservableWitness;
 
 use std::sync::Arc;
 
@@ -72,40 +73,43 @@ pub const L1_MESSAGES_MERKLIZER_OUTPUT_LINEAR_HASH: bool = false;
 
 use crate::boojum::field::SmallField;
 
-pub struct BlockFirstAndLastBasicCircuits {
-    pub main_vm_circuits: FirstAndLastCircuit<VmCircuitWitness<Field, VmWitnessOracle<Field>>>,
+pub mod observable_witness;
+use crate::witness::postprocessing::observable_witness::*;
+
+pub(crate) struct BlockFirstAndLastBasicCircuits {
+    pub main_vm_circuits: FirstAndLastCircuitWitness<VmObservableWitness<Field>>,
     pub code_decommittments_sorter_circuits:
-        FirstAndLastCircuit<CodeDecommittmentsDeduplicatorInstanceWitness<Field>>,
-    pub code_decommitter_circuits: FirstAndLastCircuit<CodeDecommitterCircuitInstanceWitness<Field>>,
-    pub log_demux_circuits: FirstAndLastCircuit<LogDemuxerCircuitInstanceWitness<Field>>,
+    FirstAndLastCircuitWitness<CodeDecommittmentsDeduplicatorObservableWitness<Field>>,
+    pub code_decommitter_circuits: FirstAndLastCircuitWitness<CodeDecommitterObservableWitness<Field>>,
+    pub log_demux_circuits: FirstAndLastCircuitWitness<LogDemuxerObservableWitness<Field>>,
     pub keccak_precompile_circuits:
-        FirstAndLastCircuit<Keccak256RoundFunctionCircuitInstanceWitness<Field>>,
+    FirstAndLastCircuitWitness<Keccak256RoundFunctionObservableWitness<Field>>,
     pub sha256_precompile_circuits:
-        FirstAndLastCircuit<Sha256RoundFunctionCircuitInstanceWitness<Field>>,
+    FirstAndLastCircuitWitness<Sha256RoundFunctionObservableWitness<Field>>,
     pub ecrecover_precompile_circuits:
-        FirstAndLastCircuit<EcrecoverCircuitInstanceWitness<Field>>,
-    pub ram_permutation_circuits: FirstAndLastCircuit<RamPermutationCircuitInstanceWitness<Field>>,
-    pub storage_sorter_circuits: FirstAndLastCircuit<StorageDeduplicatorInstanceWitness<Field>>,
-    pub storage_application_circuits:
-        FirstAndLastCircuit<StorageApplicationCircuitInstanceWitness<Field>>,
-    pub events_sorter_circuits:
-        FirstAndLastCircuit<EventsDeduplicatorInstanceWitness<Field>>,
-    pub l1_messages_sorter_circuits:
-        FirstAndLastCircuit<EventsDeduplicatorInstanceWitness<Field>>,
-    pub l1_messages_hasher_circuits: FirstAndLastCircuit<LinearHasherCircuitInstanceWitness<Field>>,
-    pub transient_storage_sorter_circuits:
-        FirstAndLastCircuit<TransientStorageDeduplicatorInstanceWitness<Field>>,
+    FirstAndLastCircuitWitness<EcrecoverObservableWitness<Field>>,
     pub secp256r1_verify_circuits:
-        FirstAndLastCircuit<Secp256r1VerifyCircuitInstanceWitness<Field>>,
+    FirstAndLastCircuitWitness<Secp256r1VerifyObservableWitness<Field>>,
+    pub ram_permutation_circuits: FirstAndLastCircuitWitness<RamPermutationObservableWitness<Field>>,
+    pub storage_sorter_circuits: FirstAndLastCircuitWitness<StorageDeduplicatorObservableWitness<Field>>,
+    pub storage_application_circuits:
+    FirstAndLastCircuitWitness<StorageApplicationObservableWitness<Field>>,
+    pub transient_storage_sorter_circuits:
+    FirstAndLastCircuitWitness<TransientStorageDeduplicatorObservableWitness<Field>>,
+    pub events_sorter_circuits:
+    FirstAndLastCircuitWitness<EventsDeduplicatorObservableWitness<Field>>,
+    pub l1_messages_sorter_circuits:
+    FirstAndLastCircuitWitness<EventsDeduplicatorObservableWitness<Field>>,
+    pub l1_messages_hasher_circuits: FirstAndLastCircuitWitness<LinearHasherObservableWitness<Field>>,
 }
 
-pub struct FirstAndLastCircuit<T: ClosedFormInputField<GoldilocksField>>
+pub struct FirstAndLastCircuitWitness<T>
 {
     pub first: Option<T>,
     pub last: Option<T>,
 }
 
-impl<T: ClosedFormInputField<GoldilocksField>> Default for FirstAndLastCircuit<T> 
+impl<T> Default for FirstAndLastCircuitWitness<T> 
 {
     fn default() -> Self {
         Self {
@@ -363,7 +367,7 @@ pub(crate) struct CircuitMaker<'a, T: ClosedFormInputField<GoldilocksField>>
     cs_for_witness_generation: &'a mut CsForWitnessGeneration,
     queue_simulator: RecursionQueueSimulator<GoldilocksField>,
     compact_form_witnesses: Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
-    extremes: FirstAndLastCircuit<T>,
+    extremes: FirstAndLastCircuitWitness<ObservableWitness<GoldilocksField, T>>,
 }
 
 impl<'a, T> CircuitMaker<'a, T>
@@ -388,7 +392,7 @@ where
             cs_for_witness_generation,
             queue_simulator: RecursionQueueSimulator::empty(),
             compact_form_witnesses: vec![],
-            extremes: FirstAndLastCircuit::default(),
+            extremes: FirstAndLastCircuitWitness::default(),
         }
     }
 
@@ -427,11 +431,17 @@ where
             round_function: Arc::new(self.round_function),
             expected_public_input: Some(proof_system_input),
         };
-
+        let mut wit: T = circuit.clone_witness().unwrap();
         if self.extremes.first.is_none() {
-            self.extremes.first = circuit.clone_witness();
+            self.extremes.first = Some(ObservableWitness {
+                observable_input: wit.closed_form_input().observable_input.clone(),
+                observable_output: wit.closed_form_input().observable_output.clone(),
+            });
         }
-        self.extremes.last = circuit.clone_witness();
+        self.extremes.last = Some(ObservableWitness {
+            observable_input: wit.closed_form_input().observable_input.clone(),
+            observable_output: wit.closed_form_input().observable_output.clone(),
+        });
 
         let recursive_request = RecursionRequest {
             circuit_type: GoldilocksField::from_u64_unchecked(circuit_type as u64),
@@ -447,7 +457,7 @@ where
     pub(crate) fn into_results(
         self,
     ) -> (
-        FirstAndLastCircuit<T>,
+        FirstAndLastCircuitWitness<ObservableWitness<GoldilocksField, T>>,
         RecursionQueueSimulator<GoldilocksField>,
         Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
     ) {
