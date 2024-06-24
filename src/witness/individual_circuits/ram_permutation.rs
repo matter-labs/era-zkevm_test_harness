@@ -239,7 +239,7 @@ pub(crate)  fn compute_ram_circuit_snapshots<
         sorted_global_final_state.num_items
     );
 
-
+    // TODO split inplace?
     let unsorted_witness = memory_queue_simulator
     .witness;
     let sorted_witness = sorted_memory_queries_simulator
