@@ -35,20 +35,11 @@ crossbeam = "0.8"
 tracing = { version= "0.1.26" }
 bincode = "*"
 test-log = "*"
-env_logger = "*"
 smallvec = "*"
 structopt = "0.3.26"
 codegen = "0.2.0"
-lazy_static = "1.4"
-reqwest = { version = "0.11", features = ["blocking"] }
-curl = "0.4"
-walkdir = "2.4"
 regex = { version = "1.10.4", features = ["pattern"] }
-tracing-subscriber = "0.3.18"
-
-[target.'cfg(not(target_env = "msvc"))'.dependencies]
-jemallocator = "0.5"
-jemalloc-ctl = "0.5"
+peak_alloc = "0.2.0"
 
 [dev-dependencies]
 rand = "0.4"

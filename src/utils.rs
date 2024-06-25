@@ -35,6 +35,7 @@ fn peak_mem_array() -> &'static Mutex<Vec<(String, f32)>> {
 
 fn peak_snapshot_mem(label: &str) {
     let peak_mem = PEAK_ALLOC.peak_usage_as_mb();
+    println!("PEAK MEM: {}: {}", label.to_owned(), peak_mem);
     peak_mem_array().lock().unwrap().push((label.to_owned(), peak_mem));
 }
 
@@ -67,6 +68,7 @@ pub fn print_time_snapshots() {
 
 pub fn snapshot_mem(label: &str) {
     let current_mem = PEAK_ALLOC.current_usage_as_mb();
+    println!("MEM: {}: {}", label.to_owned(), current_mem);
     mem_array().lock().unwrap().push((label.to_owned(), current_mem));
 }
 
@@ -79,6 +81,7 @@ pub fn snapshot_prof(label: &str) {
 
 pub fn snapshot_time(label: &str) {
     let mut instant = time_instant().lock().unwrap();
+    println!("TIME: {}: {:.2?}", label.to_owned(), instant.elapsed());
     time_array().lock().unwrap().push((label.to_owned(), instant.elapsed()));
     *instant = Instant::now();
 }
