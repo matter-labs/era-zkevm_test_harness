@@ -1544,7 +1544,7 @@ fn process_main_vm<
         VmInstanceWitness<GoldilocksField, VmWitnessOracle<GoldilocksField>>,
     > = None;
 
-    snapshot_mem("Before mainVM processing");
+    snapshot_prof("Before mainVM processing");
 
     let main_vm_inputs = repack_input_for_main_vm(
         &vm_snapshots,
@@ -1561,7 +1561,7 @@ fn process_main_vm<
     vm_snapshots.push(vm_snapshots.last().unwrap().clone());
     let circuits_len = vm_snapshots.windows(2).len();
 
-    snapshot_mem("Before mainVM processing cycle");
+    snapshot_prof("Before mainVM processing cycle");
 
     // parallelizable
     for ((circuit_idx, pair), main_vm_input) in
@@ -1663,7 +1663,7 @@ fn process_main_vm<
             previous_instance_witness = Some(instance_witness);
 
             let lbl = format!("MainVM processing cycle instance built {}", circuit_idx);
-            snapshot_mem(&lbl);
+            snapshot_prof(&lbl);
         } else {
             previous_instance_witness = None;
         }
@@ -1732,17 +1732,17 @@ pub(crate) fn create_artifacts_from_tracer<
 
     assert!(vm_snapshots.len() >= 2); // we need at least entry point and the last save (after exit)
 
-    snapshot_mem("Before log sim");
+    snapshot_prof("Before log sim");
     tracing::debug!("Running storage log simulation");
 
     let (log_simulation_result, log_simulation_queries_data) =
         log_simulation(&callstack_with_aux_data, round_function);
 
-    snapshot_mem("After log sim");
+    snapshot_prof("After log sim");
 
     // and now do trivial simulation
 
-    snapshot_mem("Before callstack sim");
+    snapshot_prof("Before callstack sim");
     tracing::debug!("Running callstack sumulation");
 
     // TODO can be moved after process_log_circuits
@@ -1757,14 +1757,14 @@ pub(crate) fn create_artifacts_from_tracer<
         .clone();
     drop(log_simulation_result);
 
-    snapshot_mem("After callstack sim");
+    snapshot_prof("After callstack sim");
 
     let CallstackWithAuxData {
         flat_new_frames_history,
         ..
     } = callstack_with_aux_data;
 
-    snapshot_mem("Before cs creation");
+    snapshot_prof("Before cs creation");
 
     // we simulate a series of actions on the stack starting from the outermost frame
     // each history record contains an information on what was the stack state between points
@@ -1772,7 +1772,7 @@ pub(crate) fn create_artifacts_from_tracer<
 
     let mut cs_for_witness_generation = CsForWitnessGeneration::new();
 
-    snapshot_mem("After cs creation");
+    snapshot_prof("After cs creation");
 
     // process all circuits related to logs
     let (
@@ -1802,7 +1802,7 @@ pub(crate) fn create_artifacts_from_tracer<
         &mut recursion_queue_callback,
     );
 
-    snapshot_mem("Artifacts created");
+    snapshot_prof("Artifacts created");
 
     // NOTE: here we have all the queues processed in the `process` function (actual pushing is done), so we can
     // just read from the corresponding states
@@ -1847,7 +1847,7 @@ pub(crate) fn create_artifacts_from_tracer<
         &mut recursion_queue_callback,
     );
 
-    snapshot_mem("After mainVM processing");
+    snapshot_prof("After mainVM processing");
 
     {
         let CircuitArtifacts {
@@ -1873,7 +1873,7 @@ pub(crate) fn create_artifacts_from_tracer<
             &mut cs_for_witness_generation,
         );
 
-        snapshot_mem("Before additional circuits");
+        snapshot_prof("Before additional circuits");
 
         for circuit_input in decommittments_deduplicator_circuits_data.into_iter() {
             circuit_callback(ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(
@@ -1891,6 +1891,8 @@ pub(crate) fn create_artifacts_from_tracer<
             queue_simulator,
             code_decommittments_sorter_circuits_compact_forms_witnesses.clone(),
         );
+
+        snapshot_prof("Decommitments dedup");
 
         // Actual decommitter
         let circuit_type = BaseLayerCircuitType::Decommiter;
@@ -1918,6 +1920,8 @@ pub(crate) fn create_artifacts_from_tracer<
             code_decommitter_circuits_compact_forms_witnesses.clone(),
         );
 
+        snapshot_prof("Decommiter");
+
         // keccak precompiles
         let circuit_type = BaseLayerCircuitType::KeccakPrecompile;
 
@@ -1943,6 +1947,8 @@ pub(crate) fn create_artifacts_from_tracer<
             queue_simulator,
             keccak_precompile_circuits_compact_forms_witnesses.clone(),
         );
+
+        snapshot_prof("Keccak");
 
         // sha256 precompiles
         let circuit_type = BaseLayerCircuitType::Sha256Precompile;
@@ -1970,6 +1976,8 @@ pub(crate) fn create_artifacts_from_tracer<
             sha256_precompile_circuits_compact_forms_witnesses.clone(),
         );
 
+        snapshot_prof("Sha256");
+
         // ecrecover precompiles
         let circuit_type = BaseLayerCircuitType::EcrecoverPrecompile;
 
@@ -1995,6 +2003,8 @@ pub(crate) fn create_artifacts_from_tracer<
             queue_simulator,
             ecrecover_precompile_circuits_compact_forms_witnesses.clone(),
         );
+
+        snapshot_prof("Ecrecover");
 
         // storage sorter
         let circuit_type = BaseLayerCircuitType::StorageFilter;
@@ -2022,6 +2032,8 @@ pub(crate) fn create_artifacts_from_tracer<
             storage_sorter_circuit_compact_form_witnesses.clone(),
         );
 
+        snapshot_prof("Storage sorter");
+
         // events sorter
         let circuit_type = BaseLayerCircuitType::EventsRevertsFilter;
 
@@ -2047,6 +2059,8 @@ pub(crate) fn create_artifacts_from_tracer<
             queue_simulator,
             events_sorter_circuits_compact_forms_witnesses.clone(),
         );
+
+        snapshot_prof("Events sorter");
 
         // l1 messages sorter
         let circuit_type = BaseLayerCircuitType::L1MessagesRevertsFilter;
@@ -2074,6 +2088,8 @@ pub(crate) fn create_artifacts_from_tracer<
             l1_messages_sorter_circuits_compact_forms_witnesses.clone(),
         );
 
+        snapshot_prof("L1 sorter");
+
         // l1 messages pubdata hasher
         let circuit_type = BaseLayerCircuitType::L1MessagesHasher;
 
@@ -2099,6 +2115,8 @@ pub(crate) fn create_artifacts_from_tracer<
             queue_simulator,
             l1_messages_hasher_circuits_compact_forms_witnesses.clone(),
         );
+
+        snapshot_prof("L1 messages hasher");
 
         // transient storage sorter
         let circuit_type = BaseLayerCircuitType::TransientStorageChecker;
@@ -2126,6 +2144,8 @@ pub(crate) fn create_artifacts_from_tracer<
             transient_storage_sorter_circuits_compact_forms_witnesses.clone(),
         );
 
+        snapshot_prof("Transient storage sorter");
+
         // secp256r1 verify
         let circuit_type = BaseLayerCircuitType::Secp256r1Verify;
 
@@ -2152,6 +2172,8 @@ pub(crate) fn create_artifacts_from_tracer<
             secp256r1_verify_circuits_compact_forms_witnesses.clone(),
         );
 
+        snapshot_prof("Secp256 verify");
+
         // eip 4844 circuits are basic, but they do not need closed form input commitments
         let circuit_type = BaseLayerCircuitType::EIP4844Repack;
 
@@ -2176,7 +2198,7 @@ pub(crate) fn create_artifacts_from_tracer<
 
         // done!
 
-        snapshot_mem("After additional circuits");
+        snapshot_prof("Eip 4844");
 
         let basic_circuits = BlockFirstAndLastBasicCircuitsObservableWitnesses {
             main_vm_circuits,
@@ -2216,7 +2238,7 @@ pub(crate) fn create_artifacts_from_tracer<
             .chain(secp256r1_verify_circuits_compact_forms_witnesses)
             .collect();
 
-        snapshot_mem("Final");
+        snapshot_prof("Final");
 
         (basic_circuits, all_compact_forms, eip_4844_circuits)
     }

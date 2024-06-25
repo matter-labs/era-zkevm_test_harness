@@ -33,6 +33,8 @@ use circuit_definitions::encodings::*;
 
 use super::*;
 
+use std::time::Instant;
+use std::time::Duration;
 use peak_alloc::PeakAlloc;
 use std::sync::{Mutex, OnceLock};
 
@@ -42,6 +44,16 @@ static PEAK_ALLOC: PeakAlloc = PeakAlloc;
 fn mem_array() -> &'static Mutex<Vec<(String, f32)>> {
     static MEM_ARRAY: OnceLock<Mutex<Vec<(String, f32)>>> = OnceLock::new();
     MEM_ARRAY.get_or_init(|| Mutex::new(vec![]))
+}
+
+fn time_instant() -> &'static Mutex<Instant> {
+    static TIME_INSTANT: OnceLock<Mutex<Instant>> = OnceLock::new();
+    TIME_INSTANT.get_or_init(|| Mutex::new(Instant::now()))
+}
+
+fn time_array() -> &'static Mutex<Vec<(String, Duration)>> {
+    static TIME_ARRAY: OnceLock<Mutex<Vec<(String, Duration)>>> = OnceLock::new();
+    TIME_ARRAY.get_or_init(|| Mutex::new(vec![]))
 }
 
 fn peak_mem_array() -> &'static Mutex<Vec<(String, f32)>> {
@@ -72,11 +84,31 @@ pub fn print_peak_mem_snapshots() {
     println!();
 }
 
+pub fn print_time_snapshots() {
+    let time = time_array().lock().unwrap();
+    println!("TIME SNAPSHOTS");
+    for snapshot in time.clone() {
+        println!("{}: {:.2?}", snapshot.0, snapshot.1);
+    }
+    println!();
+}
+
 pub fn snapshot_mem(label: &str) {
     let current_mem = PEAK_ALLOC.current_usage_as_mb();
     mem_array().lock().unwrap().push((label.to_owned(), current_mem));
+}
+
+pub fn snapshot_prof(label: &str) {
+    snapshot_mem(label);
     peak_snapshot_mem(label);
+    snapshot_time(label);
     reset_peak_snapshot_mem();
+}
+
+pub fn snapshot_time(label: &str) {
+    let mut instant = time_instant().lock().unwrap();
+    time_array().lock().unwrap().push((label.to_owned(), instant.elapsed()));
+    *instant = Instant::now();
 }
 
 pub fn reset_peak_snapshot_mem() {

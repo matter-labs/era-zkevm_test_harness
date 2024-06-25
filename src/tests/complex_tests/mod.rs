@@ -284,6 +284,7 @@ pub(crate) fn generate_base_layer(
 
     print_mem_snapshots();
     print_peak_mem_snapshots();
+    print_time_snapshots();
 
     (
         basic_block_circuits,
