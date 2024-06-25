@@ -59,6 +59,8 @@ use crate::zk_evm::zkevm_opcode_defs::system_params::{
     EVENT_AUX_BYTE, L1_MESSAGE_AUX_BYTE, PRECOMPILE_AUX_BYTE, STORAGE_AUX_BYTE,
 };
 
+use crate::snapshot_prof;
+
 #[derive(Derivative)]
 #[derivative(Clone(bound = ""), Copy(bound = ""), Debug, Default)]
 struct CallframeLogState {

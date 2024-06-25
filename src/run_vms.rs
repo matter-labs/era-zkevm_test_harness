@@ -40,6 +40,8 @@ use circuit_definitions::zkevm_circuits::fsm_input_output::ClosedFormInputCompac
 use circuit_definitions::{Field as MainField, ZkSyncDefaultRoundFunction};
 use std::collections::VecDeque;
 
+use crate::snapshot_prof;
+
 pub const SCHEDULER_TIMESTAMP: u32 = 1;
 
 #[derive(Debug)]
@@ -88,6 +90,8 @@ pub fn run_vms<
     queue_simulator_callback: QSCB,
     out_of_circuit_tracer: &mut impl Tracer<SupportedMemory = SimpleMemory>,
 ) -> Result<RunVMsResult, RunVmError> {
+    snapshot_prof("Global start");
+
     let round_function = ZkSyncDefaultRoundFunction::default();
 
     if zk_porter_is_available {
@@ -187,6 +191,8 @@ pub fn run_vms<
         out_of_circuit_vm.memory.execute_partial_query(0, query);
     }
 
+    snapshot_prof("Starting out-of-circuit sim");
+
     // tracing::debug!("Running out of circuit for {} cycles", cycle_limit);
     println!("Running out of circuit for {} cycles", cycle_limit);
     let mut next_snapshot_will_capture_end_of_execution = false;
@@ -219,6 +225,8 @@ pub fn run_vms<
             "root frame ended up with panic".to_owned(),
         ));
     }
+
+    snapshot_prof("Finished out-of-circuit sim");
 
     println!("Out of circuit tracing is complete, now running witness generation");
 
@@ -685,6 +693,15 @@ pub fn run_vms<
 
         (scheduler_circuit_witness, aux_data)
     };
+
+    snapshot_prof("Global finish");
+
+    use crate::print_peak_mem_snapshots;
+    use crate::print_mem_snapshots;
+    use crate::print_time_snapshots;
+    print_mem_snapshots();
+    print_peak_mem_snapshots();
+    print_time_snapshots();
 
     Ok((scheduler_circuit_witness, aux_data))
 }
