@@ -1299,6 +1299,8 @@ fn repack_input_for_main_vm(
         .collect();
     drop(vm_memory_queries_accumulated);
 
+    snapshot_prof("Repack: splitted witnesses");
+
     // prepare some inputs for MainVM circuits
 
     for (_circuit_idx, pair) in vm_snapshots.windows(2).enumerate() {
@@ -1443,6 +1445,8 @@ fn repack_input_for_main_vm(
         };
 
         main_vm_inputs.push(main_vm_input);
+
+        snapshot_prof("Repack: repacked last circuit");
     }
 
     main_vm_inputs
