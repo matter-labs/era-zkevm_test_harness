@@ -278,7 +278,7 @@ pub(crate) fn run_with_options(entry_point_bytecode: Vec<[u8; 32]>, options: Opt
         options.cycle_limit,
         geometry,
         storage_impl,
-        &mut tree,
+        tree,
         "kzg/src/trusted_setup.json",
         std::array::from_fn(|_| None),
         |circuit| basic_block_circuits.push(circuit),

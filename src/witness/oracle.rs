@@ -854,7 +854,7 @@ fn process_log_circuits<
     ),
 >(
     geometry: &GeometryConfig,
-    tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
+    tree: impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
     vm_memory_queries_accumulated: Vec<(u32, MemoryQuery)>,
     prepared_decommittment_queries: Vec<(u32, DecommittmentQuery)>,
     executed_decommittment_queries: Vec<(u32, DecommittmentQuery, Vec<U256>)>,
@@ -1303,7 +1303,12 @@ fn repack_input_for_main_vm(
 
     // prepare some inputs for MainVM circuits
 
+    let amount_of_circuits = vm_snapshots.windows(2).enumerate().len(); // TODO clean
+
     for (_circuit_idx, pair) in vm_snapshots.windows(2).enumerate() {
+        if _circuit_idx % (amount_of_circuits / 100) == 0 {
+            println!("{} / {}", _circuit_idx, amount_of_circuits);
+        }
         let initial_state = &pair[0];
         let final_state = &pair[1];
         let cycle_range = initial_state.at_cycle..final_state.at_cycle;
@@ -1340,45 +1345,45 @@ fn repack_input_for_main_vm(
             .unwrap_or([GoldilocksField::ZERO; FULL_SPONGE_QUEUE_STATE_WIDTH]);
 
         let range = AdvancingRange::get_range_from(&memory_write_witnesses, cycle_range.clone());
-        let memory_write_witnesses_for_instance = memory_write_witnesses.drain(range).collect();
+        let memory_write_witnesses_for_instance = memory_write_witnesses[range].to_vec();
 
         let range = AdvancingRange::get_range_from(&memory_read_witnesses, cycle_range.clone());
-        let memory_read_witnesses_for_instance = memory_read_witnesses.drain(range).collect();
+        let memory_read_witnesses_for_instance = memory_read_witnesses[range].to_vec();
 
         let range = AdvancingRange::get_range_from(&storage_queries, cycle_range.clone());
-        let storage_queries_witnesses_for_instance = storage_queries.drain(range).collect();
+        let storage_queries_witnesses_for_instance = storage_queries[range].to_vec();
 
         let range = AdvancingRange::get_range_from(&cold_warm_refunds_logs, cycle_range.clone());
-        let cold_warm_refund_logs_for_instance = cold_warm_refunds_logs.drain(range).collect();
+        let cold_warm_refund_logs_for_instance = cold_warm_refunds_logs[range].to_vec();
 
         let range = AdvancingRange::get_range_from(&pubdata_cost_logs, cycle_range.clone());
-        let pubdata_cost_logs_for_instance = pubdata_cost_logs.drain(range).collect();
+        let pubdata_cost_logs_for_instance = pubdata_cost_logs[range].to_vec();
 
         let range = AdvancingRange::get_range_from(
             &all_prepared_decommittment_queries,
             cycle_range.clone(),
         );
         let decommittment_requests_witness_for_instance =
-            all_prepared_decommittment_queries.drain(range).collect();
+            all_prepared_decommittment_queries[range].to_vec();
 
         let range =
             AdvancingRange::get_range_from(&rollback_queue_tails_for_frames, cycle_range.clone());
         let rollback_queue_initial_tails_for_new_frames_for_instance =
-            rollback_queue_tails_for_frames.drain(range).collect();
+            rollback_queue_tails_for_frames[range].to_vec();
 
         let range =
             AdvancingRange::get_range_from(&callstack_values_witnesses, cycle_range.clone());
         let callstack_values_witnesses_for_instance =
-            callstack_values_witnesses.drain(range).collect();
+            callstack_values_witnesses[range].to_vec();
 
         let range =
             AdvancingRange::get_range_from(&rollback_queue_head_segments, cycle_range.clone());
         let rollback_queue_head_segments_for_instance =
-            rollback_queue_head_segments.drain(range).collect();
+            rollback_queue_head_segments[range].to_vec();
 
         let range = AdvancingRange::get_range_from(&flat_new_frames_history, cycle_range.clone());
         let callstack_new_frames_witnesses_for_instance =
-            flat_new_frames_history.drain(range).collect();
+            flat_new_frames_history[range].to_vec();
 
         let main_vm_input = MainVmSimulationInput {
             decommittment_queue_states_for_entry: decommitment_queue_state,
@@ -1399,6 +1404,7 @@ fn repack_input_for_main_vm(
         };
 
         main_vm_inputs.push(main_vm_input);
+
     }
 
     // special pass for last one
@@ -1696,7 +1702,7 @@ pub(crate) fn create_artifacts_from_tracer<
     round_function: &Poseidon2Goldilocks,
     geometry: &GeometryConfig,
     entry_point_decommittment_query: (DecommittmentQuery, Vec<U256>),
-    tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
+    tree: impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
     num_non_deterministic_heap_queries: usize,
     zk_porter_is_available: bool,
     default_aa_code_hash: U256,

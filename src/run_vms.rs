@@ -7,6 +7,7 @@ use crate::snark_wrapper::boojum::gadgets::recursion::recursive_tree_hasher::Cir
 use crate::toolset::create_tools;
 use crate::toolset::GeometryConfig;
 use crate::witness::oracle::create_artifacts_from_tracer;
+use crate::witness::tracer::WitnessTracer;
 use crate::witness::tree::BinarySparseStorageTree;
 use crate::witness::tree::ZkSyncStorageLeaf;
 use crate::witness::utils::{
@@ -83,7 +84,7 @@ pub fn run_vms<
     cycle_limit: usize,
     geometry: GeometryConfig,
     storage: S,
-    tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
+    tree: impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
     trusted_setup_path: &str,
     eip_4844_repack_inputs: [Option<Vec<u8>>; MAX_4844_BLOBS_PER_BLOCK],
     circuit_callback: CB,
@@ -230,7 +231,7 @@ pub fn run_vms<
 
     println!("Out of circuit tracing is complete, now running witness generation");
 
-    let vm_local_state = out_of_circuit_vm.local_state;
+    let vm_local_state = out_of_circuit_vm.local_state.clone();
 
     if !next_snapshot_will_capture_end_of_execution {
         // perform the final snapshot
@@ -243,10 +244,11 @@ pub fn run_vms<
         out_of_circuit_vm.witness_tracer.vm_snapshots.push(snapshot);
     }
 
-    // dbg!(tools.witness_tracer.vm_snapshots.len());
+    let witness_tracer = out_of_circuit_vm.witness_tracer.clone();
+    drop(out_of_circuit_vm);
 
     let (basic_circuits, compact_form_witnesses, eip4844_circuits) = create_artifacts_from_tracer(
-        out_of_circuit_vm.witness_tracer,
+        witness_tracer,
         &round_function,
         &geometry,
         (

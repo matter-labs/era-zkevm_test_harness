@@ -267,7 +267,7 @@ pub(crate) fn generate_base_layer(
         cycle_limit,
         geometry,
         storage_impl,
-        &mut tree,
+        tree,
         "kzg/src/trusted_setup.json",
         blobs,
         |circuit| basic_block_circuits.push(circuit),

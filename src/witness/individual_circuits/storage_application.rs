@@ -37,7 +37,7 @@ pub(crate) fn decompose_into_storage_application_witnesses<
 >(
     deduplicated_rollup_storage_queue_simulator: LogQueueSimulator<GoldilocksField>,
     deduplicated_rollup_storage_queries: Vec<LogQuery>,
-    tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
+    mut tree: impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
     round_function: &Poseidon2Goldilocks,
     num_rounds_per_circuit: usize,
     geometry: &GeometryConfig,
