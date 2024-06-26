@@ -1,3 +1,5 @@
+use circuit_sequencer_api::INITIAL_MONOTONIC_CYCLE_COUNTER;
+
 use crate::witness::advancing_range::TupleFirst;
 
 /// Used to store queries that will be used for the main VM witness generation.
@@ -40,9 +42,16 @@ impl<T: TupleFirst> QueueForMainVm<T> {
         _self
     }
 
+    /// Will ignore queries before INITIAL_MONOTONIC_CYCLE_COUNTER
     pub fn push(&mut self, val: T) {
         let cycle = val.first() as usize;
-        let batch_index = cycle / self.cycles_per_vm_snapshot;
+
+        // we should not have any snapshots before INITIAL_MONOTONIC_CYCLE_COUNTER
+        if cycle < INITIAL_MONOTONIC_CYCLE_COUNTER as usize {
+            return;
+        }
+
+        let batch_index = (cycle - INITIAL_MONOTONIC_CYCLE_COUNTER as usize) / self.cycles_per_vm_snapshot;
 
         while self.inner.len() <= batch_index {
             self.seal_last_batch();
@@ -53,7 +62,12 @@ impl<T: TupleFirst> QueueForMainVm<T> {
         batch.push(val);
     }
 
-    pub fn into_batches(self) -> Vec<Vec<T>> {
+    pub fn into_batches(mut self, amount_of_circuits: usize) -> Vec<Vec<T>> {
+        while self.inner.len() < amount_of_circuits {
+            self.seal_last_batch();
+            self.push_new_batch();
+        }
+
         self.inner
     }
 

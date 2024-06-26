@@ -1314,30 +1314,32 @@ fn repack_input_for_main_vm(
 
     let amount_of_circuits = vm_snapshots.windows(2).enumerate().len(); // TODO clean
 
-    let mut memory_read_witnesses_it = memory_read_witnesses.into_batches().into_iter();
-    let mut memory_write_witnesses_it = memory_write_witnesses.into_batches().into_iter();
+    let mut memory_read_witnesses_it = memory_read_witnesses.into_batches(amount_of_circuits).into_iter();
+    let mut memory_write_witnesses_it = memory_write_witnesses.into_batches(amount_of_circuits).into_iter();
 
-    let mut storage_queries_it = storage_queries.into_batches().into_iter();
-    let mut cold_warm_refunds_logs_it = cold_warm_refunds_logs.into_batches().into_iter();
-    let mut pubdata_cost_logs_it = pubdata_cost_logs.into_batches().into_iter();
+    let mut storage_queries_it = storage_queries.into_batches(amount_of_circuits).into_iter();
+    let mut cold_warm_refunds_logs_it = cold_warm_refunds_logs.into_batches(amount_of_circuits).into_iter();
+    let mut pubdata_cost_logs_it = pubdata_cost_logs.into_batches(amount_of_circuits).into_iter();
     let mut flat_new_frames_history_it = QueueForMainVm::from_iter(
         geometry.cycles_per_vm_snapshot as usize,
         flat_new_frames_history.into_iter()
-        ).into_batches().into_iter();
+        ).into_batches(amount_of_circuits).into_iter();
 
     let mut rollback_queue_tails_for_frames_it = QueueForMainVm::from_iter(
         geometry.cycles_per_vm_snapshot as usize,
         rollback_queue_tails_for_frames.into_iter()
-        ).into_batches().into_iter();
+        ).into_batches(amount_of_circuits).into_iter();
 
 
-    let mut rollback_queue_head_segments_it = rollback_queue_head_segments.into_batches().into_iter();
-    let mut callstack_values_witnesses_it = callstack_values_witnesses.into_batches().into_iter();
+    let mut rollback_queue_head_segments_it = rollback_queue_head_segments.into_batches(amount_of_circuits).into_iter();
+    let mut callstack_values_witnesses_it = callstack_values_witnesses.into_batches(amount_of_circuits).into_iter();
     snapshot_prof("Repack: prepared iters");
 
     for (_circuit_idx, pair) in vm_snapshots.windows(2).enumerate() {
-        if _circuit_idx % (amount_of_circuits / 100) == 0 {
-            println!("{} / {}", _circuit_idx, amount_of_circuits);
+        if amount_of_circuits / 100 != 0 {
+            if _circuit_idx % (amount_of_circuits / 100) == 0 {
+                println!("{} / {}", _circuit_idx, amount_of_circuits);
+            }
         }
         let initial_state = &pair[0];
         let final_state = &pair[1];
@@ -1589,9 +1591,10 @@ fn process_main_vm<
     for ((circuit_idx, pair), main_vm_input) in
         vm_snapshots.windows(2).enumerate().zip(main_vm_inputs)
     {
-
-        if circuit_idx % (amount_of_circuits / 100) == 0 {
-            println!("{} / {}", circuit_idx, amount_of_circuits);
+        if amount_of_circuits / 100 != 0 {
+            if circuit_idx % (amount_of_circuits / 100) == 0 {
+                println!("{} / {}", circuit_idx, amount_of_circuits);
+            }
         }
 
         let is_last = circuit_idx == circuits_len - 1;
