@@ -422,6 +422,7 @@ fn run_and_try_create_witness_inner(
         if options.try_reuse_artifacts {
             if let Ok(_) = source.get_base_layer_proof(el.numeric_circuit_type(), instance_idx) {
                 instance_idx += 1;
+                previous_circuit_type = el.numeric_circuit_type();
                 continue;
             }
         }
