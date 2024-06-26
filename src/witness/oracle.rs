@@ -4,6 +4,7 @@
 
 use super::callstack_handler::*;
 use super::postprocessing::{BlockFirstAndLastBasicCircuitsObservableWitnesses, ClosedFormInputField, CsForWitnessGeneration, FirstAndLastCircuitWitness};
+use super::queue_for_main_vm::QueueForMainVm;
 use super::utils::*;
 use crate::boojum::field::SmallField;
 use crate::boojum::gadgets::queue::{QueueState, QueueStateWitness, QueueTailStateWitness};
@@ -488,13 +489,14 @@ use circuit_definitions::encodings::callstack_entry::{
 
 struct CallstackSimulationResult<F: SmallField> {
     callstack_sponge_encoding_ranges: Vec<(u32, [F; FULL_SPONGE_QUEUE_STATE_WIDTH])>,
-    callstack_values_witnesses: Vec<(u32, (ExtendedCallstackEntry<F>, CallstackSimulatorState<F>))>,
-    rollback_queue_head_segments: Vec<(u32, [F; QUEUE_STATE_WIDTH])>,
+    callstack_values_witnesses: QueueForMainVm<(u32, (ExtendedCallstackEntry<F>, CallstackSimulatorState<F>))>,
+    rollback_queue_head_segments: QueueForMainVm<(u32, [F; QUEUE_STATE_WIDTH])>,
     history_of_storage_log_states: BTreeMap<u32, StorageLogDetailedState<F>>,
     global_end_of_storage_log: [F; QUEUE_STATE_WIDTH],
 }
 
 fn callstack_simulation<'a>(
+    geometry: &GeometryConfig,
     callstack_with_aux_data: &'a CallstackWithAuxData,
     log_simulation_result: &LogSimulationResult<'a, GoldilocksField>,
     round_function: &Poseidon2Goldilocks,
@@ -502,7 +504,7 @@ fn callstack_simulation<'a>(
     let mut callstack_argebraic_simulator = CallstackSimulator::empty();
 
     // index of cycle -> witness for callstack
-    let mut callstack_values_witnesses = vec![];
+    let mut callstack_values_witnesses = QueueForMainVm::new(geometry.cycles_per_vm_snapshot as usize);
     // we need to simultaneously follow the logic of pushes/joins of the storage queues,
     // and encoding of the current callstack state as the sponge state
 
@@ -533,7 +535,7 @@ fn callstack_simulation<'a>(
 
     // so we can quickly reconstruct every current state
 
-    let mut rollback_queue_head_segments: Vec<(u32, [GoldilocksField; QUEUE_STATE_WIDTH])> = vec![];
+    let mut rollback_queue_head_segments: QueueForMainVm<(u32, [GoldilocksField; QUEUE_STATE_WIDTH])> = QueueForMainVm::new(geometry.cycles_per_vm_snapshot as usize);
 
     for (cycle, (_forward, rollback)) in log_simulation_result.cycle_to_query_and_rollback.iter() {
         if let Some(pointer) = rollback {
@@ -1247,19 +1249,20 @@ use circuit_definitions::encodings::decommittment_request::DecommittmentQueueSta
 use circuit_definitions::encodings::memory_query::MemoryQueueState;
 
 fn repack_input_for_main_vm(
+    geometry: &GeometryConfig,
     vm_snapshots: &Vec<VmSnapshot>,
     memory_artifacts: MemoryArtifacts<GoldilocksField>,
     callstack_simulation_result: CallstackSimulationResult<GoldilocksField>,
-    mut storage_queries: Vec<(u32, LogQuery)>,
-    mut cold_warm_refunds_logs: Vec<(u32, LogQuery, u32)>,
-    mut pubdata_cost_logs: Vec<(u32, LogQuery, PubdataCost)>,
-    mut rollback_queue_tails_for_frames: Vec<(u32, [GoldilocksField; QUEUE_STATE_WIDTH])>,
-    mut flat_new_frames_history: Vec<(u32, CallStackEntry)>,
+    storage_queries: QueueForMainVm<(u32, LogQuery)>,
+    cold_warm_refunds_logs: QueueForMainVm<(u32, LogQuery, u32)>,
+    pubdata_cost_logs: QueueForMainVm<(u32, LogQuery, PubdataCost)>,
+    rollback_queue_tails_for_frames: Vec<(u32, [GoldilocksField; QUEUE_STATE_WIDTH])>,
+    flat_new_frames_history: Vec<(u32, CallStackEntry)>,
 ) -> Vec<MainVmSimulationInput> {
     let MemoryArtifacts {
         vm_memory_query_cycles,
         all_decommittment_queue_states,
-        mut all_prepared_decommittment_queries,
+        all_prepared_decommittment_queries,
         all_memory_queue_states,
         all_memory_queries_accumulated,
         ..
@@ -1268,8 +1271,8 @@ fn repack_input_for_main_vm(
     // TODO do not move?
     let CallstackSimulationResult {
         callstack_sponge_encoding_ranges,
-        mut callstack_values_witnesses,
-        mut rollback_queue_head_segments,
+        callstack_values_witnesses,
+        rollback_queue_head_segments,
         history_of_storage_log_states,
         global_end_of_storage_log,
     } = callstack_simulation_result;
@@ -1287,16 +1290,22 @@ fn repack_input_for_main_vm(
         .copied()
         .zip(all_memory_queries_accumulated)
         .collect();
-    let mut memory_write_witnesses: Vec<(u32, MemoryQuery)> = vm_memory_queries_accumulated
+
+    let memory_write_witnesses = QueueForMainVm::from_iter(
+        geometry.cycles_per_vm_snapshot as usize,
+        vm_memory_queries_accumulated
         .iter()
         .filter(|(_, query)| query.rw_flag)
         .copied()
-        .collect();
-    let mut memory_read_witnesses: Vec<(u32, MemoryQuery)> = vm_memory_queries_accumulated
+    );
+
+    let memory_read_witnesses = QueueForMainVm::from_iter(
+        geometry.cycles_per_vm_snapshot as usize,
+        vm_memory_queries_accumulated
         .iter()
         .filter(|(_, query)| !query.rw_flag)
         .copied()
-        .collect();
+    );
     drop(vm_memory_queries_accumulated);
 
     snapshot_prof("Repack: splitted witnesses");
@@ -1304,6 +1313,27 @@ fn repack_input_for_main_vm(
     // prepare some inputs for MainVM circuits
 
     let amount_of_circuits = vm_snapshots.windows(2).enumerate().len(); // TODO clean
+
+    let mut memory_read_witnesses_it = memory_read_witnesses.into_batches().into_iter();
+    let mut memory_write_witnesses_it = memory_write_witnesses.into_batches().into_iter();
+
+    let mut storage_queries_it = storage_queries.into_batches().into_iter();
+    let mut cold_warm_refunds_logs_it = cold_warm_refunds_logs.into_batches().into_iter();
+    let mut pubdata_cost_logs_it = pubdata_cost_logs.into_batches().into_iter();
+    let mut flat_new_frames_history_it = QueueForMainVm::from_iter(
+        geometry.cycles_per_vm_snapshot as usize,
+        flat_new_frames_history.into_iter()
+        ).into_batches().into_iter();
+
+    let mut rollback_queue_tails_for_frames_it = QueueForMainVm::from_iter(
+        geometry.cycles_per_vm_snapshot as usize,
+        rollback_queue_tails_for_frames.into_iter()
+        ).into_batches().into_iter();
+
+
+    let mut rollback_queue_head_segments_it = rollback_queue_head_segments.into_batches().into_iter();
+    let mut callstack_values_witnesses_it = callstack_values_witnesses.into_batches().into_iter();
+    snapshot_prof("Repack: prepared iters");
 
     for (_circuit_idx, pair) in vm_snapshots.windows(2).enumerate() {
         if _circuit_idx % (amount_of_circuits / 100) == 0 {
@@ -1344,20 +1374,12 @@ fn repack_input_for_main_vm(
             .map(|el| el.1)
             .unwrap_or([GoldilocksField::ZERO; FULL_SPONGE_QUEUE_STATE_WIDTH]);
 
-        let range = AdvancingRange::get_range_from(&memory_write_witnesses, cycle_range.clone());
-        let memory_write_witnesses_for_instance = memory_write_witnesses[range].to_vec();
+        let memory_read_witnesses_for_instance = memory_read_witnesses_it.next().unwrap();
+        let memory_write_witnesses_for_instance = memory_write_witnesses_it.next().unwrap();
 
-        let range = AdvancingRange::get_range_from(&memory_read_witnesses, cycle_range.clone());
-        let memory_read_witnesses_for_instance = memory_read_witnesses[range].to_vec();
-
-        let range = AdvancingRange::get_range_from(&storage_queries, cycle_range.clone());
-        let storage_queries_witnesses_for_instance = storage_queries[range].to_vec();
-
-        let range = AdvancingRange::get_range_from(&cold_warm_refunds_logs, cycle_range.clone());
-        let cold_warm_refund_logs_for_instance = cold_warm_refunds_logs[range].to_vec();
-
-        let range = AdvancingRange::get_range_from(&pubdata_cost_logs, cycle_range.clone());
-        let pubdata_cost_logs_for_instance = pubdata_cost_logs[range].to_vec();
+        let storage_queries_witnesses_for_instance = storage_queries_it.next().unwrap();
+        let cold_warm_refund_logs_for_instance = cold_warm_refunds_logs_it.next().unwrap();
+        let pubdata_cost_logs_for_instance = pubdata_cost_logs_it.next().unwrap();
 
         let range = AdvancingRange::get_range_from(
             &all_prepared_decommittment_queries,
@@ -1366,24 +1388,10 @@ fn repack_input_for_main_vm(
         let decommittment_requests_witness_for_instance =
             all_prepared_decommittment_queries[range].to_vec();
 
-        let range =
-            AdvancingRange::get_range_from(&rollback_queue_tails_for_frames, cycle_range.clone());
-        let rollback_queue_initial_tails_for_new_frames_for_instance =
-            rollback_queue_tails_for_frames[range].to_vec();
-
-        let range =
-            AdvancingRange::get_range_from(&callstack_values_witnesses, cycle_range.clone());
-        let callstack_values_witnesses_for_instance =
-            callstack_values_witnesses[range].to_vec();
-
-        let range =
-            AdvancingRange::get_range_from(&rollback_queue_head_segments, cycle_range.clone());
-        let rollback_queue_head_segments_for_instance =
-            rollback_queue_head_segments[range].to_vec();
-
-        let range = AdvancingRange::get_range_from(&flat_new_frames_history, cycle_range.clone());
-        let callstack_new_frames_witnesses_for_instance =
-            flat_new_frames_history[range].to_vec();
+        let rollback_queue_initial_tails_for_new_frames_for_instance = rollback_queue_tails_for_frames_it.next().unwrap();
+        let callstack_values_witnesses_for_instance = callstack_values_witnesses_it.next().unwrap();
+        let rollback_queue_head_segments_for_instance = rollback_queue_head_segments_it.next().unwrap();
+        let callstack_new_frames_witnesses_for_instance = flat_new_frames_history_it.next().unwrap();
 
         let main_vm_input = MainVmSimulationInput {
             decommittment_queue_states_for_entry: decommitment_queue_state,
@@ -1472,9 +1480,9 @@ fn process_main_vm<
     geometry: &GeometryConfig,
     in_circuit_global_context: GlobalContextWitness<GoldilocksField>,
     memory_artifacts: MemoryArtifacts<GoldilocksField>,
-    storage_queries: Vec<(u32, LogQuery)>,
-    cold_warm_refunds_logs: Vec<(u32, LogQuery, u32)>,
-    pubdata_cost_logs: Vec<(u32, LogQuery, PubdataCost)>,
+    storage_queries: QueueForMainVm<(u32, LogQuery)>,
+    cold_warm_refunds_logs: QueueForMainVm<(u32, LogQuery, u32)>,
+    pubdata_cost_logs: QueueForMainVm<(u32, LogQuery, PubdataCost)>,
     rollback_queue_tails_for_frames: Vec<(u32, [GoldilocksField; QUEUE_STATE_WIDTH])>,
     callstack_simulation_result: CallstackSimulationResult<GoldilocksField>,
     flat_new_frames_history: Vec<(u32, CallStackEntry)>,
@@ -1559,6 +1567,7 @@ fn process_main_vm<
     snapshot_prof("Before mainVM processing");
 
     let main_vm_inputs = repack_input_for_main_vm(
+        geometry,
         &vm_snapshots,
         memory_artifacts,
         callstack_simulation_result,
@@ -1575,10 +1584,16 @@ fn process_main_vm<
 
     snapshot_prof("Before mainVM processing cycle");
 
+    let amount_of_circuits = vm_snapshots.windows(2).enumerate().len();
     // parallelizable
     for ((circuit_idx, pair), main_vm_input) in
         vm_snapshots.windows(2).enumerate().zip(main_vm_inputs)
     {
+
+        if circuit_idx % (amount_of_circuits / 100) == 0 {
+            println!("{} / {}", circuit_idx, amount_of_circuits);
+        }
+
         let is_last = circuit_idx == circuits_len - 1;
 
         let initial_state = &pair[0];
@@ -1673,13 +1688,12 @@ fn process_main_vm<
                 auxilary_final_parameters: VmInCircuitAuxilaryParameters::default(), // we will use next circuit's initial as final here!
             };
             previous_instance_witness = Some(instance_witness);
-
-            let lbl = format!("MainVM processing cycle instance built {}", circuit_idx);
-            snapshot_prof(&lbl);
         } else {
             previous_instance_witness = None;
         }
     }
+
+    snapshot_prof("MainVM processing cycle finished");
 
     recursion_queue_callback(
         BaseLayerCircuitType::VM as u64,
@@ -1759,6 +1773,7 @@ pub(crate) fn create_artifacts_from_tracer<
 
     // TODO can be moved after process_log_circuits
     let callstack_simulation_result = callstack_simulation(
+        geometry,
         &callstack_with_aux_data,
         &log_simulation_result,
         round_function,

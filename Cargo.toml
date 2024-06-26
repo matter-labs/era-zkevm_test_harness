@@ -48,7 +48,6 @@ indicatif = "0.16"
 
 [profile.release]
 debug = false
-lto = false
 incremental = true
 
 [profile.bench]

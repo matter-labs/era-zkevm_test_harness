@@ -12,6 +12,7 @@ pub mod tracer;
 pub mod tree;
 pub mod utils;
 pub mod vm_snapshot;
+pub mod queue_for_main_vm;
 
 // pub mod vk_set_generator;
 // pub mod block_header;
