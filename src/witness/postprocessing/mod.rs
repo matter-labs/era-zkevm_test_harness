@@ -487,3 +487,62 @@ where
         (self.extremes, self.queue_simulator, compact_form_witnesses)
     }
 }
+
+pub(crate) fn make_circuit<
+T: ClosedFormInputField<GoldilocksField>,
+S: ZkSyncUniformSynthesisFunction<GoldilocksField>,
+CB: FnMut(ZkSyncUniformCircuitInstance<GoldilocksField, S>),
+QSCB: FnMut(
+    u64,
+    RecursionQueueSimulator<GoldilocksField>,
+    Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
+),
+> 
+(
+    geometry: u32,
+    circuit_type: BaseLayerCircuitType,
+    circuits_data: Vec<T>,
+    round_function: Poseidon2Goldilocks,
+    mut circuit_callback: CB,
+    recursion_queue_callback: &mut QSCB,
+    cs_for_witness_generation: &mut CsForWitnessGeneration
+) -> (FirstAndLastCircuitWitness<ObservableWitness<GoldilocksField, T>>, Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>)
+where 
+<T::T as CSAllocatable<GoldilocksField>>::Witness:
+serde::Serialize + serde::de::DeserializeOwned + Eq,
+<T::IN as CSAllocatable<GoldilocksField>>::Witness:
+serde::Serialize + serde::de::DeserializeOwned + Eq,
+<T::OUT as CSAllocatable<GoldilocksField>>::Witness:
+serde::Serialize + serde::de::DeserializeOwned + Eq,
+S: ZkSyncUniformSynthesisFunction<
+    GoldilocksField,
+    Config = usize,
+    Witness = T,
+    RoundFunction = Poseidon2Goldilocks,
+>
+{
+    let mut maker = CircuitMaker::new(
+        geometry,
+        round_function.clone(),
+        cs_for_witness_generation,
+    );
+
+    for circuit_input in circuits_data.into_iter() {
+        circuit_callback(
+            maker.process(circuit_input, circuit_type),
+        );
+    }
+
+    let (
+        ecrecover_precompile_circuits,
+        queue_simulator,
+        ecrecover_precompile_circuits_compact_forms_witnesses,
+    ) = maker.into_results();
+    recursion_queue_callback(
+        circuit_type as u64,
+        queue_simulator,
+        ecrecover_precompile_circuits_compact_forms_witnesses.clone(),
+    );
+
+    (ecrecover_precompile_circuits, ecrecover_precompile_circuits_compact_forms_witnesses)
+}

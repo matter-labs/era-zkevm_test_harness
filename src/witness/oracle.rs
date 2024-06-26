@@ -15,7 +15,7 @@ use crate::witness::advancing_range::AdvancingRange;
 use crate::witness::artifacts::{
     CircuitArtifacts, DemuxedQueries, ImplicitMemoryArtifacts, MemoryArtifacts,
 };
-use crate::witness::postprocessing::CircuitMaker;
+use crate::witness::postprocessing::{make_circuit, CircuitMaker};
 use crate::witness::tracer::{QueryMarker, WitnessTracer};
 use crate::witness::vm_snapshot::VmSnapshot;
 use crate::zk_evm::aux_structures::DecommittmentQuery;
@@ -1894,341 +1894,169 @@ pub(crate) fn create_artifacts_from_tracer<
             secp256r1_verify_circuits_data,
         } = log_circuits_artifacts;
 
-        // Code decommitter sorter
-        let circuit_type = BaseLayerCircuitType::DecommitmentsFilter;
-
-        let mut maker = CircuitMaker::new(
-            geometry.cycles_code_decommitter_sorter,
-            round_function.clone(),
-            &mut cs_for_witness_generation,
-        );
-
         snapshot_prof("Before additional circuits");
 
-        for circuit_input in decommittments_deduplicator_circuits_data.into_iter() {
-            circuit_callback(ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(
-                maker.process(circuit_input, circuit_type),
-            ));
-        }
-
-        let (
-            code_decommittments_sorter_circuits,
-            queue_simulator,
-            code_decommittments_sorter_circuits_compact_forms_witnesses,
-        ) = maker.into_results();
-        recursion_queue_callback(
-            circuit_type as u64,
-            queue_simulator,
-            code_decommittments_sorter_circuits_compact_forms_witnesses.clone(),
+        // Code decommitter sorter
+        let (code_decommittments_sorter_circuits, code_decommittments_sorter_circuits_compact_forms_witnesses) = make_circuit(
+            geometry.cycles_code_decommitter_sorter, 
+            BaseLayerCircuitType::DecommitmentsFilter, 
+            decommittments_deduplicator_circuits_data, 
+            round_function.clone(), 
+            |x| circuit_callback(ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(x)), 
+            &mut recursion_queue_callback, 
+            &mut cs_for_witness_generation
         );
 
         snapshot_prof("Decommitments dedup");
 
         // Actual decommitter
-        let circuit_type = BaseLayerCircuitType::Decommiter;
-
-        let mut maker = CircuitMaker::new(
-            geometry.cycles_per_code_decommitter,
-            round_function.clone(),
-            &mut cs_for_witness_generation,
-        );
-
-        for circuit_input in code_decommitter_circuits_data.into_iter() {
-            circuit_callback(ZkSyncBaseLayerCircuit::CodeDecommitter(
-                maker.process(circuit_input, circuit_type),
-            ));
-        }
-
-        let (
-            code_decommitter_circuits,
-            queue_simulator,
-            code_decommitter_circuits_compact_forms_witnesses,
-        ) = maker.into_results();
-        recursion_queue_callback(
-            circuit_type as u64,
-            queue_simulator,
-            code_decommitter_circuits_compact_forms_witnesses.clone(),
+        let (code_decommitter_circuits, code_decommitter_circuits_compact_forms_witnesses) = make_circuit(
+            geometry.cycles_per_code_decommitter, 
+            BaseLayerCircuitType::Decommiter, 
+            code_decommitter_circuits_data, 
+            round_function.clone(), 
+            |x| circuit_callback(ZkSyncBaseLayerCircuit::CodeDecommitter(x)), 
+            &mut recursion_queue_callback, 
+            &mut cs_for_witness_generation
         );
 
         snapshot_prof("Decommiter");
 
         // keccak precompiles
-        let circuit_type = BaseLayerCircuitType::KeccakPrecompile;
-
-        let mut maker = CircuitMaker::new(
-            geometry.cycles_per_keccak256_circuit,
-            round_function.clone(),
-            &mut cs_for_witness_generation,
-        );
-
-        for circuit_input in keccak256_circuits_data.into_iter() {
-            circuit_callback(ZkSyncBaseLayerCircuit::KeccakRoundFunction(
-                maker.process(circuit_input, circuit_type),
-            ));
-        }
-
-        let (
-            keccak_precompile_circuits,
-            queue_simulator,
-            keccak_precompile_circuits_compact_forms_witnesses,
-        ) = maker.into_results();
-        recursion_queue_callback(
-            circuit_type as u64,
-            queue_simulator,
-            keccak_precompile_circuits_compact_forms_witnesses.clone(),
+        let (keccak_precompile_circuits, keccak_precompile_circuits_compact_forms_witnesses) = make_circuit(
+            geometry.cycles_per_keccak256_circuit, 
+            BaseLayerCircuitType::KeccakPrecompile, 
+            keccak256_circuits_data, 
+            round_function.clone(), 
+            |x| circuit_callback(ZkSyncBaseLayerCircuit::KeccakRoundFunction(x)), 
+            &mut recursion_queue_callback, 
+            &mut cs_for_witness_generation
         );
 
         snapshot_prof("Keccak");
 
         // sha256 precompiles
-        let circuit_type = BaseLayerCircuitType::Sha256Precompile;
-
-        let mut maker = CircuitMaker::new(
-            geometry.cycles_per_sha256_circuit,
-            round_function.clone(),
-            &mut cs_for_witness_generation,
-        );
-
-        for circuit_input in sha256_circuits_data.into_iter() {
-            circuit_callback(ZkSyncBaseLayerCircuit::Sha256RoundFunction(
-                maker.process(circuit_input, circuit_type),
-            ));
-        }
-
-        let (
-            sha256_precompile_circuits,
-            queue_simulator,
-            sha256_precompile_circuits_compact_forms_witnesses,
-        ) = maker.into_results();
-        recursion_queue_callback(
-            circuit_type as u64,
-            queue_simulator,
-            sha256_precompile_circuits_compact_forms_witnesses.clone(),
+        let (sha256_precompile_circuits, sha256_precompile_circuits_compact_forms_witnesses) = make_circuit(
+            geometry.cycles_per_sha256_circuit, 
+            BaseLayerCircuitType::Sha256Precompile, 
+            sha256_circuits_data, 
+            round_function.clone(), 
+            |x| circuit_callback(ZkSyncBaseLayerCircuit::Sha256RoundFunction(x)), 
+            &mut recursion_queue_callback, 
+            &mut cs_for_witness_generation
         );
 
         snapshot_prof("Sha256");
 
         // ecrecover precompiles
-        let circuit_type = BaseLayerCircuitType::EcrecoverPrecompile;
-
-        let mut maker = CircuitMaker::new(
-            geometry.cycles_per_ecrecover_circuit,
-            round_function.clone(),
-            &mut cs_for_witness_generation,
-        );
-
-        for circuit_input in ecrecover_circuits_data.into_iter() {
-            circuit_callback(ZkSyncBaseLayerCircuit::ECRecover(
-                maker.process(circuit_input, circuit_type),
-            ));
-        }
-
-        let (
-            ecrecover_precompile_circuits,
-            queue_simulator,
-            ecrecover_precompile_circuits_compact_forms_witnesses,
-        ) = maker.into_results();
-        recursion_queue_callback(
-            circuit_type as u64,
-            queue_simulator,
-            ecrecover_precompile_circuits_compact_forms_witnesses.clone(),
+        let (ecrecover_precompile_circuits, ecrecover_precompile_circuits_compact_forms_witnesses) = make_circuit(
+            geometry.cycles_per_ecrecover_circuit, 
+            BaseLayerCircuitType::EcrecoverPrecompile, 
+            ecrecover_circuits_data, 
+            round_function.clone(), 
+            |x| circuit_callback(ZkSyncBaseLayerCircuit::ECRecover(x)), 
+            &mut recursion_queue_callback, 
+            &mut cs_for_witness_generation
         );
 
         snapshot_prof("Ecrecover");
 
-        // storage sorter
-        let circuit_type = BaseLayerCircuitType::StorageFilter;
-
-        let mut maker = CircuitMaker::new(
-            geometry.cycles_per_storage_sorter,
-            round_function.clone(),
-            &mut cs_for_witness_generation,
+        // secp256r1 verify
+        let (secp256r1_verify_circuits, secp256r1_verify_circuits_compact_forms_witnesses) = make_circuit(
+            geometry.cycles_per_secp256r1_verify_circuit, 
+            BaseLayerCircuitType::Secp256r1Verify, 
+            secp256r1_verify_circuits_data, 
+            round_function.clone(), 
+            |x| circuit_callback(ZkSyncBaseLayerCircuit::Secp256r1Verify(x)), 
+            &mut recursion_queue_callback, 
+            &mut cs_for_witness_generation
         );
 
-        for circuit_input in storage_deduplicator_circuit_data.into_iter() {
-            circuit_callback(ZkSyncBaseLayerCircuit::StorageSorter(
-                maker.process(circuit_input, circuit_type),
-            ));
-        }
+        snapshot_prof("Secp256 verify");
 
-        let (
-            storage_sorter_circuits,
-            queue_simulator,
-            storage_sorter_circuit_compact_form_witnesses,
-        ) = maker.into_results();
-        recursion_queue_callback(
-            circuit_type as u64,
-            queue_simulator,
-            storage_sorter_circuit_compact_form_witnesses.clone(),
+        // storage sorter
+        let (storage_sorter_circuits, storage_sorter_circuit_compact_form_witnesses) = make_circuit(
+            geometry.cycles_per_storage_sorter, 
+            BaseLayerCircuitType::StorageFilter, 
+            storage_deduplicator_circuit_data, 
+            round_function.clone(), 
+            |x| circuit_callback(ZkSyncBaseLayerCircuit::StorageSorter(x)), 
+            &mut recursion_queue_callback, 
+            &mut cs_for_witness_generation
         );
 
         snapshot_prof("Storage sorter");
 
         // events sorter
-        let circuit_type = BaseLayerCircuitType::EventsRevertsFilter;
-
-        let mut maker = CircuitMaker::new(
-            geometry.cycles_per_events_or_l1_messages_sorter,
-            round_function.clone(),
-            &mut cs_for_witness_generation,
-        );
-
-        for circuit_input in events_deduplicator_circuit_data.into_iter() {
-            circuit_callback(ZkSyncBaseLayerCircuit::EventsSorter(
-                maker.process(circuit_input, circuit_type),
-            ));
-        }
-
-        let (
-            events_sorter_circuits,
-            queue_simulator,
-            events_sorter_circuits_compact_forms_witnesses,
-        ) = maker.into_results();
-        recursion_queue_callback(
-            circuit_type as u64,
-            queue_simulator,
-            events_sorter_circuits_compact_forms_witnesses.clone(),
+        let (events_sorter_circuits, events_sorter_circuits_compact_forms_witnesses) = make_circuit(
+            geometry.cycles_per_events_or_l1_messages_sorter, 
+            BaseLayerCircuitType::EventsRevertsFilter, 
+            events_deduplicator_circuit_data, 
+            round_function.clone(), 
+            |x| circuit_callback(ZkSyncBaseLayerCircuit::EventsSorter(x)), 
+            &mut recursion_queue_callback, 
+            &mut cs_for_witness_generation
         );
 
         snapshot_prof("Events sorter");
 
         // l1 messages sorter
-        let circuit_type = BaseLayerCircuitType::L1MessagesRevertsFilter;
-
-        let mut maker = CircuitMaker::new(
-            geometry.cycles_per_events_or_l1_messages_sorter,
-            round_function.clone(),
-            &mut cs_for_witness_generation,
-        );
-
-        for circuit_input in l1_messages_deduplicator_circuit_data.into_iter() {
-            circuit_callback(ZkSyncBaseLayerCircuit::L1MessagesSorter(
-                maker.process(circuit_input, circuit_type),
-            ));
-        }
-
-        let (
-            l1_messages_sorter_circuits,
-            queue_simulator,
-            l1_messages_sorter_circuits_compact_forms_witnesses,
-        ) = maker.into_results();
-        recursion_queue_callback(
-            circuit_type as u64,
-            queue_simulator,
-            l1_messages_sorter_circuits_compact_forms_witnesses.clone(),
+        let (l1_messages_sorter_circuits, l1_messages_sorter_circuits_compact_forms_witnesses) = make_circuit(
+            geometry.cycles_per_events_or_l1_messages_sorter, 
+            BaseLayerCircuitType::L1MessagesRevertsFilter, 
+            l1_messages_deduplicator_circuit_data, 
+            round_function.clone(), 
+            |x| circuit_callback(ZkSyncBaseLayerCircuit::L1MessagesSorter(x)), 
+            &mut recursion_queue_callback, 
+            &mut cs_for_witness_generation
         );
 
         snapshot_prof("L1 sorter");
 
         // l1 messages pubdata hasher
-        let circuit_type = BaseLayerCircuitType::L1MessagesHasher;
-
-        let mut maker = CircuitMaker::new(
-            geometry.limit_for_l1_messages_pudata_hasher,
-            round_function.clone(),
-            &mut cs_for_witness_generation,
-        );
-
-        for circuit_input in l1_messages_linear_hash_data.into_iter() {
-            circuit_callback(ZkSyncBaseLayerCircuit::L1MessagesHasher(
-                maker.process(circuit_input, circuit_type),
-            ));
-        }
-
-        let (
-            l1_messages_hasher_circuits,
-            queue_simulator,
-            l1_messages_hasher_circuits_compact_forms_witnesses,
-        ) = maker.into_results();
-        recursion_queue_callback(
-            circuit_type as u64,
-            queue_simulator,
-            l1_messages_hasher_circuits_compact_forms_witnesses.clone(),
+        let (l1_messages_hasher_circuits, l1_messages_hasher_circuits_compact_forms_witnesses) = make_circuit(
+            geometry.limit_for_l1_messages_pudata_hasher, 
+            BaseLayerCircuitType::L1MessagesHasher, 
+            l1_messages_linear_hash_data, 
+            round_function.clone(), 
+            |x| circuit_callback(ZkSyncBaseLayerCircuit::L1MessagesHasher(x)), 
+            &mut recursion_queue_callback, 
+            &mut cs_for_witness_generation
         );
 
         snapshot_prof("L1 messages hasher");
 
         // transient storage sorter
-        let circuit_type = BaseLayerCircuitType::TransientStorageChecker;
-
-        let mut maker = CircuitMaker::new(
-            geometry.cycles_per_transient_storage_sorter,
-            round_function.clone(),
-            &mut cs_for_witness_generation,
-        );
-
-        for circuit_input in transient_storage_sorter_circuit_data.into_iter() {
-            circuit_callback(ZkSyncBaseLayerCircuit::TransientStorageSorter(
-                maker.process(circuit_input, circuit_type),
-            ));
-        }
-
-        let (
-            transient_storage_sorter_circuits,
-            queue_simulator,
-            transient_storage_sorter_circuits_compact_forms_witnesses,
-        ) = maker.into_results();
-        recursion_queue_callback(
-            circuit_type as u64,
-            queue_simulator,
-            transient_storage_sorter_circuits_compact_forms_witnesses.clone(),
+        let (transient_storage_sorter_circuits, transient_storage_sorter_circuits_compact_forms_witnesses) = make_circuit(
+            geometry.cycles_per_transient_storage_sorter, 
+            BaseLayerCircuitType::TransientStorageChecker, 
+            transient_storage_sorter_circuit_data, 
+            round_function.clone(), 
+            |x| circuit_callback(ZkSyncBaseLayerCircuit::TransientStorageSorter(x)), 
+            &mut recursion_queue_callback, 
+            &mut cs_for_witness_generation
         );
 
         snapshot_prof("Transient storage sorter");
 
-        // secp256r1 verify
-        let circuit_type = BaseLayerCircuitType::Secp256r1Verify;
-
-        let mut maker = CircuitMaker::new(
-            geometry.cycles_per_secp256r1_verify_circuit,
-            round_function.clone(),
-            &mut cs_for_witness_generation,
-        );
-
-        for circuit_input in secp256r1_verify_circuits_data.into_iter() {
-            circuit_callback(ZkSyncBaseLayerCircuit::Secp256r1Verify(
-                maker.process(circuit_input, circuit_type),
-            ));
-        }
-
-        let (
-            secp256r1_verify_circuits,
-            queue_simulator,
-            secp256r1_verify_circuits_compact_forms_witnesses,
-        ) = maker.into_results();
-        recursion_queue_callback(
-            circuit_type as u64,
-            queue_simulator,
-            secp256r1_verify_circuits_compact_forms_witnesses.clone(),
-        );
-
-        snapshot_prof("Secp256 verify");
-
         // eip 4844 circuits are basic, but they do not need closed form input commitments
-        let circuit_type = BaseLayerCircuitType::EIP4844Repack;
-
-        let mut maker =
-            CircuitMaker::new(4096, round_function.clone(), &mut cs_for_witness_generation);
 
         use crate::witness::individual_circuits::eip4844_repack::compute_eip_4844;
         let eip_4844_circuits = compute_eip_4844(eip_4844_repack_inputs, trusted_setup_path);
 
-        for circuit_input in eip_4844_circuits.iter().cloned() {
-            circuit_callback(ZkSyncBaseLayerCircuit::EIP4844Repack(
-                maker.process(circuit_input, circuit_type),
-            ));
-        }
-        let (_eip_4844_circuits, queue_simulator, eip_4844_circuits_compact_forms_witnesses) =
-            maker.into_results();
-        recursion_queue_callback(
-            circuit_type as u64,
-            queue_simulator,
-            eip_4844_circuits_compact_forms_witnesses,
+        let (_eip_4844_circuits, _eip_4844_circuits_compact_forms_witnesses) = make_circuit(
+            4096, 
+            BaseLayerCircuitType::EIP4844Repack, 
+            eip_4844_circuits.clone(), 
+            round_function.clone(), 
+            |x| circuit_callback(ZkSyncBaseLayerCircuit::EIP4844Repack(x)), 
+            &mut recursion_queue_callback, 
+            &mut cs_for_witness_generation
         );
 
-        // done!
-
         snapshot_prof("Eip 4844");
+
+        // done!
 
         let basic_circuits = BlockFirstAndLastBasicCircuitsObservableWitnesses {
             main_vm_circuits,
