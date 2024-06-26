@@ -396,7 +396,7 @@ fn run_and_try_create_witness_inner(
         }
     }
 
-    let worker = Worker::new_with_num_threads(1);
+    let worker = Worker::new_with_num_threads(8);
 
     let mut previous_circuit_type = 0;
 
