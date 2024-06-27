@@ -193,8 +193,7 @@ struct LogSimulationResult<'a, F: SmallField> {
         u32,
         QueryMarker,
         ([F; QUEUE_STATE_WIDTH], [F; QUEUE_STATE_WIDTH]),
-    )>,
-    rollback_queue_tails_for_frames: Vec<(u32, [F; QUEUE_STATE_WIDTH])>,
+    )>
 }
 
 struct LogSimulationQueriesData<F: SmallField> {
@@ -204,24 +203,22 @@ struct LogSimulationQueriesData<F: SmallField> {
 }
 
 fn log_simulation<'a>(
-    callstack_with_aux_data: &'a CallstackWithAuxData,
+    full_callstack_history: &Vec<CallstackActionHistoryEntry>,
+    mut last_callstack_entry: CallstackEntryWithAuxData,
     round_function: &Poseidon2Goldilocks,
 ) -> (
     LogSimulationResult<'a, GoldilocksField>,
     LogSimulationQueriesData<GoldilocksField>,
+    Vec<(u32, [GoldilocksField; QUEUE_STATE_WIDTH])>
 ) {
     // segmentation of the log queue
     // - split into independent queues
     // - compute initial tail segments (with head == tail) for every new call frame
     // - also compute head segments for every write-like actions
 
-    assert!(
-        callstack_with_aux_data.depth == 0,
-        "parent frame didn't exit"
-    );
-
-    let applied_queries = &callstack_with_aux_data.current_entry.forward_queue;
-    let not_applied_queries = &callstack_with_aux_data.current_entry.rollback_queue;
+    let applied_queries = std::mem::take(&mut last_callstack_entry.forward_queue);
+    let not_applied_queries = std::mem::take(&mut last_callstack_entry.rollback_queue);
+    drop(last_callstack_entry);
 
     let mut demuxed_queries = DemuxedQueries::default();
 
@@ -238,7 +235,7 @@ fn log_simulation<'a>(
 
     let mut frames_beginnings_and_rollback_tails = vec![];
 
-    for el in callstack_with_aux_data.full_history.iter() {
+    for el in full_callstack_history.iter() {
         match el.action {
             CallstackAction::PushToStack => {}
             CallstackAction::PopFromStack { panic: _ } => {}
@@ -472,14 +469,14 @@ fn log_simulation<'a>(
     (
         LogSimulationResult {
             cycle_to_query_and_rollback,
-            chain_of_states,
-            rollback_queue_tails_for_frames,
+            chain_of_states
         },
         LogSimulationQueriesData {
             applied_log_queue_simulator,
             applied_log_queue_states,
             demuxed_queries,
         },
+        rollback_queue_tails_for_frames
     )
 }
 
@@ -497,8 +494,9 @@ struct CallstackSimulationResult<F: SmallField> {
 
 fn callstack_simulation<'a>(
     geometry: &GeometryConfig,
-    callstack_with_aux_data: &'a CallstackWithAuxData,
-    log_simulation_result: &LogSimulationResult<'a, GoldilocksField>,
+    full_callstack_history: Vec<CallstackActionHistoryEntry>,
+    log_simulation_result: LogSimulationResult<'a, GoldilocksField>,
+    rollback_queue_tails_for_frames: &Vec<(u32, [GoldilocksField; QUEUE_STATE_WIDTH])>,
     round_function: &Poseidon2Goldilocks,
 ) -> CallstackSimulationResult<GoldilocksField> {
     let mut callstack_argebraic_simulator = CallstackSimulator::empty();
@@ -555,7 +553,7 @@ fn callstack_simulation<'a>(
 
     let mut state_to_merge: Option<(bool, StorageLogDetailedState<GoldilocksField>)> = None;
 
-    for (_idx, el) in callstack_with_aux_data.full_history.iter().enumerate() {
+    for (_idx, el) in full_callstack_history.iter().enumerate() {
         let frame_index = el.frame_index;
 
         match el.action {
@@ -728,8 +726,7 @@ fn callstack_simulation<'a>(
             }
             CallstackAction::OutOfScope(OutOfScopeReason::Fresh) => {
                 // we already identified initial rollback tails for new frames
-                let rollback_tail =
-                    log_simulation_result.rollback_queue_tails_for_frames[frame_index].1;
+                let rollback_tail = rollback_queue_tails_for_frames[frame_index].1;
                 // do not reset forward length as it's easy to merge
                 current_storage_log_state.frame_idx = frame_index;
                 current_storage_log_state.rollback_length = 0;
@@ -819,6 +816,7 @@ fn callstack_simulation<'a>(
         }
     }
 
+    callstack_sponge_encoding_ranges.shrink_to_fit();
     CallstackSimulationResult {
         callstack_sponge_encoding_ranges,
         callstack_values_witnesses,
@@ -887,28 +885,39 @@ fn process_log_circuits<
 
     // this is parallelizable internally by the factor of 3 in round function implementation later on
 
-    tracing::debug!("Running memory queue simulation");
+    
+    snapshot_prof("Start mem queue sim");
 
     memory_artifacts.all_memory_queries_accumulated =
         Vec::with_capacity(vm_memory_queries_accumulated.len());
     memory_artifacts.vm_memory_query_cycles =
         Vec::with_capacity(vm_memory_queries_accumulated.len());
-    memory_artifacts.all_memory_queue_states =
-        Vec::with_capacity(vm_memory_queries_accumulated.len());
-
-    let mut memory_queue_simulator: MemoryQueueSimulator<GoldilocksField> =
-        MemoryQueueSimulator::default();
 
     for (cycle, query) in vm_memory_queries_accumulated {
-        let (_, intermediate_info) =
-            memory_queue_simulator.push_and_output_intermediate_data(query.clone(), round_function);
-
-        memory_artifacts.all_memory_queries_accumulated.push(query);
         memory_artifacts.vm_memory_query_cycles.push(cycle);
+        memory_artifacts.all_memory_queries_accumulated.push(query);
+    }
+
+    snapshot_prof("Splitted vm_memory_queries_accumulated");
+
+    tracing::debug!("Running memory queue simulation");
+
+    memory_artifacts.all_memory_queue_states =
+    Vec::with_capacity(memory_artifacts.all_memory_queries_accumulated.len());
+
+    // very big data struct inside
+    let mut memory_queue_simulator: MemoryQueueSimulator<GoldilocksField> = MemoryQueueSimulator::empty();
+
+    // very slow
+    for query in memory_artifacts.all_memory_queries_accumulated.iter() {
+        let (_, intermediate_info) =
+            memory_queue_simulator.push_and_output_intermediate_data(*query, round_function);
         memory_artifacts
             .all_memory_queue_states
             .push(intermediate_info);
     }
+
+    snapshot_prof("Finished memory queue simulation");
 
     // ----------------------------
 
@@ -1745,7 +1754,7 @@ pub(crate) fn create_artifacts_from_tracer<
         ecrecover_witnesses,
         secp256r1_verify_witnesses,
         monotonic_query_counter: _,
-        callstack_with_aux_data,
+        mut callstack_with_aux_data,
         vm_snapshots,
         ..
     } = tracer;
@@ -1761,40 +1770,36 @@ pub(crate) fn create_artifacts_from_tracer<
 
     assert!(vm_snapshots.len() >= 2); // we need at least entry point and the last save (after exit)
 
+    assert!(
+        callstack_with_aux_data.depth == 0,
+        "parent frame didn't exit"
+    );
+
+    let full_callstack_history = std::mem::take(&mut callstack_with_aux_data.full_history);
+    let last_callstack_entry = std::mem::take(&mut callstack_with_aux_data.current_entry);
+    let flat_new_frames_history = std::mem::take(&mut callstack_with_aux_data.flat_new_frames_history);
+    drop(callstack_with_aux_data);
+
     snapshot_prof("Before log sim");
     tracing::debug!("Running storage log simulation");
 
-    let (log_simulation_result, log_simulation_queries_data) =
-        log_simulation(&callstack_with_aux_data, round_function);
+    let (log_simulation_result, log_simulation_queries_data, rollback_queue_tails_for_frames) =
+        log_simulation(&full_callstack_history, last_callstack_entry, round_function);
 
-    snapshot_prof("After log sim");
+    snapshot_prof("Log simulated");
 
     // and now do trivial simulation
-
-    snapshot_prof("Before callstack sim");
     tracing::debug!("Running callstack sumulation");
 
-    // TODO can be moved after process_log_circuits
     let callstack_simulation_result = callstack_simulation(
         geometry,
-        &callstack_with_aux_data,
-        &log_simulation_result,
+        full_callstack_history,
+        log_simulation_result,
+        &rollback_queue_tails_for_frames,
         round_function,
     );
 
-    let rollback_queue_tails_for_frames = log_simulation_result
-        .rollback_queue_tails_for_frames
-        .clone();
-    drop(log_simulation_result);
-
-    snapshot_prof("After callstack sim");
-
-    let CallstackWithAuxData {
-        flat_new_frames_history,
-        ..
-    } = callstack_with_aux_data;
-
-    snapshot_prof("Before cs creation");
+    snapshot_prof("Callstack simulated");
 
     // we simulate a series of actions on the stack starting from the outermost frame
     // each history record contains an information on what was the stack state between points
@@ -1802,7 +1807,7 @@ pub(crate) fn create_artifacts_from_tracer<
 
     let mut cs_for_witness_generation = CsForWitnessGeneration::new();
 
-    snapshot_prof("After cs creation");
+    snapshot_prof("Cs created");
 
     // process all circuits related to logs
     let (
@@ -1832,7 +1837,7 @@ pub(crate) fn create_artifacts_from_tracer<
         &mut recursion_queue_callback,
     );
 
-    snapshot_prof("Artifacts created");
+    snapshot_prof("Log circuits processed");
 
     // NOTE: here we have all the queues processed in the `process` function (actual pushing is done), so we can
     // just read from the corresponding states
@@ -1893,8 +1898,6 @@ pub(crate) fn create_artifacts_from_tracer<
             transient_storage_sorter_circuit_data,
             secp256r1_verify_circuits_data,
         } = log_circuits_artifacts;
-
-        snapshot_prof("Before additional circuits");
 
         // Code decommitter sorter
         let (code_decommittments_sorter_circuits, code_decommittments_sorter_circuits_compact_forms_witnesses) = make_circuit(

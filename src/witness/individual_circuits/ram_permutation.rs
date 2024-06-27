@@ -84,6 +84,8 @@ pub(crate)  fn compute_ram_circuit_snapshots<
         amount_of_circuits
     );
 
+    snapshot_prof("Ram circuit: prepared unsorted chunks");
+
     let mut sorted_memory_queue_chunk_final_states = Vec::with_capacity(amount_of_circuits);
     let mut sorted_memory_queries_simulator = MemoryQueueSimulator::<Field>::with_capacity(
         total_amount_of_queries
@@ -93,11 +95,16 @@ pub(crate)  fn compute_ram_circuit_snapshots<
             .all_memory_queries_accumulated
             .iter().chain(implicit_memory_artifacts.memory_queries_accumulated.iter())
             .collect();
+
+        snapshot_prof("Ram circuit: created 'sorted' vec");
+
         // sort by memory location, and then by timestamp
         sorted_memory_queries_accumulated.par_sort_by(|a, b| match a.location.cmp(&b.location) {
             Ordering::Equal => a.timestamp.cmp(&b.timestamp),
             a @ _ => a,
         });
+
+        snapshot_prof("Ram circuit: sorting done");
 
         // those two thins are parallelizable, and can be internally parallelized too
 
@@ -113,6 +120,8 @@ pub(crate)  fn compute_ram_circuit_snapshots<
             }).last().unwrap();
             sorted_memory_queue_chunk_final_states.push(intermediate_info);
         }
+
+        snapshot_prof("Ram circuit: simulation done");
     }
     drop(implicit_memory_artifacts.memory_queries_accumulated);
 

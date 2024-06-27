@@ -58,6 +58,12 @@ impl CallstackEntryWithAuxData {
     }
 }
 
+impl Default for CallstackEntryWithAuxData {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum OutOfScopeReason {
     Fresh,
