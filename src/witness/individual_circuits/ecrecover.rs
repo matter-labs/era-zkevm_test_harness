@@ -11,6 +11,12 @@ use circuit_definitions::encodings::*;
 use circuit_definitions::encodings::memory_query::MemoryQueueState;
 use crate::witness::queue_for_main_vm::QueueStatesForCircuit;
 
+pub(crate) fn ecrecover_memory_queries_amount(ecrecover_witnesses: &Vec<(u32, LogQuery_, ECRecoverRoundWitness)>) -> usize {
+    ecrecover_witnesses.iter().fold(0, |inner, (_, _, witness)| {
+        inner + witness.reads.len() + witness.writes.len()
+    })
+}
+
 // we want to simulate splitting of data into many separate instances of the same circuit.
 // So we basically need to reconstruct the FSM state on input/output, and passthrough data.
 // In practice the only difficulty is buffer state, everything else is provided by out-of-circuit VM
@@ -44,7 +50,7 @@ pub(crate)  fn ecrecover_decompose_into_per_circuit_witness<
     // split into aux witness, don't mix with the memory
 
     use crate::zk_evm::zk_evm_abstractions::precompiles::ecrecover::ECRecoverRoundWitness;
-    let mut ecrecover_memory_queries = vec![];
+    let mut ecrecover_memory_queries = Vec::with_capacity(ecrecover_memory_queries_amount(&ecrecover_witnesses));
 
     for (_cycle, _query, witness) in ecrecover_witnesses.iter() {
         let ECRecoverRoundWitness {

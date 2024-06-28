@@ -15,6 +15,11 @@ use crate::witness::advancing_range::AdvancingRange;
 use crate::witness::artifacts::{
     CircuitArtifacts, DemuxedQueries, ImplicitMemoryArtifacts, MemoryArtifacts,
 };
+use crate::witness::individual_circuits::decommit_code::decommitter_memory_queries_amount;
+use crate::witness::individual_circuits::ecrecover::ecrecover_memory_queries_amount;
+use crate::witness::individual_circuits::keccak256_round_function::keccak256_memory_queries_amount;
+use crate::witness::individual_circuits::secp256r1_verify::secp256r1_memory_queries_amount;
+use crate::witness::individual_circuits::sha256_round_function::sha256_memory_queries_amount;
 use crate::witness::postprocessing::{make_circuit, CircuitMaker};
 use crate::witness::tracer::{QueryMarker, WitnessTracer};
 use crate::witness::vm_snapshot::VmSnapshot;
@@ -883,9 +888,6 @@ fn process_log_circuits<
     memory_artifacts.all_prepared_decommittment_queries = prepared_decommittment_queries;
 
     tracing::debug!("Processing artifacts queue");
-
-    // this is parallelizable internally by the factor of 3 in round function implementation later on
-
     
     snapshot_prof("Start mem queue sim");
 
@@ -901,6 +903,32 @@ fn process_log_circuits<
 
     snapshot_prof("Splitted vm_memory_queries_accumulated");
 
+    // TODO cleanup
+    let mut artifacts = CircuitArtifacts::default();
+
+    use crate::witness::individual_circuits::sort_decommit_requests::compute_decommitts_sorter_circuit_snapshots;
+
+    tracing::debug!("Running code decommittments sorter simulation");
+
+    let mut deduplicated_decommitment_queue_simulator = Default::default();
+    let mut deduplicated_decommittment_queue_states = Default::default();
+    let mut deduplicated_decommit_requests_with_data = Default::default();
+
+    let (all_decommittment_queue_states, decommittments_deduplicator_circuits_data) =
+        compute_decommitts_sorter_circuit_snapshots(
+            executed_decommittment_queries,
+            &mut deduplicated_decommitment_queue_simulator,
+            &mut deduplicated_decommittment_queue_states,
+            &mut deduplicated_decommit_requests_with_data,
+            round_function,
+            geometry.cycles_code_decommitter_sorter as usize,
+        );
+    memory_artifacts.all_decommittment_queue_states = all_decommittment_queue_states;
+    artifacts.decommittments_deduplicator_circuits_data =
+        decommittments_deduplicator_circuits_data;
+
+    snapshot_prof("Finished compute_decommitts_sorter_circuit_snapshots");
+
     tracing::debug!("Running memory queue simulation");
 
     // TODO rename
@@ -911,14 +939,22 @@ fn process_log_circuits<
     );
     let mut vm_entry_memory_states_builder = MemoryQueueWitnessesForVmCircuitBuilder::new(&vm_snapshots, &memory_artifacts.vm_memory_query_cycles);
 
+    let amount_of_implicit_memory_queries = decommitter_memory_queries_amount(&deduplicated_decommit_requests_with_data)
+    + ecrecover_memory_queries_amount(&ecrecover_witnesses)
+    + keccak256_memory_queries_amount(&keccak_round_function_witnesses)
+    + secp256r1_memory_queries_amount(&secp256r1_verify_witnesses)
+    + sha256_memory_queries_amount(&sha256_round_function_witnesses);
+
     // very big data struct inside
-    let mut memory_queue_simulator: MemoryQueueSimulator<GoldilocksField> = MemoryQueueSimulator::empty();
+    let mut memory_queue_simulator: MemoryQueueSimulator<GoldilocksField> = MemoryQueueSimulator::with_capacity(
+        memory_artifacts.all_memory_queries_accumulated.len() + amount_of_implicit_memory_queries
+    );
 
     // very slow
     for query in memory_artifacts.all_memory_queries_accumulated.iter() {
         let (_, intermediate_info) =
             memory_queue_simulator.push_and_output_intermediate_data(*query, round_function);
-            
+
         all_memory_queue_states
         .push(intermediate_info);
         vm_entry_memory_states_builder.push(intermediate_info);
@@ -949,55 +985,28 @@ fn process_log_circuits<
     // direct VM related part is done, other subcircuit's functionality is moved to other functions
     // that should properly do sorts and memory writes
 
-    let mut artifacts = CircuitArtifacts::default();
+    use crate::witness::individual_circuits::decommit_code::compute_decommitter_circuit_snapshots;
 
     // precompiles and decommiter will produce additional implicit memory queries
     let mut implicit_memory_artifacts: ImplicitMemoryArtifacts<GoldilocksField> =
-        ImplicitMemoryArtifacts::default();
+    ImplicitMemoryArtifacts::default();
+    implicit_memory_artifacts.memory_queries_accumulated = Vec::with_capacity(amount_of_implicit_memory_queries);
 
-    {
-        use crate::witness::individual_circuits::sort_decommit_requests::compute_decommitts_sorter_circuit_snapshots;
+    tracing::debug!("Running code code decommitter simulation");
 
-        tracing::debug!("Running code decommittments sorter simulation");
+    let code_decommitter_circuits_data = compute_decommitter_circuit_snapshots(
+        &memory_artifacts,
+        &mut implicit_memory_artifacts,
+        &all_memory_queue_states,
+        &mut memory_queue_simulator,
+        deduplicated_decommitment_queue_simulator,
+        deduplicated_decommittment_queue_states,
+        deduplicated_decommit_requests_with_data,
+        round_function,
+        geometry.cycles_per_code_decommitter as usize,
+    );
 
-        let mut deduplicated_decommitment_queue_simulator = Default::default();
-        let mut deduplicated_decommittment_queue_states = Default::default();
-        let mut deduplicated_decommit_requests_with_data = Default::default();
-
-        let (all_decommittment_queue_states, decommittments_deduplicator_circuits_data) =
-            compute_decommitts_sorter_circuit_snapshots(
-                &memory_artifacts,
-                &all_memory_queue_states,
-                &memory_queue_simulator,
-                executed_decommittment_queries,
-                &mut deduplicated_decommitment_queue_simulator,
-                &mut deduplicated_decommittment_queue_states,
-                &mut deduplicated_decommit_requests_with_data,
-                round_function,
-                geometry.cycles_code_decommitter_sorter as usize,
-            );
-        memory_artifacts.all_decommittment_queue_states = all_decommittment_queue_states;
-        artifacts.decommittments_deduplicator_circuits_data =
-            decommittments_deduplicator_circuits_data;
-
-        use crate::witness::individual_circuits::decommit_code::compute_decommitter_circuit_snapshots;
-
-        tracing::debug!("Running code code decommitter simulation");
-
-        let code_decommitter_circuits_data = compute_decommitter_circuit_snapshots(
-            &memory_artifacts,
-            &mut implicit_memory_artifacts,
-            &all_memory_queue_states,
-            &mut memory_queue_simulator,
-            deduplicated_decommitment_queue_simulator,
-            deduplicated_decommittment_queue_states,
-            deduplicated_decommit_requests_with_data,
-            round_function,
-            geometry.cycles_per_code_decommitter as usize,
-        );
-
-        artifacts.code_decommitter_circuits_data = code_decommitter_circuits_data;
-    }
+    artifacts.code_decommitter_circuits_data = code_decommitter_circuits_data;
 
     // demux log queue
     use crate::witness::individual_circuits::log_demux::{compute_logs_demux, LogDemuxArtifacts};
@@ -1110,6 +1119,8 @@ fn process_log_circuits<
         round_function,
     );
     artifacts.secp256r1_verify_circuits_data = secp256r1_verify_circuits_data;
+
+    assert!(implicit_memory_artifacts.memory_queries_accumulated.len() == amount_of_implicit_memory_queries);
 
     // we are done with a memory and can do the processing and breaking of the logical arguments into individual circits
 

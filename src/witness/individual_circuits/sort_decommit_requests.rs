@@ -23,9 +23,6 @@ pub(crate) fn compute_decommitts_sorter_circuit_snapshots<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
-    memory_artifacts: &MemoryArtifacts<F>,
-    all_memory_queue_states: &QueueStatesForCircuit::<MemoryQueueState<F>>,
-    memory_queue_simulator: &MemoryQueueSimulator<F>,
     mut executed_decommittment_queries: Vec<(u32, DecommittmentQuery, Vec<U256>)>,
     deduplicated_decommittment_queue_simulator: &mut DecommittmentQueueSimulator<F>,
     deduplicated_decommittment_queue_states: &mut Vec<DecommittmentQueueState<F>>,
@@ -36,15 +33,6 @@ pub(crate) fn compute_decommitts_sorter_circuit_snapshots<
     Vec<(u32, DecommittmentQueueState<F>)>,
     Vec<CodeDecommittmentsDeduplicatorInstanceWitness<F>>,
 ) {
-    assert_eq!(
-        memory_artifacts.all_memory_queries_accumulated.len(),
-        all_memory_queue_states.len()
-    );
-    assert_eq!(
-        memory_artifacts.all_memory_queries_accumulated.len(),
-        memory_queue_simulator.num_items as usize
-    );
-
     let total_executed_queries = executed_decommittment_queries.len();
 
     assert!(
@@ -198,11 +186,6 @@ pub(crate) fn compute_decommitts_sorter_circuit_snapshots<
         previous_records.push(DecommitQuery::<F>::placeholder_witness());
         first_encountered_timestamps.push(0);
     }
-
-    assert_eq!(
-        all_memory_queue_states.len(),
-        memory_artifacts.all_memory_queries_accumulated.len()
-    );
 
     // create witnesses
 

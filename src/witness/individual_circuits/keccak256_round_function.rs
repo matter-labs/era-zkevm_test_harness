@@ -14,6 +14,31 @@ use circuit_definitions::encodings::memory_query::MemoryQueueState;
 use derivative::*;
 use crate::witness::queue_for_main_vm::QueueStatesForCircuit;
 
+pub(crate) fn keccak256_memory_queries_amount(keccak_round_function_witnesses: &Vec<(u32, LogQuery_, Vec<Keccak256RoundWitness>)>) -> usize {
+    let result = keccak_round_function_witnesses.iter().fold(0, |mut inner, (_, _, witness)| {
+        for el in witness.iter() {
+            let Keccak256RoundWitness {
+                new_request: _,
+                reads,
+                writes,
+            } = el;
+
+            reads.iter().for_each(|read| {
+                if read.is_some() {
+                    inner += 1;
+                }
+            });
+
+            if let Some(writes) = writes.as_ref() {
+                inner += writes.len()
+            }
+        }
+        inner
+    });
+
+    result
+}
+
 #[derive(Derivative)]
 #[derivative(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Keccak256PrecompileState {
@@ -55,7 +80,9 @@ pub(crate) fn keccak256_decompose_into_per_circuit_witness<
 
     // split into aux witness, don't mix with the memory
 
-    let mut keccak_256_memory_queries = vec![];
+    let mut keccak_256_memory_queries = Vec::with_capacity(
+        keccak256_memory_queries_amount(&keccak_round_function_witnesses)
+    );
 
     for (_cycle, _query, witness) in keccak_round_function_witnesses.iter() {
         for el in witness.iter() {

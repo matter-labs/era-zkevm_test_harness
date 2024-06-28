@@ -11,6 +11,12 @@ use circuit_definitions::encodings::memory_query::MemoryQueueState;
 use circuit_definitions::encodings::*;
 use crate::witness::queue_for_main_vm::QueueStatesForCircuit;
 
+pub(crate) fn secp256r1_memory_queries_amount(secp256r1_verify_witnesses: &Vec<(u32, LogQuery_, Secp256r1VerifyRoundWitness)>) -> usize {
+    secp256r1_verify_witnesses.iter().fold(0, |inner, (_, _, witness)| {
+        inner + witness.reads.len() + witness.writes.len()
+    })
+}
+
 // we want to simulate splitting of data into many separate instances of the same circuit.
 // So we basically need to reconstruct the FSM state on input/output, and passthrough data.
 // In practice the only difficulty is buffer state, everything else is provided by out-of-circuit VM
@@ -44,7 +50,7 @@ pub(crate)  fn secp256r1_verify_decompose_into_per_circuit_witness<
     // split into aux witness, don't mix with the memory
 
     use crate::zk_evm::zk_evm_abstractions::precompiles::secp256r1_verify::Secp256r1VerifyRoundWitness;
-    let mut memory_queries = vec![];
+    let mut memory_queries = Vec::with_capacity(secp256r1_memory_queries_amount(&secp256r1_verify_witnesses));
 
     for (_cycle, _query, witness) in secp256r1_verify_witnesses.iter() {
         let Secp256r1VerifyRoundWitness {

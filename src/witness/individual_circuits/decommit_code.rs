@@ -16,7 +16,14 @@ use std::collections::VecDeque;
 use circuit_definitions::encodings::memory_query::MemoryQueueState;
 use crate::witness::queue_for_main_vm::QueueStatesForCircuit;
 
-pub(crate)  fn compute_decommitter_circuit_snapshots<
+// TODO docs
+pub(crate) fn decommitter_memory_queries_amount(deduplicated_decommit_requests_with_data: &Vec<(DecommittmentQuery, Vec<U256>)>) -> usize {
+    deduplicated_decommit_requests_with_data.iter().fold(0, |inner, (_, writes)| {
+        inner + writes.len()
+    })
+}
+
+pub(crate) fn compute_decommitter_circuit_snapshots<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
