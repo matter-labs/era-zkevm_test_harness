@@ -38,13 +38,13 @@ pub(crate) fn compute_decommitter_circuit_snapshots<
     decommiter_circuit_capacity: usize,
 ) -> Vec<CodeDecommitterCircuitInstanceWitness<F>> {
     assert_eq!(
-        memory_artifacts.all_memory_queries_accumulated.len()
+        memory_artifacts.vm_memory_queries_accumulated.len()
             + implicit_memory_artifacts.memory_queries_accumulated.len(),
             all_memory_queue_states.len()
             + implicit_memory_artifacts.memory_queue_states.len()
     );
     assert_eq!(
-        memory_artifacts.all_memory_queries_accumulated.len()
+        memory_artifacts.vm_memory_queries_accumulated.len()
             + implicit_memory_artifacts.memory_queries_accumulated.len(),
         memory_queue_simulator.num_items as usize
     );
@@ -442,13 +442,13 @@ pub(crate) fn compute_decommitter_circuit_snapshots<
     }
 
     assert_eq!(
-        memory_artifacts.all_memory_queries_accumulated.len()
+        memory_artifacts.vm_memory_queries_accumulated.len()
             + implicit_memory_artifacts.memory_queries_accumulated.len(),
         all_memory_queue_states.len()
             + implicit_memory_artifacts.memory_queue_states.len()
     );
     assert_eq!(
-        memory_artifacts.all_memory_queries_accumulated.len()
+        memory_artifacts.vm_memory_queries_accumulated.len()
             + implicit_memory_artifacts.memory_queries_accumulated.len(),
         memory_queue_simulator.num_items as usize
     );

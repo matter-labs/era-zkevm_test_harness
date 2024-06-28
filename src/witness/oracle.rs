@@ -886,22 +886,11 @@ fn process_log_circuits<
 ) {
     let mut memory_artifacts = MemoryArtifacts::default();
     memory_artifacts.all_prepared_decommittment_queries = prepared_decommittment_queries;
+    memory_artifacts.vm_memory_queries_accumulated = vm_memory_queries_accumulated;
 
     tracing::debug!("Processing artifacts queue");
     
     snapshot_prof("Start mem queue sim");
-
-    memory_artifacts.all_memory_queries_accumulated =
-        Vec::with_capacity(vm_memory_queries_accumulated.len());
-    memory_artifacts.vm_memory_query_cycles =
-        Vec::with_capacity(vm_memory_queries_accumulated.len());
-
-    for (cycle, query) in vm_memory_queries_accumulated {
-        memory_artifacts.vm_memory_query_cycles.push(cycle);
-        memory_artifacts.all_memory_queries_accumulated.push(query);
-    }
-
-    snapshot_prof("Splitted vm_memory_queries_accumulated");
 
     // TODO cleanup
     let mut artifacts = CircuitArtifacts::default();
@@ -935,9 +924,9 @@ fn process_log_circuits<
     let mut all_memory_queue_states =
     QueueStatesForCircuit::<MemoryQueueState<GoldilocksField>>::with_flat_capacity(
         geometry.cycles_per_ram_permutation as usize,
-        memory_artifacts.all_memory_queries_accumulated.len()
+        memory_artifacts.vm_memory_queries_accumulated.len()
     );
-    let mut vm_entry_memory_states_builder = MemoryQueueWitnessesForVmCircuitBuilder::new(&vm_snapshots, &memory_artifacts.vm_memory_query_cycles);
+    let mut vm_entry_memory_states_builder = MemoryQueueWitnessesForVmCircuitBuilder::new(&vm_snapshots, &memory_artifacts.vm_memory_queries_accumulated);
 
     let amount_of_implicit_memory_queries = decommitter_memory_queries_amount(&deduplicated_decommit_requests_with_data)
     + ecrecover_memory_queries_amount(&ecrecover_witnesses)
@@ -947,11 +936,11 @@ fn process_log_circuits<
 
     // very big data struct inside
     let mut memory_queue_simulator: MemoryQueueSimulator<GoldilocksField> = MemoryQueueSimulator::with_capacity(
-        memory_artifacts.all_memory_queries_accumulated.len() + amount_of_implicit_memory_queries
+        memory_artifacts.vm_memory_queries_accumulated.len() + amount_of_implicit_memory_queries
     );
 
     // very slow
-    for query in memory_artifacts.all_memory_queries_accumulated.iter() {
+    for (_, query) in memory_artifacts.vm_memory_queries_accumulated.iter() {
         let (_, intermediate_info) =
             memory_queue_simulator.push_and_output_intermediate_data(*query, round_function);
 
@@ -971,11 +960,11 @@ fn process_log_circuits<
 
     {
         assert_eq!(
-            memory_artifacts.all_memory_queries_accumulated.len(),
+            memory_artifacts.vm_memory_queries_accumulated.len(),
             all_memory_queue_states.len()
         );
         assert_eq!(
-            memory_artifacts.all_memory_queries_accumulated.len(),
+            memory_artifacts.vm_memory_queries_accumulated.len(),
             memory_queue_simulator.num_items as usize
         );
     }
@@ -1299,11 +1288,10 @@ fn repack_input_for_main_vm(
     flat_new_frames_history: Vec<(u32, CallStackEntry)>,
 ) -> Vec<MainVmSimulationInput> {
     let MemoryArtifacts {
-        vm_memory_query_cycles,
         all_decommittment_queue_states,
         all_prepared_decommittment_queries,
         memory_queue_entry_states,
-        all_memory_queries_accumulated,
+        vm_memory_queries_accumulated,
         ..
     } = memory_artifacts;
 
@@ -1323,12 +1311,6 @@ fn repack_input_for_main_vm(
         AdvancingRange::new(&callstack_sponge_encoding_ranges);
 
     // split the oracle witness
-    let vm_memory_queries_accumulated: Vec<(u32, MemoryQuery)> = vm_memory_query_cycles
-        .iter()
-        .copied()
-        .zip(all_memory_queries_accumulated)
-        .collect();
-
     let memory_write_witnesses = QueueForMainVm::from_iter(
         geometry.cycles_per_vm_snapshot as usize,
         vm_memory_queries_accumulated

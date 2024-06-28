@@ -246,7 +246,7 @@ impl<T> QueueStatesForCircuit<T> {
         } else {
             self.inner[circuit_id] = val;
         }
-        
+
         self.len += 1;
     }
 }
@@ -259,12 +259,13 @@ use circuit_definitions::encodings::memory_query::MemoryQueueState;
 use crate::boojum::gadgets::queue::QueueStateWitness;
 use crate::zkevm_circuits::base_structures::vm_state::FULL_SPONGE_QUEUE_STATE_WIDTH;
 use crate::witness::utils::transform_sponge_like_queue_state;
+use crate::zk_evm::aux_structures::MemoryQuery;
 
 /// TODO docs
 pub struct MemoryQueueWitnessesForVmCircuitBuilder<'a> {
     inner: Vec<QueueStateWitness<Field, FULL_SPONGE_QUEUE_STATE_WIDTH>>,
     vm_snapshots: &'a Vec<VmSnapshot>,
-    vm_memory_query_cycles_it: Iter<'a, u32>,
+    vm_memory_queries_accumulated_it: Iter<'a, (u32, MemoryQuery)>,
     current_snapshot: usize,
     current_snapshot_start_cycle: u32,
     last: Option<MemoryQueueState<Field>>
@@ -273,12 +274,12 @@ pub struct MemoryQueueWitnessesForVmCircuitBuilder<'a> {
 impl<'a> MemoryQueueWitnessesForVmCircuitBuilder<'a> {
     pub fn new(
         vm_snapshots: &'a Vec<VmSnapshot>,
-        vm_memory_query_cycles: &'a Vec<u32>,
+        vm_memory_queries_accumulated: &'a Vec<(u32, MemoryQuery)>,
 ) -> Self {
         Self {
             inner: Vec::with_capacity(vm_snapshots.windows(2).len() + 1),
             vm_snapshots,
-            vm_memory_query_cycles_it: vm_memory_query_cycles.iter(),
+            vm_memory_queries_accumulated_it: vm_memory_queries_accumulated.iter(),
             current_snapshot: 0,
             current_snapshot_start_cycle: 0,
             last: None
@@ -300,7 +301,7 @@ impl<'a> MemoryQueueWitnessesForVmCircuitBuilder<'a> {
     }
 
     pub fn push(&mut self, state: MemoryQueueState<Field>) {
-        let cycle = self.vm_memory_query_cycles_it.next().unwrap();
+        let (cycle, _) = self.vm_memory_queries_accumulated_it.next().unwrap();
         if *cycle >= self.current_snapshot_start_cycle {
             self.current_snapshot += 1;
             self.current_snapshot_start_cycle = self.vm_snapshots[self.current_snapshot].at_cycle;

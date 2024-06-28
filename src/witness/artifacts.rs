@@ -35,9 +35,8 @@ pub struct DemuxedQueries {
 #[derive(Derivative)]
 #[derivative(Default)]
 pub struct MemoryArtifacts<F: SmallField> {
-    pub vm_memory_query_cycles: Vec<u32>,
     //
-    pub all_memory_queries_accumulated: Vec<MemoryQuery>,
+    pub vm_memory_queries_accumulated: Vec<(u32, MemoryQuery)>,
     // TODO docs
     pub memory_queue_entry_states: Vec<QueueStateWitness<F, FULL_SPONGE_QUEUE_STATE_WIDTH>>,
     // decommittment queue

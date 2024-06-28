@@ -50,7 +50,7 @@ pub(crate)  fn compute_ram_circuit_snapshots<
     Vec<ClosedFormInputCompactFormWitness<Field>>,
 ) {
     assert_eq!(
-        memory_artifacts.all_memory_queries_accumulated.len(),
+        memory_artifacts.vm_memory_queries_accumulated.len(),
         all_memory_queue_states.len()
     );
 
@@ -60,7 +60,7 @@ pub(crate)  fn compute_ram_circuit_snapshots<
     );
 
     // including additional queries from precompiles
-    let total_amount_of_queries = memory_artifacts.all_memory_queries_accumulated.len()
+    let total_amount_of_queries = memory_artifacts.vm_memory_queries_accumulated.len()
         + implicit_memory_artifacts.memory_queries_accumulated.len();
 
     assert!(
@@ -91,8 +91,8 @@ pub(crate)  fn compute_ram_circuit_snapshots<
     );
     {
         let mut sorted_memory_queries_accumulated: Vec<&MemoryQuery> = memory_artifacts
-            .all_memory_queries_accumulated
-            .iter().chain(implicit_memory_artifacts.memory_queries_accumulated.iter())
+            .vm_memory_queries_accumulated
+            .iter().map(|(_, query)| query).chain(implicit_memory_artifacts.memory_queries_accumulated.iter())
             .collect();
 
         snapshot_prof("Ram circuit: created 'sorted' vec");
