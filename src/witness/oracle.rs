@@ -4,7 +4,7 @@
 
 use super::callstack_handler::*;
 use super::postprocessing::{BlockFirstAndLastBasicCircuitsObservableWitnesses, ClosedFormInputField, CsForWitnessGeneration, FirstAndLastCircuitWitness};
-use super::queue_for_main_vm::{MemoryQueueWitnessesForVmCircuitBuilder, QueueForMainVm, QueueStatesForCircuit};
+use super::queue_for_main_vm::{MemoryQueueWitnessesForVmCircuitBuilder, QueueForMainVm, QueueLastStatesForCircuits};
 use super::utils::*;
 use crate::boojum::field::SmallField;
 use crate::boojum::gadgets::queue::{QueueState, QueueStateWitness, QueueTailStateWitness};
@@ -922,7 +922,7 @@ fn process_log_circuits<
 
     // TODO rename
     let mut all_memory_queue_states =
-    QueueStatesForCircuit::<MemoryQueueState<GoldilocksField>>::with_flat_capacity(
+    QueueLastStatesForCircuits::<MemoryQueueState<GoldilocksField>>::with_flat_capacity(
         geometry.cycles_per_ram_permutation as usize,
         memory_artifacts.vm_memory_queries_accumulated.len()
     );
@@ -935,8 +935,15 @@ fn process_log_circuits<
     + sha256_memory_queries_amount(&sha256_round_function_witnesses);
 
     // very big data struct inside
-    let mut memory_queue_simulator: MemoryQueueSimulator<GoldilocksField> = MemoryQueueSimulator::with_capacity(
-        memory_artifacts.vm_memory_queries_accumulated.len() + amount_of_implicit_memory_queries
+    //let mut memory_queue_simulator: MemoryQueueSimulator<GoldilocksField> = MemoryQueueSimulator::with_capacity(
+    //    memory_artifacts.vm_memory_queries_accumulated.len() + amount_of_implicit_memory_queries
+    //);
+
+    use crate::witness::queue_for_main_vm::MemoryQueuePerCircuitSimulator;
+    use crate::witness::queue_for_main_vm::MemoryQueueStatesForRamCircuits;
+
+    let mut memory_queue_simulator = MemoryQueuePerCircuitSimulator::using_container(
+        MemoryQueueStatesForRamCircuits::new(geometry.cycles_per_ram_permutation as usize)
     );
 
     // very slow

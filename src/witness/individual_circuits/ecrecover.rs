@@ -9,7 +9,8 @@ use crate::zkevm_circuits::ecrecover::*;
 use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 use circuit_definitions::encodings::*;
 use circuit_definitions::encodings::memory_query::MemoryQueueState;
-use crate::witness::queue_for_main_vm::QueueStatesForCircuit;
+use queue_for_main_vm::MemoryQueuePerCircuitSimulator;
+use crate::witness::queue_for_main_vm::QueueLastStatesForCircuits;
 
 pub(crate) fn ecrecover_memory_queries_amount(ecrecover_witnesses: &Vec<(u32, LogQuery_, ECRecoverRoundWitness)>) -> usize {
     ecrecover_witnesses.iter().fold(0, |inner, (_, _, witness)| {
@@ -27,8 +28,8 @@ pub(crate)  fn ecrecover_decompose_into_per_circuit_witness<
 >(
     memory_artifacts: &MemoryArtifacts<F>,
     implicit_memory_artifacts: &mut ImplicitMemoryArtifacts<F>,
-    all_memory_queue_states: &QueueStatesForCircuit::<MemoryQueueState<F>>,
-    memory_queue_simulator: &mut MemoryQueueSimulator<F>,
+    all_memory_queue_states: &QueueLastStatesForCircuits::<MemoryQueueState<F>>,
+    memory_queue_simulator: &mut MemoryQueuePerCircuitSimulator<F>,
     ecrecover_witnesses: Vec<(u32, LogQuery_, ECRecoverRoundWitness)>,
     ecrecover_queries: Vec<LogQuery_>,
     mut demuxed_ecrecover_queue: LogQueue<F>,
@@ -94,7 +95,7 @@ pub(crate)  fn ecrecover_decompose_into_per_circuit_witness<
     let mut starting_request_idx = 0;
 
     let mut memory_queue_input_state =
-        take_sponge_like_queue_state_from_simulator(&memory_queue_simulator);
+        memory_queue_simulator.take_sponge_like_queue_state();
     let mut current_memory_queue_state = memory_queue_input_state.clone();
 
     for (request_idx, ((request, _queue_transition_state), per_request_work)) in precompile_calls
@@ -133,7 +134,7 @@ pub(crate)  fn ecrecover_decompose_into_per_circuit_witness<
                 .memory_queue_states
                 .push(intermediate_info);
             current_memory_queue_state =
-                take_sponge_like_queue_state_from_simulator(&memory_queue_simulator);
+                memory_queue_simulator.take_sponge_like_queue_state();
 
             precompile_request.input_memory_offset += 1;
         }
@@ -153,7 +154,7 @@ pub(crate)  fn ecrecover_decompose_into_per_circuit_witness<
                 .memory_queue_states
                 .push(intermediate_info);
             current_memory_queue_state =
-                take_sponge_like_queue_state_from_simulator(&memory_queue_simulator);
+                memory_queue_simulator.take_sponge_like_queue_state();
 
             precompile_request.output_memory_offset += 1;
         }

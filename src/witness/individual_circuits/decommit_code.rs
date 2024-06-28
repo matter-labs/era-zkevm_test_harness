@@ -12,9 +12,10 @@ use circuit_definitions::encodings::decommittment_request::DecommittmentQueueSim
 use circuit_definitions::encodings::decommittment_request::DecommittmentQueueState;
 use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 use circuit_definitions::zk_evm::aux_structures::DecommittmentQuery;
+use queue_for_main_vm::MemoryQueuePerCircuitSimulator;
 use std::collections::VecDeque;
 use circuit_definitions::encodings::memory_query::MemoryQueueState;
-use crate::witness::queue_for_main_vm::QueueStatesForCircuit;
+use crate::witness::queue_for_main_vm::QueueLastStatesForCircuits;
 
 // TODO docs
 pub(crate) fn decommitter_memory_queries_amount(deduplicated_decommit_requests_with_data: &Vec<(DecommittmentQuery, Vec<U256>)>) -> usize {
@@ -29,8 +30,8 @@ pub(crate) fn compute_decommitter_circuit_snapshots<
 >(
     memory_artifacts: &MemoryArtifacts<F>,
     implicit_memory_artifacts: &mut ImplicitMemoryArtifacts<F>,
-    all_memory_queue_states: &QueueStatesForCircuit::<MemoryQueueState<F>>,
-    memory_queue_simulator: &mut MemoryQueueSimulator<F>,
+    all_memory_queue_states: &QueueLastStatesForCircuits::<MemoryQueueState<F>>,
+    memory_queue_simulator: &mut MemoryQueuePerCircuitSimulator<F>,
     deduplicated_decommittment_queue_simulator: DecommittmentQueueSimulator<F>,
     deduplicated_decommittment_queue_states: Vec<DecommittmentQueueState<F>>,
     mut deduplicated_decommit_requests_with_data: Vec<(DecommittmentQuery, Vec<U256>)>,
@@ -51,8 +52,7 @@ pub(crate) fn compute_decommitter_circuit_snapshots<
 
     let start_idx_for_memory_accumulator = implicit_memory_artifacts.memory_queue_states.len();
 
-    let initial_memory_queue_state =
-        take_sponge_like_queue_state_from_simulator(&memory_queue_simulator);
+    let initial_memory_queue_state = &memory_queue_simulator.take_sponge_like_queue_state();
 
     // now we should start chunking the requests into separate decommittment circuits by running a micro-simulator
 

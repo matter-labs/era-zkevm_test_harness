@@ -85,14 +85,6 @@ impl<T: TupleFirst> QueueForMainVm<T> {
         Some(batch)
     }
 
-    pub fn iter(&self) -> SplittedQueueIterator<T> {
-        SplittedQueueIterator {
-            queue: self,
-            batch_index: 0,
-            inner_index: 0
-        }
-    }
-
     fn push_new_batch(&mut self) {
         self.inner.push(Vec::with_capacity(self.cycles_per_vm_snapshot / 2));
     }
@@ -127,34 +119,6 @@ impl<T: TupleFirst> Extend<T> for QueueForMainVm<T> {
         while let Some(element) = iterator.next() {
             self.push(element);
         }
-    }
-}
-
-pub struct SplittedQueueIterator<'a, T: TupleFirst> {
-    queue: &'a QueueForMainVm<T>,
-    batch_index: usize,
-    inner_index: usize,
-}
-
-impl<'a, T: TupleFirst> Iterator for SplittedQueueIterator<'a, T> {
-    type Item = &'a T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let mut batch = self.queue.get_batch(self.batch_index);
-        if batch.is_none() {
-            return None;
-        }
-
-        if self.inner_index >= batch.unwrap().len(){
-            self.batch_index += 1;
-            self.inner_index = 0;
-            batch = self.queue.get_batch(self.batch_index);
-            if batch.is_none() {
-                return None;
-            }
-        }
-        
-        batch.unwrap().get(self.inner_index)
     }
 }
 
@@ -195,13 +159,13 @@ impl<T: TupleFirst> Iterator for SplittedQueueIntoIter<T> {
 }
 
 /// TODO docs
-pub struct QueueStatesForCircuit<T> {
+pub struct QueueLastStatesForCircuits<T> {
     cycles_per_circuit: usize,
     inner: Vec<T>,
     len: usize,
 }
 
-impl<T> QueueStatesForCircuit<T> {
+impl<T> QueueLastStatesForCircuits<T> {
     pub fn new(cycles_per_circuit: usize) -> Self {
         Self {
             cycles_per_circuit,
@@ -251,11 +215,141 @@ impl<T> QueueStatesForCircuit<T> {
     }
 }
 
+// TODO cleanup
+use circuit_definitions::encodings::memory_query::QueueWitness;
+pub type MemoryQueuePerCircuitSimulator<F> = CustomMemoryQueueSimulator<F, MemoryQueueStatesForRamCircuits::<QueueWitness<F>>>;
+
+pub struct MemoryQueueStatesForRamCircuits<T> {
+    cycles_per_circuit: usize,
+    inner: Vec<Vec<T>>,
+    len: usize
+}
+
+impl<T> MemoryQueueStatesForRamCircuits<T> {
+    pub fn new(cycles_per_circuit: usize) -> Self {
+        Self {
+            cycles_per_circuit,
+            inner: Default::default(),
+            len: 0
+        }
+    }
+
+    pub fn last(&self) -> Option<&T> {
+        let last_batch = self.inner.last();
+        if last_batch.is_none() {
+            return None;
+        }
+
+        last_batch.unwrap().last()
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    pub fn from_iter<I: IntoIterator<Item = T>>(cycles_per_circuit: usize, iterator: I) -> Self {
+        let mut _self = Self::new(cycles_per_circuit);
+        let mut iterator = iterator.into_iter();
+        while let Some(element) = iterator.next() {
+            _self.push(element);
+        }
+
+        _self
+    }
+
+    pub fn push(&mut self, val: T) {
+        let idx = self.len;
+
+        let circuit_index = (idx as usize) / self.cycles_per_circuit;
+
+        while self.inner.len() <= circuit_index {
+            self.seal_last_batch();
+            self.push_new_batch();
+        }
+
+        self.inner[circuit_index].push(val);
+        self.len += 1;
+    }
+
+    pub fn into_circuits(mut self, amount_of_circuits: usize) -> Vec<Vec<T>> {
+        while self.inner.len() < amount_of_circuits {
+            self.seal_last_batch();
+            self.push_new_batch();
+        }
+
+        self.seal_last_batch();
+        self.inner
+    }
+
+    pub fn get_batch(&self, batch_index: usize) -> Option<&Vec<T>> {
+        self.inner.get(batch_index)
+    }
+
+    pub fn iter(&self) -> MemoryQueueStatesForRamCircuitsIterator<T> {
+        MemoryQueueStatesForRamCircuitsIterator {
+            queue: self,
+            batch_index: 0,
+            inner_index: 0
+        }
+    }
+
+    fn push_new_batch(&mut self) {
+        self.inner.push(Vec::with_capacity(self.cycles_per_circuit / 2));
+    }
+
+    fn seal_last_batch(&mut self) {
+        let len = self.inner.len();
+        if len == 0 {
+            return;
+        }
+
+        self.inner[len - 1].shrink_to_fit();
+    }
+}
+
+pub struct MemoryQueueStatesForRamCircuitsIterator<'a, T> {
+    queue: &'a MemoryQueueStatesForRamCircuits<T>,
+    batch_index: usize,
+    inner_index: usize,
+}
+
+impl<'a, T> Iterator for MemoryQueueStatesForRamCircuitsIterator<'a, T> {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut batch = self.queue.get_batch(self.batch_index);
+        if batch.is_none() {
+            return None;
+        }
+
+        if self.inner_index >= batch.unwrap().len(){
+            self.batch_index += 1;
+            self.inner_index = 0;
+            batch = self.queue.get_batch(self.batch_index);
+            if batch.is_none() {
+                return None;
+            }
+        }
+        
+        let res = batch.unwrap().get(self.inner_index);
+        self.inner_index += 1;
+        
+        res
+    }
+}
+
+use circuit_definitions::encodings::Pushable;
+impl<T> Pushable<T> for MemoryQueueStatesForRamCircuits<T> {
+    fn push(&mut self, val: T) {
+        self.push(val);
+    }
+}
+
 use core::slice::Iter;
 use crate::witness::vm_snapshot::VmSnapshot;
 use crate::boojum::gadgets::queue::QueueState;
 use circuit_definitions::boojum::gadgets::traits::allocatable::CSAllocatable;
-use circuit_definitions::encodings::memory_query::MemoryQueueState;
+use circuit_definitions::encodings::memory_query::{CustomMemoryQueueSimulator, MemoryQueueState};
 use crate::boojum::gadgets::queue::QueueStateWitness;
 use crate::zkevm_circuits::base_structures::vm_state::FULL_SPONGE_QUEUE_STATE_WIDTH;
 use crate::witness::utils::transform_sponge_like_queue_state;
