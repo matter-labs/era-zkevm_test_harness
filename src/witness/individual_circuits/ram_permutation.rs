@@ -16,8 +16,10 @@ use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use circuit_definitions::{encodings::*, Field, RoundFunction};
+use circuit_definitions::encodings::memory_query::MemoryQueueState;
 use postprocessing::{CsForWitnessGeneration, FirstAndLastCircuitWitness};
 use crate::witness::postprocessing::observable_witness::RamPermutationObservableWitness;
+use crate::witness::queue_for_main_vm::QueueStatesForCircuit;
 
 use rayon::prelude::*;
 use snark_wrapper::boojum::field::Field as _;
@@ -34,6 +36,7 @@ pub(crate)  fn compute_ram_circuit_snapshots<
 >(
     memory_artifacts: &MemoryArtifacts<Field>,
     implicit_memory_artifacts: ImplicitMemoryArtifacts<Field>,
+    mut all_memory_queue_states: QueueStatesForCircuit::<MemoryQueueState<Field>>,
     memory_queue_simulator: MemoryQueueSimulator<Field>,
     round_function: &RoundFunction,
     num_non_deterministic_heap_queries: usize,
@@ -48,7 +51,7 @@ pub(crate)  fn compute_ram_circuit_snapshots<
 ) {
     assert_eq!(
         memory_artifacts.all_memory_queries_accumulated.len(),
-        memory_artifacts.all_memory_queue_states.len()
+        all_memory_queue_states.len()
     );
 
     assert_eq!(
@@ -69,15 +72,11 @@ pub(crate)  fn compute_ram_circuit_snapshots<
 
     let amount_of_circuits = (total_amount_of_queries + per_circuit_capacity - 1) / per_circuit_capacity;
 
-    let mut unsorted_memory_queue_chunk_final_states = Vec::with_capacity(amount_of_circuits);
-    let all_queue_states_iter = memory_artifacts
-    .all_memory_queue_states.iter().chain(implicit_memory_artifacts.memory_queue_states.iter());
-    for (i, state) in all_queue_states_iter.enumerate() {
-        if (i % per_circuit_capacity == per_circuit_capacity - 1) || i == total_amount_of_queries - 1 {
-            unsorted_memory_queue_chunk_final_states.push(*state);
-        }
+    all_memory_queue_states.reserve_exact_flat(implicit_memory_artifacts.memory_queue_states.len());
+    for state in implicit_memory_artifacts.memory_queue_states.into_iter() {
+        all_memory_queue_states.push(state);
     }
-    drop(implicit_memory_artifacts.memory_queue_states);
+    let unsorted_memory_queue_chunk_final_states = all_memory_queue_states.into_circuits();
 
     assert_eq!(
         unsorted_memory_queue_chunk_final_states.len(),
@@ -195,6 +194,8 @@ pub(crate)  fn compute_ram_circuit_snapshots<
 
     let transposed_lhs_chains = transpose_chunks(&lhs_grand_product_chains, per_circuit_capacity);
     let transposed_rhs_chains = transpose_chunks(&rhs_grand_product_chains, per_circuit_capacity);
+
+    snapshot_prof("Ram circuit: chains created");
 
     // now we need to split them into individual circuits
     // splitting is not extra hard here, we walk over iterator over everything and save states on checkpoints

@@ -1,3 +1,4 @@
+use circuit_definitions::Field;
 use circuit_sequencer_api::INITIAL_MONOTONIC_CYCLE_COUNTER;
 
 use crate::witness::advancing_range::TupleFirst;
@@ -193,3 +194,126 @@ impl<T: TupleFirst> Iterator for SplittedQueueIntoIter<T> {
     }
 }
 
+/// TODO docs
+pub struct QueueStatesForCircuit<T> {
+    cycles_per_circuit: usize,
+    inner: Vec<T>,
+    len: usize,
+}
+
+impl<T> QueueStatesForCircuit<T> {
+    pub fn new(cycles_per_circuit: usize) -> Self {
+        Self {
+            cycles_per_circuit,
+            inner: Default::default(),
+            len: 0
+        }
+    }
+
+    // TODO with_exact_capacity
+    pub fn with_flat_capacity(cycles_per_circuit: usize, capacity: usize) -> Self {
+        let num_circuits = (capacity + cycles_per_circuit - 1)
+        / cycles_per_circuit;
+
+        let mut _self = Self::new(cycles_per_circuit);
+        _self.inner.reserve_exact(num_circuits);
+        _self
+    }
+
+    pub fn reserve_exact_flat(&mut self, additional: usize) {
+        let num_circuits = (self.len + additional + self.cycles_per_circuit - 1)
+        / self.cycles_per_circuit;
+
+        self.inner.reserve_exact(num_circuits - self.inner.capacity());
+    }
+
+    pub fn into_circuits(self) -> Vec<T> {
+        self.inner
+    }
+
+    pub fn last(&self) -> Option<&T> {
+        self.inner.last()
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    pub fn push(&mut self, val: T) {
+        let circuit_id = self.len / self.cycles_per_circuit;
+        if self.inner.len() <= circuit_id {
+            self.inner.push(val);
+        } else {
+            self.inner[circuit_id] = val;
+        }
+        
+        self.len += 1;
+    }
+}
+
+use core::slice::Iter;
+use crate::witness::vm_snapshot::VmSnapshot;
+use crate::boojum::gadgets::queue::QueueState;
+use circuit_definitions::boojum::gadgets::traits::allocatable::CSAllocatable;
+use circuit_definitions::encodings::memory_query::MemoryQueueState;
+use crate::boojum::gadgets::queue::QueueStateWitness;
+use crate::zkevm_circuits::base_structures::vm_state::FULL_SPONGE_QUEUE_STATE_WIDTH;
+use crate::witness::utils::transform_sponge_like_queue_state;
+
+/// TODO docs
+pub struct MemoryQueueWitnessesForVmCircuitBuilder<'a> {
+    inner: Vec<QueueStateWitness<Field, FULL_SPONGE_QUEUE_STATE_WIDTH>>,
+    vm_snapshots: &'a Vec<VmSnapshot>,
+    vm_memory_query_cycles_it: Iter<'a, u32>,
+    current_snapshot: usize,
+    current_snapshot_start_cycle: u32,
+    last: Option<MemoryQueueState<Field>>
+}
+
+impl<'a> MemoryQueueWitnessesForVmCircuitBuilder<'a> {
+    pub fn new(
+        vm_snapshots: &'a Vec<VmSnapshot>,
+        vm_memory_query_cycles: &'a Vec<u32>,
+) -> Self {
+        Self {
+            inner: Vec::with_capacity(vm_snapshots.windows(2).len() + 1),
+            vm_snapshots,
+            vm_memory_query_cycles_it: vm_memory_query_cycles.iter(),
+            current_snapshot: 0,
+            current_snapshot_start_cycle: 0,
+            last: None
+        }
+    }
+
+    pub fn into_circuits(mut self) -> Vec<QueueStateWitness<Field, FULL_SPONGE_QUEUE_STATE_WIDTH>> {
+        // special for last vm snapshot
+        if let Some(last_state) = self.last  {
+            self.inner.push(
+                transform_sponge_like_queue_state(last_state)
+            );
+        } else {
+            self.inner.push(QueueState::placeholder_witness());
+        }
+        assert!(self.inner.len() == self.vm_snapshots.windows(2).len() + 1);
+
+        self.inner
+    }
+
+    pub fn push(&mut self, state: MemoryQueueState<Field>) {
+        let cycle = self.vm_memory_query_cycles_it.next().unwrap();
+        if *cycle >= self.current_snapshot_start_cycle {
+            self.current_snapshot += 1;
+            self.current_snapshot_start_cycle = self.vm_snapshots[self.current_snapshot].at_cycle;
+
+            if let Some(last_state) = self.last {
+                self.inner.push(
+                    transform_sponge_like_queue_state(last_state)
+                );
+            } else {
+                self.inner.push(QueueState::placeholder_witness());
+            }
+        }
+
+        self.last = Some(state);
+    }
+}

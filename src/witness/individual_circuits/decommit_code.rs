@@ -13,6 +13,8 @@ use circuit_definitions::encodings::decommittment_request::DecommittmentQueueSta
 use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 use circuit_definitions::zk_evm::aux_structures::DecommittmentQuery;
 use std::collections::VecDeque;
+use circuit_definitions::encodings::memory_query::MemoryQueueState;
+use crate::witness::queue_for_main_vm::QueueStatesForCircuit;
 
 pub(crate)  fn compute_decommitter_circuit_snapshots<
     F: SmallField,
@@ -20,6 +22,7 @@ pub(crate)  fn compute_decommitter_circuit_snapshots<
 >(
     memory_artifacts: &MemoryArtifacts<F>,
     implicit_memory_artifacts: &mut ImplicitMemoryArtifacts<F>,
+    all_memory_queue_states: &QueueStatesForCircuit::<MemoryQueueState<F>>,
     memory_queue_simulator: &mut MemoryQueueSimulator<F>,
     deduplicated_decommittment_queue_simulator: DecommittmentQueueSimulator<F>,
     deduplicated_decommittment_queue_states: Vec<DecommittmentQueueState<F>>,
@@ -30,7 +33,7 @@ pub(crate)  fn compute_decommitter_circuit_snapshots<
     assert_eq!(
         memory_artifacts.all_memory_queries_accumulated.len()
             + implicit_memory_artifacts.memory_queries_accumulated.len(),
-        memory_artifacts.all_memory_queue_states.len()
+            all_memory_queue_states.len()
             + implicit_memory_artifacts.memory_queue_states.len()
     );
     assert_eq!(
@@ -171,7 +174,7 @@ pub(crate)  fn compute_decommitter_circuit_snapshots<
         };
 
         let wintess_state = if start_idx_for_memory_accumulator + memory_queue_state_offset == 0 {
-            memory_artifacts.all_memory_queue_states.last().unwrap()
+            all_memory_queue_states.last().unwrap()
         } else {
             implicit_memory_artifacts
                 .memory_queue_states
@@ -387,7 +390,7 @@ pub(crate)  fn compute_decommitter_circuit_snapshots<
         );
 
         let wintess_state = if start_idx_for_memory_accumulator + memory_queue_state_offset == 0 {
-            memory_artifacts.all_memory_queue_states.last().unwrap()
+            all_memory_queue_states.last().unwrap()
         } else {
             implicit_memory_artifacts
                 .memory_queue_states
@@ -434,7 +437,7 @@ pub(crate)  fn compute_decommitter_circuit_snapshots<
     assert_eq!(
         memory_artifacts.all_memory_queries_accumulated.len()
             + implicit_memory_artifacts.memory_queries_accumulated.len(),
-        memory_artifacts.all_memory_queue_states.len()
+        all_memory_queue_states.len()
             + implicit_memory_artifacts.memory_queue_states.len()
     );
     assert_eq!(

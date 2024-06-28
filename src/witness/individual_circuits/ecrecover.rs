@@ -8,6 +8,8 @@ use crate::zkevm_circuits::base_structures::log_query::*;
 use crate::zkevm_circuits::ecrecover::*;
 use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 use circuit_definitions::encodings::*;
+use circuit_definitions::encodings::memory_query::MemoryQueueState;
+use crate::witness::queue_for_main_vm::QueueStatesForCircuit;
 
 // we want to simulate splitting of data into many separate instances of the same circuit.
 // So we basically need to reconstruct the FSM state on input/output, and passthrough data.
@@ -19,6 +21,7 @@ pub(crate)  fn ecrecover_decompose_into_per_circuit_witness<
 >(
     memory_artifacts: &MemoryArtifacts<F>,
     implicit_memory_artifacts: &mut ImplicitMemoryArtifacts<F>,
+    all_memory_queue_states: &QueueStatesForCircuit::<MemoryQueueState<F>>,
     memory_queue_simulator: &mut MemoryQueueSimulator<F>,
     ecrecover_witnesses: Vec<(u32, LogQuery_, ECRecoverRoundWitness)>,
     ecrecover_queries: Vec<LogQuery_>,
@@ -29,7 +32,7 @@ pub(crate)  fn ecrecover_decompose_into_per_circuit_witness<
     assert_eq!(
         memory_artifacts.all_memory_queries_accumulated.len()
             + implicit_memory_artifacts.memory_queries_accumulated.len(),
-        memory_artifacts.all_memory_queue_states.len()
+        all_memory_queue_states.len()
             + implicit_memory_artifacts.memory_queue_states.len()
     );
     assert_eq!(
@@ -231,7 +234,7 @@ pub(crate)  fn ecrecover_decompose_into_per_circuit_witness<
     assert_eq!(
         memory_artifacts.all_memory_queries_accumulated.len()
             + implicit_memory_artifacts.memory_queries_accumulated.len(),
-        memory_artifacts.all_memory_queue_states.len()
+        all_memory_queue_states.len()
             + implicit_memory_artifacts.memory_queue_states.len()
     );
     assert_eq!(

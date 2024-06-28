@@ -1,4 +1,5 @@
 use crate::boojum::field::SmallField;
+use crate::boojum::gadgets::queue::QueueStateWitness;
 use crate::zk_evm::aux_structures::{DecommittmentQuery, LogQuery, MemoryQuery};
 use crate::zkevm_circuits::code_unpacker_sha256::input::CodeDecommitterCircuitInstanceWitness;
 use crate::zkevm_circuits::ecrecover::EcrecoverCircuitInstanceWitness;
@@ -8,12 +9,14 @@ use crate::zkevm_circuits::log_sorter::input::EventsDeduplicatorInstanceWitness;
 use crate::zkevm_circuits::sha256_round_function::input::Sha256RoundFunctionCircuitInstanceWitness;
 use crate::zkevm_circuits::sort_decommittment_requests::input::CodeDecommittmentsDeduplicatorInstanceWitness;
 use crate::zkevm_circuits::storage_validity_by_grand_product::input::StorageDeduplicatorInstanceWitness;
+use crate::zkevm_circuits::base_structures::vm_state::FULL_SPONGE_QUEUE_STATE_WIDTH;
 use circuit_definitions::encodings::decommittment_request::DecommittmentQueueState;
 use circuit_definitions::encodings::memory_query::MemoryQueueState;
 use circuit_definitions::encodings::*;
 use circuit_definitions::zkevm_circuits::secp256r1_verify::Secp256r1VerifyCircuitInstanceWitness;
 use circuit_definitions::zkevm_circuits::transient_storage_validity_by_grand_product::input::TransientStorageDeduplicatorInstanceWitness;
 use derivative::Derivative;
+
 
 #[derive(Derivative)]
 #[derivative(Default)]
@@ -35,8 +38,8 @@ pub struct MemoryArtifacts<F: SmallField> {
     pub vm_memory_query_cycles: Vec<u32>,
     //
     pub all_memory_queries_accumulated: Vec<MemoryQuery>,
-    // all the RAM queue states
-    pub all_memory_queue_states: Vec<MemoryQueueState<F>>,
+    // TODO docs
+    pub memory_queue_entry_states: Vec<QueueStateWitness<F, FULL_SPONGE_QUEUE_STATE_WIDTH>>,
     // decommittment queue
     pub all_prepared_decommittment_queries: Vec<(u32, DecommittmentQuery)>,
     pub all_decommittment_queue_states: Vec<(u32, DecommittmentQueueState<F>)>,

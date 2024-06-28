@@ -12,16 +12,19 @@ use crate::zkevm_circuits::DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS;
 use artifacts::MemoryArtifacts;
 use circuit_definitions::encodings::decommittment_request::*;
 use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
+use circuit_definitions::encodings::memory_query::MemoryQueueState;
 use circuit_definitions::encodings::CircuitEquivalentReflection;
 use circuit_definitions::zk_evm::aux_structures::DecommittmentQuery;
 use rayon::prelude::*;
 use std::cmp::Ordering;
+use crate::witness::queue_for_main_vm::QueueStatesForCircuit;
 
 pub(crate) fn compute_decommitts_sorter_circuit_snapshots<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     memory_artifacts: &MemoryArtifacts<F>,
+    all_memory_queue_states: &QueueStatesForCircuit::<MemoryQueueState<F>>,
     memory_queue_simulator: &MemoryQueueSimulator<F>,
     mut executed_decommittment_queries: Vec<(u32, DecommittmentQuery, Vec<U256>)>,
     deduplicated_decommittment_queue_simulator: &mut DecommittmentQueueSimulator<F>,
@@ -35,7 +38,7 @@ pub(crate) fn compute_decommitts_sorter_circuit_snapshots<
 ) {
     assert_eq!(
         memory_artifacts.all_memory_queries_accumulated.len(),
-        memory_artifacts.all_memory_queue_states.len()
+        all_memory_queue_states.len()
     );
     assert_eq!(
         memory_artifacts.all_memory_queries_accumulated.len(),
@@ -197,7 +200,7 @@ pub(crate) fn compute_decommitts_sorter_circuit_snapshots<
     }
 
     assert_eq!(
-        memory_artifacts.all_memory_queue_states.len(),
+        all_memory_queue_states.len(),
         memory_artifacts.all_memory_queries_accumulated.len()
     );
 

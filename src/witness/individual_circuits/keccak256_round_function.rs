@@ -10,7 +10,9 @@ use crate::zkevm_circuits::keccak256_round_function::{
 };
 use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 use circuit_definitions::encodings::*;
+use circuit_definitions::encodings::memory_query::MemoryQueueState;
 use derivative::*;
+use crate::witness::queue_for_main_vm::QueueStatesForCircuit;
 
 #[derive(Derivative)]
 #[derivative(Clone, Copy, Debug, PartialEq, Eq)]
@@ -31,6 +33,7 @@ pub(crate) fn keccak256_decompose_into_per_circuit_witness<
 >(
     memory_artifacts: &MemoryArtifacts<F>,
     implicit_memory_artifacts: &mut ImplicitMemoryArtifacts<F>,
+    all_memory_queue_states: &QueueStatesForCircuit::<MemoryQueueState<F>>,
     memory_queue_simulator: &mut MemoryQueueSimulator<F>,
     keccak_round_function_witnesses: Vec<(u32, LogQuery_, Vec<Keccak256RoundWitness>)>,
     keccak_precompile_queries: Vec<LogQuery_>,
@@ -41,7 +44,7 @@ pub(crate) fn keccak256_decompose_into_per_circuit_witness<
     assert_eq!(
         memory_artifacts.all_memory_queries_accumulated.len()
             + implicit_memory_artifacts.memory_queries_accumulated.len(),
-        memory_artifacts.all_memory_queue_states.len()
+        all_memory_queue_states.len()
             + implicit_memory_artifacts.memory_queue_states.len()
     );
     assert_eq!(
@@ -463,7 +466,7 @@ pub(crate) fn keccak256_decompose_into_per_circuit_witness<
     assert_eq!(
         memory_artifacts.all_memory_queries_accumulated.len()
             + implicit_memory_artifacts.memory_queries_accumulated.len(),
-        memory_artifacts.all_memory_queue_states.len()
+        all_memory_queue_states.len()
             + implicit_memory_artifacts.memory_queue_states.len()
     );
     assert_eq!(

@@ -4,7 +4,7 @@
 
 use super::callstack_handler::*;
 use super::postprocessing::{BlockFirstAndLastBasicCircuitsObservableWitnesses, ClosedFormInputField, CsForWitnessGeneration, FirstAndLastCircuitWitness};
-use super::queue_for_main_vm::QueueForMainVm;
+use super::queue_for_main_vm::{MemoryQueueWitnessesForVmCircuitBuilder, QueueForMainVm, QueueStatesForCircuit};
 use super::utils::*;
 use crate::boojum::field::SmallField;
 use crate::boojum::gadgets::queue::{QueueState, QueueStateWitness, QueueTailStateWitness};
@@ -865,6 +865,7 @@ fn process_log_circuits<
     log_simulation_queries_data: LogSimulationQueriesData<GoldilocksField>,
     round_function: &Poseidon2Goldilocks,
     num_non_deterministic_heap_queries: usize,
+    vm_snapshots: &Vec<VmSnapshot>,
     mut cs_for_witness_generation: &mut CsForWitnessGeneration,
     mut circuit_callback: &mut CB,
     mut recursion_queue_callback: &mut QSCB,
@@ -902,8 +903,13 @@ fn process_log_circuits<
 
     tracing::debug!("Running memory queue simulation");
 
-    memory_artifacts.all_memory_queue_states =
-    Vec::with_capacity(memory_artifacts.all_memory_queries_accumulated.len());
+    // TODO rename
+    let mut all_memory_queue_states =
+    QueueStatesForCircuit::<MemoryQueueState<GoldilocksField>>::with_flat_capacity(
+        geometry.cycles_per_ram_permutation as usize,
+        memory_artifacts.all_memory_queries_accumulated.len()
+    );
+    let mut vm_entry_memory_states_builder = MemoryQueueWitnessesForVmCircuitBuilder::new(&vm_snapshots, &memory_artifacts.vm_memory_query_cycles);
 
     // very big data struct inside
     let mut memory_queue_simulator: MemoryQueueSimulator<GoldilocksField> = MemoryQueueSimulator::empty();
@@ -912,10 +918,16 @@ fn process_log_circuits<
     for query in memory_artifacts.all_memory_queries_accumulated.iter() {
         let (_, intermediate_info) =
             memory_queue_simulator.push_and_output_intermediate_data(*query, round_function);
-        memory_artifacts
-            .all_memory_queue_states
-            .push(intermediate_info);
+            
+        all_memory_queue_states
+        .push(intermediate_info);
+        vm_entry_memory_states_builder.push(intermediate_info);
     }
+
+    // compress huge data structure into smaller one
+    memory_artifacts.memory_queue_entry_states = vm_entry_memory_states_builder.into_circuits();
+
+
 
     snapshot_prof("Finished memory queue simulation");
 
@@ -924,7 +936,7 @@ fn process_log_circuits<
     {
         assert_eq!(
             memory_artifacts.all_memory_queries_accumulated.len(),
-            memory_artifacts.all_memory_queue_states.len()
+            all_memory_queue_states.len()
         );
         assert_eq!(
             memory_artifacts.all_memory_queries_accumulated.len(),
@@ -955,6 +967,7 @@ fn process_log_circuits<
         let (all_decommittment_queue_states, decommittments_deduplicator_circuits_data) =
             compute_decommitts_sorter_circuit_snapshots(
                 &memory_artifacts,
+                &all_memory_queue_states,
                 &memory_queue_simulator,
                 executed_decommittment_queries,
                 &mut deduplicated_decommitment_queue_simulator,
@@ -974,6 +987,7 @@ fn process_log_circuits<
         let code_decommitter_circuits_data = compute_decommitter_circuit_snapshots(
             &memory_artifacts,
             &mut implicit_memory_artifacts,
+            &all_memory_queue_states,
             &mut memory_queue_simulator,
             deduplicated_decommitment_queue_simulator,
             deduplicated_decommittment_queue_states,
@@ -1023,6 +1037,7 @@ fn process_log_circuits<
     let keccak256_circuits_data = keccak256_decompose_into_per_circuit_witness(
         &memory_artifacts,
         &mut implicit_memory_artifacts,
+        &all_memory_queue_states,
         &mut memory_queue_simulator,
         keccak_round_function_witnesses,
         log_simulation_queries_data.demuxed_queries.keccak_precompile_queries,
@@ -1044,6 +1059,7 @@ fn process_log_circuits<
     let sha256_circuits_data = sha256_decompose_into_per_circuit_witness(
         &memory_artifacts,
         &mut implicit_memory_artifacts,
+        &all_memory_queue_states,
         &mut memory_queue_simulator,
         sha256_round_function_witnesses,
         log_simulation_queries_data.demuxed_queries.sha256_precompile_queries,
@@ -1065,6 +1081,7 @@ fn process_log_circuits<
     let ecrecover_circuits_data = ecrecover_decompose_into_per_circuit_witness(
         &memory_artifacts,
         &mut implicit_memory_artifacts,
+        &all_memory_queue_states,
         &mut memory_queue_simulator,
         ecrecover_witnesses,
         log_simulation_queries_data.demuxed_queries.ecrecover_queries,
@@ -1084,6 +1101,7 @@ fn process_log_circuits<
     let secp256r1_verify_circuits_data = secp256r1_verify_decompose_into_per_circuit_witness(
         &memory_artifacts,
         &mut implicit_memory_artifacts,
+        &all_memory_queue_states,
         &mut memory_queue_simulator,
         secp256r1_verify_witnesses,
         log_simulation_queries_data.demuxed_queries.secp256r1_verify_queries,
@@ -1103,6 +1121,7 @@ fn process_log_circuits<
         compute_ram_circuit_snapshots(
             &memory_artifacts,
             implicit_memory_artifacts,
+            all_memory_queue_states,
             memory_queue_simulator,
             round_function,
             num_non_deterministic_heap_queries,
@@ -1272,7 +1291,7 @@ fn repack_input_for_main_vm(
         vm_memory_query_cycles,
         all_decommittment_queue_states,
         all_prepared_decommittment_queries,
-        all_memory_queue_states,
+        memory_queue_entry_states,
         all_memory_queries_accumulated,
         ..
     } = memory_artifacts;
@@ -1288,7 +1307,6 @@ fn repack_input_for_main_vm(
 
     let mut main_vm_inputs = vec![];
 
-    let mut memory_query_cycles_range = AdvancingRange::new(&vm_memory_query_cycles);
     let mut decommittment_queue_states_range = AdvancingRange::new(&all_decommittment_queue_states);
     let mut callstack_sponge_encoding_ranges_range =
         AdvancingRange::new(&callstack_sponge_encoding_ranges);
@@ -1342,6 +1360,7 @@ fn repack_input_for_main_vm(
 
     let mut rollback_queue_head_segments_it = rollback_queue_head_segments.into_batches(amount_of_circuits).into_iter();
     let mut callstack_values_witnesses_it = callstack_values_witnesses.into_batches(amount_of_circuits).into_iter();
+    let mut memory_queue_entry_states_it = memory_queue_entry_states.into_iter();
     snapshot_prof("Repack: prepared iters");
 
     for (_circuit_idx, pair) in vm_snapshots.windows(2).enumerate() {
@@ -1354,15 +1373,7 @@ fn repack_input_for_main_vm(
         let final_state = &pair[1];
         let cycle_range = initial_state.at_cycle..final_state.at_cycle;
 
-        let memory_query_range = memory_query_cycles_range.get_range(cycle_range.clone());
-
-        let index_plus_one = memory_query_range.start;
-
-        let memory_queue_state_for_entry = if index_plus_one == 0 {
-            QueueState::placeholder_witness()
-        } else {
-            transform_sponge_like_queue_state(all_memory_queue_states[index_plus_one - 1])
-        };
+        let memory_queue_state_for_entry = memory_queue_entry_states_it.next().unwrap();
 
         let decommitment_queue_state = decommittment_queue_states_range
             .get_slice(0..initial_state.at_cycle)
@@ -1428,14 +1439,7 @@ fn repack_input_for_main_vm(
 
     // special pass for last one
     {
-        let memory_queue_state_for_entry = if vm_memory_query_cycles.is_empty() {
-            QueueState::placeholder_witness()
-        } else {
-            transform_sponge_like_queue_state(
-                all_memory_queue_states[vm_memory_query_cycles.len() - 1],
-            )
-        };
-
+        let memory_queue_state_for_entry = memory_queue_entry_states_it.next().unwrap();
         let decommitment_queue_state = all_decommittment_queue_states
             .iter()
             .last()
@@ -1832,6 +1836,7 @@ pub(crate) fn create_artifacts_from_tracer<
         log_simulation_queries_data,
         round_function,
         num_non_deterministic_heap_queries,
+        &vm_snapshots,
         &mut cs_for_witness_generation,
         &mut circuit_callback,
         &mut recursion_queue_callback,
