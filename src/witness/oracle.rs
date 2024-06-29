@@ -203,11 +203,12 @@ struct LogSimulationResult<'a, F: SmallField> {
 
 struct LogSimulationQueriesData<F: SmallField> {
     applied_log_queue_simulator: Option<LogQueueSimulator<F>>,
-    applied_log_queue_states: Vec<(u32, LogQueueState<F>)>,
+    applied_log_queue_states: QueueLastStatesForCircuits<(u32, LogQueueState<F>)>,
     demuxed_queries: DemuxedQueries,
 }
 
 fn log_simulation<'a>(
+    geometry: &GeometryConfig,
     full_callstack_history: &Vec<CallstackActionHistoryEntry>,
     mut last_callstack_entry: CallstackEntryWithAuxData,
     round_function: &Poseidon2Goldilocks,
@@ -227,7 +228,10 @@ fn log_simulation<'a>(
 
     let mut demuxed_queries = DemuxedQueries::default();
 
-    let mut applied_log_queue_states = Vec::with_capacity(applied_queries.len());
+    let mut applied_log_queue_states = QueueLastStatesForCircuits::with_flat_capacity(
+        geometry.cycles_per_log_demuxer as usize, 
+        applied_queries.len()
+    );
     let mut chain_of_states: Vec<(
         u32,
         QueryMarker,
@@ -943,7 +947,10 @@ fn process_log_circuits<
     use crate::witness::queue_for_main_vm::MemoryQueueStatesForRamCircuits;
 
     let mut memory_queue_simulator = MemoryQueuePerCircuitSimulator::using_container(
-        MemoryQueueStatesForRamCircuits::new(geometry.cycles_per_ram_permutation as usize)
+        MemoryQueueStatesForRamCircuits::with_flat_capacity(
+            geometry.cycles_per_ram_permutation as usize,
+            memory_artifacts.vm_memory_queries_accumulated.len()
+        )
     );
 
     // very slow
@@ -1788,7 +1795,7 @@ pub(crate) fn create_artifacts_from_tracer<
     tracing::debug!("Running storage log simulation");
 
     let (log_simulation_result, log_simulation_queries_data, rollback_queue_tails_for_frames) =
-        log_simulation(&full_callstack_history, last_callstack_entry, round_function);
+        log_simulation(geometry, &full_callstack_history, last_callstack_entry, round_function);
 
     snapshot_prof("Log simulated");
 

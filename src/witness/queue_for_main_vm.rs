@@ -234,6 +234,16 @@ impl<T> MemoryQueueStatesForRamCircuits<T> {
         }
     }
 
+    pub fn with_flat_capacity(cycles_per_circuit: usize, flat_capacity: usize) -> Self {
+        let mut _self = Self::new(cycles_per_circuit);
+        let num_circuits = (flat_capacity + cycles_per_circuit - 1)
+        / cycles_per_circuit;
+
+        _self.inner.reserve_exact(num_circuits);
+
+        _self
+    }
+
     pub fn last(&self) -> Option<&T> {
         let last_batch = self.inner.last();
         if last_batch.is_none() {
@@ -294,7 +304,7 @@ impl<T> MemoryQueueStatesForRamCircuits<T> {
     }
 
     fn push_new_batch(&mut self) {
-        self.inner.push(Vec::with_capacity(self.cycles_per_circuit / 2));
+        self.inner.push(Vec::with_capacity(self.cycles_per_circuit));
     }
 
     fn seal_last_batch(&mut self) {
@@ -333,7 +343,7 @@ impl<'a, T> Iterator for MemoryQueueStatesForRamCircuitsIterator<'a, T> {
         
         let res = batch.unwrap().get(self.inner_index);
         self.inner_index += 1;
-        
+
         res
     }
 }

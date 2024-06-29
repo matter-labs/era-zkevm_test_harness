@@ -92,7 +92,10 @@ pub(crate)  fn compute_ram_circuit_snapshots<
     let mut sorted_memory_queue_chunk_final_states = Vec::with_capacity(amount_of_circuits);
 
     let mut sorted_memory_queries_simulator = MemoryQueuePerCircuitSimulator::using_container(
-        MemoryQueueStatesForRamCircuits::new(per_circuit_capacity)
+        MemoryQueueStatesForRamCircuits::with_flat_capacity(
+            per_circuit_capacity,
+            memory_artifacts.vm_memory_queries_accumulated.len() + implicit_memory_artifacts.memory_queries_accumulated.len()
+        )
     );
     {
         let mut sorted_memory_queries_accumulated: Vec<&MemoryQuery> = memory_artifacts

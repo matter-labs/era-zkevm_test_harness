@@ -19,11 +19,12 @@ use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use circuit_definitions::{encodings::*, Field, RoundFunction};
 use postprocessing::CsForWitnessGeneration;
 use zk_evm::zkevm_opcode_defs::SECP256R1_VERIFY_PRECOMPILE_ADDRESS;
+use crate::witness::queue_for_main_vm::QueueLastStatesForCircuits;
 
 pub(crate)  struct LogDemuxArtifacts<F: SmallField> {
     // log queue
     pub applied_log_queue_simulator: LogQueueSimulator<F>,
-    pub applied_log_queue_states: Vec<(u32, LogQueueState<F>)>,
+    pub applied_log_queue_states: QueueLastStatesForCircuits<(u32, LogQueueState<F>)>,
 }
 
 /// Take a storage log, output logs separately for events, l1 messages, storage, etc
@@ -95,7 +96,11 @@ pub(crate)  fn compute_logs_demux<
         .witness
         .as_slices()
         .0;
-    let mut states_iter = log_demux_artifacts.applied_log_queue_states.iter();
+
+
+    assert!(input_queue_witness.len() == log_demux_artifacts.applied_log_queue_states.len());
+
+    let last_applied_log_queue_states_for_chunks = log_demux_artifacts.applied_log_queue_states.into_circuits();
 
     let num_chunks = input_queue_witness.chunks(per_circuit_capacity).len();
 
@@ -155,13 +160,12 @@ pub(crate)  fn compute_logs_demux<
 
     let mut output_queues = std::array::from_fn(|index| LogQueue::<Field>::with_capacity(amounts_of_queries[index]));
 
-    for (idx, input_chunk) in input_queue_witness.chunks(per_circuit_capacity).enumerate() {
-        let is_first = idx == 0;
-        let is_last = idx == num_chunks - 1;
+    for (circuit_index, input_chunk) in input_queue_witness.chunks(per_circuit_capacity).enumerate() {
+        let is_first = circuit_index == 0;
+        let is_last = circuit_index == num_chunks - 1;
 
         // simulate the circuit
         for (_encoding, _previous_tail, query) in input_chunk.iter() {
-            let (_, _states) = states_iter.next().unwrap();
             match query.aux_byte {
                 STORAGE_AUX_BYTE => {
                     // sort rollup and porter
@@ -296,15 +300,10 @@ pub(crate)  fn compute_logs_demux<
 
         state_idx += per_circuit_capacity;
 
-        let idx = std::cmp::min(
-            log_demux_artifacts.applied_log_queue_states.len(),
-            state_idx,
-        ) - 1;
-
         let mut fsm_output = LogDemuxerFSMInputOutput::placeholder_witness();
         let mut initial_log_queue_state = full_log_queue_state.clone();
-        initial_log_queue_state.head = log_demux_artifacts.applied_log_queue_states[idx].1.tail;
-        initial_log_queue_state.tail.length -= log_demux_artifacts.applied_log_queue_states[idx]
+        initial_log_queue_state.head = last_applied_log_queue_states_for_chunks[circuit_index].1.tail;
+        initial_log_queue_state.tail.length -= last_applied_log_queue_states_for_chunks[circuit_index]
             .1
             .num_items;
 
