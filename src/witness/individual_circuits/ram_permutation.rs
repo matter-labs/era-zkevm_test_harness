@@ -130,6 +130,7 @@ pub(crate)  fn compute_ram_circuit_snapshots<
 
         snapshot_prof("Ram circuit: simulation done");
     }
+
     drop(implicit_memory_artifacts.memory_queries_accumulated);
 
     snapshot_prof("Inside RAM permutation circuit computing 2");
@@ -146,18 +147,6 @@ pub(crate)  fn compute_ram_circuit_snapshots<
 
     // now we should chunk it by circuits but briefly simulating their logic
 
-    let challenges = produce_fs_challenges::<
-        Field,
-        RoundFunction,
-        FULL_SPONGE_QUEUE_STATE_WIDTH,
-        { MEMORY_QUERY_PACKED_WIDTH + 1 },
-        2,
-    >(
-        memory_queue_simulator.take_sponge_like_queue_state().tail,
-        sorted_memory_queries_simulator.take_sponge_like_queue_state().tail,
-        round_function,
-    );
-
     // since encodings of the elements provide all the information necessary to perform soring argument,
     // we use them naively
 
@@ -169,15 +158,27 @@ pub(crate)  fn compute_ram_circuit_snapshots<
     let mut lhs_grand_product_chains = Vec::with_capacity(DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS);
     let mut rhs_grand_product_chains = Vec::with_capacity(DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS);
     {
+        let challenges = produce_fs_challenges::<
+            Field,
+            RoundFunction,
+            FULL_SPONGE_QUEUE_STATE_WIDTH,
+            { MEMORY_QUERY_PACKED_WIDTH + 1 },
+            2,
+        >(
+            memory_queue_simulator.take_sponge_like_queue_state().tail,
+            sorted_memory_queries_simulator.take_sponge_like_queue_state().tail,
+            round_function,
+        );
+
         let lhs_contributions: Vec<_> = memory_queue_simulator
             .witness
             .iter()
-            .map(|el| el.0)
+            .map(|el| &el.0)
             .collect();
         let rhs_contributions: Vec<_> = sorted_memory_queries_simulator
             .witness
             .iter()
-            .map(|el| el.0)
+            .map(|el| &el.0)
             .collect();
 
         for idx in 0..DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS {
@@ -198,7 +199,6 @@ pub(crate)  fn compute_ram_circuit_snapshots<
             lhs_grand_product_chains.push(lhs_grand_product_chain);
             rhs_grand_product_chains.push(rhs_grand_product_chain);
         }
-        snapshot_prof("Chains cycle finished");
     }
 
     let transposed_lhs_chains = transpose_chunks(&lhs_grand_product_chains, per_circuit_capacity);

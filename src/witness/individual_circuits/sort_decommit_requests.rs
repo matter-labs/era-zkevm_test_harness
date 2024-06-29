@@ -216,12 +216,12 @@ pub(crate) fn compute_decommitts_sorter_circuit_snapshots<
     let lhs_contributions: Vec<_> = unsorted_decommittment_queue_simulator
         .witness
         .iter()
-        .map(|el| el.0)
+        .map(|el| &el.0)
         .collect();
     let rhs_contributions: Vec<_> = sorted_decommittment_queue_simulator
         .witness
         .iter()
-        .map(|el| el.0)
+        .map(|el| &el.0)
         .collect();
 
     let mut lhs_grand_product_chains = vec![];

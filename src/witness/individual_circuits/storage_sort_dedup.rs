@@ -110,11 +110,12 @@ pub(crate) fn compute_storage_dedup_and_sort<
             >>::encoding_witness(&extended_query)
         })
         .collect();
+    let lhs_contributions_refs = lhs_contributions.iter().collect();
 
     let rhs_contributions: Vec<_> = intermediate_sorted_log_simulator
         .witness
         .iter()
-        .map(|el| el.0)
+        .map(|el| &el.0)
         .collect();
 
     // --------------------
@@ -130,7 +131,7 @@ pub(crate) fn compute_storage_dedup_and_sort<
             LOG_QUERY_PACKED_WIDTH,
             { LOG_QUERY_PACKED_WIDTH + 1 },
         >(
-            &lhs_contributions,
+            &lhs_contributions_refs,
             &rhs_contributions,
             &challenges[idx],
         );

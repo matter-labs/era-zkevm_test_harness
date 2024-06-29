@@ -89,12 +89,12 @@ pub(crate)  fn compute_events_dedup_and_sort<
         .simulator
         .witness
         .iter()
-        .map(|el| el.0)
+        .map(|el| &el.0)
         .collect();
     let rhs_contributions: Vec<_> = intermediate_sorted_simulator
         .witness
         .iter()
-        .map(|el| el.0)
+        .map(|el| &el.0)
         .collect();
 
     // --------------------

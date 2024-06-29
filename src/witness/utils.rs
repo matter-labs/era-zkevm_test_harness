@@ -542,8 +542,8 @@ pub fn produce_fs_challenges<
 const PARALLELIZATION_CHUNK_SIZE: usize = 1 << 16;
 
 pub(crate) fn compute_grand_product_chains<F: SmallField, const N: usize, const M: usize>(
-    lhs_contributions: &Vec<[F; N]>,
-    rhs_contributions: &Vec<[F; N]>,
+    lhs_contributions: &Vec<&[F; N]>,
+    rhs_contributions: &Vec<&[F; N]>,
     challenges: &[F; M],
 ) -> (Vec<F>, Vec<F>) {
     assert_eq!(N + 1, M);

@@ -244,6 +244,10 @@ impl<T> MemoryQueueStatesForRamCircuits<T> {
         _self
     }
 
+    pub fn container(&self) -> &Vec<Vec<T>> {
+        &self.inner
+    }
+
     pub fn last(&self) -> Option<&T> {
         let last_batch = self.inner.last();
         if last_batch.is_none() {
