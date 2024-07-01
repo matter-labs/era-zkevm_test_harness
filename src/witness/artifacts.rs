@@ -17,6 +17,9 @@ use circuit_definitions::zkevm_circuits::secp256r1_verify::Secp256r1VerifyCircui
 use circuit_definitions::zkevm_circuits::transient_storage_validity_by_grand_product::input::TransientStorageDeduplicatorInstanceWitness;
 use derivative::Derivative;
 
+use crate::witness::queue_for_main_vm::CircuitlLastStateAccumulator;
+use crate::witness::queue_for_main_vm::QueueForMainVm;
+
 use crate::zk_evm::zkevm_opcode_defs::system_params::{
     EVENT_AUX_BYTE, L1_MESSAGE_AUX_BYTE, PRECOMPILE_AUX_BYTE, STORAGE_AUX_BYTE, TRANSIENT_STORAGE_AUX_BYTE
 };
@@ -92,16 +95,14 @@ impl DemuxedQueries {
     }
 }
 
-#[derive(Derivative)]
-#[derivative(Default)]
 pub struct MemoryArtifacts<F: SmallField> {
     //
     pub vm_memory_queries_accumulated: Vec<(u32, MemoryQuery)>,
     // TODO docs
     pub memory_queue_entry_states: Vec<QueueStateWitness<F, FULL_SPONGE_QUEUE_STATE_WIDTH>>,
     // decommittment queue
-    pub all_prepared_decommittment_queries: Vec<(u32, DecommittmentQuery)>,
-    pub all_decommittment_queue_states: Vec<(u32, DecommittmentQueueState<F>)>,
+    pub prepared_decommittment_queries_per_instance: QueueForMainVm<(u32, DecommittmentQuery)>,
+    pub decommittment_queue_entry_states: CircuitlLastStateAccumulator<(u32, QueueStateWitness<F, FULL_SPONGE_QUEUE_STATE_WIDTH>)>,
 }
 
 #[derive(Derivative)]

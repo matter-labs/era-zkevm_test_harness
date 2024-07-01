@@ -1,7 +1,28 @@
 use circuit_definitions::Field;
 use circuit_sequencer_api::INITIAL_MONOTONIC_CYCLE_COUNTER;
 
-use crate::witness::advancing_range::TupleFirst;
+// TODO add tests after cleanup
+
+pub trait TupleFirst {
+    fn first(&self) -> u32;
+}
+
+impl TupleFirst for u32 {
+    fn first(&self) -> u32 {
+        *self
+    }
+}
+
+impl<T> TupleFirst for (u32, T) {
+    fn first(&self) -> u32 {
+        self.0
+    }
+}
+impl<T, U> TupleFirst for (u32, T, U) {
+    fn first(&self) -> u32 {
+        self.0
+    }
+}
 
 /// Used to store queries that will be used for the main VM witness generation.
 /// This data structure internally sorts queries by main VM circuit instances.
@@ -119,6 +140,85 @@ impl<T: TupleFirst> Extend<T> for QueueForMainVm<T> {
         while let Some(element) = iterator.next() {
             self.push(element);
         }
+    }
+}
+
+#[derive(Default)]
+pub struct CircuitlLastStateAccumulator<T: TupleFirst> 
+where T: Clone
+{
+    cycles_per_circuit: usize,
+    inner: Vec<T>,
+    last: T
+}
+
+// TODO can be optimized for sparse values
+impl<T: TupleFirst> CircuitlLastStateAccumulator<T> 
+where T: Clone
+{
+    pub fn new(cycles_per_circuit: usize, initial_value: T) -> Self {
+        Self {
+            cycles_per_circuit,
+            inner: Default::default(),
+            last: initial_value
+        }
+    }
+
+    pub fn from_iter<I: IntoIterator<Item = T>>(cycles_per_circuit: usize, initial_value: T, iterator: I) -> Self {
+        let mut _self = Self {
+            cycles_per_circuit,
+             inner: Default::default(),
+             last: initial_value
+         };
+ 
+         let mut iterator = iterator.into_iter();
+ 
+         while let Some(element) = iterator.next() {
+             _self.push(element);
+         }
+ 
+         _self
+     }
+
+    pub fn extend<I: IntoIterator<Item = T>>(&mut self, iterator: I) {
+         let mut iterator = iterator.into_iter();
+
+         while let Some(element) = iterator.next() {
+            self.push(element);
+         }
+     }
+
+    pub fn last(&self) -> &T {
+        &self.last
+    }
+
+    pub fn push(&mut self, val: T) {
+        let cycle = val.first() as usize;
+
+        if cycle < INITIAL_MONOTONIC_CYCLE_COUNTER as usize {
+            self.last = val;
+            return;
+        }
+
+        let circuit_index = (cycle - INITIAL_MONOTONIC_CYCLE_COUNTER as usize) / self.cycles_per_circuit;
+
+        while self.inner.len() <= circuit_index {
+            self.inner.push(self.last.clone());
+        }
+
+        self.last = val;
+    }
+
+    pub fn into_batches(mut self, amount_of_circuits: usize) -> Vec<T> {
+        if self.inner.len() < amount_of_circuits {
+            self.inner.reserve_exact(amount_of_circuits - self.inner.len());
+        }
+        
+        while self.inner.len() < amount_of_circuits {
+            self.inner.push(self.last.clone());
+        }
+
+        self.inner
     }
 }
 
@@ -376,53 +476,52 @@ pub struct MemoryQueueWitnessesForVmCircuitBuilder<'a> {
     vm_memory_queries_accumulated_it: Iter<'a, (u32, MemoryQuery)>,
     current_snapshot: usize,
     current_snapshot_start_cycle: u32,
-    last: Option<MemoryQueueState<Field>>
+    last_witness: QueueStateWitness<Field, FULL_SPONGE_QUEUE_STATE_WIDTH>
 }
 
+// TODO refactor
 impl<'a> MemoryQueueWitnessesForVmCircuitBuilder<'a> {
     pub fn new(
         vm_snapshots: &'a Vec<VmSnapshot>,
         vm_memory_queries_accumulated: &'a Vec<(u32, MemoryQuery)>,
 ) -> Self {
+        assert!(!vm_snapshots.is_empty());
+        
         Self {
             inner: Vec::with_capacity(vm_snapshots.windows(2).len() + 1),
             vm_snapshots,
             vm_memory_queries_accumulated_it: vm_memory_queries_accumulated.iter(),
             current_snapshot: 0,
-            current_snapshot_start_cycle: 0,
-            last: None
+            current_snapshot_start_cycle: vm_snapshots[0].at_cycle,
+            last_witness: QueueState::placeholder_witness()
         }
     }
 
     pub fn into_circuits(mut self) -> Vec<QueueStateWitness<Field, FULL_SPONGE_QUEUE_STATE_WIDTH>> {
-        // special for last vm snapshot
-        if let Some(last_state) = self.last  {
-            self.inner.push(
-                transform_sponge_like_queue_state(last_state)
-            );
-        } else {
-            self.inner.push(QueueState::placeholder_witness());
+        let amount_of_circuits = self.vm_snapshots.windows(2).len();
+
+        while self.inner.len() < amount_of_circuits {
+            self.inner.push(self.last_witness.clone());          
         }
-        assert!(self.inner.len() == self.vm_snapshots.windows(2).len() + 1);
+
+        // special for last vm snapshot
+        self.inner.push(self.last_witness);
+
+        assert_eq!(self.inner.len(), self.vm_snapshots.windows(2).len() + 1);
 
         self.inner
     }
 
     pub fn push(&mut self, state: MemoryQueueState<Field>) {
         let (cycle, _) = self.vm_memory_queries_accumulated_it.next().unwrap();
-        if *cycle >= self.current_snapshot_start_cycle {
+
+        while *cycle >= self.current_snapshot_start_cycle {
             self.current_snapshot += 1;
             self.current_snapshot_start_cycle = self.vm_snapshots[self.current_snapshot].at_cycle;
 
-            if let Some(last_state) = self.last {
-                self.inner.push(
-                    transform_sponge_like_queue_state(last_state)
-                );
-            } else {
-                self.inner.push(QueueState::placeholder_witness());
-            }
+            self.inner.push(self.last_witness.clone());
         }
 
-        self.last = Some(state);
+        self.last_witness = transform_sponge_like_queue_state(state);
     }
 }

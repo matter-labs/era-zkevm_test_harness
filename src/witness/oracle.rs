@@ -5,13 +5,13 @@
 use super::callstack_handler::*;
 use super::postprocessing::{BlockFirstAndLastBasicCircuitsObservableWitnesses, ClosedFormInputField, CsForWitnessGeneration, FirstAndLastCircuitWitness};
 use super::queue_for_main_vm::{MemoryQueueWitnessesForVmCircuitBuilder, QueueForMainVm, QueueLastStatesForCircuits};
+use crate::witness::queue_for_main_vm::CircuitlLastStateAccumulator;
 use super::utils::*;
 use crate::boojum::field::SmallField;
 use crate::boojum::gadgets::queue::{QueueState, QueueStateWitness, QueueTailStateWitness};
 use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 use crate::ethereum_types::U256;
 use crate::toolset::GeometryConfig;
-use crate::witness::advancing_range::AdvancingRange;
 use crate::witness::artifacts::{
     CircuitArtifacts, DemuxedQueries, ImplicitMemoryArtifacts, MemoryArtifacts,
 };
@@ -43,6 +43,7 @@ use circuit_definitions::encodings::recursion_request::{
     RecursionQueueSimulator, RecursionRequest,
 };
 use circuit_definitions::encodings::{LogQueueSimulator, LogQueueState};
+use circuit_definitions::zkevm_circuits::base_structures::vm_state::callstack;
 use circuit_definitions::zkevm_circuits::eip_4844::input::EIP4844CircuitInstanceWitness;
 use circuit_definitions::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
@@ -436,11 +437,10 @@ use circuit_definitions::encodings::callstack_entry::{
 };
 
 struct CallstackSimulationResult<F: SmallField> {
-    callstack_sponge_encoding_ranges: Vec<(u32, [F; FULL_SPONGE_QUEUE_STATE_WIDTH])>,
+    callstack_sponge_encoding_ranges: CircuitlLastStateAccumulator<(u32, [F; FULL_SPONGE_QUEUE_STATE_WIDTH])>,
     callstack_values_witnesses: QueueForMainVm<(u32, (ExtendedCallstackEntry<F>, CallstackSimulatorState<F>))>,
     rollback_queue_head_segments: QueueForMainVm<(u32, [F; QUEUE_STATE_WIDTH])>,
-    history_of_storage_log_states: BTreeMap<u32, StorageLogDetailedState<F>>,
-    global_end_of_storage_log: [F; QUEUE_STATE_WIDTH],
+    storage_log_states_for_entry: CircuitlLastStateAccumulator<(u32, StorageLogDetailedState<F>)>
 }
 
 fn callstack_simulation<'a>(
@@ -461,10 +461,10 @@ fn callstack_simulation<'a>(
     // so we never follow the "current", but add on push/pop
 
     // These are "frozen" states that just lie in the callstack for now and can not be modified
-    let mut callstack_sponge_encoding_ranges = vec![];
-    // pretend initial state
-    callstack_sponge_encoding_ranges
-        .push((0, [GoldilocksField::ZERO; FULL_SPONGE_QUEUE_STATE_WIDTH]));
+    let mut callstack_sponge_encoding_ranges = CircuitlLastStateAccumulator::new(
+        geometry.cycles_per_vm_snapshot as usize, 
+        (0, [GoldilocksField::ZERO; FULL_SPONGE_QUEUE_STATE_WIDTH])
+    );
 
     // we need some information that spans the whole number of cycles with "what is a frame counter at this time"
 
@@ -761,13 +761,21 @@ fn callstack_simulation<'a>(
         }
     }
 
-    callstack_sponge_encoding_ranges.shrink_to_fit();
+    let mut initial_storage_state = StorageLogDetailedState::default();
+    initial_storage_state.rollback_tail = global_end_of_storage_log;
+    initial_storage_state.rollback_head = global_end_of_storage_log;
+
+    let storage_log_states_for_entry = CircuitlLastStateAccumulator::from_iter(
+        geometry.cycles_per_vm_snapshot as usize, 
+        (0, initial_storage_state),
+        history_of_storage_log_states.into_iter()
+    );
+
     CallstackSimulationResult {
         callstack_sponge_encoding_ranges,
         callstack_values_witnesses,
         rollback_queue_head_segments,
-        history_of_storage_log_states,
-        global_end_of_storage_log,
+        storage_log_states_for_entry
     }
 }
 
@@ -824,9 +832,12 @@ fn process_log_circuits<
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
 ) {
-    let mut memory_artifacts = MemoryArtifacts::default();
-    memory_artifacts.all_prepared_decommittment_queries = prepared_decommittment_queries;
-    memory_artifacts.vm_memory_queries_accumulated = vm_memory_queries_accumulated;
+    let mut memory_artifacts = MemoryArtifacts {
+        prepared_decommittment_queries_per_instance: QueueForMainVm::from_iter(geometry.cycles_per_vm_snapshot as usize, prepared_decommittment_queries.into_iter()),
+        vm_memory_queries_accumulated,
+        memory_queue_entry_states: vec![],
+        decommittment_queue_entry_states: CircuitlLastStateAccumulator::new(geometry.cycles_per_vm_snapshot as usize, (0, QueueState::placeholder_witness()))
+    };
 
     tracing::debug!("Processing artifacts queue");
     
@@ -852,7 +863,19 @@ fn process_log_circuits<
             round_function,
             geometry.cycles_code_decommitter_sorter as usize,
         );
-    memory_artifacts.all_decommittment_queue_states = all_decommittment_queue_states;
+
+    // first decommittment query (for bootloader) must come before the beginning of time
+    {
+        let initial_cycle = vm_snapshots[0].at_cycle;
+        let decommittment_queue_states_before_start: Vec<_> = all_decommittment_queue_states
+            .iter()
+            .take_while(|el| el.0 < initial_cycle)
+            .collect();
+
+        assert!(decommittment_queue_states_before_start.len() == 1);
+    }
+
+    memory_artifacts.decommittment_queue_entry_states.extend(all_decommittment_queue_states.into_iter().map(|el| (el.0, transform_sponge_like_queue_state(el.1))));
     artifacts.decommittments_deduplicator_circuits_data =
         decommittments_deduplicator_circuits_data;
 
@@ -1237,26 +1260,21 @@ fn repack_input_for_main_vm(
     flat_new_frames_history: Vec<(u32, CallStackEntry)>,
 ) -> Vec<MainVmSimulationInput> {
     let MemoryArtifacts {
-        all_decommittment_queue_states,
-        all_prepared_decommittment_queries,
+        decommittment_queue_entry_states,
+        prepared_decommittment_queries_per_instance,
         memory_queue_entry_states,
         vm_memory_queries_accumulated,
     } = memory_artifacts;
 
-    // TODO do not move?
     let CallstackSimulationResult {
         callstack_sponge_encoding_ranges,
         callstack_values_witnesses,
         rollback_queue_head_segments,
-        history_of_storage_log_states,
-        global_end_of_storage_log,
+        storage_log_states_for_entry,
     } = callstack_simulation_result;
 
+    // TODO capacity
     let mut main_vm_inputs = vec![];
-
-    let mut decommittment_queue_states_range = AdvancingRange::new(&all_decommittment_queue_states);
-    let mut callstack_sponge_encoding_ranges_range =
-        AdvancingRange::new(&callstack_sponge_encoding_ranges);
 
     // split the oracle witness
     let memory_write_witnesses = QueueForMainVm::from_iter(
@@ -1302,40 +1320,32 @@ fn repack_input_for_main_vm(
     let mut rollback_queue_head_segments_it = rollback_queue_head_segments.into_batches(amount_of_circuits).into_iter();
     let mut callstack_values_witnesses_it = callstack_values_witnesses.into_batches(amount_of_circuits).into_iter();
     let mut memory_queue_entry_states_it = memory_queue_entry_states.into_iter();
+
+    let mut callstack_sponge_encoding_ranges_it = callstack_sponge_encoding_ranges.into_batches(amount_of_circuits).into_iter(); 
+
+    let last_storage_log_state = storage_log_states_for_entry.last().1;
+    let mut storage_log_states_for_entry_it = storage_log_states_for_entry.into_batches(amount_of_circuits).into_iter();
+
+    let last_decommittment_queue_state = decommittment_queue_entry_states.last().1.clone();
+    let mut decommittment_queue_entry_states = decommittment_queue_entry_states.into_batches(amount_of_circuits).into_iter();
+
+    let mut prepared_decommittment_queries_per_instance_it = prepared_decommittment_queries_per_instance.into_batches(amount_of_circuits).into_iter();
     snapshot_prof("Repack: prepared iters");
 
-    for (_circuit_idx, pair) in vm_snapshots.windows(2).enumerate() {
+    for (circuit_idx, _pair) in vm_snapshots.windows(2).enumerate() {
         if amount_of_circuits / 100 != 0 {
-            if _circuit_idx % (amount_of_circuits / 100) == 0 {
-                println!("{} / {}", _circuit_idx, amount_of_circuits);
+            if circuit_idx % (amount_of_circuits / 100) == 0 {
+                println!("{} / {}", circuit_idx, amount_of_circuits);
             }
         }
-        let initial_state = &pair[0];
-        let final_state = &pair[1];
-        let cycle_range = initial_state.at_cycle..final_state.at_cycle;
 
         let memory_queue_state_for_entry = memory_queue_entry_states_it.next().unwrap();
 
-        let decommitment_queue_state = decommittment_queue_states_range
-            .get_slice(0..initial_state.at_cycle)
-            .last()
-            .map(|el| transform_sponge_like_queue_state(el.1))
-            .unwrap_or(QueueState::placeholder_witness());
+        let decommitment_queue_state = decommittment_queue_entry_states.next().unwrap().1;
 
-        let range = history_of_storage_log_states.range(..initial_state.at_cycle);
-        let storage_log_queue_detailed_state = range.last().map(|el| el.1).copied().unwrap_or({
-            let mut initial = StorageLogDetailedState::default();
-            initial.rollback_tail = global_end_of_storage_log;
-            initial.rollback_head = global_end_of_storage_log;
+        let storage_log_queue_detailed_state = storage_log_states_for_entry_it.next().unwrap().1;
 
-            initial
-        });
-
-        let callstack_state_for_entry = callstack_sponge_encoding_ranges_range
-            .get_slice(0..initial_state.at_cycle)
-            .last()
-            .map(|el| el.1)
-            .unwrap_or([GoldilocksField::ZERO; FULL_SPONGE_QUEUE_STATE_WIDTH]);
+        let callstack_state_for_entry = callstack_sponge_encoding_ranges_it.next().map(|el| el.1).unwrap();
 
         let memory_read_witnesses_for_instance = memory_read_witnesses_it.next().unwrap();
         let memory_write_witnesses_for_instance = memory_write_witnesses_it.next().unwrap();
@@ -1344,12 +1354,7 @@ fn repack_input_for_main_vm(
         let cold_warm_refund_logs_for_instance = cold_warm_refunds_logs_it.next().unwrap();
         let pubdata_cost_logs_for_instance = pubdata_cost_logs_it.next().unwrap();
 
-        let range = AdvancingRange::get_range_from(
-            &all_prepared_decommittment_queries,
-            cycle_range.clone(),
-        );
-        let decommittment_requests_witness_for_instance =
-            all_prepared_decommittment_queries[range].to_vec();
+        let decommittment_requests_witness_for_instance = prepared_decommittment_queries_per_instance_it.next().unwrap();
 
         let rollback_queue_initial_tails_for_new_frames_for_instance = rollback_queue_tails_for_frames_it.next().unwrap();
         let callstack_values_witnesses_for_instance = callstack_values_witnesses_it.next().unwrap();
@@ -1381,21 +1386,12 @@ fn repack_input_for_main_vm(
     // special pass for last one
     {
         let memory_queue_state_for_entry = memory_queue_entry_states_it.next().unwrap();
-        let decommitment_queue_state = all_decommittment_queue_states
-            .iter()
-            .last()
-            .map(|el| transform_sponge_like_queue_state(el.1))
-            .unwrap_or(QueueState::placeholder_witness());
 
+        let decommitment_queue_state = last_decommittment_queue_state;
         // always an empty one
         let callstack_state_for_entry = [GoldilocksField::ZERO; FULL_SPONGE_QUEUE_STATE_WIDTH];
 
-        let range = history_of_storage_log_states.range(..);
-        let storage_log_queue_detailed_state = range
-            .last()
-            .map(|el| el.1)
-            .copied()
-            .unwrap_or(StorageLogDetailedState::default());
+        let storage_log_queue_detailed_state = last_storage_log_state;
 
         let main_vm_input = MainVmSimulationInput {
             decommittment_queue_states_for_entry: decommitment_queue_state,
@@ -1787,18 +1783,6 @@ pub(crate) fn create_artifacts_from_tracer<
 
     // NOTE: here we have all the queues processed in the `process` function (actual pushing is done), so we can
     // just read from the corresponding states
-
-    // first decommittment query (for bootloader) must come before the beginning of time
-    {
-        let initial_cycle = vm_snapshots[0].at_cycle;
-        let decommittment_queue_states_before_start: Vec<_> = memory_artifacts
-            .all_decommittment_queue_states
-            .iter()
-            .take_while(|el| el.0 < initial_cycle)
-            .collect();
-
-        assert!(decommittment_queue_states_before_start.len() == 1);
-    }
 
     tracing::debug!(
         "Processing VM snapshots queue (total {:?})",
