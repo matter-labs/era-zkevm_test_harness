@@ -43,9 +43,6 @@ use circuit_definitions::encodings::recursion_request::{
     RecursionQueueSimulator, RecursionRequest,
 };
 use circuit_definitions::encodings::{LogQueueSimulator, LogQueueState};
-use circuit_definitions::zk_evm::zkevm_opcode_defs::system_params::{
-    SECP256R1_VERIFY_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS, TRANSIENT_STORAGE_AUX_BYTE,
-};
 use circuit_definitions::zkevm_circuits::eip_4844::input::EIP4844CircuitInstanceWitness;
 use circuit_definitions::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
@@ -55,15 +52,6 @@ use derivative::Derivative;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::sync::Arc;
 
-use crate::zk_evm::zkevm_opcode_defs::system_params::{
-    ECRECOVER_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
-    KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
-    SHA256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
-};
-
-use crate::zk_evm::zkevm_opcode_defs::system_params::{
-    EVENT_AUX_BYTE, L1_MESSAGE_AUX_BYTE, PRECOMPILE_AUX_BYTE, STORAGE_AUX_BYTE,
-};
 
 use crate::snapshot_prof;
 
@@ -195,14 +183,12 @@ use crate::witness::tree::*;
 struct LogSimulationResult<'a, F: SmallField> {
     cycle_to_query_and_rollback: BTreeMap<u32, (usize, Option<usize>)>,
     chain_of_states: Vec<(
-        u32,
-        QueryMarker,
-        ([F; QUEUE_STATE_WIDTH], [F; QUEUE_STATE_WIDTH]),
+        [F; QUEUE_STATE_WIDTH], [F; QUEUE_STATE_WIDTH],
     )>
 }
 
 struct LogSimulationQueriesData<F: SmallField> {
-    applied_log_queue_simulator: Option<LogQueueSimulator<F>>,
+    applied_log_queue_simulator: LogQueueSimulator<F>,
     applied_log_queue_states: QueueLastStatesForCircuits<(u32, LogQueueState<F>)>,
     demuxed_queries: DemuxedQueries,
 }
@@ -233,16 +219,15 @@ fn log_simulation<'a>(
         applied_queries.len()
     );
     let mut chain_of_states: Vec<(
-        u32,
-        QueryMarker,
-        ([GoldilocksField; 4], [GoldilocksField; 4]),
+        [GoldilocksField; 4], [GoldilocksField; 4],
     )> = Vec::with_capacity(applied_queries.len() + not_applied_queries.len());
-    let mut applied_log_queue_simulator = None;
 
     // we want to have some hashmap that will indicate
     // that on some specific VM cycle we either read or write
 
-    let mut frames_beginnings_and_rollback_tails = vec![];
+    let mut frames_beginnings_and_rollback_tails = Vec::with_capacity(
+        full_callstack_history.iter().filter(|x| x.action == CallstackAction::OutOfScope(OutOfScopeReason::Fresh)).count()
+    );
 
     for el in full_callstack_history.iter() {
         match el.action {
@@ -273,6 +258,7 @@ fn log_simulation<'a>(
     // from cycle into first two sponges (common), then tail-tail pair and 3rd sponge for forward, then head-head pair and 3rd sponge for rollback
     let mut sponges_data: HashMap<u32, LogAccessSpongesInfo<GoldilocksField>> = HashMap::new();
 
+    let mut applied_log_queue_simulator = None;
     let mut log_queue_simulator = LogQueueSimulator::<GoldilocksField>::with_capacity(applied_queries.len());
 
     for (extended_query, was_applied) in applied_queries
@@ -309,7 +295,7 @@ fn log_simulation<'a>(
                 frames_beginnings_and_rollback_tails[*frame_index].1 = Some(
                     chain_of_states
                         .last()
-                        .map(|el| el.2 .1)
+                        .map(|el| el.1)
                         .unwrap_or([GoldilocksField::ZERO; QUEUE_STATE_WIDTH]),
                 );
 
@@ -323,9 +309,7 @@ fn log_simulation<'a>(
         let pointer_to_chain_of_states = chain_of_states.len();
         // we just log all chains of old tail -> new tail, and will interpret them later
         chain_of_states.push((
-            *cycle,
-            *query_marker,
-            (intermediate_info.previous_tail, intermediate_info.tail),
+            intermediate_info.previous_tail, intermediate_info.tail,
         ));
 
         let key = query.timestamp.0;
@@ -416,50 +400,8 @@ fn log_simulation<'a>(
         if was_applied {
             // push state
             applied_log_queue_states.push((*cycle, intermediate_info));
-            match query.aux_byte {
-                STORAGE_AUX_BYTE => {
-                    // sort rollup and porter
-                    match query.shard_id {
-                        0 => {
-                            demuxed_queries.rollup_storage_queries.push(*query);
-                        }
-                        1 => {
-                            demuxed_queries.porter_storage_queries.push(*query);
-                        }
-                        _ => unreachable!(),
-                    }
-                }
-                TRANSIENT_STORAGE_AUX_BYTE => {
-                    demuxed_queries.transient_storage_queries.push(*query);
-                }
-                L1_MESSAGE_AUX_BYTE => {
-                    demuxed_queries.to_l1_queries.push(*query);
-                }
-                EVENT_AUX_BYTE => {
-                    demuxed_queries.event_queries.push(*query);
-                }
-                PRECOMPILE_AUX_BYTE => {
-                    assert!(!query.rollback);
-                    match query.address {
-                        a if a == *KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
-                            demuxed_queries.keccak_precompile_queries.push(*query);
-                        }
-                        a if a == *SHA256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
-                            demuxed_queries.sha256_precompile_queries.push(*query);
-                        }
-                        a if a == *ECRECOVER_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
-                            demuxed_queries.ecrecover_queries.push(*query);
-                        }
-                        a if a == *SECP256R1_VERIFY_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
-                            demuxed_queries.secp256r1_verify_queries.push(*query);
-                        }
-                        _ => {
-                            // just burn ergs
-                        }
-                    }
-                }
-                _ => unreachable!(),
-            }
+
+            demuxed_queries.sort_and_push(*query);
         }
     }
 
@@ -481,7 +423,7 @@ fn log_simulation<'a>(
             chain_of_states
         },
         LogSimulationQueriesData {
-            applied_log_queue_simulator,
+            applied_log_queue_simulator: applied_log_queue_simulator.unwrap_or(LogQueueSimulator::<GoldilocksField>::empty()),
             applied_log_queue_states,
             demuxed_queries,
         },
@@ -533,7 +475,7 @@ fn callstack_simulation<'a>(
     let global_end_of_storage_log = log_simulation_result
         .chain_of_states
         .last()
-        .map(|el| el.2 .1)
+        .map(|el| el.1)
         .unwrap_or([GoldilocksField::ZERO; QUEUE_STATE_WIDTH]);
 
     // we know for every cycle a pointer to the positions of item's forward and rollback action into
@@ -547,7 +489,7 @@ fn callstack_simulation<'a>(
     for (cycle, (_forward, rollback)) in log_simulation_result.cycle_to_query_and_rollback.iter() {
         if let Some(pointer) = rollback {
             let state = &log_simulation_result.chain_of_states[*pointer];
-            rollback_queue_head_segments.push((*cycle, state.2 .0));
+            rollback_queue_head_segments.push((*cycle, state.0));
         }
     }
 
@@ -583,9 +525,7 @@ fn callstack_simulation<'a>(
                     .range(range_of_interest);
                 for (cycle, (_forward_pointer, rollback_pointer)) in frame_action_span {
                     // always add to the forward
-                    let new_forward_tail = log_simulation_result.chain_of_states[*_forward_pointer]
-                        .2
-                         .1;
+                    let new_forward_tail = log_simulation_result.chain_of_states[*_forward_pointer].1;
                     if new_forward_tail != current_storage_log_state.forward_tail {
                         // edge case of double data on fram boudary, reword later
                         current_storage_log_state.forward_tail = new_forward_tail;
@@ -596,9 +536,7 @@ fn callstack_simulation<'a>(
 
                     if let Some(rollback_pointer) = rollback_pointer {
                         let new_rollback_head = log_simulation_result.chain_of_states
-                            [*rollback_pointer]
-                            .2
-                             .0;
+                            [*rollback_pointer].0;
                         current_storage_log_state.rollback_head = new_rollback_head;
                         current_storage_log_state.rollback_length += 1;
                     } else {
@@ -785,7 +723,6 @@ fn callstack_simulation<'a>(
                 for (cycle, (_forward_pointer, rollback_pointer)) in frame_action_span {
                     // always add to the forward
                     let new_forward_tail = log_simulation_result.chain_of_states[*_forward_pointer]
-                        .2
                          .1;
                     if new_forward_tail != current_storage_log_state.forward_tail {
                         // edge case of double data on fram boudary, reword later
@@ -798,7 +735,6 @@ fn callstack_simulation<'a>(
                     if let Some(rollback_pointer) = rollback_pointer {
                         let new_rollback_head = log_simulation_result.chain_of_states
                             [*rollback_pointer]
-                            .2
                              .0;
                         current_storage_log_state.rollback_head = new_rollback_head;
                         current_storage_log_state.rollback_length += 1;
@@ -1018,8 +954,7 @@ fn process_log_circuits<
 
     let log_demux_artifacts = LogDemuxArtifacts {
         applied_log_queue_simulator: log_simulation_queries_data
-            .applied_log_queue_simulator
-            .unwrap_or(LogQueueSimulator::empty()),
+            .applied_log_queue_simulator,
         applied_log_queue_states: log_simulation_queries_data.applied_log_queue_states,
     };
 
@@ -1306,7 +1241,6 @@ fn repack_input_for_main_vm(
         all_prepared_decommittment_queries,
         memory_queue_entry_states,
         vm_memory_queries_accumulated,
-        ..
     } = memory_artifacts;
 
     // TODO do not move?

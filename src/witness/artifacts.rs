@@ -17,6 +17,17 @@ use circuit_definitions::zkevm_circuits::secp256r1_verify::Secp256r1VerifyCircui
 use circuit_definitions::zkevm_circuits::transient_storage_validity_by_grand_product::input::TransientStorageDeduplicatorInstanceWitness;
 use derivative::Derivative;
 
+use crate::zk_evm::zkevm_opcode_defs::system_params::{
+    EVENT_AUX_BYTE, L1_MESSAGE_AUX_BYTE, PRECOMPILE_AUX_BYTE, STORAGE_AUX_BYTE, TRANSIENT_STORAGE_AUX_BYTE
+};
+
+use crate::zk_evm::zkevm_opcode_defs::system_params::{
+    ECRECOVER_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
+    KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
+    SHA256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
+    SECP256R1_VERIFY_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS
+};
+
 
 #[derive(Derivative)]
 #[derivative(Default)]
@@ -30,6 +41,55 @@ pub struct DemuxedQueries {
     pub ecrecover_queries: Vec<LogQuery>,
     pub secp256r1_verify_queries: Vec<LogQuery>,
     pub transient_storage_queries: Vec<LogQuery>,
+}
+
+impl DemuxedQueries {
+    pub fn sort_and_push(&mut self, query: LogQuery) {
+        match query.aux_byte {
+            STORAGE_AUX_BYTE => {
+                // sort rollup and porter
+                match query.shard_id {
+                    0 => {
+                        self.rollup_storage_queries.push(query);
+                    }
+                    1 => {
+                        self.porter_storage_queries.push(query);
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            TRANSIENT_STORAGE_AUX_BYTE => {
+                self.transient_storage_queries.push(query);
+            }
+            L1_MESSAGE_AUX_BYTE => {
+                self.to_l1_queries.push(query);
+            }
+            EVENT_AUX_BYTE => {
+                self.event_queries.push(query);
+            }
+            PRECOMPILE_AUX_BYTE => {
+                assert!(!query.rollback);
+                match query.address {
+                    a if a == *KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
+                        self.keccak_precompile_queries.push(query);
+                    }
+                    a if a == *SHA256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
+                        self.sha256_precompile_queries.push(query);
+                    }
+                    a if a == *ECRECOVER_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
+                        self.ecrecover_queries.push(query);
+                    }
+                    a if a == *SECP256R1_VERIFY_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
+                        self.secp256r1_verify_queries.push(query);
+                    }
+                    _ => {
+                        // just burn ergs
+                    }
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
 }
 
 #[derive(Derivative)]
