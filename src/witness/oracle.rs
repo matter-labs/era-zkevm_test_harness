@@ -1676,7 +1676,6 @@ pub(crate) fn create_artifacts_from_tracer<
 
     tracing::debug!("Running multiplexed log queue simulation");
 
-    // can be processed in parallel thread
     let (log_states_data, log_demux_circuit_inputs, demuxed_log_queries, log_rollback_tails_for_frames) =
     process_multiplexed_log_queue(*geometry, &full_callstack_history, last_callstack_entry, *round_function);
 
