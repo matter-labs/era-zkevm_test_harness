@@ -34,7 +34,7 @@ use crate::zk_evm::zkevm_opcode_defs::system_params::{
 
 #[derive(Derivative)]
 #[derivative(Default)]
-pub struct DemuxedQueries {
+pub struct DemuxedLogQueries {
     pub rollup_storage_queries: Vec<LogQuery>,
     pub porter_storage_queries: Vec<LogQuery>,
     pub event_queries: Vec<LogQuery>,
@@ -46,7 +46,7 @@ pub struct DemuxedQueries {
     pub transient_storage_queries: Vec<LogQuery>,
 }
 
-impl DemuxedQueries {
+impl DemuxedLogQueries {
     pub fn sort_and_push(&mut self, query: LogQuery) {
         match query.aux_byte {
             STORAGE_AUX_BYTE => {

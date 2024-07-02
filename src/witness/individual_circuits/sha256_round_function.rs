@@ -1,7 +1,7 @@
 use super::*;
 use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 use crate::witness::artifacts::{
-    DemuxedQueries, ImplicitMemoryArtifacts, LogQueue, MemoryArtifacts,
+    DemuxedLogQueries, ImplicitMemoryArtifacts, LogQueue, MemoryArtifacts,
 };
 use crate::zk_evm::aux_structures::LogQuery as LogQuery_;
 use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Sha256RoundWitness;

@@ -13,13 +13,14 @@ use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 use crate::ethereum_types::U256;
 use crate::toolset::GeometryConfig;
 use crate::witness::artifacts::{
-    CircuitArtifacts, DemuxedQueries, ImplicitMemoryArtifacts, MemoryArtifacts,
+    CircuitArtifacts, DemuxedLogQueries, ImplicitMemoryArtifacts, MemoryArtifacts,
 };
 use crate::witness::individual_circuits::decommit_code::decommitter_memory_queries_amount;
 use crate::witness::individual_circuits::ecrecover::ecrecover_memory_queries_amount;
 use crate::witness::individual_circuits::keccak256_round_function::keccak256_memory_queries_amount;
 use crate::witness::individual_circuits::secp256r1_verify::secp256r1_memory_queries_amount;
 use crate::witness::individual_circuits::sha256_round_function::sha256_memory_queries_amount;
+use crate::witness::individual_circuits::log_demux::LogDemuxCircuitArtifacts;
 use crate::witness::postprocessing::{make_circuit, CircuitMaker};
 use crate::witness::tracer::{QueryMarker, WitnessTracer};
 use crate::witness::vm_snapshot::VmSnapshot;
@@ -160,13 +161,13 @@ pub struct RollbackLogSponge<F: SmallField> {
     pub exclusive_rf: ([F; 12], [F; 12]),
 }
 
+type Cycle = u32;
+
 #[derive(Derivative)]
 #[derivative(Clone(bound = ""), Copy(bound = ""), Debug, Default)]
 pub struct LogAccessSpongesInfo<F: SmallField> {
-    pub cycle: u32,
+    pub cycle: Cycle,
     pub common_sponges: CommonLogSponges<F>,
-    pub forward_info: ForwardLogSponge<F>,
-    pub rollback_info: Option<RollbackLogSponge<F>>,
 }
 
 #[derive(Derivative)]
@@ -178,97 +179,87 @@ struct FlattenedLogQueueIndexer<F: SmallField> {
     pub tail_offset: usize,
 }
 
-use crate::blake2::Blake2s256;
-use crate::witness::tree::*;
-
-struct LogSimulationResult<'a, F: SmallField> {
-    cycle_to_query_and_rollback: BTreeMap<u32, (usize, Option<usize>)>,
+struct LogMuxedStatesData<F: SmallField> {
+    /// If any forward query occurs at a given cycle, this map contains indexes of entries in chain_of_states for the query and corresponding rollback.
+    forward_and_rollback_pointers: BTreeMap<Cycle, (usize, Option<usize>)>,
+    /// The chain of all multiplexed log queue simulator state changes, old_tail -> new_tail 
     chain_of_states: Vec<(
         [F; QUEUE_STATE_WIDTH], [F; QUEUE_STATE_WIDTH],
     )>
 }
 
-struct LogSimulationQueriesData<F: SmallField> {
-    applied_log_queue_simulator: LogQueueSimulator<F>,
-    applied_log_queue_states: QueueLastStatesForCircuits<(u32, LogQueueState<F>)>,
-    demuxed_queries: DemuxedQueries,
-}
+type LogRollbackTailsForFrames = Vec<(Cycle, [GoldilocksField; QUEUE_STATE_WIDTH])>;
 
-fn log_simulation<'a>(
-    geometry: &GeometryConfig,
+/// Simulates the global multiplexed log queue and produces inputs for log demux circuit processing. 
+/// Together with simulation, splits the multiplexed log queue into separate queues.
+/// Also returns the initial tails of the multiplexed log rollback queue for each frame.
+fn process_multiplexed_log_queue(
+    geometry: GeometryConfig,
     full_callstack_history: &Vec<CallstackActionHistoryEntry>,
     mut last_callstack_entry: CallstackEntryWithAuxData,
-    round_function: &Poseidon2Goldilocks,
+    round_function: Poseidon2Goldilocks,
 ) -> (
-    LogSimulationResult<'a, GoldilocksField>,
-    LogSimulationQueriesData<GoldilocksField>,
-    Vec<(u32, [GoldilocksField; QUEUE_STATE_WIDTH])>
+    LogMuxedStatesData<GoldilocksField>,
+    LogDemuxCircuitArtifacts<GoldilocksField>,
+    DemuxedLogQueries,
+    LogRollbackTailsForFrames
 ) {
-    // segmentation of the log queue
-    // - split into independent queues
-    // - compute initial tail segments (with head == tail) for every new call frame
-    // - also compute head segments for every write-like actions
-
+    // these queues contain all log queries and some additional markers
     let applied_queries = std::mem::take(&mut last_callstack_entry.forward_queue);
-    let not_applied_queries = std::mem::take(&mut last_callstack_entry.rollback_queue);
+    let not_applied_rollbacks = std::mem::take(&mut last_callstack_entry.rollback_queue);
     drop(last_callstack_entry);
 
-    let mut demuxed_queries = DemuxedQueries::default();
-
-    let mut applied_log_queue_states = QueueLastStatesForCircuits::with_flat_capacity(
-        geometry.cycles_per_log_demuxer as usize, 
-        applied_queries.len()
-    );
-    let mut chain_of_states: Vec<(
-        [GoldilocksField; 4], [GoldilocksField; 4],
-    )> = Vec::with_capacity(applied_queries.len() + not_applied_queries.len());
-
-    // we want to have some hashmap that will indicate
-    // that on some specific VM cycle we either read or write
-
-    let mut frames_beginnings_and_rollback_tails = Vec::with_capacity(
-        full_callstack_history.iter().filter(|x| x.action == CallstackAction::OutOfScope(OutOfScopeReason::Fresh)).count()
-    );
+    let total_amount_of_frames = full_callstack_history.iter().filter(|x| x.action == CallstackAction::OutOfScope(OutOfScopeReason::Fresh)).count();
+    let mut frames_beginnings_and_rollback_tails = Vec::with_capacity(total_amount_of_frames);
 
     for el in full_callstack_history.iter() {
         match el.action {
             CallstackAction::PushToStack => {}
             CallstackAction::PopFromStack { panic: _ } => {}
             CallstackAction::OutOfScope(OutOfScopeReason::Fresh) => {
-                // fresh frame
+                // frame created at el.beginning_cycle, we will find log queue rollback tail later
                 frames_beginnings_and_rollback_tails.push((el.beginning_cycle, None));
             }
             CallstackAction::OutOfScope(OutOfScopeReason::Exited { panic: _ }) => {
-                el.end_cycle.expect("frame must end");
+                el.end_cycle.expect("frame must end"); // sanity check
             }
         }
     }
 
-    // now it's going to be fun. We simultaneously will do the following indexing:
-    // - simulate the state of callstack as a sponge
-    // - follow the call graph and storage queries graph to know exacly the following subset of properties at any
-    // range of cycles:
-    // - callstack "frozen" part (what is in the callstack). This involves rollback queue head/tail/length!
-    // - "active" callstack entry rollback queue's head/tail/length at this cycle
+    // from cycle to first two sponges (common for forwards and rollbacks)
+    let mut sponges_data: HashMap<u32, CommonLogSponges<GoldilocksField>> = HashMap::new();
 
-    // first we need to hash the queue itself, and create an index of "where in the final flat queue did log access from this frame end up"
-    // If we encounter "read" that implies no reverts we use "None"
-
-    let mut cycle_to_query_and_rollback = BTreeMap::<u32, (usize, Option<usize>)>::new();
-
-    // from cycle into first two sponges (common), then tail-tail pair and 3rd sponge for forward, then head-head pair and 3rd sponge for rollback
-    let mut sponges_data: HashMap<u32, LogAccessSpongesInfo<GoldilocksField>> = HashMap::new();
-
-    let mut applied_log_queue_simulator = None;
     let mut log_queue_simulator = LogQueueSimulator::<GoldilocksField>::with_capacity(applied_queries.len());
+    let mut applied_log_queue_simulator = None;
 
+    // struct contains the chain of all multiplexed log queue simulator state changes, old_tail -> new_tail
+    // and pointers to corresponding indexes in this chain for forward and rollback queries (if any) at cycle
+    let mut states_data = LogMuxedStatesData {
+        forward_and_rollback_pointers: BTreeMap::<Cycle, (usize, Option<usize>)>::new(),
+        chain_of_states: Vec::with_capacity(applied_queries.len() + not_applied_rollbacks.len())
+    };
+
+    let mut demuxed_queries = DemuxedLogQueries::default();
+
+    // used to accumulate all applied muxed log queue state changes needed for log demux circuit simulation
+    let mut applied_queue_states_accumulator = QueueLastStatesForCircuits::with_flat_capacity(
+        geometry.cycles_per_log_demuxer as usize, 
+        applied_queries.len()
+    );
+
+    // Now we will do following:
+    // - simulate the states of multiplexed log queue as a sponge
+    // - find initial multiplexed log queue rollback tails for every frame (including not applied rollbacks)
+    // - demux applied part of the log queue and prepare inputs for log demux circuit processing
+
+    // we use reversed iterator for not_applied_rollbacks here
     for (extended_query, was_applied) in applied_queries
-        .iter()
+        .into_iter()
         .zip(std::iter::repeat(true))
-        .chain(not_applied_queries.iter().rev().zip(std::iter::repeat(false)))
+        .chain(not_applied_rollbacks.into_iter().rev().zip(std::iter::repeat(false)))
     {
         if !was_applied {
-            // save the latest "usefull"
+            // save the latest "useful"
             if applied_log_queue_simulator.is_none() {
                 applied_log_queue_simulator = Some(log_queue_simulator.clone());
             }
@@ -284,151 +275,114 @@ fn log_simulation<'a>(
                 query,
             } => (marker, cycle, query),
             ExtendedLogQuery::FrameForwardHeadMarker(..) => {
-                continue;
+                continue; // not used
             }
             ExtendedLogQuery::FrameForwardTailMarker(..) => {
-                continue;
+                continue; // not used
             }
             ExtendedLogQuery::FrameRollbackHeadMarker(..) => {
-                continue;
+                continue; // not used
             }
             ExtendedLogQuery::FrameRollbackTailMarker(frame_index) => {
-                frames_beginnings_and_rollback_tails[*frame_index].1 = Some(
-                    chain_of_states
+                // special marker, use the last "new" queue simulator tail value from chain_of_states
+                // as initial log rollback queue tail for frame
+
+                assert!(frames_beginnings_and_rollback_tails[frame_index].1.is_none());
+
+                frames_beginnings_and_rollback_tails[frame_index].1 = Some(
+                    states_data.chain_of_states
                         .last()
                         .map(|el| el.1)
                         .unwrap_or([GoldilocksField::ZERO; QUEUE_STATE_WIDTH]),
                 );
 
-                continue;
+                continue; // we do not have any query to simulate
             }
         };
 
-        let (_old_tail, intermediate_info) =
-            log_queue_simulator.push_and_output_intermediate_data(*query, round_function);
+        // actually simulate new queue state
+        let (_, simulator_state) =
+            log_queue_simulator.push_and_output_intermediate_data(query, &round_function);
 
-        let pointer_to_chain_of_states = chain_of_states.len();
-        // we just log all chains of old tail -> new tail, and will interpret them later
-        chain_of_states.push((
-            intermediate_info.previous_tail, intermediate_info.tail,
+        let pointer_to_chain_of_states = states_data.chain_of_states.len();
+        states_data.chain_of_states.push((
+            simulator_state.previous_tail, simulator_state.tail,
         ));
 
-        let key = query.timestamp.0;
-        if query.rollback {
-            let entry = sponges_data
-                .get_mut(&key)
+        if was_applied {
+            applied_queue_states_accumulator.push((cycle, simulator_state));
+            demuxed_queries.sort_and_push(query);
+        }
+
+        let timestamp = query.timestamp.0; // special "timestamp-like" value
+        if !query.rollback {
+            let sponge_data = sponges_data.entry(timestamp).or_default();
+            sponge_data.rf_0 = simulator_state.round_function_execution_pairs[0];
+            sponge_data.rf_1 = simulator_state.round_function_execution_pairs[1];
+            // forward case
+            states_data.forward_and_rollback_pointers.entry(cycle).or_default().0 = pointer_to_chain_of_states;
+        } else {
+            let sponge_data = sponges_data
+                .get_mut(&timestamp)
                 .expect("rollbacks always happen after forward case");
-            let common_sponges_pair = entry.common_sponges;
             assert_eq!(
-                &common_sponges_pair.rf_0,
-                &intermediate_info.round_function_execution_pairs[0]
+                &sponge_data.rf_0,
+                &simulator_state.round_function_execution_pairs[0]
             );
             assert_eq!(
-                &common_sponges_pair.rf_1,
-                &intermediate_info.round_function_execution_pairs[1]
+                &sponge_data.rf_1,
+                &simulator_state.round_function_execution_pairs[1]
             );
-
-            let rollback_info = RollbackLogSponge {
-                old_head: intermediate_info.tail,
-                new_head: intermediate_info.previous_tail, // it's our convension - we move backwards
-                exclusive_rf: intermediate_info.round_function_execution_pairs[2],
-            };
-
-            entry.rollback_info = Some(rollback_info);
-
-            cycle_to_query_and_rollback
+            // rollback case
+            states_data.forward_and_rollback_pointers
                 .get_mut(&cycle)
                 .expect("rollbacks always happen after forward case")
                 .1 = Some(pointer_to_chain_of_states);
-
-            match query_marker {
-                QueryMarker::Rollback {
-                    in_frame: _,
-                    index: _,
-                    cycle_of_declaration: c,
-                    ..
-                } => {
-                    assert_eq!(cycle, c);
-                }
-                a @ _ => {
-                    unreachable!("encounteted {:?}", a)
-                }
-            }
-        } else {
-            let entry = sponges_data.entry(key).or_default();
-
-            let common_sponges_info = CommonLogSponges {
-                rf_0: intermediate_info.round_function_execution_pairs[0],
-                rf_1: intermediate_info.round_function_execution_pairs[1],
-            };
-
-            let forward_info = ForwardLogSponge {
-                old_tail: intermediate_info.previous_tail,
-                new_tail: intermediate_info.tail,
-                exclusive_rf: intermediate_info.round_function_execution_pairs[2],
-            };
-
-            entry.cycle = *cycle;
-            entry.common_sponges = common_sponges_info;
-            entry.forward_info = forward_info;
-
-            cycle_to_query_and_rollback.entry(*cycle).or_default().0 = pointer_to_chain_of_states;
-
-            match query_marker {
-                QueryMarker::Forward {
-                    in_frame: _,
-                    index: _,
-                    cycle: c,
-                    ..
-                } => {
-                    assert_eq!(cycle, c);
-                }
-                QueryMarker::ForwardNoRollback {
-                    in_frame: _,
-                    index: _,
-                    cycle: c,
-                    ..
-                } => {
-                    assert_eq!(cycle, c);
-                }
-                a @ _ => {
-                    unreachable!("encounteted {:?}", a)
-                }
-            }
         }
 
-        // and sort
-        if was_applied {
-            // push state
-            applied_log_queue_states.push((*cycle, intermediate_info));
-
-            demuxed_queries.sort_and_push(*query);
+        match query_marker {
+            QueryMarker::Forward {
+                cycle: c,
+                ..
+            } => {
+                assert_eq!(cycle, c);
+                assert!(!query.rollback);
+            }
+            QueryMarker::ForwardNoRollback {
+                cycle: c,
+                ..
+            } => {
+                assert_eq!(cycle, c);
+                assert!(!query.rollback);
+            }
+            QueryMarker::Rollback {
+                cycle_of_declaration: c,
+                ..
+            } => {
+                assert_eq!(cycle, c);
+                assert!(query.rollback);
+            }
         }
     }
 
-    let rollback_queue_tails_for_frames = frames_beginnings_and_rollback_tails
-        .iter()
+    let mut log_rollback_tails_for_frames = Vec::with_capacity(frames_beginnings_and_rollback_tails.len());
+    log_rollback_tails_for_frames.extend(
+        frames_beginnings_and_rollback_tails
+        .into_iter()
         .enumerate()
-        .map(|(frame_index, (beginning_cycle, optional_tail))| {
-            assert!(
-                optional_tail.is_some(),
-                "No rollback tail for frame {frame_index}"
-            );
-            (*beginning_cycle, optional_tail.unwrap())
+        .map(|(frame_index, (beginning_cycle, tail))| {
+            (beginning_cycle, tail.expect(&format!("No rollback tail for frame {frame_index}")))
         })
-        .collect();
+    );
 
     (
-        LogSimulationResult {
-            cycle_to_query_and_rollback,
-            chain_of_states
-        },
-        LogSimulationQueriesData {
+        states_data,
+        LogDemuxCircuitArtifacts {
             applied_log_queue_simulator: applied_log_queue_simulator.unwrap_or(LogQueueSimulator::<GoldilocksField>::empty()),
-            applied_log_queue_states,
-            demuxed_queries,
+            applied_queue_states_accumulator,
         },
-        rollback_queue_tails_for_frames
+        demuxed_queries,
+        log_rollback_tails_for_frames
     )
 }
 
@@ -437,17 +391,17 @@ use circuit_definitions::encodings::callstack_entry::{
 };
 
 struct CallstackSimulationResult<F: SmallField> {
-    callstack_sponge_encoding_ranges: CircuitlLastStateAccumulator<(u32, [F; FULL_SPONGE_QUEUE_STATE_WIDTH])>,
-    callstack_values_witnesses: QueueForMainVm<(u32, (ExtendedCallstackEntry<F>, CallstackSimulatorState<F>))>,
-    rollback_queue_head_segments: QueueForMainVm<(u32, [F; QUEUE_STATE_WIDTH])>,
-    storage_log_states_for_entry: CircuitlLastStateAccumulator<(u32, StorageLogDetailedState<F>)>
+    callstack_sponge_encoding_ranges: CircuitlLastStateAccumulator<(Cycle, [F; FULL_SPONGE_QUEUE_STATE_WIDTH])>,
+    callstack_values_witnesses: QueueForMainVm<(Cycle, (ExtendedCallstackEntry<F>, CallstackSimulatorState<F>))>,
+    rollback_queue_head_segments: QueueForMainVm<(Cycle, [F; QUEUE_STATE_WIDTH])>,
+    storage_log_states_for_entry: CircuitlLastStateAccumulator<(Cycle, StorageLogDetailedState<F>)>
 }
 
-fn callstack_simulation<'a>(
+fn callstack_simulation(
     geometry: &GeometryConfig,
     full_callstack_history: Vec<CallstackActionHistoryEntry>,
-    log_simulation_result: LogSimulationResult<'a, GoldilocksField>,
-    rollback_queue_tails_for_frames: &Vec<(u32, [GoldilocksField; QUEUE_STATE_WIDTH])>,
+    log_states_data: LogMuxedStatesData<GoldilocksField>,
+    log_rollback_tails_for_frames: &Vec<(Cycle, [GoldilocksField; QUEUE_STATE_WIDTH])>,
     round_function: &Poseidon2Goldilocks,
 ) -> CallstackSimulationResult<GoldilocksField> {
     let mut callstack_argebraic_simulator = CallstackSimulator::empty();
@@ -472,7 +426,7 @@ fn callstack_simulation<'a>(
     // - simulate what is saved and when
     // - get witnesses for heads when encountering the new spans
 
-    let global_end_of_storage_log = log_simulation_result
+    let global_end_of_storage_log = log_states_data
         .chain_of_states
         .last()
         .map(|el| el.1)
@@ -484,11 +438,11 @@ fn callstack_simulation<'a>(
 
     // so we can quickly reconstruct every current state
 
-    let mut rollback_queue_head_segments: QueueForMainVm<(u32, [GoldilocksField; QUEUE_STATE_WIDTH])> = QueueForMainVm::new(geometry.cycles_per_vm_snapshot as usize);
+    let mut rollback_queue_head_segments: QueueForMainVm<(Cycle, [GoldilocksField; QUEUE_STATE_WIDTH])> = QueueForMainVm::new(geometry.cycles_per_vm_snapshot as usize);
 
-    for (cycle, (_forward, rollback)) in log_simulation_result.cycle_to_query_and_rollback.iter() {
+    for (cycle, (_forward, rollback)) in log_states_data.forward_and_rollback_pointers.iter() {
         if let Some(pointer) = rollback {
-            let state = &log_simulation_result.chain_of_states[*pointer];
+            let state = &log_states_data.chain_of_states[*pointer];
             rollback_queue_head_segments.push((*cycle, state.0));
         }
     }
@@ -520,12 +474,12 @@ fn callstack_simulation<'a>(
                 let end_cycle = el.end_cycle.expect("frame must end");
 
                 let range_of_interest = (begin_at_cycle + 1)..=end_cycle; // begin_at_cycle is formally bound to the previous one
-                let frame_action_span = log_simulation_result
-                    .cycle_to_query_and_rollback
+                let frame_action_span = log_states_data
+                    .forward_and_rollback_pointers
                     .range(range_of_interest);
                 for (cycle, (_forward_pointer, rollback_pointer)) in frame_action_span {
                     // always add to the forward
-                    let new_forward_tail = log_simulation_result.chain_of_states[*_forward_pointer].1;
+                    let new_forward_tail = log_states_data.chain_of_states[*_forward_pointer].1;
                     if new_forward_tail != current_storage_log_state.forward_tail {
                         // edge case of double data on fram boudary, reword later
                         current_storage_log_state.forward_tail = new_forward_tail;
@@ -535,7 +489,7 @@ fn callstack_simulation<'a>(
                     // if there is a rollback then let's process it too
 
                     if let Some(rollback_pointer) = rollback_pointer {
-                        let new_rollback_head = log_simulation_result.chain_of_states
+                        let new_rollback_head = log_states_data.chain_of_states
                             [*rollback_pointer].0;
                         current_storage_log_state.rollback_head = new_rollback_head;
                         current_storage_log_state.rollback_length += 1;
@@ -673,7 +627,7 @@ fn callstack_simulation<'a>(
             }
             CallstackAction::OutOfScope(OutOfScopeReason::Fresh) => {
                 // we already identified initial rollback tails for new frames
-                let rollback_tail = rollback_queue_tails_for_frames[frame_index].1;
+                let rollback_tail = log_rollback_tails_for_frames[frame_index].1;
                 // do not reset forward length as it's easy to merge
                 current_storage_log_state.frame_idx = frame_index;
                 current_storage_log_state.rollback_length = 0;
@@ -717,13 +671,12 @@ fn callstack_simulation<'a>(
                 let end_cycle = el.end_cycle.expect("frame must end");
 
                 let range_of_interest = (begin_at_cycle + 1)..=end_cycle; // begin_at_cycle is formally bound to the previous one
-                let frame_action_span = log_simulation_result
-                    .cycle_to_query_and_rollback
+                let frame_action_span = log_states_data
+                    .forward_and_rollback_pointers
                     .range(range_of_interest);
-                for (cycle, (_forward_pointer, rollback_pointer)) in frame_action_span {
+                for (cycle, (forward_pointer, rollback_pointer)) in frame_action_span {
                     // always add to the forward
-                    let new_forward_tail = log_simulation_result.chain_of_states[*_forward_pointer]
-                         .1;
+                    let new_forward_tail = log_states_data.chain_of_states[*forward_pointer].1;
                     if new_forward_tail != current_storage_log_state.forward_tail {
                         // edge case of double data on fram boudary, reword later
                         current_storage_log_state.forward_tail = new_forward_tail;
@@ -733,7 +686,7 @@ fn callstack_simulation<'a>(
                     // if there is a rollback then let's process it too
 
                     if let Some(rollback_pointer) = rollback_pointer {
-                        let new_rollback_head = log_simulation_result.chain_of_states
+                        let new_rollback_head = log_states_data.chain_of_states
                             [*rollback_pointer]
                              .0;
                         current_storage_log_state.rollback_head = new_rollback_head;
@@ -798,6 +751,9 @@ use crate::witness::postprocessing::observable_witness::LogDemuxerObservableWitn
 use crate::witness::postprocessing::observable_witness::RamPermutationObservableWitness;
 use crate::witness::postprocessing::observable_witness::StorageApplicationObservableWitness;
 
+use crate::blake2::Blake2s256;
+use crate::witness::tree::*;
+
 fn process_log_circuits<
     CB: FnMut(ZkSyncBaseLayerCircuit),
     QSCB: FnMut(
@@ -808,14 +764,15 @@ fn process_log_circuits<
 >(
     geometry: &GeometryConfig,
     tree: impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
-    vm_memory_queries_accumulated: Vec<(u32, MemoryQuery)>,
-    prepared_decommittment_queries: Vec<(u32, DecommittmentQuery)>,
-    executed_decommittment_queries: Vec<(u32, DecommittmentQuery, Vec<U256>)>,
-    keccak_round_function_witnesses: Vec<(u32, LogQuery, Vec<Keccak256RoundWitness>)>,
-    sha256_round_function_witnesses: Vec<(u32, LogQuery, Vec<Sha256RoundWitness>)>,
-    ecrecover_witnesses: Vec<(u32, LogQuery, ECRecoverRoundWitness)>,
-    secp256r1_verify_witnesses: Vec<(u32, LogQuery, Secp256r1VerifyRoundWitness)>,
-    log_simulation_queries_data: LogSimulationQueriesData<GoldilocksField>,
+    vm_memory_queries_accumulated: Vec<(Cycle, MemoryQuery)>,
+    prepared_decommittment_queries: Vec<(Cycle, DecommittmentQuery)>,
+    executed_decommittment_queries: Vec<(Cycle, DecommittmentQuery, Vec<U256>)>,
+    keccak_round_function_witnesses: Vec<(Cycle, LogQuery, Vec<Keccak256RoundWitness>)>,
+    sha256_round_function_witnesses: Vec<(Cycle, LogQuery, Vec<Sha256RoundWitness>)>,
+    ecrecover_witnesses: Vec<(Cycle, LogQuery, ECRecoverRoundWitness)>,
+    secp256r1_verify_witnesses: Vec<(Cycle, LogQuery, Secp256r1VerifyRoundWitness)>,
+    log_demux_circuit_inputs: LogDemuxCircuitArtifacts<GoldilocksField>,
+    demuxed_log_queries: DemuxedLogQueries,
     round_function: &Poseidon2Goldilocks,
     num_non_deterministic_heap_queries: usize,
     vm_snapshots: &Vec<VmSnapshot>,
@@ -971,20 +928,14 @@ fn process_log_circuits<
     artifacts.code_decommitter_circuits_data = code_decommitter_circuits_data;
 
     // demux log queue
-    use crate::witness::individual_circuits::log_demux::{compute_logs_demux, LogDemuxArtifacts};
+    use crate::witness::individual_circuits::log_demux::compute_logs_demux;
 
     tracing::debug!("Running log demux simulation");
 
-    let log_demux_artifacts = LogDemuxArtifacts {
-        applied_log_queue_simulator: log_simulation_queries_data
-            .applied_log_queue_simulator,
-        applied_log_queue_states: log_simulation_queries_data.applied_log_queue_states,
-    };
-
     let (log_demux_circuits, log_demux_circuits_compact_forms_witnesses, mut all_demuxed_queues) =
         compute_logs_demux(
-            log_demux_artifacts,
-            &log_simulation_queries_data.demuxed_queries,
+            log_demux_circuit_inputs,
+            &demuxed_log_queries,
             geometry.cycles_per_log_demuxer as usize,
             round_function,
             geometry,
@@ -1010,7 +961,7 @@ fn process_log_circuits<
         &all_memory_queue_states,
         &mut memory_queue_simulator,
         keccak_round_function_witnesses,
-        log_simulation_queries_data.demuxed_queries.keccak_precompile_queries,
+        demuxed_log_queries.keccak_precompile_queries,
         demuxed_keccak_precompile_queue,
         geometry.cycles_per_keccak256_circuit as usize,
         round_function,
@@ -1032,7 +983,7 @@ fn process_log_circuits<
         &all_memory_queue_states,
         &mut memory_queue_simulator,
         sha256_round_function_witnesses,
-        log_simulation_queries_data.demuxed_queries.sha256_precompile_queries,
+        demuxed_log_queries.sha256_precompile_queries,
         demuxed_sha256_precompile_queue,
         geometry.cycles_per_sha256_circuit as usize,
         round_function,
@@ -1054,7 +1005,7 @@ fn process_log_circuits<
         &all_memory_queue_states,
         &mut memory_queue_simulator,
         ecrecover_witnesses,
-        log_simulation_queries_data.demuxed_queries.ecrecover_queries,
+        demuxed_log_queries.ecrecover_queries,
         demuxed_ecrecover_queue,
         geometry.cycles_per_ecrecover_circuit as usize,
         round_function,
@@ -1074,7 +1025,7 @@ fn process_log_circuits<
         &all_memory_queue_states,
         &mut memory_queue_simulator,
         secp256r1_verify_witnesses,
-        log_simulation_queries_data.demuxed_queries.secp256r1_verify_queries,
+        demuxed_log_queries.secp256r1_verify_queries,
         demuxed_secp256r1_verify_queue,
         geometry.cycles_per_secp256r1_verify_circuit as usize,
         round_function,
@@ -1118,7 +1069,7 @@ fn process_log_circuits<
         deduplicated_rollup_storage_queries,
         storage_deduplicator_circuit_data,
     ) = compute_storage_dedup_and_sort(
-        log_simulation_queries_data.demuxed_queries.rollup_storage_queries,
+        demuxed_log_queries.rollup_storage_queries,
         demuxed_rollup_storage_queue,
         geometry.cycles_per_storage_sorter as usize,
         round_function,
@@ -1132,7 +1083,7 @@ fn process_log_circuits<
     let demuxed_event_queue = std::mem::take(&mut all_demuxed_queues[DemuxOutput::Events as usize]);
 
     let events_deduplicator_circuit_data = compute_events_dedup_and_sort(
-        log_simulation_queries_data.demuxed_queries.event_queries,
+        demuxed_log_queries.event_queries,
         demuxed_event_queue,
         &mut Default::default(),
         geometry.cycles_per_events_or_l1_messages_sorter as usize,
@@ -1148,7 +1099,7 @@ fn process_log_circuits<
 
     let mut deduplicated_to_l1_queue_simulator = Default::default();
     let l1_messages_deduplicator_circuit_data = compute_events_dedup_and_sort(
-        log_simulation_queries_data.demuxed_queries.to_l1_queries,
+        demuxed_log_queries.to_l1_queries,
         demuxed_to_l1_queue,
         &mut deduplicated_to_l1_queue_simulator,
         geometry.cycles_per_events_or_l1_messages_sorter as usize,
@@ -1164,7 +1115,7 @@ fn process_log_circuits<
         std::mem::take(&mut all_demuxed_queues[DemuxOutput::TransientStorage as usize]);
 
     let transient_storage_sorter_circuit_data = compute_transient_storage_dedup_and_sort(
-        log_simulation_queries_data.demuxed_queries.transient_storage_queries,
+        demuxed_log_queries.transient_storage_queries,
         demuxed_transient_storage_queue,
         geometry.cycles_per_transient_storage_sorter as usize,
         round_function,
@@ -1227,22 +1178,22 @@ struct MainVmSimulationInput {
         QueueStateWitness<GoldilocksField, FULL_SPONGE_QUEUE_STATE_WIDTH>,
     callstack_state_for_entry: [GoldilocksField; FULL_SPONGE_QUEUE_STATE_WIDTH],
     storage_log_queue_detailed_state_for_entry: StorageLogDetailedState<GoldilocksField>,
-    storage_queries_witnesses: Vec<(u32, LogQuery)>,
-    cold_warm_refund_logs: Vec<(u32, LogQuery, u32)>,
-    pubdata_cost_logs: Vec<(u32, LogQuery, PubdataCost)>,
-    decommittment_requests_witness: Vec<(u32, DecommittmentQuery)>,
-    rollback_queue_initial_tails_for_new_frames: Vec<(u32, [GoldilocksField; QUEUE_STATE_WIDTH])>,
+    storage_queries_witnesses: Vec<(Cycle, LogQuery)>,
+    cold_warm_refund_logs: Vec<(Cycle, LogQuery, u32)>,
+    pubdata_cost_logs: Vec<(Cycle, LogQuery, PubdataCost)>,
+    decommittment_requests_witness: Vec<(Cycle, DecommittmentQuery)>,
+    rollback_queue_initial_tails_for_new_frames: Vec<(Cycle, [GoldilocksField; QUEUE_STATE_WIDTH])>,
     callstack_values_witnesses: Vec<(
-        u32,
+        Cycle,
         (
             ExtendedCallstackEntry<GoldilocksField>,
             CallstackSimulatorState<GoldilocksField>,
         ),
     )>,
-    rollback_queue_head_segments: Vec<(u32, [GoldilocksField; QUEUE_STATE_WIDTH])>,
-    callstack_new_frames_witnesses: Vec<(u32, CallStackEntry)>,
-    memory_read_witnesses: Vec<(u32, MemoryQuery)>,
-    memory_write_witnesses: Vec<(u32, MemoryQuery)>,
+    rollback_queue_head_segments: Vec<(Cycle, [GoldilocksField; QUEUE_STATE_WIDTH])>,
+    callstack_new_frames_witnesses: Vec<(Cycle, CallStackEntry)>,
+    memory_read_witnesses: Vec<(Cycle, MemoryQuery)>,
+    memory_write_witnesses: Vec<(Cycle, MemoryQuery)>,
 }
 
 use circuit_definitions::encodings::decommittment_request::DecommittmentQueueState;
@@ -1253,11 +1204,11 @@ fn repack_input_for_main_vm(
     vm_snapshots: &Vec<VmSnapshot>,
     memory_artifacts: MemoryArtifacts<GoldilocksField>,
     callstack_simulation_result: CallstackSimulationResult<GoldilocksField>,
-    storage_queries: QueueForMainVm<(u32, LogQuery)>,
-    cold_warm_refunds_logs: QueueForMainVm<(u32, LogQuery, u32)>,
-    pubdata_cost_logs: QueueForMainVm<(u32, LogQuery, PubdataCost)>,
-    rollback_queue_tails_for_frames: Vec<(u32, [GoldilocksField; QUEUE_STATE_WIDTH])>,
-    flat_new_frames_history: Vec<(u32, CallStackEntry)>,
+    storage_queries: QueueForMainVm<(Cycle, LogQuery)>,
+    cold_warm_refunds_logs: QueueForMainVm<(Cycle, LogQuery, u32)>,
+    pubdata_cost_logs: QueueForMainVm<(Cycle, LogQuery, PubdataCost)>,
+    log_rollback_tails_for_frames: Vec<(Cycle, [GoldilocksField; QUEUE_STATE_WIDTH])>,
+    flat_new_frames_history: Vec<(Cycle, CallStackEntry)>,
 ) -> Vec<MainVmSimulationInput> {
     let MemoryArtifacts {
         decommittment_queue_entry_states,
@@ -1313,7 +1264,7 @@ fn repack_input_for_main_vm(
 
     let mut rollback_queue_tails_for_frames_it = QueueForMainVm::from_iter(
         geometry.cycles_per_vm_snapshot as usize,
-        rollback_queue_tails_for_frames.into_iter()
+        log_rollback_tails_for_frames.into_iter()
         ).into_batches(amount_of_circuits).into_iter();
 
 
@@ -1432,12 +1383,12 @@ fn process_main_vm<
     geometry: &GeometryConfig,
     in_circuit_global_context: GlobalContextWitness<GoldilocksField>,
     memory_artifacts: MemoryArtifacts<GoldilocksField>,
-    storage_queries: QueueForMainVm<(u32, LogQuery)>,
-    cold_warm_refunds_logs: QueueForMainVm<(u32, LogQuery, u32)>,
-    pubdata_cost_logs: QueueForMainVm<(u32, LogQuery, PubdataCost)>,
-    rollback_queue_tails_for_frames: Vec<(u32, [GoldilocksField; QUEUE_STATE_WIDTH])>,
+    storage_queries: QueueForMainVm<(Cycle, LogQuery)>,
+    cold_warm_refunds_logs: QueueForMainVm<(Cycle, LogQuery, u32)>,
+    pubdata_cost_logs: QueueForMainVm<(Cycle, LogQuery, PubdataCost)>,
+    log_rollback_tails_for_frames: Vec<(Cycle, [GoldilocksField; QUEUE_STATE_WIDTH])>,
     callstack_simulation_result: CallstackSimulationResult<GoldilocksField>,
-    flat_new_frames_history: Vec<(u32, CallStackEntry)>,
+    flat_new_frames_history: Vec<(Cycle, CallStackEntry)>,
     mut vm_snapshots: Vec<VmSnapshot>,
     round_function: Poseidon2Goldilocks,
     cs_for_witness_generation: &mut CsForWitnessGeneration,
@@ -1526,7 +1477,7 @@ fn process_main_vm<
         storage_queries,
         cold_warm_refunds_logs,
         pubdata_cost_logs,
-        rollback_queue_tails_for_frames,
+        log_rollback_tails_for_frames,
         flat_new_frames_history,
     );
 
@@ -1722,12 +1673,14 @@ pub(crate) fn create_artifacts_from_tracer<
     drop(callstack_with_aux_data);
 
     snapshot_prof("Before log sim");
-    tracing::debug!("Running storage log simulation");
 
-    let (log_simulation_result, log_simulation_queries_data, rollback_queue_tails_for_frames) =
-        log_simulation(geometry, &full_callstack_history, last_callstack_entry, round_function);
+    tracing::debug!("Running multiplexed log queue simulation");
 
-    snapshot_prof("Log simulated");
+    // can be processed in parallel thread
+    let (log_states_data, log_demux_circuit_inputs, demuxed_log_queries, log_rollback_tails_for_frames) =
+    process_multiplexed_log_queue(*geometry, &full_callstack_history, last_callstack_entry, *round_function);
+
+    snapshot_prof("Muxed log queue processed");
 
     // and now do trivial simulation
     tracing::debug!("Running callstack sumulation");
@@ -1735,8 +1688,8 @@ pub(crate) fn create_artifacts_from_tracer<
     let callstack_simulation_result = callstack_simulation(
         geometry,
         full_callstack_history,
-        log_simulation_result,
-        &rollback_queue_tails_for_frames,
+        log_states_data,
+        &log_rollback_tails_for_frames,
         round_function,
     );
 
@@ -1770,7 +1723,8 @@ pub(crate) fn create_artifacts_from_tracer<
         sha256_round_function_witnesses,
         ecrecover_witnesses,
         secp256r1_verify_witnesses,
-        log_simulation_queries_data,
+        log_demux_circuit_inputs,
+        demuxed_log_queries,
         round_function,
         num_non_deterministic_heap_queries,
         &vm_snapshots,
@@ -1802,7 +1756,7 @@ pub(crate) fn create_artifacts_from_tracer<
         storage_queries,
         cold_warm_refunds_logs,
         pubdata_cost_logs,
-        rollback_queue_tails_for_frames,
+        log_rollback_tails_for_frames,
         callstack_simulation_result,
         flat_new_frames_history,
         vm_snapshots,

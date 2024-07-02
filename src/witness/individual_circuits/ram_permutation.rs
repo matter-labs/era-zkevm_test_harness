@@ -204,7 +204,7 @@ pub(crate)  fn compute_ram_circuit_snapshots<
     let transposed_lhs_chains = transpose_chunks(&lhs_grand_product_chains, per_circuit_capacity);
     let transposed_rhs_chains = transpose_chunks(&rhs_grand_product_chains, per_circuit_capacity);
 
-    snapshot_prof("Ram circuit: chains created");
+    
 
     // now we need to split them into individual circuits
     // splitting is not extra hard here, we walk over iterator over everything and save states on checkpoints
@@ -248,6 +248,8 @@ pub(crate)  fn compute_ram_circuit_snapshots<
         unsorted_global_final_state.num_items,
         sorted_global_final_state.num_items
     );
+
+    snapshot_prof("Ram circuit: chains created");
 
     let it = unsorted_memory_queue_chunk_final_states.into_iter()
         .zip(sorted_memory_queue_chunk_final_states.into_iter())

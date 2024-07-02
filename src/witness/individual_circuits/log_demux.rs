@@ -5,7 +5,7 @@ use self::witness::postprocessing::FirstAndLastCircuitWitness;
 use crate::witness::postprocessing::observable_witness::LogDemuxerObservableWitness;
 
 use super::*;
-use crate::witness::artifacts::{DemuxedQueries, LogQueue};
+use crate::witness::artifacts::{DemuxedLogQueries, LogQueue};
 use crate::witness::postprocessing::CircuitMaker;
 use crate::zkevm_circuits::base_structures::log_query::*;
 use crate::zkevm_circuits::demux_log_queue::input::*;
@@ -21,10 +21,10 @@ use postprocessing::CsForWitnessGeneration;
 use zk_evm::zkevm_opcode_defs::SECP256R1_VERIFY_PRECOMPILE_ADDRESS;
 use crate::witness::queue_for_main_vm::QueueLastStatesForCircuits;
 
-pub(crate)  struct LogDemuxArtifacts<F: SmallField> {
+pub(crate)  struct LogDemuxCircuitArtifacts<F: SmallField> {
     // log queue
     pub applied_log_queue_simulator: LogQueueSimulator<F>,
-    pub applied_log_queue_states: QueueLastStatesForCircuits<(u32, LogQueueState<F>)>,
+    pub applied_queue_states_accumulator: QueueLastStatesForCircuits<(u32, LogQueueState<F>)>,
 }
 
 /// Take a storage log, output logs separately for events, l1 messages, storage, etc
@@ -32,8 +32,8 @@ pub(crate)  fn compute_logs_demux<
     CB: FnMut(ZkSyncBaseLayerCircuit),
     QSCB: FnMut(u64, RecursionQueueSimulator<Field>, Vec<ClosedFormInputCompactFormWitness<Field>>),
 >(
-    mut log_demux_artifacts: LogDemuxArtifacts<Field>,
-    demuxed_queues: &DemuxedQueries,
+    mut log_demux_artifacts: LogDemuxCircuitArtifacts<Field>,
+    demuxed_queues: &DemuxedLogQueries,
     per_circuit_capacity: usize,
     round_function: &RoundFunction,
     geometry: &GeometryConfig,
@@ -98,9 +98,9 @@ pub(crate)  fn compute_logs_demux<
         .0;
 
 
-    assert!(input_queue_witness.len() == log_demux_artifacts.applied_log_queue_states.len());
+    assert!(input_queue_witness.len() == log_demux_artifacts.applied_queue_states_accumulator.len());
 
-    let last_applied_log_queue_states_for_chunks = log_demux_artifacts.applied_log_queue_states.into_circuits();
+    let last_applied_log_queue_states_for_chunks = log_demux_artifacts.applied_queue_states_accumulator.into_circuits();
 
     let num_chunks = input_queue_witness.chunks(per_circuit_capacity).len();
 

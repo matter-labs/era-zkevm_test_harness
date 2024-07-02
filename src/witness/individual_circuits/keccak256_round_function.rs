@@ -1,6 +1,6 @@
 use super::*;
 use crate::witness::artifacts::{
-    DemuxedQueries, ImplicitMemoryArtifacts, LogQueue, MemoryArtifacts,
+    DemuxedLogQueries, ImplicitMemoryArtifacts, LogQueue, MemoryArtifacts,
 };
 use crate::zk_evm::aux_structures::LogQuery as LogQuery_;
 use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::Keccak256RoundWitness;
