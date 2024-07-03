@@ -1,6 +1,6 @@
 use super::*;
 use crate::witness::artifacts::{
-    DemuxedLogQueries, ImplicitMemoryArtifacts, LogQueue, MemoryArtifacts,
+    DemuxedLogQueries, ImplicitMemoryArtifacts, LogQueueStates, MemoryArtifacts,
 };
 use crate::zk_evm::aux_structures::LogQuery as LogQuery_;
 use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::Keccak256RoundWitness;
@@ -63,7 +63,7 @@ pub(crate) fn keccak256_decompose_into_per_circuit_witness<
     memory_queue_simulator: &mut MemoryQueuePerCircuitSimulator<F>,
     keccak_round_function_witnesses: Vec<(u32, LogQuery_, Vec<Keccak256RoundWitness>)>,
     keccak_precompile_queries: Vec<LogQuery_>,
-    mut demuxed_keccak_precompile_queue: LogQueue<F>,
+    mut demuxed_keccak_precompile_queue: LogQueueStates<F>,
     num_rounds_per_circuit: usize,
     round_function: &R,
 ) -> Vec<Keccak256RoundFunctionCircuitInstanceWitness<F>> {
@@ -109,7 +109,6 @@ pub(crate) fn keccak256_decompose_into_per_circuit_witness<
     let mut result = vec![];
 
     let keccak_precompile_calls = keccak_precompile_queries;
-    let keccak_precompile_calls_queue_states = demuxed_keccak_precompile_queue.states;
     let round_function_witness = keccak_round_function_witnesses;
 
     let memory_queries = keccak_256_memory_queries;
@@ -117,8 +116,10 @@ pub(crate) fn keccak256_decompose_into_per_circuit_witness<
     // check basic consistency
     assert_eq!(
         keccak_precompile_calls.len(),
-        keccak_precompile_calls_queue_states.len()
+        demuxed_keccak_precompile_queue.states.len()
     );
+    drop(demuxed_keccak_precompile_queue.states);
+
     assert_eq!(keccak_precompile_calls.len(), round_function_witness.len());
     assert_eq!(
         demuxed_keccak_precompile_queue.simulator.num_items as usize,
@@ -159,10 +160,9 @@ pub(crate) fn keccak256_decompose_into_per_circuit_witness<
 
     let mut memory_reads_per_circuit = VecDeque::new();
 
-    for (request_idx, ((request, _queue_transition_state), per_request_work)) in
+    for (request_idx, (request, per_request_work)) in
         keccak_precompile_calls
             .into_iter()
-            .zip(keccak_precompile_calls_queue_states.into_iter())
             .zip(round_function_witness.into_iter())
             .enumerate()
     {

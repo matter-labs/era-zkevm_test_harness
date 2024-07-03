@@ -138,16 +138,16 @@ pub struct CircuitArtifacts<F: SmallField> {
 
 #[derive(Derivative)]
 #[derivative(Default(bound = ""))]
-pub struct LogQueue<F: SmallField> {
+pub struct LogQueueStates<F: SmallField> {
     pub states: Vec<LogQueueState<F>>,
     pub simulator: LogQueueSimulator<F>,
 }
 
-impl<F: SmallField> LogQueue<F>  {
-    pub fn with_capacity(capacitty: usize) -> Self {
+impl<F: SmallField> LogQueueStates<F>  {
+    pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            states: Vec::with_capacity(capacitty),
-            simulator: LogQueueSimulator::<F>::with_capacity(capacitty)
+            states: Vec::with_capacity(capacity),
+            simulator: LogQueueSimulator::<F>::with_capacity(capacity)
         }
     }
 }

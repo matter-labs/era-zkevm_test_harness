@@ -1,6 +1,6 @@
 use super::*;
 use crate::ethereum_types::U256;
-use crate::witness::artifacts::LogQueue;
+use crate::witness::artifacts::LogQueueStates;
 use crate::zk_evm::aux_structures::*;
 use crate::zkevm_circuits::base_structures::log_query::LOG_QUERY_PACKED_WIDTH;
 use crate::zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
@@ -16,7 +16,7 @@ pub(crate)  fn compute_events_dedup_and_sort<
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     unsorted_queries: Vec<LogQuery>,
-    unsorted_queue: LogQueue<F>,
+    unsorted_queue: LogQueueStates<F>,
     result_queue_simulator: &mut LogQueueSimulator<F>,
     per_circuit_capacity: usize,
     round_function: &R,

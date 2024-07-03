@@ -1,5 +1,5 @@
 use super::*;
-use crate::witness::artifacts::LogQueue;
+use crate::witness::artifacts::LogQueueStates;
 use crate::zk_evm::aux_structures::*;
 use crate::zkevm_circuits::base_structures::log_query::LOG_QUERY_PACKED_WIDTH;
 use crate::zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
@@ -12,7 +12,7 @@ pub(crate) fn compute_transient_storage_dedup_and_sort<
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     transient_storage_queries: Vec<LogQuery>,
-    mut demuxed_transient_storage_queue: LogQueue<F>,
+    mut demuxed_transient_storage_queue: LogQueueStates<F>,
     per_circuit_capacity: usize,
     round_function: &R,
 ) -> Vec<TransientStorageDeduplicatorInstanceWitness<F>> {

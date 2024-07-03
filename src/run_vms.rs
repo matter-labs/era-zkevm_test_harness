@@ -365,11 +365,11 @@ pub fn run_vms<
 
         // VM can not be skipped
 
-        use crate::witness::artifacts::LogQueue;
+        use crate::witness::artifacts::LogQueueStates;
         use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 
         let empty_log_queue_state =
-            take_queue_state_from_simulator(&LogQueue::<GoldilocksField>::default().simulator);
+            take_queue_state_from_simulator(&LogQueueStates::<GoldilocksField>::default().simulator);
         let empty_sponge_like_queue_state = take_sponge_like_queue_state_from_simulator(
             &MemoryQueueSimulator::<GoldilocksField>::empty(),
         );

@@ -1,6 +1,6 @@
 use super::*;
 use crate::witness::artifacts::{
-    DemuxedLogQueries, ImplicitMemoryArtifacts, LogQueue, MemoryArtifacts,
+    DemuxedLogQueries, ImplicitMemoryArtifacts, LogQueueStates, MemoryArtifacts,
 };
 use crate::zk_evm::aux_structures::LogQuery as LogQuery_;
 use crate::zk_evm::zk_evm_abstractions::precompiles::ecrecover::ECRecoverRoundWitness;
@@ -32,7 +32,7 @@ pub(crate)  fn ecrecover_decompose_into_per_circuit_witness<
     memory_queue_simulator: &mut MemoryQueuePerCircuitSimulator<F>,
     ecrecover_witnesses: Vec<(u32, LogQuery_, ECRecoverRoundWitness)>,
     ecrecover_queries: Vec<LogQuery_>,
-    mut demuxed_ecrecover_queue: LogQueue<F>,
+    mut demuxed_ecrecover_queue: LogQueueStates<F>,
     num_rounds_per_circuit: usize,
     round_function: &R,
 ) -> Vec<EcrecoverCircuitInstanceWitness<F>> {
@@ -69,14 +69,14 @@ pub(crate)  fn ecrecover_decompose_into_per_circuit_witness<
     let mut result = vec![];
 
     let precompile_calls = ecrecover_queries;
-    let precompile_calls_queue_states = demuxed_ecrecover_queue.states;
     let simulator_witness: Vec<_> = demuxed_ecrecover_queue.simulator.witness.clone().into();
     let round_function_witness = ecrecover_witnesses;
 
     let memory_queries = ecrecover_memory_queries;
 
     // check basic consistency
-    assert!(precompile_calls.len() == precompile_calls_queue_states.len());
+    assert!(precompile_calls.len() == demuxed_ecrecover_queue.states.len());
+    drop(demuxed_ecrecover_queue.states);
     assert!(precompile_calls.len() == round_function_witness.len());
 
     if precompile_calls.len() == 0 {
@@ -98,9 +98,8 @@ pub(crate)  fn ecrecover_decompose_into_per_circuit_witness<
         memory_queue_simulator.take_sponge_like_queue_state();
     let mut current_memory_queue_state = memory_queue_input_state.clone();
 
-    for (request_idx, ((request, _queue_transition_state), per_request_work)) in precompile_calls
+    for (request_idx, (request, per_request_work)) in precompile_calls
         .into_iter()
-        .zip(precompile_calls_queue_states.into_iter())
         .zip(round_function_witness.into_iter())
         .enumerate()
     {
