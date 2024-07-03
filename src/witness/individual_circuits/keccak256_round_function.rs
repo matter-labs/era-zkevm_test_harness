@@ -116,9 +116,9 @@ pub(crate) fn keccak256_decompose_into_per_circuit_witness<
     // check basic consistency
     assert_eq!(
         keccak_precompile_calls.len(),
-        demuxed_keccak_precompile_queue.states.len()
+        demuxed_keccak_precompile_queue.states_accumulator.len()
     );
-    drop(demuxed_keccak_precompile_queue.states);
+    drop(demuxed_keccak_precompile_queue.states_accumulator);
 
     assert_eq!(keccak_precompile_calls.len(), round_function_witness.len());
     assert_eq!(

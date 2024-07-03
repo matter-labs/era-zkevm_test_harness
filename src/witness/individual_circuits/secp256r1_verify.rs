@@ -77,8 +77,8 @@ pub(crate)  fn secp256r1_verify_decompose_into_per_circuit_witness<
     let round_function_witness = secp256r1_verify_witnesses;
 
     // check basic consistency
-    assert!(precompile_calls.len() == demuxed_secp256r1_verify_queue.states.len());
-    drop(demuxed_secp256r1_verify_queue.states);
+    assert!(precompile_calls.len() == demuxed_secp256r1_verify_queue.states_accumulator.len());
+    drop(demuxed_secp256r1_verify_queue.states_accumulator);
     assert!(precompile_calls.len() == round_function_witness.len());
 
     if precompile_calls.len() == 0 {

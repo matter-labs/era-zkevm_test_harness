@@ -2,6 +2,7 @@ use std::default;
 
 use super::*;
 use crate::witness::artifacts::LogQueueStates;
+use crate::witness::queue_for_main_vm::QueueLastStatesForCircuits;
 use crate::zk_evm::aux_structures::LogQuery;
 use crate::zkevm_circuits::base_structures::log_query::LOG_QUERY_PACKED_WIDTH;
 use crate::zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
@@ -35,29 +36,22 @@ pub(crate) fn compute_storage_dedup_and_sort<
     use crate::witness::sort_storage_access::sort_storage_access_queries;
 
     let total_amount_of_queries = rollup_storage_queries.len();
-    let amount_of_circuits = (total_amount_of_queries + per_circuit_capacity - 1) / per_circuit_capacity;
 
     let (sorted_storage_queries_with_extra_timestamp, deduplicated_rollup_storage_queries) =
         sort_storage_access_queries(&rollup_storage_queries);
 
-    let mut sorted_log_simulator_states_chunk_final_states = Vec::with_capacity(amount_of_circuits);
+    let mut sorted_log_simulator_states_accumulator = QueueLastStatesForCircuits::with_flat_capacity(per_circuit_capacity, total_amount_of_queries);
     let mut intermediate_sorted_log_simulator =
         LogWithExtendedEnumerationQueueSimulator::<F>::with_capacity(sorted_storage_queries_with_extra_timestamp.len());
-    for (i, el) in sorted_storage_queries_with_extra_timestamp.into_iter().enumerate() {
+    for el in sorted_storage_queries_with_extra_timestamp.into_iter() {
         let (_, intermediate_state) = intermediate_sorted_log_simulator
             .push_and_output_intermediate_data(el.clone(), round_function);
 
-        if (i % per_circuit_capacity == per_circuit_capacity - 1) || i == total_amount_of_queries - 1 {
-            sorted_log_simulator_states_chunk_final_states.push(intermediate_state);
-        }
+            sorted_log_simulator_states_accumulator.push(intermediate_state);
     }
 
-    let mut unsorted_log_simulator_states_chunk_final_states = Vec::with_capacity(amount_of_circuits);
-    for (i, state) in demuxed_rollup_storage_queue.states.into_iter().enumerate() {
-        if (i % per_circuit_capacity == per_circuit_capacity - 1) || i == total_amount_of_queries - 1 {
-            unsorted_log_simulator_states_chunk_final_states.push(state);
-        }
-    }
+    let sorted_log_simulator_states_chunk_final_states = sorted_log_simulator_states_accumulator.into_circuits();
+    let unsorted_log_simulator_states_chunk_final_states = demuxed_rollup_storage_queue.states_accumulator.into_circuits();
 
     let unsorted_simulator_final_state =
         take_queue_state_from_simulator(&demuxed_rollup_storage_queue.simulator);

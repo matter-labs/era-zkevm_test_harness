@@ -15,6 +15,7 @@ use circuit_definitions::encodings::memory_query::MemoryQueueState;
 use circuit_definitions::encodings::*;
 use circuit_definitions::zkevm_circuits::secp256r1_verify::Secp256r1VerifyCircuitInstanceWitness;
 use circuit_definitions::zkevm_circuits::transient_storage_validity_by_grand_product::input::TransientStorageDeduplicatorInstanceWitness;
+use circuit_sequencer_api::toolset::GeometryConfig;
 use derivative::Derivative;
 
 use crate::witness::queue_for_main_vm::CircuitlLastStateAccumulator;
@@ -136,18 +137,27 @@ pub struct CircuitArtifacts<F: SmallField> {
     pub l1_messages_linear_hash_data: Vec<LinearHasherCircuitInstanceWitness<F>>,
 }
 
+use crate::witness::queue_for_main_vm::QueueLastStatesForCircuits;
+
 #[derive(Derivative)]
-#[derivative(Default(bound = ""))]
+#[derivative(Default)]
 pub struct LogQueueStates<F: SmallField> {
-    pub states: Vec<LogQueueState<F>>,
+    pub states_accumulator: QueueLastStatesForCircuits<LogQueueState<F>>,
     pub simulator: LogQueueSimulator<F>,
 }
 
 impl<F: SmallField> LogQueueStates<F>  {
-    pub fn with_capacity(capacity: usize) -> Self {
+    pub fn new(cycles_per_circuit: usize) -> Self {
         Self {
-            states: Vec::with_capacity(capacity),
-            simulator: LogQueueSimulator::<F>::with_capacity(capacity)
+            states_accumulator: QueueLastStatesForCircuits::new(cycles_per_circuit),
+            simulator: LogQueueSimulator::<F>::empty()
+        }
+    }
+
+    pub fn with_flat_capacity(cycles_per_circuit: usize, flat_capacity: usize) -> Self {
+        Self {
+            states_accumulator: QueueLastStatesForCircuits::with_flat_capacity(cycles_per_circuit, flat_capacity),
+            simulator: LogQueueSimulator::<F>::with_capacity(flat_capacity)
         }
     }
 }

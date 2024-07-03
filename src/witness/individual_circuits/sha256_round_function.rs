@@ -109,8 +109,8 @@ pub(crate) fn sha256_decompose_into_per_circuit_witness<
     let memory_queries = sha256_memory_queries;
 
     // check basic consistency
-    assert!(precompile_calls.len() == demuxed_sha256_precompile_queue.states.len());
-    drop(demuxed_sha256_precompile_queue.states);
+    assert!(precompile_calls.len() == demuxed_sha256_precompile_queue.states_accumulator.len());
+    drop(demuxed_sha256_precompile_queue.states_accumulator);
     assert!(precompile_calls.len() == round_function_witness.len());
 
     if precompile_calls.len() == 0 {

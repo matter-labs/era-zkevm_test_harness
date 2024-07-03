@@ -75,8 +75,8 @@ pub(crate)  fn ecrecover_decompose_into_per_circuit_witness<
     let memory_queries = ecrecover_memory_queries;
 
     // check basic consistency
-    assert!(precompile_calls.len() == demuxed_ecrecover_queue.states.len());
-    drop(demuxed_ecrecover_queue.states);
+    assert!(precompile_calls.len() == demuxed_ecrecover_queue.states_accumulator.len());
+    drop(demuxed_ecrecover_queue.states_accumulator);
     assert!(precompile_calls.len() == round_function_witness.len());
 
     if precompile_calls.len() == 0 {

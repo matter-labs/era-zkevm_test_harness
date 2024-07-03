@@ -274,8 +274,8 @@ impl<T> QueueLastStatesForCircuits<T> {
         }
     }
 
-    // TODO with_exact_capacity
     pub fn with_flat_capacity(cycles_per_circuit: usize, capacity: usize) -> Self {
+        assert!(cycles_per_circuit != 0);
         let num_circuits = (capacity + cycles_per_circuit - 1)
         / cycles_per_circuit;
 
@@ -304,6 +304,8 @@ impl<T> QueueLastStatesForCircuits<T> {
     }
 
     pub fn push(&mut self, val: T) {
+        assert!(self.cycles_per_circuit != 0);
+
         let circuit_id = self.len / self.cycles_per_circuit;
         if self.inner.len() <= circuit_id {
             self.inner.push(val);
@@ -312,6 +314,12 @@ impl<T> QueueLastStatesForCircuits<T> {
         }
 
         self.len += 1;
+    }
+}
+
+impl<T> Default for QueueLastStatesForCircuits<T> {
+    fn default() -> Self {
+        Self::new(0)
     }
 }
 

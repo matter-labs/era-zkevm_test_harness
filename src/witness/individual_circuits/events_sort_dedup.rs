@@ -26,7 +26,7 @@ pub(crate)  fn compute_events_dedup_and_sort<
     if unsorted_queries.is_empty() {
         return vec![];
     }
-    assert!(unsorted_queue.states.len() > 0);
+    assert!(unsorted_queue.states_accumulator.len() > 0);
 
     // parallelizable between events and L2 to L1 messages
 
@@ -59,8 +59,7 @@ pub(crate)  fn compute_events_dedup_and_sort<
         }
     }
 
-    let unsorted_log_simulator_states_chunk_final_states: Vec<_> = unsorted_queue.states.chunks(per_circuit_capacity).map(|chunk| chunk.last().unwrap().clone()).collect();
-    drop(unsorted_queue.states);
+    let unsorted_log_simulator_states_chunk_final_states: Vec<_> = unsorted_queue.states_accumulator.into_circuits();
     
     let intermediate_sorted_simulator_final_state =
         take_queue_state_from_simulator(&intermediate_sorted_simulator);
