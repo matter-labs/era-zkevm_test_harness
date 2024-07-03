@@ -18,21 +18,25 @@ use circuit_definitions::zk_evm::aux_structures::DecommittmentQuery;
 use rayon::prelude::*;
 use std::cmp::Ordering;
 use crate::witness::queue_for_main_vm::QueueLastStatesForCircuits;
+use crate::witness::individual_circuits::decommit_code::DecommiterCircuitProcessingInputs;
 
 pub(crate) fn compute_decommitts_sorter_circuit_snapshots<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     mut executed_decommittment_queries: Vec<(u32, DecommittmentQuery, Vec<U256>)>,
-    deduplicated_decommittment_queue_simulator: &mut DecommittmentQueueSimulator<F>,
-    deduplicated_decommittment_queue_states: &mut Vec<DecommittmentQueueState<F>>,
-    deduplicated_decommit_requests_with_data: &mut Vec<(DecommittmentQuery, Vec<U256>)>,
     round_function: &R,
     deduplicator_circuit_capacity: usize,
 ) -> (
     Vec<(u32, DecommittmentQueueState<F>)>,
     Vec<CodeDecommittmentsDeduplicatorInstanceWitness<F>>,
-) {
+    DecommiterCircuitProcessingInputs<F>
+) { 
+    // TODO cleanup
+    let mut deduplicated_decommittment_queue_simulator: DecommittmentQueueSimulator<F> = Default::default();
+    let mut deduplicated_decommittment_queue_states: Vec<DecommittmentQueueState<F>> = Default::default();
+    let mut deduplicated_decommit_requests_with_data: Vec<(DecommittmentQuery, Vec<U256>)> = Default::default();
+
     let total_executed_queries = executed_decommittment_queries.len();
 
     assert!(
@@ -424,6 +428,11 @@ pub(crate) fn compute_decommitts_sorter_circuit_snapshots<
     (
         all_decommittment_queue_states,
         decommittments_deduplicator_witness,
+        DecommiterCircuitProcessingInputs {
+            deduplicated_decommit_requests_with_data,
+            deduplicated_decommittment_queue_simulator,
+            deduplicated_decommittment_queue_states
+        }
     )
 }
 

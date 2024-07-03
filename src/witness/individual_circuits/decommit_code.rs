@@ -24,6 +24,12 @@ pub(crate) fn decommitter_memory_queries_amount(deduplicated_decommit_requests_w
     })
 }
 
+pub(crate) struct DecommiterCircuitProcessingInputs<F: SmallField> {
+    pub deduplicated_decommittment_queue_simulator: DecommittmentQueueSimulator<F>,
+    pub deduplicated_decommittment_queue_states: Vec<DecommittmentQueueState<F>>,
+    pub deduplicated_decommit_requests_with_data: Vec<(DecommittmentQuery, Vec<U256>)>,
+}
+
 pub(crate) fn compute_decommitter_circuit_snapshots<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
@@ -32,9 +38,7 @@ pub(crate) fn compute_decommitter_circuit_snapshots<
     implicit_memory_artifacts: &mut ImplicitMemoryArtifacts<F>,
     all_memory_queue_states: &QueueLastStatesForCircuits::<MemoryQueueState<F>>,
     memory_queue_simulator: &mut MemoryQueuePerCircuitSimulator<F>,
-    deduplicated_decommittment_queue_simulator: DecommittmentQueueSimulator<F>,
-    deduplicated_decommittment_queue_states: Vec<DecommittmentQueueState<F>>,
-    mut deduplicated_decommit_requests_with_data: Vec<(DecommittmentQuery, Vec<U256>)>,
+    decommiter_circuit_inputs: DecommiterCircuitProcessingInputs<F>,
     round_function: &R,
     decommiter_circuit_capacity: usize,
 ) -> Vec<CodeDecommitterCircuitInstanceWitness<F>> {
@@ -53,6 +57,12 @@ pub(crate) fn compute_decommitter_circuit_snapshots<
     let start_idx_for_memory_accumulator = implicit_memory_artifacts.memory_queue_states.len();
 
     let initial_memory_queue_state = &memory_queue_simulator.take_sponge_like_queue_state();
+
+    let DecommiterCircuitProcessingInputs {
+        deduplicated_decommit_requests_with_data,
+        deduplicated_decommittment_queue_states,
+        deduplicated_decommittment_queue_simulator
+    } = decommiter_circuit_inputs;
 
     // now we should start chunking the requests into separate decommittment circuits by running a micro-simulator
 
@@ -138,10 +148,11 @@ pub(crate) fn compute_decommitter_circuit_snapshots<
         deduplicated_decommittment_queue_simulator.witness.len(),
     );
 
+    drop(deduplicated_decommittment_queue_states);
+
     let mut it = deduplicated_decommit_requests_with_data
-        .drain(..)
-        .zip(deduplicated_decommittment_queue_states.iter())
-        .zip(deduplicated_decommittment_queue_simulator.witness.iter())
+        .into_iter()
+        .zip(deduplicated_decommittment_queue_simulator.witness)
         .peekable();
 
     let mut fsm_state = DecommitterState::BeginNew;
@@ -240,10 +251,10 @@ pub(crate) fn compute_decommitter_circuit_snapshots<
             if &DecommitterState::BeginNew == &fsm_state {
                 internal_state = Sha256::default();
 
-                let (((_query, memory_data), _state), wit) = it.next().unwrap();
-                let (_el, _intermediate_info) = current_decommittment_requests_queue_simulator
+                let ((query, memory_data), wit) = it.next().unwrap();
+                let (el, _intermediate_info) = current_decommittment_requests_queue_simulator
                     .pop_and_output_intermediate_data(round_function);
-                debug_assert_eq!(_query, _el);
+                debug_assert_eq!(query, el);
 
                 assert!(memory_data.len() > 0);
                 current_memory_data_it = memory_data.into_iter();

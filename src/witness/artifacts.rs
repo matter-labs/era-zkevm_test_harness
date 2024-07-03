@@ -115,16 +115,22 @@ pub struct ImplicitMemoryArtifacts<F: SmallField> {
 
 #[derive(Derivative)]
 #[derivative(Default)]
-pub struct CircuitArtifacts<F: SmallField> {
-    // processed code decommitter circuits, as well as sorting circuit
-    pub code_decommitter_circuits_data: Vec<CodeDecommitterCircuitInstanceWitness<F>>,
-    pub decommittments_deduplicator_circuits_data:
-        Vec<CodeDecommittmentsDeduplicatorInstanceWitness<F>>,
+pub struct LogCircuitsArtifacts<F: SmallField> {
     // IO related circuits
     pub storage_deduplicator_circuit_data: Vec<StorageDeduplicatorInstanceWitness<F>>,
     pub events_deduplicator_circuit_data: Vec<EventsDeduplicatorInstanceWitness<F>>,
     pub l1_messages_deduplicator_circuit_data: Vec<EventsDeduplicatorInstanceWitness<F>>,
     pub transient_storage_sorter_circuit_data: Vec<TransientStorageDeduplicatorInstanceWitness<F>>,
+    pub l1_messages_linear_hash_data: Vec<LinearHasherCircuitInstanceWitness<F>>,
+}
+
+#[derive(Derivative)]
+#[derivative(Default)]
+pub struct MemoryCircuitsArtifacts<F: SmallField> {
+    // processed code decommitter circuits, as well as sorting circuit
+    pub code_decommitter_circuits_data: Vec<CodeDecommitterCircuitInstanceWitness<F>>,
+    pub decommittments_deduplicator_circuits_data:
+        Vec<CodeDecommittmentsDeduplicatorInstanceWitness<F>>,
     //
     pub keccak256_circuits_data: Vec<Keccak256RoundFunctionCircuitInstanceWitness<F>>,
     //
@@ -133,8 +139,6 @@ pub struct CircuitArtifacts<F: SmallField> {
     pub ecrecover_circuits_data: Vec<EcrecoverCircuitInstanceWitness<F>>,
     //
     pub secp256r1_verify_circuits_data: Vec<Secp256r1VerifyCircuitInstanceWitness<F>>,
-    //
-    pub l1_messages_linear_hash_data: Vec<LinearHasherCircuitInstanceWitness<F>>,
 }
 
 use crate::witness::queue_for_main_vm::QueueLastStatesForCircuits;
