@@ -20,3 +20,4 @@ pub(crate) mod storage_sort_dedup;
 pub(crate) mod transient_storage_sorter;
 pub mod events_sort_dedup;
 pub(crate) mod memory_related;
+pub(crate) mod main_vm;

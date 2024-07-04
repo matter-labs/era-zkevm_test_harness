@@ -30,6 +30,8 @@ use circuit_definitions::boojum::cs::GateTypeEntry;
 use circuit_definitions::boojum::cs::Tool;
 use circuit_definitions::boojum::cs::Variable;
 use circuit_definitions::encodings::*;
+use individual_circuits::main_vm::VmInCircuitAuxilaryParameters;
+use individual_circuits::main_vm::VmInstanceWitness;
 
 use super::*;
 
@@ -297,8 +299,6 @@ where
     (public_input, compact_form_witness)
 }
 
-use crate::witness::oracle::VmInCircuitAuxilaryParameters;
-
 pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
     vm_state: &zk_evm::vm_state::VmLocalState,
     aux_params: &VmInCircuitAuxilaryParameters<F>,
@@ -414,7 +414,6 @@ pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
     hidden_fsm
 }
 
-use crate::witness::oracle::VmInstanceWitness;
 use crate::zkevm_circuits::fsm_input_output::circuit_inputs::main_vm::VmCircuitWitness;
 use crate::zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
 
