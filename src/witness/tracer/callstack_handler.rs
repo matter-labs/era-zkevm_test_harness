@@ -233,7 +233,6 @@ impl CallstackWithAuxData {
         self.depth -= 1;
 
         previous.current_history_record.beginning_cycle = monotonic_cycle_counter;
-        previous.current_history_record.beginning_cycle = monotonic_cycle_counter;
         previous.current_history_record.actions = vec![]; // cleanup
         previous.current_history_record.end_cycle = None;
 

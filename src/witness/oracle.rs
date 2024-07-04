@@ -360,9 +360,9 @@ fn callstack_simulation(
 ) -> CallstackSimulationResult<GoldilocksField> {
     let mut callstack_argebraic_simulator = CallstackSimulator::empty();
 
-    // index of cycle -> witness for callstack
     let mut callstack_values_witnesses =
         PerCircuitAccumulatorSparse::new(geometry.cycles_per_vm_snapshot as usize);
+
     // we need to simultaneously follow the logic of pushes/joins of the storage queues,
     // and encoding of the current callstack state as the sponge state
 
@@ -370,7 +370,7 @@ fn callstack_simulation(
     // so we never follow the "current", but add on push/pop
 
     // These are "frozen" states that just lie in the callstack for now and can not be modified
-    let mut callstack_sponge_encoding_ranges = CircuitsEntryAccumulatorSparse::new(
+    let mut callstack_states_accumulator_for_main_vm = CircuitsEntryAccumulatorSparse::new(
         geometry.cycles_per_vm_snapshot as usize,
         (0, [GoldilocksField::ZERO; FULL_SPONGE_QUEUE_STATE_WIDTH]),
     );
@@ -408,18 +408,88 @@ fn callstack_simulation(
     let mut history_of_storage_log_states = BTreeMap::new();
 
     // we start with no rollbacks, but non-trivial tail
-    let mut current_storage_log_state = StorageLogDetailedState::default();
-    current_storage_log_state.rollback_head = global_end_of_storage_log;
-    current_storage_log_state.rollback_tail = global_end_of_storage_log;
+
+    let initial_storage_state = StorageLogDetailedState {
+        rollback_tail: global_end_of_storage_log,
+        rollback_head: global_end_of_storage_log,
+        ..Default::default()
+    };
+
+    let mut current_storage_log_state = initial_storage_state.clone();
 
     let mut storage_logs_states_stack = vec![];
 
-    let mut state_to_merge: Option<(bool, StorageLogDetailedState<GoldilocksField>)> = None;
+    let mut exited_state_to_merge: Option<(bool, StorageLogDetailedState<GoldilocksField>)> = None;
 
-    for (_idx, el) in full_callstack_history.iter().enumerate() {
-        let frame_index = el.frame_index;
+    let apply_frame_log_changes = |
+        callstack_history_entry: &CallstackActionHistoryEntry, 
+        mut storage_log_state: StorageLogDetailedState<GoldilocksField>,
+        history_of_storage_log_states: &mut BTreeMap<u32, StorageLogDetailedState<GoldilocksField>>
+        | {
+        let begin_at_cycle = callstack_history_entry.beginning_cycle;
+        let end_cycle = callstack_history_entry.end_cycle.expect("frame must end");
 
-        match el.action {
+        let range_of_interest = (begin_at_cycle + 1)..=end_cycle; // begin_at_cycle is formally bound to the previous one
+        let frame_action_span = log_states_data
+            .forward_and_rollback_pointers
+            .range(range_of_interest);
+        for (cycle, (forward_pointer, rollback_pointer)) in frame_action_span {
+            // always add to the forward
+            let new_forward_tail = log_states_data.chain_of_states[*forward_pointer].1;
+            if new_forward_tail != storage_log_state.forward_tail {
+                // edge case of double data on frame boudary, reword later
+                storage_log_state.forward_tail = new_forward_tail;
+                storage_log_state.forward_length += 1;
+            }
+
+            // if there is a rollback then let's process it too
+
+            if let Some(rollback_pointer) = rollback_pointer {
+                let new_rollback_head =
+                    log_states_data.chain_of_states[*rollback_pointer].0;
+                    storage_log_state.rollback_head = new_rollback_head;
+                    storage_log_state.rollback_length += 1;
+            }
+
+            let previous =
+                history_of_storage_log_states.insert(*cycle, storage_log_state);
+            if previous.is_some() {
+                assert_eq!(
+                    previous.unwrap(),
+                    storage_log_state,
+                    "duplicate divergence for cycle {}: previous is {:?}, new is {:?}",
+                    cycle,
+                    previous.unwrap(),
+                    storage_log_state
+                )
+            }
+        }
+
+        storage_log_state
+    };
+
+    let mut save_callstack_witness_for_main_vm = |
+        cycle_to_use: u32,
+        callstack_entry: ExtendedCallstackEntry<GoldilocksField>,
+        callstack_simulator_state: CallstackSimulatorState<GoldilocksField>
+    | {
+        if let Some((prev_cycle, _)) = callstack_values_witnesses.last() {
+            assert!(cycle_to_use != *prev_cycle, "trying to add callstack witness for cycle {}, but previous one is on cycle {}", cycle_to_use, prev_cycle);
+        }
+        callstack_values_witnesses.push((cycle_to_use, (callstack_entry, callstack_simulator_state)));
+
+        // when we push a new one then we need to "finish" the previous range and start a new one
+        callstack_states_accumulator_for_main_vm
+            .push((cycle_to_use, callstack_simulator_state.new_state));
+    };
+
+    for callstack_history_entry in full_callstack_history.iter() {
+        let frame_index = callstack_history_entry.frame_index;
+
+        // flow for new frame (push current and create a new one): PushToStack -> OutOfScope(Fresh)
+        // flow for frame ending (remove current and pop from stack): OutOfScope(Exited) -> PopFromStack
+
+        match callstack_history_entry.action {
             CallstackAction::PushToStack => {
                 // we did push some(!) context to the stack
                 // it means that between beginning and end cycles
@@ -428,80 +498,81 @@ fn callstack_simulation(
                 // `current_storage_log_state` is what we should use for the "current" one,
                 // and we can mutate it, bookkeep and then use in the simulator
 
-                let begin_at_cycle = el.beginning_cycle;
-                let end_cycle = el.end_cycle.expect("frame must end");
+                current_storage_log_state = apply_frame_log_changes(callstack_history_entry, current_storage_log_state, &mut history_of_storage_log_states);
 
-                let range_of_interest = (begin_at_cycle + 1)..=end_cycle; // begin_at_cycle is formally bound to the previous one
-                let frame_action_span = log_states_data
-                    .forward_and_rollback_pointers
-                    .range(range_of_interest);
-                for (cycle, (_forward_pointer, rollback_pointer)) in frame_action_span {
-                    // always add to the forward
-                    let new_forward_tail = log_states_data.chain_of_states[*_forward_pointer].1;
-                    if new_forward_tail != current_storage_log_state.forward_tail {
-                        // edge case of double data on fram boudary, reword later
-                        current_storage_log_state.forward_tail = new_forward_tail;
-                        current_storage_log_state.forward_length += 1;
-                    }
+                // push the item to the stack
+                storage_logs_states_stack.push(current_storage_log_state);
 
-                    // if there is a rollback then let's process it too
-
-                    if let Some(rollback_pointer) = rollback_pointer {
-                        let new_rollback_head =
-                            log_states_data.chain_of_states[*rollback_pointer].0;
-                        current_storage_log_state.rollback_head = new_rollback_head;
-                        current_storage_log_state.rollback_length += 1;
-                    } else {
-                        // we didn't in fact rollback, but it nevertheless can be counted as formal rollback
-                    }
-
-                    let previous =
-                        history_of_storage_log_states.insert(*cycle, current_storage_log_state);
-                    if !previous.is_none() {
-                        assert_eq!(
-                            previous.unwrap(),
-                            current_storage_log_state,
-                            "duplicate divergence for cycle {}: previous is {:?}, new is {:?}",
-                            cycle,
-                            previous.unwrap(),
-                            current_storage_log_state
-                        )
-                    }
-                    // assert!(previous.is_none(), "duplicate for cycle {}: previous is {:?}, new is {:?}", *cycle, previous.unwrap(), current_storage_log_state);
-                }
+                let end_cycle = callstack_history_entry.end_cycle.expect("frame must end");
 
                 // dump it into the entry and dump entry into simulator
-
                 let entry = ExtendedCallstackEntry {
-                    callstack_entry: el.affected_entry,
+                    callstack_entry: callstack_history_entry.affected_entry,
                     rollback_queue_head: current_storage_log_state.rollback_head,
                     rollback_queue_tail: current_storage_log_state.rollback_tail,
                     rollback_queue_segment_length: current_storage_log_state.rollback_length,
                 };
 
-                storage_logs_states_stack.push(current_storage_log_state);
-
-                // push the item to the stack
                 let intermediate_info = callstack_argebraic_simulator
                     .push_and_output_intermediate_data(entry, round_function);
 
-                assert!(intermediate_info.is_push == true);
-                let cycle_to_use = end_cycle;
-                if let Some((prev_cycle, _)) = callstack_values_witnesses.last() {
-                    assert!(cycle_to_use != *prev_cycle, "trying to add callstack witness for cycle {}, but previous one is on cycle {}", cycle_to_use, prev_cycle);
-                }
                 // we do push the witness at the cycle numbered at when the element was pushed
-                callstack_values_witnesses.push((cycle_to_use, (entry, intermediate_info)));
+                assert!(intermediate_info.is_push == true);
+                save_callstack_witness_for_main_vm(end_cycle, entry, intermediate_info);
+            }
+            CallstackAction::OutOfScope(OutOfScopeReason::Fresh) => {
+                // new frame created
 
-                // when we push a new one then we need to "finish" the previous range and start a new one
-                callstack_sponge_encoding_ranges.push((end_cycle, intermediate_info.new_state));
+                // we already identified initial rollback tails for new frames
+                let rollback_tail = log_rollback_tails_for_frames[frame_index].1;
+                // do not reset forward length as it's easy to merge
+                current_storage_log_state.frame_idx = frame_index;
+                current_storage_log_state.rollback_length = 0;
+                current_storage_log_state.rollback_head = rollback_tail;
+                current_storage_log_state.rollback_tail = rollback_tail;
+
+                let beginning_cycle = callstack_history_entry.beginning_cycle;
+
+                let previous =
+                    history_of_storage_log_states.insert(beginning_cycle, current_storage_log_state);
+
+                if !previous.is_none() {
+                    // ensure that basic properties hold: we replace the current frame with a new one, so
+                    // it should have larger frame_idx and the same forward tail and length
+                    let previous = previous.unwrap();
+                    assert!(
+                        previous.frame_idx < current_storage_log_state.frame_idx,
+                        "frame divergence for cycle {}: previous is {:?}, new is {:?}",
+                        beginning_cycle,
+                        previous,
+                        current_storage_log_state
+                    );
+                    assert_eq!(
+                        previous.forward_tail, current_storage_log_state.forward_tail,
+                        "frame divergence for cycle {}: previous is {:?}, new is {:?}",
+                        beginning_cycle, previous, current_storage_log_state
+                    );
+                    assert_eq!(
+                        previous.forward_length, current_storage_log_state.forward_length,
+                        "frame divergence for cycle {}: previous is {:?}, new is {:?}",
+                        beginning_cycle, previous, current_storage_log_state
+                    );
+                }
+            }
+            CallstackAction::OutOfScope(OutOfScopeReason::Exited { panic }) => {
+                // frame ended
+                // we are not too interested, frame just ends, and all the storage log logic was resolved before it
+                assert!(exited_state_to_merge.is_none());
+
+                current_storage_log_state = apply_frame_log_changes(callstack_history_entry, current_storage_log_state, &mut history_of_storage_log_states);
+                exited_state_to_merge = Some((panic, current_storage_log_state));
             }
             CallstackAction::PopFromStack { panic } => {
                 // an item that was in the stack becomes current
-                assert!(state_to_merge.is_some());
+                assert!(exited_state_to_merge.is_some());
 
-                let (claimed_panic, state_to_merge) = state_to_merge.take().unwrap();
-                assert_eq!(panic, claimed_panic);
+                let (pending_panic, exited_state_to_merge) = exited_state_to_merge.take().unwrap();
+                assert_eq!(panic, pending_panic);
 
                 let popped_state = storage_logs_states_stack.pop().unwrap();
 
@@ -525,40 +596,41 @@ fn callstack_simulation(
                     frame_index
                 );
 
+                // merge state from exited frame
                 current_storage_log_state = popped_state;
                 current_storage_log_state.frame_idx = frame_index;
-                current_storage_log_state.forward_tail = state_to_merge.forward_tail;
+                current_storage_log_state.forward_tail = exited_state_to_merge.forward_tail;
                 assert!(
-                    current_storage_log_state.forward_length <= state_to_merge.forward_length,
+                    current_storage_log_state.forward_length <= exited_state_to_merge.forward_length,
                     "divergence at frame {}",
                     frame_index
                 );
-                current_storage_log_state.forward_length = state_to_merge.forward_length;
+                current_storage_log_state.forward_length = exited_state_to_merge.forward_length;
 
                 if panic {
                     assert_eq!(
-                        current_storage_log_state.forward_tail, state_to_merge.rollback_head,
+                        current_storage_log_state.forward_tail, exited_state_to_merge.rollback_head,
                         "divergence at frame {} with panic: {:?}",
-                        frame_index, el
+                        frame_index, callstack_history_entry
                     );
 
-                    current_storage_log_state.forward_tail = state_to_merge.rollback_tail;
-                    current_storage_log_state.forward_length += state_to_merge.rollback_length;
+                    current_storage_log_state.forward_tail = exited_state_to_merge.rollback_tail;
+                    current_storage_log_state.forward_length += exited_state_to_merge.rollback_length;
                 } else {
                     assert_eq!(
-                        current_storage_log_state.rollback_head, state_to_merge.rollback_tail,
+                        current_storage_log_state.rollback_head, exited_state_to_merge.rollback_tail,
                         "divergence at frame {} without panic: {:?}",
-                        frame_index, el
+                        frame_index, callstack_history_entry
                     );
-                    current_storage_log_state.rollback_head = state_to_merge.rollback_head;
-                    current_storage_log_state.rollback_length += state_to_merge.rollback_length;
+                    current_storage_log_state.rollback_head = exited_state_to_merge.rollback_head;
+                    current_storage_log_state.rollback_length += exited_state_to_merge.rollback_length;
                 }
 
-                let beginning_cycle = el.beginning_cycle;
+                let beginning_cycle = callstack_history_entry.beginning_cycle;
 
                 let previous = history_of_storage_log_states
                     .insert(beginning_cycle, current_storage_log_state);
-                if !previous.is_none() {
+                if previous.is_some() {
                     assert_eq!(
                         previous.unwrap(),
                         current_storage_log_state,
@@ -569,111 +641,13 @@ fn callstack_simulation(
                     )
                 }
 
-                // assert!(previous.is_none(), "duplicate for cycle {}: previous is {:?}, new is {:?}", beginning_cycle, previous.unwrap(), current_storage_log_state);
-
                 assert!(intermediate_info.is_push == false);
-                let cycle_to_use = beginning_cycle;
-                if let Some((prev_cycle, _)) = callstack_values_witnesses.last() {
-                    assert!(cycle_to_use != *prev_cycle, "trying to add callstack witness for cycle {}, but previous one is on cycle {}", cycle_to_use, prev_cycle);
-                }
+                
                 // we place it at the cycle when it was actually popped, but not one when it becase "active"
-                callstack_values_witnesses.push((cycle_to_use, (entry, intermediate_info)));
-
-                // when we push a new one then we need to "finish" the previous range and start a new one
-                callstack_sponge_encoding_ranges
-                    .push((beginning_cycle, intermediate_info.new_state));
-            }
-            CallstackAction::OutOfScope(OutOfScopeReason::Fresh) => {
-                // we already identified initial rollback tails for new frames
-                let rollback_tail = log_rollback_tails_for_frames[frame_index].1;
-                // do not reset forward length as it's easy to merge
-                current_storage_log_state.frame_idx = frame_index;
-                current_storage_log_state.rollback_length = 0;
-                current_storage_log_state.rollback_head = rollback_tail;
-                current_storage_log_state.rollback_tail = rollback_tail;
-
-                let cycle = el.beginning_cycle;
-
-                let previous =
-                    history_of_storage_log_states.insert(cycle, current_storage_log_state);
-                if !previous.is_none() {
-                    // ensure that basic properties hold: we replace the current frame with a new one, so
-                    // it should have large frame_idx and the same forward tail and length
-                    let previous = previous.unwrap();
-                    assert!(
-                        previous.frame_idx < current_storage_log_state.frame_idx,
-                        "frame divergence for cycle {}: previous is {:?}, new is {:?}",
-                        cycle,
-                        previous,
-                        current_storage_log_state
-                    );
-                    assert_eq!(
-                        previous.forward_tail, current_storage_log_state.forward_tail,
-                        "frame divergence for cycle {}: previous is {:?}, new is {:?}",
-                        cycle, previous, current_storage_log_state
-                    );
-                    assert_eq!(
-                        previous.forward_length, current_storage_log_state.forward_length,
-                        "frame divergence for cycle {}: previous is {:?}, new is {:?}",
-                        cycle, previous, current_storage_log_state
-                    );
-                }
-                // assert!(previous.is_none(), "duplicate for cycle {}: previous is {:?}, new is {:?}", cycle, previous.unwrap(), current_storage_log_state);
-            }
-            CallstackAction::OutOfScope(OutOfScopeReason::Exited { panic }) => {
-                // we are not too interested, frame just ends, and all the storage log logic was resolved before it
-
-                assert!(state_to_merge.is_none());
-
-                let begin_at_cycle = el.beginning_cycle;
-                let end_cycle = el.end_cycle.expect("frame must end");
-
-                let range_of_interest = (begin_at_cycle + 1)..=end_cycle; // begin_at_cycle is formally bound to the previous one
-                let frame_action_span = log_states_data
-                    .forward_and_rollback_pointers
-                    .range(range_of_interest);
-                for (cycle, (forward_pointer, rollback_pointer)) in frame_action_span {
-                    // always add to the forward
-                    let new_forward_tail = log_states_data.chain_of_states[*forward_pointer].1;
-                    if new_forward_tail != current_storage_log_state.forward_tail {
-                        // edge case of double data on fram boudary, reword later
-                        current_storage_log_state.forward_tail = new_forward_tail;
-                        current_storage_log_state.forward_length += 1;
-                    }
-
-                    // if there is a rollback then let's process it too
-
-                    if let Some(rollback_pointer) = rollback_pointer {
-                        let new_rollback_head =
-                            log_states_data.chain_of_states[*rollback_pointer].0;
-                        current_storage_log_state.rollback_head = new_rollback_head;
-                        current_storage_log_state.rollback_length += 1;
-                    }
-
-                    let previous =
-                        history_of_storage_log_states.insert(*cycle, current_storage_log_state);
-                    if !previous.is_none() {
-                        assert_eq!(
-                            previous.unwrap(),
-                            current_storage_log_state,
-                            "duplicate divergence for cycle {}: previous is {:?}, new is {:?}",
-                            cycle,
-                            previous.unwrap(),
-                            current_storage_log_state
-                        )
-                    }
-
-                    // assert!(previous.is_none(), "duplicate for cycle {}: previous is {:?}, new is {:?}", *cycle, previous.unwrap(), current_storage_log_state);
-                }
-
-                state_to_merge = Some((panic, current_storage_log_state));
+                save_callstack_witness_for_main_vm(beginning_cycle, entry, intermediate_info);
             }
         }
     }
-
-    let mut initial_storage_state = StorageLogDetailedState::default();
-    initial_storage_state.rollback_tail = global_end_of_storage_log;
-    initial_storage_state.rollback_head = global_end_of_storage_log;
 
     let storage_log_states_for_entry = CircuitsEntryAccumulatorSparse::from_iter(
         geometry.cycles_per_vm_snapshot as usize,
@@ -682,7 +656,7 @@ fn callstack_simulation(
     );
 
     CallstackSimulationResult {
-        callstack_sponge_encoding_ranges,
+        callstack_sponge_encoding_ranges: callstack_states_accumulator_for_main_vm,
         callstack_values_witnesses,
         rollback_queue_head_segments,
         storage_log_states_for_entry,
@@ -841,7 +815,6 @@ use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::Keccak256RoundWi
 use crate::zk_evm::zk_evm_abstractions::precompiles::secp256r1_verify::Secp256r1VerifyRoundWitness;
 use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Sha256RoundWitness;
 
-use crate::witness::postprocessing::observable_witness::LogDemuxerObservableWitness;
 use crate::witness::postprocessing::observable_witness::RamPermutationObservableWitness;
 use crate::witness::postprocessing::observable_witness::StorageApplicationObservableWitness;
 
