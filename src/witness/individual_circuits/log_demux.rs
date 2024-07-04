@@ -6,6 +6,7 @@ use crate::witness::postprocessing::observable_witness::LogDemuxerObservableWitn
 
 use super::*;
 use crate::witness::artifacts::{DemuxedLogQueries, LogQueueStates};
+use crate::witness::aux_data_structs::one_per_circuit_accumulator::LastPerCircuitAccumulator;
 use crate::witness::postprocessing::CircuitMaker;
 use crate::zkevm_circuits::base_structures::log_query::*;
 use crate::zkevm_circuits::demux_log_queue::input::*;
@@ -19,7 +20,6 @@ use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use circuit_definitions::{encodings::*, Field, RoundFunction};
 use postprocessing::CsForWitnessGeneration;
 use zk_evm::zkevm_opcode_defs::SECP256R1_VERIFY_PRECOMPILE_ADDRESS;
-use crate::witness::aux_data_structs::one_per_circuit_accumulator::LastPerCircuitAccumulator;
 
 use crate::zk_evm::aux_structures::LogQuery as LogQuery_;
 
@@ -30,53 +30,62 @@ pub(crate) struct LogDemuxCircuitArtifacts<F: SmallField> {
 
 pub struct DemuxedQueuesStatesSimulator {
     pub subqueues: [LogQueueStates<Field>; NUM_DEMUX_OUTPUTS],
-    round_function: RoundFunction
+    round_function: RoundFunction,
 }
 
 impl DemuxedQueuesStatesSimulator {
-    pub fn new(geometry: GeometryConfig, amounts_of_queries: [usize; NUM_DEMUX_OUTPUTS], round_function: RoundFunction) -> Self {
+    pub fn new(
+        geometry: GeometryConfig,
+        amounts_of_queries: [usize; NUM_DEMUX_OUTPUTS],
+        round_function: RoundFunction,
+    ) -> Self {
         use crate::zkevm_circuits::demux_log_queue::ALL_DEMUX_OUTPUTS;
-        let geometries: Vec<u32> = ALL_DEMUX_OUTPUTS.iter().map(|demux_output| {
-            match demux_output {
-                DemuxOutput::RollupStorage => geometry.cycles_per_storage_sorter,
-                DemuxOutput::TransientStorage => geometry.cycles_per_transient_storage_sorter,
-                DemuxOutput::ECRecover => geometry.cycles_per_ecrecover_circuit,
-                DemuxOutput::Secp256r1Verify => geometry.cycles_per_secp256r1_verify_circuit,
-                DemuxOutput::Keccak => geometry.cycles_per_keccak256_circuit,
-                DemuxOutput::Sha256 => geometry.cycles_per_sha256_circuit,
-                DemuxOutput::Events => geometry.cycles_per_events_or_l1_messages_sorter,
-                DemuxOutput::L2ToL1Messages => geometry.cycles_per_events_or_l1_messages_sorter,
-                DemuxOutput::PorterStorage => 0 // NOT IMPLEMENTED
-            }
-        }).collect();
+        let geometries: Vec<u32> = ALL_DEMUX_OUTPUTS
+            .iter()
+            .map(|demux_output| {
+                match demux_output {
+                    DemuxOutput::RollupStorage => geometry.cycles_per_storage_sorter,
+                    DemuxOutput::TransientStorage => geometry.cycles_per_transient_storage_sorter,
+                    DemuxOutput::ECRecover => geometry.cycles_per_ecrecover_circuit,
+                    DemuxOutput::Secp256r1Verify => geometry.cycles_per_secp256r1_verify_circuit,
+                    DemuxOutput::Keccak => geometry.cycles_per_keccak256_circuit,
+                    DemuxOutput::Sha256 => geometry.cycles_per_sha256_circuit,
+                    DemuxOutput::Events => geometry.cycles_per_events_or_l1_messages_sorter,
+                    DemuxOutput::L2ToL1Messages => geometry.cycles_per_events_or_l1_messages_sorter,
+                    DemuxOutput::PorterStorage => 0, // NOT IMPLEMENTED
+                }
+            })
+            .collect();
 
         let subqueues = std::array::from_fn(|index| {
             if index == DemuxOutput::PorterStorage as usize {
                 return LogQueueStates::<Field>::default(); // NOT IMPLEMENTED
             }
-            LogQueueStates::<Field>::with_flat_capacity(*geometries.get(index).unwrap() as usize, amounts_of_queries[index])
+            LogQueueStates::<Field>::with_flat_capacity(
+                *geometries.get(index).unwrap() as usize,
+                amounts_of_queries[index],
+            )
         });
 
         Self {
             subqueues,
-            round_function
+            round_function,
         }
     }
 
     pub fn simulate_and_push(&mut self, sub_queue: DemuxOutput, item: LogQuery_) {
-        let (_old_tail, intermediate_info) = self.subqueues
-            [sub_queue as usize]
+        let (_old_tail, intermediate_info) = self.subqueues[sub_queue as usize]
             .simulator
             .push_and_output_intermediate_data(item, &self.round_function);
 
-            self.subqueues[sub_queue as usize]
+        self.subqueues[sub_queue as usize]
             .states_accumulator
-            .push(intermediate_info);        
+            .push(intermediate_info);
     }
 }
 
 /// Take a storage log, output logs separately for events, l1 messages, storage, etc
-pub(crate)  fn compute_logs_demux<
+pub(crate) fn compute_logs_demux<
     CB: FnMut(ZkSyncBaseLayerCircuit),
     QSCB: FnMut(u64, RecursionQueueSimulator<Field>, Vec<ClosedFormInputCompactFormWitness<Field>>),
 >(
@@ -145,10 +154,13 @@ pub(crate)  fn compute_logs_demux<
         .as_slices()
         .0;
 
+    assert!(
+        input_queue_witness.len() == log_demux_artifacts.applied_queue_states_accumulator.len()
+    );
 
-    assert!(input_queue_witness.len() == log_demux_artifacts.applied_queue_states_accumulator.len());
-
-    let last_applied_log_queue_states_for_chunks = log_demux_artifacts.applied_queue_states_accumulator.into_circuits();
+    let last_applied_log_queue_states_for_chunks = log_demux_artifacts
+        .applied_queue_states_accumulator
+        .into_circuits();
 
     let num_chunks = input_queue_witness.chunks(per_circuit_capacity).len();
 
@@ -190,29 +202,35 @@ pub(crate)  fn compute_logs_demux<
     for (_, _, query) in input_queue_witness.iter() {
         match query.aux_byte {
             STORAGE_AUX_BYTE => amounts_of_queries[DemuxOutput::RollupStorage as usize] += 1,
-            TRANSIENT_STORAGE_AUX_BYTE => amounts_of_queries[DemuxOutput::TransientStorage as usize] += 1,
-            L1_MESSAGE_AUX_BYTE => amounts_of_queries[DemuxOutput::L2ToL1Messages as usize] += 1, 
+            TRANSIENT_STORAGE_AUX_BYTE => {
+                amounts_of_queries[DemuxOutput::TransientStorage as usize] += 1
+            }
+            L1_MESSAGE_AUX_BYTE => amounts_of_queries[DemuxOutput::L2ToL1Messages as usize] += 1,
             EVENT_AUX_BYTE => amounts_of_queries[DemuxOutput::Events as usize] += 1,
-            PRECOMPILE_AUX_BYTE => {
-                match query.address {
-                    a if a == *KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => amounts_of_queries[DemuxOutput::Keccak as usize] += 1,
-                    a if a == *SHA256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => amounts_of_queries[DemuxOutput::Sha256 as usize] += 1,
-                    a if a == *ECRECOVER_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => amounts_of_queries[DemuxOutput::ECRecover as usize] += 1,
-                    a if a == *SECP256R1_VERIFY_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => amounts_of_queries[DemuxOutput::Secp256r1Verify as usize] += 1,
-                    _ => {}
+            PRECOMPILE_AUX_BYTE => match query.address {
+                a if a == *KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
+                    amounts_of_queries[DemuxOutput::Keccak as usize] += 1
                 }
+                a if a == *SHA256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
+                    amounts_of_queries[DemuxOutput::Sha256 as usize] += 1
+                }
+                a if a == *ECRECOVER_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
+                    amounts_of_queries[DemuxOutput::ECRecover as usize] += 1
+                }
+                a if a == *SECP256R1_VERIFY_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
+                    amounts_of_queries[DemuxOutput::Secp256r1Verify as usize] += 1
+                }
+                _ => {}
             },
             _ => {}
         }
     }
 
-    let mut demuxed_simulator = DemuxedQueuesStatesSimulator::new(
-        *geometry,
-        amounts_of_queries,
-        *round_function
-    );
+    let mut demuxed_simulator =
+        DemuxedQueuesStatesSimulator::new(*geometry, amounts_of_queries, *round_function);
 
-    for (circuit_index, input_chunk) in input_queue_witness.chunks(per_circuit_capacity).enumerate() {
+    for (circuit_index, input_chunk) in input_queue_witness.chunks(per_circuit_capacity).enumerate()
+    {
         let is_first = circuit_index == 0;
         let is_last = circuit_index == num_chunks - 1;
 
@@ -223,8 +241,10 @@ pub(crate)  fn compute_logs_demux<
                     // sort rollup and porter
                     match query.shard_id {
                         0 => {
-                            let log_query = demuxed_rollup_storage_queries_it.next().copied().unwrap();
-                            demuxed_simulator.simulate_and_push(DemuxOutput::RollupStorage, log_query);
+                            let log_query =
+                                demuxed_rollup_storage_queries_it.next().copied().unwrap();
+                            demuxed_simulator
+                                .simulate_and_push(DemuxOutput::RollupStorage, log_query);
                         }
                         _ => unreachable!(),
                     }
@@ -234,7 +254,8 @@ pub(crate)  fn compute_logs_demux<
                     match query.shard_id {
                         0 => {
                             let log_query = demuxed_transient_storage_it.next().copied().unwrap();
-                            demuxed_simulator.simulate_and_push(DemuxOutput::TransientStorage, log_query);
+                            demuxed_simulator
+                                .simulate_and_push(DemuxOutput::TransientStorage, log_query);
                         }
                         _ => unreachable!(),
                     }
@@ -269,8 +290,10 @@ pub(crate)  fn compute_logs_demux<
                             demuxed_simulator.simulate_and_push(DemuxOutput::ECRecover, log_query);
                         }
                         a if a == *SECP256R1_VERIFY_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
-                            let log_query = demuxed_secp256r1_verify_queries_it.next().copied().unwrap();
-                            demuxed_simulator.simulate_and_push(DemuxOutput::Secp256r1Verify, log_query);
+                            let log_query =
+                                demuxed_secp256r1_verify_queries_it.next().copied().unwrap();
+                            demuxed_simulator
+                                .simulate_and_push(DemuxOutput::Secp256r1Verify, log_query);
                         }
                         _ => {
                             // just burn ergs
@@ -298,14 +321,18 @@ pub(crate)  fn compute_logs_demux<
 
         let mut fsm_output = LogDemuxerFSMInputOutput::placeholder_witness();
         let mut initial_log_queue_state = full_log_queue_state.clone();
-        initial_log_queue_state.head = last_applied_log_queue_states_for_chunks[circuit_index].1.tail;
-        initial_log_queue_state.tail.length -= last_applied_log_queue_states_for_chunks[circuit_index]
+        initial_log_queue_state.head = last_applied_log_queue_states_for_chunks[circuit_index]
+            .1
+            .tail;
+        initial_log_queue_state.tail.length -= last_applied_log_queue_states_for_chunks
+            [circuit_index]
             .1
             .num_items;
 
         fsm_output.initial_log_queue_state = initial_log_queue_state;
-        fsm_output.output_queue_states =
-            std::array::from_fn(|i| take_queue_state_from_simulator(&demuxed_simulator.subqueues[i].simulator));
+        fsm_output.output_queue_states = std::array::from_fn(|i| {
+            take_queue_state_from_simulator(&demuxed_simulator.subqueues[i].simulator)
+        });
 
         let mut witness = LogDemuxerCircuitInstanceWitness {
             closed_form_input: ClosedFormInputWitness {

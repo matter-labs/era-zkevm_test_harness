@@ -5,7 +5,7 @@ use circuit_sequencer_api::INITIAL_MONOTONIC_CYCLE_COUNTER;
 struct PerCircuitAccumulatorContainer<T> {
     cycles_per_circuit: usize,
     circuits_data: Vec<Vec<T>>,
-    accumulated: usize
+    accumulated: usize,
 }
 
 impl<T> PerCircuitAccumulatorContainer<T> {
@@ -13,15 +13,14 @@ impl<T> PerCircuitAccumulatorContainer<T> {
         Self {
             cycles_per_circuit,
             circuits_data: Default::default(),
-            accumulated: 0
+            accumulated: 0,
         }
     }
 
     pub fn with_flat_capacity(cycles_per_circuit: usize, flat_capacity: usize) -> Self {
         assert!(cycles_per_circuit != 0);
-        
-        let num_circuits = (flat_capacity + cycles_per_circuit - 1)
-        / cycles_per_circuit;
+
+        let num_circuits = (flat_capacity + cycles_per_circuit - 1) / cycles_per_circuit;
 
         // TODO reserve in sub-vectors
         let mut _self = Self::new(cycles_per_circuit);
@@ -76,7 +75,8 @@ impl<T> PerCircuitAccumulatorContainer<T> {
     }
 
     fn push_new_batch(&mut self) {
-        self.circuits_data.push(Vec::with_capacity(self.cycles_per_circuit));
+        self.circuits_data
+            .push(Vec::with_capacity(self.cycles_per_circuit));
     }
 
     fn seal_last_batch(&mut self) {
@@ -92,14 +92,14 @@ impl<T> PerCircuitAccumulatorContainer<T> {
         PerCircuitAccumulatorIterator {
             container: &self,
             batch_index: 0,
-            inner_index: 0
+            inner_index: 0,
         }
     }
 
     pub fn into_iter(self) -> PerCircuitAccumulatorIntoIter<T> {
         PerCircuitAccumulatorIntoIter {
             container: self,
-            batch_index: 0
+            batch_index: 0,
         }
     }
 }
@@ -119,7 +119,7 @@ impl<'a, T> Iterator for PerCircuitAccumulatorIterator<'a, T> {
             return None;
         }
 
-        if self.inner_index >= batch.unwrap().len(){
+        if self.inner_index >= batch.unwrap().len() {
             self.batch_index += 1;
             self.inner_index = 0;
             batch = self.container.get_batch(self.batch_index);
@@ -127,7 +127,7 @@ impl<'a, T> Iterator for PerCircuitAccumulatorIterator<'a, T> {
                 return None;
             }
         }
-        
+
         let res = batch.unwrap().get(self.inner_index);
         self.inner_index += 1;
 
@@ -137,7 +137,7 @@ impl<'a, T> Iterator for PerCircuitAccumulatorIterator<'a, T> {
 
 pub struct PerCircuitAccumulatorIntoIter<T> {
     container: PerCircuitAccumulatorContainer<T>,
-    batch_index: usize
+    batch_index: usize,
 }
 
 impl<T: TupleFirst> Iterator for PerCircuitAccumulatorIntoIter<T> {
@@ -152,7 +152,7 @@ impl<T: TupleFirst> Iterator for PerCircuitAccumulatorIntoIter<T> {
 
         let mut batch = batch.unwrap();
 
-        if batch.is_empty(){
+        if batch.is_empty() {
             self.batch_index += 1;
             let next_batch = self.container.get_batch_mut(self.batch_index);
             if next_batch.is_none() {
@@ -172,13 +172,16 @@ impl<T: TupleFirst> Iterator for PerCircuitAccumulatorIntoIter<T> {
 }
 
 pub struct PerCircuitAccumulator<T> {
-    container: PerCircuitAccumulatorContainer<T>
+    container: PerCircuitAccumulatorContainer<T>,
 }
 
 impl<T> PerCircuitAccumulator<T> {
     pub fn with_flat_capacity(cycles_per_circuit: usize, flat_capacity: usize) -> Self {
         Self {
-            container: PerCircuitAccumulatorContainer::with_flat_capacity(cycles_per_circuit, flat_capacity)
+            container: PerCircuitAccumulatorContainer::with_flat_capacity(
+                cycles_per_circuit,
+                flat_capacity,
+            ),
         }
     }
 
@@ -214,27 +217,27 @@ impl<T> Pushable<T> for PerCircuitAccumulator<T> {
 /// This data structure internally sorts queries by main VM circuit instances.
 #[derive(Clone, Debug)]
 pub struct PerCircuitAccumulatorSparse<T: TupleFirst> {
-    container: PerCircuitAccumulatorContainer<T>
+    container: PerCircuitAccumulatorContainer<T>,
 }
 
 impl<T: TupleFirst> PerCircuitAccumulatorSparse<T> {
     pub fn new(cycles_per_circuit: usize) -> Self {
         Self {
-            container: PerCircuitAccumulatorContainer::new(cycles_per_circuit)
+            container: PerCircuitAccumulatorContainer::new(cycles_per_circuit),
         }
     }
 
     pub fn from_iter<I: IntoIterator<Item = T>>(cycles_per_circuit: usize, iterator: I) -> Self {
         let mut _self = Self::new(cycles_per_circuit);
- 
-         let mut iterator = iterator.into_iter();
- 
-         while let Some(element) = iterator.next() {
-             _self.push(element);
-         }
- 
-         _self
-     }
+
+        let mut iterator = iterator.into_iter();
+
+        while let Some(element) = iterator.next() {
+            _self.push(element);
+        }
+
+        _self
+    }
 
     pub fn last(&self) -> Option<&T> {
         self.container.last()
@@ -249,11 +252,13 @@ impl<T: TupleFirst> PerCircuitAccumulatorSparse<T> {
         let cycle = val.first() as usize;
 
         // we should not have any snapshots before INITIAL_MONOTONIC_CYCLE_COUNTER
-        if cycle < INITIAL_MONOTONIC_CYCLE_COUNTER as usize { // TODO replace with initial snapshot cycle?
+        if cycle < INITIAL_MONOTONIC_CYCLE_COUNTER as usize {
+            // TODO replace with initial snapshot cycle?
             return;
         }
 
-        let circuit_index = (cycle - INITIAL_MONOTONIC_CYCLE_COUNTER as usize) / self.container.cycles_per_circuit;
+        let circuit_index =
+            (cycle - INITIAL_MONOTONIC_CYCLE_COUNTER as usize) / self.container.cycles_per_circuit;
 
         self.container.push_for_circuit(circuit_index, val);
     }

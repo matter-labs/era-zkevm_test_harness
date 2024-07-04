@@ -13,15 +13,14 @@ impl<T> OnePerCircuitAccumulatorContainer<T> {
         Self {
             cycles_per_circuit,
             circuits_data: Default::default(),
-            accumulated: 0
+            accumulated: 0,
         }
     }
 
     pub fn with_flat_capacity(cycles_per_circuit: usize, flat_capacity: usize) -> Self {
         assert!(cycles_per_circuit != 0);
-        
-        let num_circuits = (flat_capacity + cycles_per_circuit - 1)
-        / cycles_per_circuit;
+
+        let num_circuits = (flat_capacity + cycles_per_circuit - 1) / cycles_per_circuit;
 
         let mut _self = Self::new(cycles_per_circuit);
         _self.circuits_data.reserve_exact(num_circuits);
@@ -33,10 +32,11 @@ impl<T> OnePerCircuitAccumulatorContainer<T> {
     }
 
     pub fn reserve_exact_flat(&mut self, additional: usize) {
-        let num_circuits = (self.accumulated + additional + self.cycles_per_circuit - 1)
-        / self.cycles_per_circuit;
+        let num_circuits =
+            (self.accumulated + additional + self.cycles_per_circuit - 1) / self.cycles_per_circuit;
 
-        self.circuits_data.reserve_exact(num_circuits - self.circuits_data.capacity());
+        self.circuits_data
+            .reserve_exact(num_circuits - self.circuits_data.capacity());
     }
 
     pub fn len(&self) -> usize {
@@ -64,19 +64,22 @@ impl<T> OnePerCircuitAccumulatorContainer<T> {
 
 /// TODO docs
 pub struct LastPerCircuitAccumulator<T> {
-    container: OnePerCircuitAccumulatorContainer<T>
+    container: OnePerCircuitAccumulatorContainer<T>,
 }
 
 impl<T> LastPerCircuitAccumulator<T> {
     pub fn new(cycles_per_circuit: usize) -> Self {
         Self {
-            container: OnePerCircuitAccumulatorContainer::new(cycles_per_circuit)
+            container: OnePerCircuitAccumulatorContainer::new(cycles_per_circuit),
         }
     }
 
     pub fn with_flat_capacity(cycles_per_circuit: usize, flat_capacity: usize) -> Self {
         Self {
-            container: OnePerCircuitAccumulatorContainer::with_flat_capacity(cycles_per_circuit, flat_capacity)
+            container: OnePerCircuitAccumulatorContainer::with_flat_capacity(
+                cycles_per_circuit,
+                flat_capacity,
+            ),
         }
     }
 
@@ -110,41 +113,47 @@ impl<T> Default for LastPerCircuitAccumulator<T> {
 }
 
 #[derive(Default)]
-pub struct CircuitsEntryAccumulatorSparse<T: TupleFirst> 
-where T: Clone
+pub struct CircuitsEntryAccumulatorSparse<T: TupleFirst>
+where
+    T: Clone,
 {
     container: OnePerCircuitAccumulatorContainer<T>,
-    last: T
+    last: T,
 }
 
 // TODO can be optimized for sparse values
-impl<T: TupleFirst> CircuitsEntryAccumulatorSparse<T> 
-where T: Clone
+impl<T: TupleFirst> CircuitsEntryAccumulatorSparse<T>
+where
+    T: Clone,
 {
     pub fn new(cycles_per_circuit: usize, initial_value: T) -> Self {
         Self {
             container: OnePerCircuitAccumulatorContainer::new(cycles_per_circuit),
-            last: initial_value
+            last: initial_value,
         }
     }
 
-    pub fn from_iter<I: IntoIterator<Item = T>>(cycles_per_circuit: usize, initial_value: T, iterator: I) -> Self {
+    pub fn from_iter<I: IntoIterator<Item = T>>(
+        cycles_per_circuit: usize,
+        initial_value: T,
+        iterator: I,
+    ) -> Self {
         let mut _self = Self::new(cycles_per_circuit, initial_value);
-         let mut iterator = iterator.into_iter();
- 
-         while let Some(element) = iterator.next() {
-             _self.push(element);
-         }
- 
-         _self
-     }
+        let mut iterator = iterator.into_iter();
+
+        while let Some(element) = iterator.next() {
+            _self.push(element);
+        }
+
+        _self
+    }
 
     pub fn extend<I: IntoIterator<Item = T>>(&mut self, iterator: I) {
-         let mut iterator = iterator.into_iter();
-         while let Some(element) = iterator.next() {
+        let mut iterator = iterator.into_iter();
+        while let Some(element) = iterator.next() {
             self.push(element);
-         }
-     }
+        }
+    }
 
     pub fn last(&self) -> &T {
         &self.last
@@ -157,7 +166,8 @@ where T: Clone
             return;
         }
 
-        let circuit_index = (cycle - INITIAL_MONOTONIC_CYCLE_COUNTER as usize) / self.container.cycles_per_circuit;
+        let circuit_index =
+            (cycle - INITIAL_MONOTONIC_CYCLE_COUNTER as usize) / self.container.cycles_per_circuit;
 
         self.fill_gap(circuit_index);
         self.last = val;
@@ -165,9 +175,10 @@ where T: Clone
 
     pub fn into_circuits(mut self, amount_of_circuits: usize) -> Vec<T> {
         if self.container.len() < amount_of_circuits {
-            self.container.reserve_exact(amount_of_circuits - self.container.len());
+            self.container
+                .reserve_exact(amount_of_circuits - self.container.len());
         }
-        
+
         self.fill_gap(amount_of_circuits - 1);
 
         self.container.into_circuits()
@@ -175,7 +186,8 @@ where T: Clone
 
     fn fill_gap(&mut self, to_index: usize) {
         while self.container.len() <= to_index {
-            self.container.push_for_circuit(self.container.len(), self.last.clone());
-        }        
+            self.container
+                .push_for_circuit(self.container.len(), self.last.clone());
+        }
     }
 }

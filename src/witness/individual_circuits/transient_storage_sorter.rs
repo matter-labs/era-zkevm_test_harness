@@ -32,9 +32,14 @@ pub(crate) fn compute_transient_storage_dedup_and_sort<
     let sorted_storage_queries_with_extra_timestamp =
         sort_transient_storage_access_queries(&transient_storage_queries);
 
-    let mut sorted_log_simulator_states_accumulator = LastPerCircuitAccumulator::with_flat_capacity(per_circuit_capacity, total_amount_of_queries);
+    let mut sorted_log_simulator_states_accumulator = LastPerCircuitAccumulator::with_flat_capacity(
+        per_circuit_capacity,
+        total_amount_of_queries,
+    );
     let mut intermediate_sorted_log_simulator =
-        LogWithExtendedEnumerationQueueSimulator::<F>::with_capacity(sorted_storage_queries_with_extra_timestamp.len());
+        LogWithExtendedEnumerationQueueSimulator::<F>::with_capacity(
+            sorted_storage_queries_with_extra_timestamp.len(),
+        );
     for el in sorted_storage_queries_with_extra_timestamp.into_iter() {
         let (_, intermediate_state) = intermediate_sorted_log_simulator
             .push_and_output_intermediate_data(el.clone(), round_function);
@@ -42,8 +47,11 @@ pub(crate) fn compute_transient_storage_dedup_and_sort<
         sorted_log_simulator_states_accumulator.push(intermediate_state);
     }
 
-    let sorted_log_simulator_states_chunk_final_states = sorted_log_simulator_states_accumulator.into_circuits();
-    let unsorted_log_simulator_states_chunk_final_states = demuxed_transient_storage_queue.states_accumulator.into_circuits();
+    let sorted_log_simulator_states_chunk_final_states =
+        sorted_log_simulator_states_accumulator.into_circuits();
+    let unsorted_log_simulator_states_chunk_final_states = demuxed_transient_storage_queue
+        .states_accumulator
+        .into_circuits();
 
     let unsorted_simulator_final_state =
         take_queue_state_from_simulator(&demuxed_transient_storage_queue.simulator);
@@ -167,7 +175,8 @@ pub(crate) fn compute_transient_storage_dedup_and_sort<
         .1
         .is_empty());
 
-    let it = unsorted_log_simulator_states_chunk_final_states.into_iter()
+    let it = unsorted_log_simulator_states_chunk_final_states
+        .into_iter()
         .zip(sorted_log_simulator_states_chunk_final_states)
         .zip(transposed_lhs_chains.into_iter())
         .zip(transposed_rhs_chains.into_iter())

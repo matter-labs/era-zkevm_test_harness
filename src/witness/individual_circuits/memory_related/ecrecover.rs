@@ -1,34 +1,36 @@
 use super::*;
-use crate::witness::artifacts::{
-    DemuxedLogQueries, ImplicitMemoryArtifacts, LogQueueStates,
-};
+use crate::witness::artifacts::{DemuxedLogQueries, ImplicitMemoryArtifacts, LogQueueStates};
+use crate::witness::aux_data_structs::one_per_circuit_accumulator::LastPerCircuitAccumulator;
+use crate::witness::aux_data_structs::MemoryQueuePerCircuitSimulator;
 use crate::zk_evm::aux_structures::LogQuery as LogQuery_;
 use crate::zk_evm::zk_evm_abstractions::precompiles::ecrecover::ECRecoverRoundWitness;
 use crate::zkevm_circuits::base_structures::log_query::*;
 use crate::zkevm_circuits::ecrecover::*;
 use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
-use circuit_definitions::encodings::*;
 use circuit_definitions::encodings::memory_query::MemoryQueueState;
-use crate::witness::aux_data_structs::MemoryQueuePerCircuitSimulator;
-use crate::witness::aux_data_structs::one_per_circuit_accumulator::LastPerCircuitAccumulator;
+use circuit_definitions::encodings::*;
 
-pub(crate) fn ecrecover_memory_queries_amount(ecrecover_witnesses: &Vec<(u32, LogQuery_, ECRecoverRoundWitness)>) -> usize {
-    ecrecover_witnesses.iter().fold(0, |inner, (_, _, witness)| {
-        inner + witness.reads.len() + witness.writes.len()
-    })
+pub(crate) fn ecrecover_memory_queries_amount(
+    ecrecover_witnesses: &Vec<(u32, LogQuery_, ECRecoverRoundWitness)>,
+) -> usize {
+    ecrecover_witnesses
+        .iter()
+        .fold(0, |inner, (_, _, witness)| {
+            inner + witness.reads.len() + witness.writes.len()
+        })
 }
 
 // we want to simulate splitting of data into many separate instances of the same circuit.
 // So we basically need to reconstruct the FSM state on input/output, and passthrough data.
 // In practice the only difficulty is buffer state, everything else is provided by out-of-circuit VM
 
-pub(crate)  fn ecrecover_decompose_into_per_circuit_witness<
+pub(crate) fn ecrecover_decompose_into_per_circuit_witness<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     amount_of_memory_queries: usize,
     implicit_memory_artifacts: &mut ImplicitMemoryArtifacts<F>,
-    memory_queue_states_accumulator: &LastPerCircuitAccumulator::<MemoryQueueState<F>>,
+    memory_queue_states_accumulator: &LastPerCircuitAccumulator<MemoryQueueState<F>>,
     memory_queue_simulator: &mut MemoryQueuePerCircuitSimulator<F>,
     ecrecover_witnesses: Vec<(u32, LogQuery_, ECRecoverRoundWitness)>,
     ecrecover_queries: Vec<LogQuery_>,
@@ -37,21 +39,19 @@ pub(crate)  fn ecrecover_decompose_into_per_circuit_witness<
     round_function: &R,
 ) -> Vec<EcrecoverCircuitInstanceWitness<F>> {
     assert_eq!(
-        amount_of_memory_queries
-            + implicit_memory_artifacts.memory_queries.len(),
-        memory_queue_states_accumulator.len()
-            + implicit_memory_artifacts.memory_queue_states.len()
+        amount_of_memory_queries + implicit_memory_artifacts.memory_queries.len(),
+        memory_queue_states_accumulator.len() + implicit_memory_artifacts.memory_queue_states.len()
     );
     assert_eq!(
-        amount_of_memory_queries
-            + implicit_memory_artifacts.memory_queries.len(),
+        amount_of_memory_queries + implicit_memory_artifacts.memory_queries.len(),
         memory_queue_simulator.num_items as usize
     );
 
     // split into aux witness, don't mix with the memory
 
     use crate::zk_evm::zk_evm_abstractions::precompiles::ecrecover::ECRecoverRoundWitness;
-    let mut ecrecover_memory_queries = Vec::with_capacity(ecrecover_memory_queries_amount(&ecrecover_witnesses));
+    let mut ecrecover_memory_queries =
+        Vec::with_capacity(ecrecover_memory_queries_amount(&ecrecover_witnesses));
 
     for (_cycle, _query, witness) in ecrecover_witnesses.iter() {
         let ECRecoverRoundWitness {
@@ -94,8 +94,7 @@ pub(crate)  fn ecrecover_decompose_into_per_circuit_witness<
     let mut memory_read_witnesses = vec![];
     let mut starting_request_idx = 0;
 
-    let mut memory_queue_input_state =
-        memory_queue_simulator.take_sponge_like_queue_state();
+    let mut memory_queue_input_state = memory_queue_simulator.take_sponge_like_queue_state();
     let mut current_memory_queue_state = memory_queue_input_state.clone();
 
     for (request_idx, (request, per_request_work)) in precompile_calls
@@ -124,16 +123,13 @@ pub(crate)  fn ecrecover_decompose_into_per_circuit_witness<
             assert!(read_query.rw_flag == false);
             memory_reads_per_request.push(read_query.value);
 
-            implicit_memory_artifacts
-                .memory_queries
-                .push(read);
+            implicit_memory_artifacts.memory_queries.push(read);
             let (_, intermediate_info) =
                 memory_queue_simulator.push_and_output_intermediate_data(read, round_function);
             implicit_memory_artifacts
                 .memory_queue_states
                 .push(intermediate_info);
-            current_memory_queue_state =
-                memory_queue_simulator.take_sponge_like_queue_state();
+            current_memory_queue_state = memory_queue_simulator.take_sponge_like_queue_state();
 
             precompile_request.input_memory_offset += 1;
         }
@@ -144,16 +140,13 @@ pub(crate)  fn ecrecover_decompose_into_per_circuit_witness<
             assert!(write == write_query);
             assert!(write_query.rw_flag == true);
 
-            implicit_memory_artifacts
-                .memory_queries
-                .push(write);
+            implicit_memory_artifacts.memory_queries.push(write);
             let (_, intermediate_info) =
                 memory_queue_simulator.push_and_output_intermediate_data(write, round_function);
             implicit_memory_artifacts
                 .memory_queue_states
                 .push(intermediate_info);
-            current_memory_queue_state =
-                memory_queue_simulator.take_sponge_like_queue_state();
+            current_memory_queue_state = memory_queue_simulator.take_sponge_like_queue_state();
 
             precompile_request.output_memory_offset += 1;
         }
@@ -238,14 +231,11 @@ pub(crate)  fn ecrecover_decompose_into_per_circuit_witness<
     }
 
     assert_eq!(
-        amount_of_memory_queries
-            + implicit_memory_artifacts.memory_queries.len(),
-        memory_queue_states_accumulator.len()
-            + implicit_memory_artifacts.memory_queue_states.len()
+        amount_of_memory_queries + implicit_memory_artifacts.memory_queries.len(),
+        memory_queue_states_accumulator.len() + implicit_memory_artifacts.memory_queue_states.len()
     );
     assert_eq!(
-        amount_of_memory_queries
-            + implicit_memory_artifacts.memory_queries.len(),
+        amount_of_memory_queries + implicit_memory_artifacts.memory_queries.len(),
         memory_queue_simulator.num_items as usize
     );
 

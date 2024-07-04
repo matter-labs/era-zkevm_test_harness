@@ -74,7 +74,7 @@ pub struct WitnessTracer {
     pub current_cycle_counter: u32,
     pub cycle_counter_of_last_snapshot: u32,
     pub memory_queries: Vec<(u32, MemoryQuery)>, // flattened memory queries, with cycle indicators
-    pub storage_queries: PerCircuitAccumulatorSparse<(u32, LogQuery)>,   // storage read queries with cycle indicators
+    pub storage_queries: PerCircuitAccumulatorSparse<(u32, LogQuery)>, // storage read queries with cycle indicators
     pub cold_warm_refunds_logs: PerCircuitAccumulatorSparse<(u32, LogQuery, u32)>,
     pub pubdata_cost_logs: PerCircuitAccumulatorSparse<(u32, LogQuery, PubdataCost)>,
     pub prepared_decommittment_queries: Vec<(u32, DecommittmentQuery)>,
@@ -222,8 +222,6 @@ use crate::zk_evm::vm_state::VmLocalState;
 use crate::zk_evm::witness_trace::VmWitnessTracer;
 
 use crate::witness::aux_data_structs::per_circuit_accumulator::PerCircuitAccumulatorSparse;
-
-
 
 impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
     fn start_new_execution_cycle(&mut self, current_state: &VmLocalState) {

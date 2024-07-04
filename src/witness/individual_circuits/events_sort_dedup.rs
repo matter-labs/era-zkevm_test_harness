@@ -11,7 +11,7 @@ use rayon::prelude::*;
 use smallvec::SmallVec;
 use std::cmp::Ordering;
 
-pub(crate)  fn compute_events_dedup_and_sort<
+pub(crate) fn compute_events_dedup_and_sort<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
@@ -33,7 +33,8 @@ pub(crate)  fn compute_events_dedup_and_sort<
     // first we sort the storage log (only storage now) by composite key
 
     let total_amount_of_queries = unsorted_queries.len();
-    let amount_of_circuits = (total_amount_of_queries + per_circuit_capacity - 1) / per_circuit_capacity;
+    let amount_of_circuits =
+        (total_amount_of_queries + per_circuit_capacity - 1) / per_circuit_capacity;
 
     let mut sorted_queries: Vec<_> = unsorted_queries;
 
@@ -48,19 +49,23 @@ pub(crate)  fn compute_events_dedup_and_sort<
         r @ _ => r,
     });
 
-    let mut intermediate_sorted_simulator = LogQueueSimulator::<F>::with_capacity(total_amount_of_queries);
+    let mut intermediate_sorted_simulator =
+        LogQueueSimulator::<F>::with_capacity(total_amount_of_queries);
     let mut sorted_log_simulator_states_chunk_final_states = Vec::with_capacity(amount_of_circuits);
     for (i, el) in sorted_queries.iter().enumerate() {
         let (_, intermediate_state) = intermediate_sorted_simulator
             .push_and_output_intermediate_data(el.clone(), round_function);
 
-        if (i % per_circuit_capacity == per_circuit_capacity - 1) || i == total_amount_of_queries - 1 {
+        if (i % per_circuit_capacity == per_circuit_capacity - 1)
+            || i == total_amount_of_queries - 1
+        {
             sorted_log_simulator_states_chunk_final_states.push(intermediate_state);
         }
     }
 
-    let unsorted_log_simulator_states_chunk_final_states: Vec<_> = unsorted_queue.states_accumulator.into_circuits();
-    
+    let unsorted_log_simulator_states_chunk_final_states: Vec<_> =
+        unsorted_queue.states_accumulator.into_circuits();
+
     let intermediate_sorted_simulator_final_state =
         take_queue_state_from_simulator(&intermediate_sorted_simulator);
     let sorted_queries = sort_and_dedup_events_log(sorted_queries);
@@ -131,8 +136,7 @@ pub(crate)  fn compute_events_dedup_and_sort<
     assert!(unsorted_log_simulator_states_chunk_final_states.len() > 0);
     assert_eq!(
         unsorted_log_simulator_states_chunk_final_states.len(),
-        sorted_log_simulator_states_chunk_final_states
-            .len()
+        sorted_log_simulator_states_chunk_final_states.len()
     );
     assert_eq!(
         unsorted_log_simulator_states_chunk_final_states.len(),
@@ -162,7 +166,8 @@ pub(crate)  fn compute_events_dedup_and_sort<
             .len()
     );
 
-    let it = unsorted_log_simulator_states_chunk_final_states.into_iter()
+    let it = unsorted_log_simulator_states_chunk_final_states
+        .into_iter()
         .zip(sorted_log_simulator_states_chunk_final_states)
         .zip(transposed_lhs_chains.into_iter())
         .zip(transposed_rhs_chains.into_iter())

@@ -1,6 +1,7 @@
 use crate::boojum::field::SmallField;
 use crate::boojum::gadgets::queue::QueueStateWitness;
 use crate::zk_evm::aux_structures::{DecommittmentQuery, LogQuery, MemoryQuery};
+use crate::zkevm_circuits::base_structures::vm_state::FULL_SPONGE_QUEUE_STATE_WIDTH;
 use crate::zkevm_circuits::code_unpacker_sha256::input::CodeDecommitterCircuitInstanceWitness;
 use crate::zkevm_circuits::ecrecover::EcrecoverCircuitInstanceWitness;
 use crate::zkevm_circuits::keccak256_round_function::input::Keccak256RoundFunctionCircuitInstanceWitness;
@@ -9,7 +10,6 @@ use crate::zkevm_circuits::log_sorter::input::EventsDeduplicatorInstanceWitness;
 use crate::zkevm_circuits::sha256_round_function::input::Sha256RoundFunctionCircuitInstanceWitness;
 use crate::zkevm_circuits::sort_decommittment_requests::input::CodeDecommittmentsDeduplicatorInstanceWitness;
 use crate::zkevm_circuits::storage_validity_by_grand_product::input::StorageDeduplicatorInstanceWitness;
-use crate::zkevm_circuits::base_structures::vm_state::FULL_SPONGE_QUEUE_STATE_WIDTH;
 use circuit_definitions::encodings::decommittment_request::DecommittmentQueueState;
 use circuit_definitions::encodings::memory_query::MemoryQueueState;
 use circuit_definitions::encodings::*;
@@ -22,16 +22,16 @@ use crate::witness::aux_data_structs::one_per_circuit_accumulator::CircuitsEntry
 use crate::witness::aux_data_structs::per_circuit_accumulator::PerCircuitAccumulatorSparse;
 
 use crate::zk_evm::zkevm_opcode_defs::system_params::{
-    EVENT_AUX_BYTE, L1_MESSAGE_AUX_BYTE, PRECOMPILE_AUX_BYTE, STORAGE_AUX_BYTE, TRANSIENT_STORAGE_AUX_BYTE
+    EVENT_AUX_BYTE, L1_MESSAGE_AUX_BYTE, PRECOMPILE_AUX_BYTE, STORAGE_AUX_BYTE,
+    TRANSIENT_STORAGE_AUX_BYTE,
 };
 
 use crate::zk_evm::zkevm_opcode_defs::system_params::{
     ECRECOVER_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
     KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
+    SECP256R1_VERIFY_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
     SHA256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS,
-    SECP256R1_VERIFY_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS
 };
-
 
 #[derive(Derivative)]
 #[derivative(Default)]
@@ -98,12 +98,14 @@ impl DemuxedLogQueries {
 
 pub struct DecommitmentArtifactsForMainVM<F: SmallField> {
     pub prepared_decommittment_queries: PerCircuitAccumulatorSparse<(u32, DecommittmentQuery)>,
-    pub decommittment_queue_entry_states: CircuitsEntryAccumulatorSparse<(u32, QueueStateWitness<F, FULL_SPONGE_QUEUE_STATE_WIDTH>)>,
+    pub decommittment_queue_entry_states:
+        CircuitsEntryAccumulatorSparse<(u32, QueueStateWitness<F, FULL_SPONGE_QUEUE_STATE_WIDTH>)>,
 }
 
 pub struct MemoryArtifacts<F: SmallField> {
     pub memory_queries: Vec<(u32, MemoryQuery)>,
-    pub memory_queue_entry_states: CircuitsEntryAccumulatorSparse<(u32, QueueStateWitness<F, FULL_SPONGE_QUEUE_STATE_WIDTH>)>,
+    pub memory_queue_entry_states:
+        CircuitsEntryAccumulatorSparse<(u32, QueueStateWitness<F, FULL_SPONGE_QUEUE_STATE_WIDTH>)>,
 }
 
 #[derive(Derivative)]
@@ -150,18 +152,21 @@ pub struct LogQueueStates<F: SmallField> {
     pub simulator: LogQueueSimulator<F>,
 }
 
-impl<F: SmallField> LogQueueStates<F>  {
+impl<F: SmallField> LogQueueStates<F> {
     pub fn new(cycles_per_circuit: usize) -> Self {
         Self {
             states_accumulator: LastPerCircuitAccumulator::new(cycles_per_circuit),
-            simulator: LogQueueSimulator::<F>::empty()
+            simulator: LogQueueSimulator::<F>::empty(),
         }
     }
 
     pub fn with_flat_capacity(cycles_per_circuit: usize, flat_capacity: usize) -> Self {
         Self {
-            states_accumulator: LastPerCircuitAccumulator::with_flat_capacity(cycles_per_circuit, flat_capacity),
-            simulator: LogQueueSimulator::<F>::with_capacity(flat_capacity)
+            states_accumulator: LastPerCircuitAccumulator::with_flat_capacity(
+                cycles_per_circuit,
+                flat_capacity,
+            ),
+            simulator: LogQueueSimulator::<F>::with_capacity(flat_capacity),
         }
     }
 }

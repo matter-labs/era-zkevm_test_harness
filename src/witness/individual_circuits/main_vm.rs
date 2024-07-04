@@ -1,46 +1,59 @@
 use std::sync::Arc;
 
-use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
-use circuit_definitions::boojum::gadgets::queue::{QueueState, QueueStateWitness, QueueTailStateWitness};
-use circuit_definitions::boojum::gadgets::traits::allocatable::CSAllocatable;
-use circuit_definitions::boojum::implementations::poseidon2::Poseidon2Goldilocks;
-use circuit_definitions::boojum::field::goldilocks::GoldilocksField;
-use circuit_definitions::circuit_definitions::base_layer::{VMMainCircuit, ZkSyncBaseLayerCircuit};
-use circuit_definitions::encodings::callstack_entry::{CallstackSimulatorState, ExtendedCallstackEntry};
-use circuit_definitions::encodings::decommittment_request::DecommittmentQueueState;
-use circuit_definitions::encodings::memory_query::MemoryQueueState;
-use circuit_definitions::encodings::recursion_request::{RecursionQueueSimulator, RecursionRequest};
-use circuit_definitions::zk_evm::aux_structures::{DecommittmentQuery, PubdataCost, LogQuery};
-use circuit_definitions::zk_evm::vm_state::CallStackEntry;
-use circuit_definitions::zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
-use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
-use circuit_definitions::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
-use circuit_sequencer_api::toolset::GeometryConfig;
-use circuit_definitions::boojum::field::Field;
-use circuit_definitions::boojum::field::U64Representable;
-use crossbeam::atomic::AtomicCell;
 use crate::snapshot_prof;
 use crate::witness::artifacts::{DecommitmentArtifactsForMainVM, MemoryArtifacts};
 use crate::witness::aux_data_structs::one_per_circuit_accumulator::CircuitsEntryAccumulatorSparse;
 use crate::witness::aux_data_structs::per_circuit_accumulator::PerCircuitAccumulatorSparse;
+use crate::witness::individual_circuits::SmallField;
 use crate::witness::oracle::StorageLogDetailedState;
-use crate::witness::postprocessing::{CsForWitnessGeneration, FirstAndLastCircuitWitness, ClosedFormInputField};
+use crate::witness::postprocessing::{
+    ClosedFormInputField, CsForWitnessGeneration, FirstAndLastCircuitWitness,
+};
 use crate::witness::tracer::vm_snapshot::VmSnapshot;
+use crate::zk_evm::aux_structures::MemoryQuery;
+use crate::zk_evm::vm_state::VmLocalState;
 use crate::zkevm_circuits::base_structures::vm_state::{
     GlobalContextWitness, FULL_SPONGE_QUEUE_STATE_WIDTH, QUEUE_STATE_WIDTH,
 };
-use crate::zk_evm::aux_structures::MemoryQuery;
-use crate::zk_evm::vm_state::VmLocalState;
-use crate::witness::individual_circuits::SmallField;
+use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
+use circuit_definitions::boojum::field::goldilocks::GoldilocksField;
+use circuit_definitions::boojum::field::Field;
+use circuit_definitions::boojum::field::U64Representable;
+use circuit_definitions::boojum::gadgets::queue::{
+    QueueState, QueueStateWitness, QueueTailStateWitness,
+};
+use circuit_definitions::boojum::gadgets::traits::allocatable::CSAllocatable;
+use circuit_definitions::boojum::implementations::poseidon2::Poseidon2Goldilocks;
+use circuit_definitions::circuit_definitions::base_layer::{VMMainCircuit, ZkSyncBaseLayerCircuit};
+use circuit_definitions::encodings::callstack_entry::{
+    CallstackSimulatorState, ExtendedCallstackEntry,
+};
+use circuit_definitions::encodings::decommittment_request::DecommittmentQueueState;
+use circuit_definitions::encodings::memory_query::MemoryQueueState;
+use circuit_definitions::encodings::recursion_request::{
+    RecursionQueueSimulator, RecursionRequest,
+};
+use circuit_definitions::zk_evm::aux_structures::{DecommittmentQuery, LogQuery, PubdataCost};
+use circuit_definitions::zk_evm::vm_state::CallStackEntry;
+use circuit_definitions::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
+use circuit_definitions::zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
+use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
+use circuit_sequencer_api::toolset::GeometryConfig;
+use crossbeam::atomic::AtomicCell;
 use derivative::Derivative;
 
 type Cycle = u32;
 
 pub(crate) struct CallstackSimulationResult<F: SmallField> {
-    pub callstack_sponge_encoding_ranges: CircuitsEntryAccumulatorSparse<(Cycle, [F; FULL_SPONGE_QUEUE_STATE_WIDTH])>,
-    pub callstack_values_witnesses: PerCircuitAccumulatorSparse<(Cycle, (ExtendedCallstackEntry<F>, CallstackSimulatorState<F>))>,
+    pub callstack_sponge_encoding_ranges:
+        CircuitsEntryAccumulatorSparse<(Cycle, [F; FULL_SPONGE_QUEUE_STATE_WIDTH])>,
+    pub callstack_values_witnesses: PerCircuitAccumulatorSparse<(
+        Cycle,
+        (ExtendedCallstackEntry<F>, CallstackSimulatorState<F>),
+    )>,
     pub rollback_queue_head_segments: PerCircuitAccumulatorSparse<(Cycle, [F; QUEUE_STATE_WIDTH])>,
-    pub storage_log_states_for_entry: CircuitsEntryAccumulatorSparse<(Cycle, StorageLogDetailedState<F>)>
+    pub storage_log_states_for_entry:
+        CircuitsEntryAccumulatorSparse<(Cycle, StorageLogDetailedState<F>)>,
 }
 
 #[derive(Derivative)]
@@ -132,7 +145,7 @@ fn repack_input_for_main_vm(
 
     let DecommitmentArtifactsForMainVM {
         decommittment_queue_entry_states,
-        prepared_decommittment_queries
+        prepared_decommittment_queries,
     } = decommitment_artifacts_for_main_vm;
 
     let CallstackSimulationResult {
@@ -149,17 +162,17 @@ fn repack_input_for_main_vm(
     let memory_write_witnesses = PerCircuitAccumulatorSparse::from_iter(
         geometry.cycles_per_vm_snapshot as usize,
         memory_queries
-        .iter()
-        .filter(|(_, query)| query.rw_flag)
-        .copied()
+            .iter()
+            .filter(|(_, query)| query.rw_flag)
+            .copied(),
     );
 
     let memory_read_witnesses = PerCircuitAccumulatorSparse::from_iter(
         geometry.cycles_per_vm_snapshot as usize,
         memory_queries
-        .iter()
-        .filter(|(_, query)| !query.rw_flag)
-        .copied()
+            .iter()
+            .filter(|(_, query)| !query.rw_flag)
+            .copied(),
     );
     drop(memory_queries);
 
@@ -168,34 +181,61 @@ fn repack_input_for_main_vm(
     // prepare some inputs for MainVM circuits
 
     let last_memory_queue_state = memory_queue_entry_states.last().1.clone();
-    let mut memory_queue_entry_states_it = memory_queue_entry_states.into_circuits(amount_of_circuits).into_iter();
+    let mut memory_queue_entry_states_it = memory_queue_entry_states
+        .into_circuits(amount_of_circuits)
+        .into_iter();
 
     let last_decommittment_queue_state = decommittment_queue_entry_states.last().1.clone();
-    let mut decommittment_queue_entry_states = decommittment_queue_entry_states.into_circuits(amount_of_circuits).into_iter();
+    let mut decommittment_queue_entry_states = decommittment_queue_entry_states
+        .into_circuits(amount_of_circuits)
+        .into_iter();
 
     let last_storage_log_state = storage_log_states_for_entry.last().1;
-    let mut storage_log_states_for_entry_it = storage_log_states_for_entry.into_circuits(amount_of_circuits).into_iter();
+    let mut storage_log_states_for_entry_it = storage_log_states_for_entry
+        .into_circuits(amount_of_circuits)
+        .into_iter();
 
     let last_callstack_state_for_entry = [GoldilocksField::ZERO; FULL_SPONGE_QUEUE_STATE_WIDTH]; // always an empty one
-    let mut callstack_sponge_states_it = callstack_sponge_encoding_ranges.into_circuits(amount_of_circuits).into_iter(); 
+    let mut callstack_sponge_states_it = callstack_sponge_encoding_ranges
+        .into_circuits(amount_of_circuits)
+        .into_iter();
 
-
-    let mut memory_write_witnesses_it = memory_write_witnesses.into_circuits(amount_of_circuits).into_iter();
-    let mut memory_read_witnesses_it = memory_read_witnesses.into_circuits(amount_of_circuits).into_iter();
-    let mut storage_queries_it = storage_queries.into_circuits(amount_of_circuits).into_iter();
-    let mut cold_warm_refunds_logs_it = cold_warm_refunds_logs.into_circuits(amount_of_circuits).into_iter();
-    let mut pubdata_cost_logs_it = pubdata_cost_logs.into_circuits(amount_of_circuits).into_iter();
+    let mut memory_write_witnesses_it = memory_write_witnesses
+        .into_circuits(amount_of_circuits)
+        .into_iter();
+    let mut memory_read_witnesses_it = memory_read_witnesses
+        .into_circuits(amount_of_circuits)
+        .into_iter();
+    let mut storage_queries_it = storage_queries
+        .into_circuits(amount_of_circuits)
+        .into_iter();
+    let mut cold_warm_refunds_logs_it = cold_warm_refunds_logs
+        .into_circuits(amount_of_circuits)
+        .into_iter();
+    let mut pubdata_cost_logs_it = pubdata_cost_logs
+        .into_circuits(amount_of_circuits)
+        .into_iter();
     let mut flat_new_frames_history_it = PerCircuitAccumulatorSparse::from_iter(
         geometry.cycles_per_vm_snapshot as usize,
-        flat_new_frames_history.into_iter()
-        ).into_circuits(amount_of_circuits).into_iter();
+        flat_new_frames_history.into_iter(),
+    )
+    .into_circuits(amount_of_circuits)
+    .into_iter();
     let mut rollback_queue_tails_for_frames_it = PerCircuitAccumulatorSparse::from_iter(
         geometry.cycles_per_vm_snapshot as usize,
-        log_rollback_tails_for_frames.into_iter()
-        ).into_circuits(amount_of_circuits).into_iter();
-    let mut rollback_queue_head_segments_it = rollback_queue_head_segments.into_circuits(amount_of_circuits).into_iter();
-    let mut callstack_values_witnesses_it = callstack_values_witnesses.into_circuits(amount_of_circuits).into_iter();
-    let mut prepared_decommittment_queries_it = prepared_decommittment_queries.into_circuits(amount_of_circuits).into_iter();
+        log_rollback_tails_for_frames.into_iter(),
+    )
+    .into_circuits(amount_of_circuits)
+    .into_iter();
+    let mut rollback_queue_head_segments_it = rollback_queue_head_segments
+        .into_circuits(amount_of_circuits)
+        .into_iter();
+    let mut callstack_values_witnesses_it = callstack_values_witnesses
+        .into_circuits(amount_of_circuits)
+        .into_iter();
+    let mut prepared_decommittment_queries_it = prepared_decommittment_queries
+        .into_circuits(amount_of_circuits)
+        .into_iter();
 
     snapshot_prof("Repack: prepared iters");
 
@@ -207,8 +247,10 @@ fn repack_input_for_main_vm(
         }
 
         let memory_queue_states_for_entry = memory_queue_entry_states_it.next().unwrap().1;
-        let decommittment_queue_states_for_entry = decommittment_queue_entry_states.next().unwrap().1;
-        let storage_log_queue_detailed_state_for_entry = storage_log_states_for_entry_it.next().unwrap().1;
+        let decommittment_queue_states_for_entry =
+            decommittment_queue_entry_states.next().unwrap().1;
+        let storage_log_queue_detailed_state_for_entry =
+            storage_log_states_for_entry_it.next().unwrap().1;
         let callstack_state_for_entry = callstack_sponge_states_it.next().unwrap().1;
 
         let memory_write_witnesses = memory_write_witnesses_it.next().unwrap();
@@ -217,7 +259,8 @@ fn repack_input_for_main_vm(
         let cold_warm_refund_logs = cold_warm_refunds_logs_it.next().unwrap();
         let pubdata_cost_logs = pubdata_cost_logs_it.next().unwrap();
         let decommittment_requests_witness = prepared_decommittment_queries_it.next().unwrap();
-        let rollback_queue_initial_tails_for_new_frames = rollback_queue_tails_for_frames_it.next().unwrap();
+        let rollback_queue_initial_tails_for_new_frames =
+            rollback_queue_tails_for_frames_it.next().unwrap();
         let callstack_values_witnesses = callstack_values_witnesses_it.next().unwrap();
         let rollback_queue_head_segments = rollback_queue_head_segments_it.next().unwrap();
         let callstack_new_frames_witnesses = flat_new_frames_history_it.next().unwrap();
@@ -240,7 +283,6 @@ fn repack_input_for_main_vm(
         };
 
         main_vm_inputs.push(main_vm_input);
-
     }
 
     // special pass for last one
@@ -275,10 +317,12 @@ fn repack_input_for_main_vm(
     main_vm_inputs
 }
 
-use crate::zkevm_circuits::fsm_input_output::circuit_inputs::main_vm::VmCircuitWitness;
 use crate::witness::postprocessing::observable_witness::VmObservableWitness;
+use crate::zkevm_circuits::fsm_input_output::circuit_inputs::main_vm::VmCircuitWitness;
 
-use super::{simulate_public_input_value_from_witness, vm_instance_witness_to_circuit_formal_input};
+use super::{
+    simulate_public_input_value_from_witness, vm_instance_witness_to_circuit_formal_input,
+};
 
 pub(crate) fn process_main_vm<
     CB: FnMut(ZkSyncBaseLayerCircuit),

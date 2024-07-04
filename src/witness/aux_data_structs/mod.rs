@@ -20,11 +20,12 @@ impl<T, U> TupleFirst for (u32, T, U) {
 }
 
 // TODO cleanup
+use crate::witness::aux_data_structs::per_circuit_accumulator::PerCircuitAccumulator;
 use circuit_definitions::encodings::memory_query::QueueWitness;
 use circuit_definitions::encodings::memory_query::{CustomMemoryQueueSimulator, MemoryQueueState};
-use crate::witness::aux_data_structs::per_circuit_accumulator::PerCircuitAccumulator;
 
-pub type MemoryQueuePerCircuitSimulator<F> = CustomMemoryQueueSimulator<F, PerCircuitAccumulator::<QueueWitness<F>>>;
+pub type MemoryQueuePerCircuitSimulator<F> =
+    CustomMemoryQueueSimulator<F, PerCircuitAccumulator<QueueWitness<F>>>;
 
-pub(crate) mod per_circuit_accumulator;
 pub(crate) mod one_per_circuit_accumulator;
+pub(crate) mod per_circuit_accumulator;

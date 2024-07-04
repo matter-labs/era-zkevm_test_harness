@@ -14,10 +14,10 @@ use std::collections::VecDeque;
 
 pub(crate) mod data_hasher_and_merklizer;
 pub(crate) mod eip4844_repack;
+pub mod events_sort_dedup;
 pub(crate) mod log_demux;
+pub(crate) mod main_vm;
+pub(crate) mod memory_related;
 pub(crate) mod storage_application;
 pub(crate) mod storage_sort_dedup;
 pub(crate) mod transient_storage_sorter;
-pub mod events_sort_dedup;
-pub(crate) mod memory_related;
-pub(crate) mod main_vm;
