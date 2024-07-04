@@ -37,7 +37,7 @@ pub(crate)  fn compute_ram_circuit_snapshots<
     CB: FnMut(ZkSyncBaseLayerCircuit),
     QSCB: FnMut(u64, RecursionQueueSimulator<Field>, Vec<ClosedFormInputCompactFormWitness<Field>>),
 >(
-    memory_artifacts: &MemoryArtifacts<Field>,
+    memory_queries: &Vec<(u32, MemoryQuery)>,
     implicit_memory_artifacts: ImplicitMemoryArtifacts<Field>,
     mut memory_queue_states_accumulator: LastPerCircuitAccumulator::<MemoryQueueState<Field>>,
     memory_queue_simulator: MemoryQueuePerCircuitSimulator<Field>,
@@ -53,7 +53,7 @@ pub(crate)  fn compute_ram_circuit_snapshots<
     Vec<ClosedFormInputCompactFormWitness<Field>>,
 ) {
     assert_eq!(
-        memory_artifacts.memory_queries.len(),
+        memory_queries.len(),
         memory_queue_states_accumulator.len()
     );
 
@@ -63,7 +63,7 @@ pub(crate)  fn compute_ram_circuit_snapshots<
     );
 
     // including additional queries from precompiles
-    let total_amount_of_queries = memory_artifacts.memory_queries.len()
+    let total_amount_of_queries = memory_queries.len()
         + implicit_memory_artifacts.memory_queries.len();
 
     assert!(
@@ -93,12 +93,11 @@ pub(crate)  fn compute_ram_circuit_snapshots<
     let mut sorted_memory_queries_simulator = MemoryQueuePerCircuitSimulator::using_container(
         PerCircuitAccumulator::with_flat_capacity(
             per_circuit_capacity,
-            memory_artifacts.memory_queries.len() + implicit_memory_artifacts.memory_queries.len()
+            memory_queries.len() + implicit_memory_artifacts.memory_queries.len()
         )
     );
     {
-        let mut sorted_memory_queries_accumulated: Vec<&MemoryQuery> = memory_artifacts
-            .memory_queries
+        let mut sorted_memory_queries_accumulated: Vec<&MemoryQuery> = memory_queries
             .iter().map(|(_, query)| query).chain(implicit_memory_artifacts.memory_queries.iter())
             .collect();
 

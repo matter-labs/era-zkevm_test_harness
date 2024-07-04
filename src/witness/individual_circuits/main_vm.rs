@@ -20,7 +20,7 @@ use circuit_definitions::boojum::field::Field;
 use circuit_definitions::boojum::field::U64Representable;
 use crossbeam::atomic::AtomicCell;
 use crate::snapshot_prof;
-use crate::witness::artifacts::MemoryArtifacts;
+use crate::witness::artifacts::{DecommitmentArtifactsForMainVM, MemoryArtifacts};
 use crate::witness::aux_data_structs::one_per_circuit_accumulator::CircuitsEntryAccumulatorSparse;
 use crate::witness::aux_data_structs::per_circuit_accumulator::PerCircuitAccumulatorSparse;
 use crate::witness::oracle::StorageLogDetailedState;
@@ -116,7 +116,8 @@ struct MainVmSimulationInput {
 fn repack_input_for_main_vm(
     geometry: &GeometryConfig,
     vm_snapshots: &Vec<VmSnapshot>,
-    memory_artifacts: MemoryArtifacts<GoldilocksField>,
+    memory_artifacts_for_main_vm: MemoryArtifacts<GoldilocksField>,
+    decommitment_artifacts_for_main_vm: DecommitmentArtifactsForMainVM<GoldilocksField>,
     callstack_simulation_result: CallstackSimulationResult<GoldilocksField>,
     storage_queries: PerCircuitAccumulatorSparse<(Cycle, LogQuery)>,
     cold_warm_refunds_logs: PerCircuitAccumulatorSparse<(Cycle, LogQuery, u32)>,
@@ -125,11 +126,14 @@ fn repack_input_for_main_vm(
     flat_new_frames_history: Vec<(Cycle, CallStackEntry)>,
 ) -> Vec<MainVmSimulationInput> {
     let MemoryArtifacts {
-        decommittment_queue_entry_states,
-        prepared_decommittment_queries_per_instance,
         memory_queue_entry_states,
         memory_queries,
-    } = memory_artifacts;
+    } = memory_artifacts_for_main_vm;
+
+    let DecommitmentArtifactsForMainVM {
+        decommittment_queue_entry_states,
+        prepared_decommittment_queries
+    } = decommitment_artifacts_for_main_vm;
 
     let CallstackSimulationResult {
         callstack_sponge_encoding_ranges,
@@ -191,7 +195,7 @@ fn repack_input_for_main_vm(
         ).into_circuits(amount_of_circuits).into_iter();
     let mut rollback_queue_head_segments_it = rollback_queue_head_segments.into_circuits(amount_of_circuits).into_iter();
     let mut callstack_values_witnesses_it = callstack_values_witnesses.into_circuits(amount_of_circuits).into_iter();
-    let mut prepared_decommittment_queries_per_instance_it = prepared_decommittment_queries_per_instance.into_circuits(amount_of_circuits).into_iter();
+    let mut prepared_decommittment_queries_it = prepared_decommittment_queries.into_circuits(amount_of_circuits).into_iter();
 
     snapshot_prof("Repack: prepared iters");
 
@@ -212,7 +216,7 @@ fn repack_input_for_main_vm(
         let storage_queries_witnesses = storage_queries_it.next().unwrap();
         let cold_warm_refund_logs = cold_warm_refunds_logs_it.next().unwrap();
         let pubdata_cost_logs = pubdata_cost_logs_it.next().unwrap();
-        let decommittment_requests_witness = prepared_decommittment_queries_per_instance_it.next().unwrap();
+        let decommittment_requests_witness = prepared_decommittment_queries_it.next().unwrap();
         let rollback_queue_initial_tails_for_new_frames = rollback_queue_tails_for_frames_it.next().unwrap();
         let callstack_values_witnesses = callstack_values_witnesses_it.next().unwrap();
         let rollback_queue_head_segments = rollback_queue_head_segments_it.next().unwrap();
@@ -286,7 +290,8 @@ pub(crate) fn process_main_vm<
 >(
     geometry: &GeometryConfig,
     in_circuit_global_context: GlobalContextWitness<GoldilocksField>,
-    memory_artifacts: MemoryArtifacts<GoldilocksField>,
+    memory_artifacts_for_main_vm: MemoryArtifacts<GoldilocksField>,
+    decommitment_artifacts_for_main_vm: DecommitmentArtifactsForMainVM<GoldilocksField>,
     storage_queries: PerCircuitAccumulatorSparse<(Cycle, LogQuery)>,
     cold_warm_refunds_logs: PerCircuitAccumulatorSparse<(Cycle, LogQuery, u32)>,
     pubdata_cost_logs: PerCircuitAccumulatorSparse<(Cycle, LogQuery, PubdataCost)>,
@@ -376,7 +381,8 @@ pub(crate) fn process_main_vm<
     let main_vm_inputs = repack_input_for_main_vm(
         geometry,
         &vm_snapshots,
-        memory_artifacts,
+        memory_artifacts_for_main_vm,
+        decommitment_artifacts_for_main_vm,
         callstack_simulation_result,
         storage_queries,
         cold_warm_refunds_logs,

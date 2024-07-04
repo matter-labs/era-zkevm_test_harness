@@ -1,6 +1,6 @@
 use super::*;
 use crate::witness::artifacts::{
-    DemuxedLogQueries, ImplicitMemoryArtifacts, LogQueueStates, MemoryArtifacts,
+    DemuxedLogQueries, ImplicitMemoryArtifacts, LogQueueStates,
 };
 use crate::zk_evm::aux_structures::LogQuery as LogQuery_;
 use crate::zk_evm::zk_evm_abstractions::precompiles::keccak256::Keccak256RoundWitness;
@@ -57,7 +57,7 @@ pub(crate) fn keccak256_decompose_into_per_circuit_witness<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
-    memory_artifacts: &MemoryArtifacts<F>,
+    amount_of_memory_queries: usize,
     implicit_memory_artifacts: &mut ImplicitMemoryArtifacts<F>,
     memory_queue_states_accumulator: &LastPerCircuitAccumulator::<MemoryQueueState<F>>,
     memory_queue_simulator: &mut MemoryQueuePerCircuitSimulator<F>,
@@ -68,13 +68,13 @@ pub(crate) fn keccak256_decompose_into_per_circuit_witness<
     round_function: &R,
 ) -> Vec<Keccak256RoundFunctionCircuitInstanceWitness<F>> {
     assert_eq!(
-        memory_artifacts.memory_queries.len()
+        amount_of_memory_queries
             + implicit_memory_artifacts.memory_queries.len(),
         memory_queue_states_accumulator.len()
             + implicit_memory_artifacts.memory_queue_states.len()
     );
     assert_eq!(
-        memory_artifacts.memory_queries.len()
+        amount_of_memory_queries
             + implicit_memory_artifacts.memory_queries.len(),
         memory_queue_simulator.num_items as usize
     );
@@ -492,13 +492,13 @@ pub(crate) fn keccak256_decompose_into_per_circuit_witness<
     }
 
     assert_eq!(
-        memory_artifacts.memory_queries.len()
+        amount_of_memory_queries
             + implicit_memory_artifacts.memory_queries.len(),
         memory_queue_states_accumulator.len()
             + implicit_memory_artifacts.memory_queue_states.len()
     );
     assert_eq!(
-        memory_artifacts.memory_queries.len()
+        amount_of_memory_queries
             + implicit_memory_artifacts.memory_queries.len(),
         memory_queue_simulator.num_items as usize
     );

@@ -96,14 +96,14 @@ impl DemuxedLogQueries {
     }
 }
 
-pub struct MemoryArtifacts<F: SmallField> {
-    //
-    pub memory_queries: Vec<(u32, MemoryQuery)>,
-    // TODO docs
-    pub memory_queue_entry_states: CircuitsEntryAccumulatorSparse<(u32, QueueStateWitness<F, FULL_SPONGE_QUEUE_STATE_WIDTH>)>,
-    // decommittment queue
-    pub prepared_decommittment_queries_per_instance: PerCircuitAccumulatorSparse<(u32, DecommittmentQuery)>,
+pub struct DecommitmentArtifactsForMainVM<F: SmallField> {
+    pub prepared_decommittment_queries: PerCircuitAccumulatorSparse<(u32, DecommittmentQuery)>,
     pub decommittment_queue_entry_states: CircuitsEntryAccumulatorSparse<(u32, QueueStateWitness<F, FULL_SPONGE_QUEUE_STATE_WIDTH>)>,
+}
+
+pub struct MemoryArtifacts<F: SmallField> {
+    pub memory_queries: Vec<(u32, MemoryQuery)>,
+    pub memory_queue_entry_states: CircuitsEntryAccumulatorSparse<(u32, QueueStateWitness<F, FULL_SPONGE_QUEUE_STATE_WIDTH>)>,
 }
 
 #[derive(Derivative)]

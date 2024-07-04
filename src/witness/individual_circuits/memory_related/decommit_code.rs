@@ -6,7 +6,7 @@ use crate::zk_evm::ethereum_types::U256;
 use crate::zkevm_circuits::base_structures::decommit_query::DecommitQueryWitness;
 use crate::zkevm_circuits::base_structures::decommit_query::DECOMMIT_QUERY_PACKED_WIDTH;
 use crate::zkevm_circuits::code_unpacker_sha256::input::*;
-use artifacts::{ImplicitMemoryArtifacts, MemoryArtifacts};
+use artifacts::ImplicitMemoryArtifacts;
 use circuit_definitions::encodings::decommittment_request::normalized_preimage_as_u256;
 use circuit_definitions::encodings::decommittment_request::DecommittmentQueueSimulator;
 use circuit_definitions::encodings::decommittment_request::DecommittmentQueueState;
@@ -34,7 +34,7 @@ pub(crate) fn compute_decommitter_circuit_snapshots<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
-    memory_artifacts: &MemoryArtifacts<F>,
+    amount_of_memory_queries: usize,
     implicit_memory_artifacts: &mut ImplicitMemoryArtifacts<F>,
     memory_queue_states_accumulator: &LastPerCircuitAccumulator::<MemoryQueueState<F>>,
     memory_queue_simulator: &mut MemoryQueuePerCircuitSimulator<F>,
@@ -43,13 +43,13 @@ pub(crate) fn compute_decommitter_circuit_snapshots<
     decommiter_circuit_capacity: usize,
 ) -> Vec<CodeDecommitterCircuitInstanceWitness<F>> {
     assert_eq!(
-        memory_artifacts.memory_queries.len()
+        amount_of_memory_queries
             + implicit_memory_artifacts.memory_queries.len(),
             memory_queue_states_accumulator.len()
             + implicit_memory_artifacts.memory_queue_states.len()
     );
     assert_eq!(
-        memory_artifacts.memory_queries.len()
+        amount_of_memory_queries
             + implicit_memory_artifacts.memory_queries.len(),
         memory_queue_simulator.num_items as usize
     );
@@ -453,13 +453,13 @@ pub(crate) fn compute_decommitter_circuit_snapshots<
     }
 
     assert_eq!(
-        memory_artifacts.memory_queries.len()
+        amount_of_memory_queries
             + implicit_memory_artifacts.memory_queries.len(),
         memory_queue_states_accumulator.len()
             + implicit_memory_artifacts.memory_queue_states.len()
     );
     assert_eq!(
-        memory_artifacts.memory_queries.len()
+        amount_of_memory_queries
             + implicit_memory_artifacts.memory_queries.len(),
         memory_queue_simulator.num_items as usize
     );
