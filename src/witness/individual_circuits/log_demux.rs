@@ -19,13 +19,13 @@ use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use circuit_definitions::{encodings::*, Field, RoundFunction};
 use postprocessing::CsForWitnessGeneration;
 use zk_evm::zkevm_opcode_defs::SECP256R1_VERIFY_PRECOMPILE_ADDRESS;
-use crate::witness::queue_for_main_vm::QueueLastStatesForCircuits;
+use crate::witness::aux_data_structs::last_per_circuit_accumulator::LastPerCircuitAccumulator;
 
 use crate::zk_evm::aux_structures::LogQuery as LogQuery_;
 
 pub(crate) struct LogDemuxCircuitArtifacts<F: SmallField> {
     pub applied_log_queue_simulator: LogQueueSimulator<F>,
-    pub applied_queue_states_accumulator: QueueLastStatesForCircuits<(u32, LogQueueState<F>)>,
+    pub applied_queue_states_accumulator: LastPerCircuitAccumulator<(u32, LogQueueState<F>)>,
 }
 
 pub struct DemuxedQueuesStatesSimulator {

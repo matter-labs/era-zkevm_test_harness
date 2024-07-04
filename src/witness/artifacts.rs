@@ -18,8 +18,8 @@ use circuit_definitions::zkevm_circuits::transient_storage_validity_by_grand_pro
 use circuit_sequencer_api::toolset::GeometryConfig;
 use derivative::Derivative;
 
-use crate::witness::queue_for_main_vm::CircuitlLastStateAccumulator;
-use crate::witness::queue_for_main_vm::QueueForMainVm;
+use crate::witness::aux_data_structs::last_per_circuit_accumulator::LastPerCircuitAccumulatorSparse;
+use crate::witness::aux_data_structs::per_circuit_accumulator::PerCircuitAccumulatorSparse;
 
 use crate::zk_evm::zkevm_opcode_defs::system_params::{
     EVENT_AUX_BYTE, L1_MESSAGE_AUX_BYTE, PRECOMPILE_AUX_BYTE, STORAGE_AUX_BYTE, TRANSIENT_STORAGE_AUX_BYTE
@@ -98,18 +98,18 @@ impl DemuxedLogQueries {
 
 pub struct MemoryArtifacts<F: SmallField> {
     //
-    pub vm_memory_queries_accumulated: Vec<(u32, MemoryQuery)>,
+    pub memory_queries: Vec<(u32, MemoryQuery)>,
     // TODO docs
     pub memory_queue_entry_states: Vec<QueueStateWitness<F, FULL_SPONGE_QUEUE_STATE_WIDTH>>,
     // decommittment queue
-    pub prepared_decommittment_queries_per_instance: QueueForMainVm<(u32, DecommittmentQuery)>,
-    pub decommittment_queue_entry_states: CircuitlLastStateAccumulator<(u32, QueueStateWitness<F, FULL_SPONGE_QUEUE_STATE_WIDTH>)>,
+    pub prepared_decommittment_queries_per_instance: PerCircuitAccumulatorSparse<(u32, DecommittmentQuery)>,
+    pub decommittment_queue_entry_states: LastPerCircuitAccumulatorSparse<(u32, QueueStateWitness<F, FULL_SPONGE_QUEUE_STATE_WIDTH>)>,
 }
 
 #[derive(Derivative)]
 #[derivative(Default)]
 pub struct ImplicitMemoryArtifacts<F: SmallField> {
-    pub memory_queries_accumulated: Vec<MemoryQuery>,
+    pub memory_queries: Vec<MemoryQuery>,
     pub memory_queue_states: Vec<MemoryQueueState<F>>,
 }
 
@@ -141,26 +141,26 @@ pub struct MemoryCircuitsArtifacts<F: SmallField> {
     pub secp256r1_verify_circuits_data: Vec<Secp256r1VerifyCircuitInstanceWitness<F>>,
 }
 
-use crate::witness::queue_for_main_vm::QueueLastStatesForCircuits;
+use crate::witness::aux_data_structs::last_per_circuit_accumulator::LastPerCircuitAccumulator;
 
 #[derive(Derivative)]
 #[derivative(Default)]
 pub struct LogQueueStates<F: SmallField> {
-    pub states_accumulator: QueueLastStatesForCircuits<LogQueueState<F>>,
+    pub states_accumulator: LastPerCircuitAccumulator<LogQueueState<F>>,
     pub simulator: LogQueueSimulator<F>,
 }
 
 impl<F: SmallField> LogQueueStates<F>  {
     pub fn new(cycles_per_circuit: usize) -> Self {
         Self {
-            states_accumulator: QueueLastStatesForCircuits::new(cycles_per_circuit),
+            states_accumulator: LastPerCircuitAccumulator::new(cycles_per_circuit),
             simulator: LogQueueSimulator::<F>::empty()
         }
     }
 
     pub fn with_flat_capacity(cycles_per_circuit: usize, flat_capacity: usize) -> Self {
         Self {
-            states_accumulator: QueueLastStatesForCircuits::with_flat_capacity(cycles_per_circuit, flat_capacity),
+            states_accumulator: LastPerCircuitAccumulator::with_flat_capacity(cycles_per_circuit, flat_capacity),
             simulator: LogQueueSimulator::<F>::with_capacity(flat_capacity)
         }
     }

@@ -2,7 +2,7 @@ use std::default;
 
 use super::*;
 use crate::witness::artifacts::LogQueueStates;
-use crate::witness::queue_for_main_vm::QueueLastStatesForCircuits;
+use crate::witness::aux_data_structs::last_per_circuit_accumulator::LastPerCircuitAccumulator;
 use crate::zk_evm::aux_structures::LogQuery;
 use crate::zkevm_circuits::base_structures::log_query::LOG_QUERY_PACKED_WIDTH;
 use crate::zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
@@ -40,7 +40,7 @@ pub(crate) fn compute_storage_dedup_and_sort<
     let (sorted_storage_queries_with_extra_timestamp, deduplicated_rollup_storage_queries) =
         sort_storage_access_queries(&rollup_storage_queries);
 
-    let mut sorted_log_simulator_states_accumulator = QueueLastStatesForCircuits::with_flat_capacity(per_circuit_capacity, total_amount_of_queries);
+    let mut sorted_log_simulator_states_accumulator = LastPerCircuitAccumulator::with_flat_capacity(per_circuit_capacity, total_amount_of_queries);
     let mut intermediate_sorted_log_simulator =
         LogWithExtendedEnumerationQueueSimulator::<F>::with_capacity(sorted_storage_queries_with_extra_timestamp.len());
     for el in sorted_storage_queries_with_extra_timestamp.into_iter() {

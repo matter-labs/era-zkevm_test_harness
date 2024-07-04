@@ -17,7 +17,7 @@ use circuit_definitions::encodings::CircuitEquivalentReflection;
 use circuit_definitions::zk_evm::aux_structures::DecommittmentQuery;
 use rayon::prelude::*;
 use std::cmp::Ordering;
-use crate::witness::queue_for_main_vm::QueueLastStatesForCircuits;
+use crate::witness::aux_data_structs::last_per_circuit_accumulator::LastPerCircuitAccumulator;
 use crate::witness::individual_circuits::decommit_code::DecommiterCircuitProcessingInputs;
 
 pub(crate) fn compute_decommitts_sorter_circuit_snapshots<

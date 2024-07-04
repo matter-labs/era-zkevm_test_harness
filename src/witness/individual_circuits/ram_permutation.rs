@@ -20,10 +20,9 @@ use circuit_definitions::encodings::memory_query::MemoryQueueState;
 use memory_query::{CustomMemoryQueueSimulator, QueueWitness};
 use postprocessing::{CsForWitnessGeneration, FirstAndLastCircuitWitness};
 use crate::witness::postprocessing::observable_witness::RamPermutationObservableWitness;
-use crate::witness::queue_for_main_vm::QueueLastStatesForCircuits;
-use crate::witness::queue_for_main_vm::MemoryQueueStatesForRamCircuits;
-
-use crate::witness::queue_for_main_vm::MemoryQueuePerCircuitSimulator;
+use crate::witness::aux_data_structs::last_per_circuit_accumulator::LastPerCircuitAccumulator;
+use crate::witness::aux_data_structs::per_circuit_accumulator::PerCircuitAccumulator;
+use crate::witness::aux_data_structs::MemoryQueuePerCircuitSimulator;
 
 use rayon::prelude::*;
 use snark_wrapper::boojum::field::Field as _;
@@ -40,7 +39,7 @@ pub(crate)  fn compute_ram_circuit_snapshots<
 >(
     memory_artifacts: &MemoryArtifacts<Field>,
     implicit_memory_artifacts: ImplicitMemoryArtifacts<Field>,
-    mut all_memory_queue_states: QueueLastStatesForCircuits::<MemoryQueueState<Field>>,
+    mut memory_queue_states_accumulator: LastPerCircuitAccumulator::<MemoryQueueState<Field>>,
     memory_queue_simulator: MemoryQueuePerCircuitSimulator<Field>,
     round_function: &RoundFunction,
     num_non_deterministic_heap_queries: usize,
@@ -54,18 +53,18 @@ pub(crate)  fn compute_ram_circuit_snapshots<
     Vec<ClosedFormInputCompactFormWitness<Field>>,
 ) {
     assert_eq!(
-        memory_artifacts.vm_memory_queries_accumulated.len(),
-        all_memory_queue_states.len()
+        memory_artifacts.memory_queries.len(),
+        memory_queue_states_accumulator.len()
     );
 
     assert_eq!(
-        implicit_memory_artifacts.memory_queries_accumulated.len(),
+        implicit_memory_artifacts.memory_queries.len(),
         implicit_memory_artifacts.memory_queue_states.len()
     );
 
     // including additional queries from precompiles
-    let total_amount_of_queries = memory_artifacts.vm_memory_queries_accumulated.len()
-        + implicit_memory_artifacts.memory_queries_accumulated.len();
+    let total_amount_of_queries = memory_artifacts.memory_queries.len()
+        + implicit_memory_artifacts.memory_queries.len();
 
     assert!(
         total_amount_of_queries > 0,
@@ -76,11 +75,11 @@ pub(crate)  fn compute_ram_circuit_snapshots<
 
     let amount_of_circuits = (total_amount_of_queries + per_circuit_capacity - 1) / per_circuit_capacity;
 
-    all_memory_queue_states.reserve_exact_flat(implicit_memory_artifacts.memory_queue_states.len());
+    memory_queue_states_accumulator.reserve_exact_flat(implicit_memory_artifacts.memory_queue_states.len());
     for state in implicit_memory_artifacts.memory_queue_states.into_iter() {
-        all_memory_queue_states.push(state);
+        memory_queue_states_accumulator.push(state);
     }
-    let unsorted_memory_queue_chunk_final_states = all_memory_queue_states.into_circuits();
+    let unsorted_memory_queue_chunk_final_states = memory_queue_states_accumulator.into_circuits();
 
     assert_eq!(
         unsorted_memory_queue_chunk_final_states.len(),
@@ -92,15 +91,15 @@ pub(crate)  fn compute_ram_circuit_snapshots<
     let mut sorted_memory_queue_chunk_final_states = Vec::with_capacity(amount_of_circuits);
 
     let mut sorted_memory_queries_simulator = MemoryQueuePerCircuitSimulator::using_container(
-        MemoryQueueStatesForRamCircuits::with_flat_capacity(
+        PerCircuitAccumulator::with_flat_capacity(
             per_circuit_capacity,
-            memory_artifacts.vm_memory_queries_accumulated.len() + implicit_memory_artifacts.memory_queries_accumulated.len()
+            memory_artifacts.memory_queries.len() + implicit_memory_artifacts.memory_queries.len()
         )
     );
     {
         let mut sorted_memory_queries_accumulated: Vec<&MemoryQuery> = memory_artifacts
-            .vm_memory_queries_accumulated
-            .iter().map(|(_, query)| query).chain(implicit_memory_artifacts.memory_queries_accumulated.iter())
+            .memory_queries
+            .iter().map(|(_, query)| query).chain(implicit_memory_artifacts.memory_queries.iter())
             .collect();
 
         snapshot_prof("Ram circuit: created 'sorted' vec");
@@ -131,7 +130,7 @@ pub(crate)  fn compute_ram_circuit_snapshots<
         snapshot_prof("Ram circuit: simulation done");
     }
 
-    drop(implicit_memory_artifacts.memory_queries_accumulated);
+    drop(implicit_memory_artifacts.memory_queries);
 
     snapshot_prof("Inside RAM permutation circuit computing 2");
 
