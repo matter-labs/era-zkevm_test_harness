@@ -20,7 +20,7 @@ use circuit_definitions::encodings::memory_query::MemoryQueueState;
 use memory_query::{CustomMemoryQueueSimulator, QueueWitness};
 use postprocessing::{CsForWitnessGeneration, FirstAndLastCircuitWitness};
 use crate::witness::postprocessing::observable_witness::RamPermutationObservableWitness;
-use crate::witness::aux_data_structs::last_per_circuit_accumulator::LastPerCircuitAccumulator;
+use crate::witness::aux_data_structs::one_per_circuit_accumulator::LastPerCircuitAccumulator;
 use crate::witness::aux_data_structs::per_circuit_accumulator::PerCircuitAccumulator;
 use crate::witness::aux_data_structs::MemoryQueuePerCircuitSimulator;
 

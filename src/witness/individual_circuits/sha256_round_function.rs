@@ -14,7 +14,7 @@ use circuit_definitions::encodings::memory_query::MemoryQueueState;
 use circuit_definitions::encodings::*;
 use derivative::*;
 use crate::witness::aux_data_structs::MemoryQueuePerCircuitSimulator;
-use crate::witness::aux_data_structs::last_per_circuit_accumulator::LastPerCircuitAccumulator;
+use crate::witness::aux_data_structs::one_per_circuit_accumulator::LastPerCircuitAccumulator;
 
 pub(crate) fn sha256_memory_queries_amount(sha256_round_function_witnesses: &Vec<(u32, LogQuery_, Vec<Sha256RoundWitness>)>) -> usize {
     let result = sha256_round_function_witnesses.iter().fold(0, |mut inner, (_, _, witness)| {

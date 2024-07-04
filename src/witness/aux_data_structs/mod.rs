@@ -27,5 +27,4 @@ use crate::witness::aux_data_structs::per_circuit_accumulator::PerCircuitAccumul
 pub type MemoryQueuePerCircuitSimulator<F> = CustomMemoryQueueSimulator<F, PerCircuitAccumulator::<QueueWitness<F>>>;
 
 pub(crate) mod per_circuit_accumulator;
-pub(crate) mod last_per_circuit_accumulator;
-pub(crate) mod memory_queue_witnesses_per_ciruit_builder;
+pub(crate) mod one_per_circuit_accumulator;

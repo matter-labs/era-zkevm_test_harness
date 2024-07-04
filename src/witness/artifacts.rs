@@ -18,7 +18,7 @@ use circuit_definitions::zkevm_circuits::transient_storage_validity_by_grand_pro
 use circuit_sequencer_api::toolset::GeometryConfig;
 use derivative::Derivative;
 
-use crate::witness::aux_data_structs::last_per_circuit_accumulator::LastPerCircuitAccumulatorSparse;
+use crate::witness::aux_data_structs::one_per_circuit_accumulator::CircuitsEntryAccumulatorSparse;
 use crate::witness::aux_data_structs::per_circuit_accumulator::PerCircuitAccumulatorSparse;
 
 use crate::zk_evm::zkevm_opcode_defs::system_params::{
@@ -100,10 +100,10 @@ pub struct MemoryArtifacts<F: SmallField> {
     //
     pub memory_queries: Vec<(u32, MemoryQuery)>,
     // TODO docs
-    pub memory_queue_entry_states: Vec<QueueStateWitness<F, FULL_SPONGE_QUEUE_STATE_WIDTH>>,
+    pub memory_queue_entry_states: CircuitsEntryAccumulatorSparse<(u32, QueueStateWitness<F, FULL_SPONGE_QUEUE_STATE_WIDTH>)>,
     // decommittment queue
     pub prepared_decommittment_queries_per_instance: PerCircuitAccumulatorSparse<(u32, DecommittmentQuery)>,
-    pub decommittment_queue_entry_states: LastPerCircuitAccumulatorSparse<(u32, QueueStateWitness<F, FULL_SPONGE_QUEUE_STATE_WIDTH>)>,
+    pub decommittment_queue_entry_states: CircuitsEntryAccumulatorSparse<(u32, QueueStateWitness<F, FULL_SPONGE_QUEUE_STATE_WIDTH>)>,
 }
 
 #[derive(Derivative)]
@@ -141,7 +141,7 @@ pub struct MemoryCircuitsArtifacts<F: SmallField> {
     pub secp256r1_verify_circuits_data: Vec<Secp256r1VerifyCircuitInstanceWitness<F>>,
 }
 
-use crate::witness::aux_data_structs::last_per_circuit_accumulator::LastPerCircuitAccumulator;
+use crate::witness::aux_data_structs::one_per_circuit_accumulator::LastPerCircuitAccumulator;
 
 #[derive(Derivative)]
 #[derivative(Default)]

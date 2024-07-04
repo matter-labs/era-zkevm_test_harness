@@ -10,7 +10,7 @@ use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 use circuit_definitions::encodings::*;
 use circuit_definitions::encodings::memory_query::MemoryQueueState;
 use crate::witness::aux_data_structs::MemoryQueuePerCircuitSimulator;
-use crate::witness::aux_data_structs::last_per_circuit_accumulator::LastPerCircuitAccumulator;
+use crate::witness::aux_data_structs::one_per_circuit_accumulator::LastPerCircuitAccumulator;
 
 pub(crate) fn ecrecover_memory_queries_amount(ecrecover_witnesses: &Vec<(u32, LogQuery_, ECRecoverRoundWitness)>) -> usize {
     ecrecover_witnesses.iter().fold(0, |inner, (_, _, witness)| {

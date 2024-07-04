@@ -2,13 +2,13 @@ use crate::witness::aux_data_structs::TupleFirst;
 use circuit_sequencer_api::INITIAL_MONOTONIC_CYCLE_COUNTER;
 
 #[derive(Default)]
-struct LastPerCircuitAccumulatorContainer<T> {
+struct OnePerCircuitAccumulatorContainer<T> {
     cycles_per_circuit: usize,
     circuits_data: Vec<T>,
     accumulated: usize,
 }
 
-impl<T> LastPerCircuitAccumulatorContainer<T> {
+impl<T> OnePerCircuitAccumulatorContainer<T> {
     pub fn new(cycles_per_circuit: usize) -> Self {
         Self {
             cycles_per_circuit,
@@ -64,19 +64,19 @@ impl<T> LastPerCircuitAccumulatorContainer<T> {
 
 /// TODO docs
 pub struct LastPerCircuitAccumulator<T> {
-    container: LastPerCircuitAccumulatorContainer<T>
+    container: OnePerCircuitAccumulatorContainer<T>
 }
 
 impl<T> LastPerCircuitAccumulator<T> {
     pub fn new(cycles_per_circuit: usize) -> Self {
         Self {
-            container: LastPerCircuitAccumulatorContainer::new(cycles_per_circuit)
+            container: OnePerCircuitAccumulatorContainer::new(cycles_per_circuit)
         }
     }
 
     pub fn with_flat_capacity(cycles_per_circuit: usize, flat_capacity: usize) -> Self {
         Self {
-            container: LastPerCircuitAccumulatorContainer::with_flat_capacity(cycles_per_circuit, flat_capacity)
+            container: OnePerCircuitAccumulatorContainer::with_flat_capacity(cycles_per_circuit, flat_capacity)
         }
     }
 
@@ -110,20 +110,20 @@ impl<T> Default for LastPerCircuitAccumulator<T> {
 }
 
 #[derive(Default)]
-pub struct LastPerCircuitAccumulatorSparse<T: TupleFirst> 
+pub struct CircuitsEntryAccumulatorSparse<T: TupleFirst> 
 where T: Clone
 {
-    container: LastPerCircuitAccumulatorContainer<T>,
+    container: OnePerCircuitAccumulatorContainer<T>,
     last: T
 }
 
 // TODO can be optimized for sparse values
-impl<T: TupleFirst> LastPerCircuitAccumulatorSparse<T> 
+impl<T: TupleFirst> CircuitsEntryAccumulatorSparse<T> 
 where T: Clone
 {
     pub fn new(cycles_per_circuit: usize, initial_value: T) -> Self {
         Self {
-            container: LastPerCircuitAccumulatorContainer::new(cycles_per_circuit),
+            container: OnePerCircuitAccumulatorContainer::new(cycles_per_circuit),
             last: initial_value
         }
     }

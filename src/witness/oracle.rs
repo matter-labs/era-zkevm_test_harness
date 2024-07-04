@@ -7,8 +7,7 @@ use super::callstack_handler::*;
 use super::postprocessing::{BlockFirstAndLastBasicCircuitsObservableWitnesses, ClosedFormInputField, CsForWitnessGeneration, FirstAndLastCircuitWitness};
 use crate::witness::aux_data_structs::per_circuit_accumulator::PerCircuitAccumulatorSparse;
 use crate::witness::aux_data_structs::MemoryQueuePerCircuitSimulator;
-use crate::witness::aux_data_structs::memory_queue_witnesses_per_ciruit_builder::MemoryQueueWitnessesForVmCircuitBuilder;
-use crate::witness::aux_data_structs::last_per_circuit_accumulator::{LastPerCircuitAccumulator, LastPerCircuitAccumulatorSparse};
+use crate::witness::aux_data_structs::one_per_circuit_accumulator::{LastPerCircuitAccumulator, CircuitsEntryAccumulatorSparse};
 use super::utils::*;
 use crate::boojum::field::SmallField;
 use crate::boojum::gadgets::queue::{QueueState, QueueStateWitness, QueueTailStateWitness};
@@ -395,10 +394,10 @@ use circuit_definitions::encodings::callstack_entry::{
 };
 
 struct CallstackSimulationResult<F: SmallField> {
-    callstack_sponge_encoding_ranges: LastPerCircuitAccumulatorSparse<(Cycle, [F; FULL_SPONGE_QUEUE_STATE_WIDTH])>,
+    callstack_sponge_encoding_ranges: CircuitsEntryAccumulatorSparse<(Cycle, [F; FULL_SPONGE_QUEUE_STATE_WIDTH])>,
     callstack_values_witnesses: PerCircuitAccumulatorSparse<(Cycle, (ExtendedCallstackEntry<F>, CallstackSimulatorState<F>))>,
     rollback_queue_head_segments: PerCircuitAccumulatorSparse<(Cycle, [F; QUEUE_STATE_WIDTH])>,
-    storage_log_states_for_entry: LastPerCircuitAccumulatorSparse<(Cycle, StorageLogDetailedState<F>)>
+    storage_log_states_for_entry: CircuitsEntryAccumulatorSparse<(Cycle, StorageLogDetailedState<F>)>
 }
 
 fn callstack_simulation(
@@ -419,7 +418,7 @@ fn callstack_simulation(
     // so we never follow the "current", but add on push/pop
 
     // These are "frozen" states that just lie in the callstack for now and can not be modified
-    let mut callstack_sponge_encoding_ranges = LastPerCircuitAccumulatorSparse::new(
+    let mut callstack_sponge_encoding_ranges = CircuitsEntryAccumulatorSparse::new(
         geometry.cycles_per_vm_snapshot as usize, 
         (0, [GoldilocksField::ZERO; FULL_SPONGE_QUEUE_STATE_WIDTH])
     );
@@ -722,7 +721,7 @@ fn callstack_simulation(
     initial_storage_state.rollback_tail = global_end_of_storage_log;
     initial_storage_state.rollback_head = global_end_of_storage_log;
 
-    let storage_log_states_for_entry = LastPerCircuitAccumulatorSparse::from_iter(
+    let storage_log_states_for_entry = CircuitsEntryAccumulatorSparse::from_iter(
         geometry.cycles_per_vm_snapshot as usize, 
         (0, initial_storage_state),
         history_of_storage_log_states.into_iter()
@@ -932,8 +931,8 @@ fn process_memory_related_circuits<
     let mut memory_artifacts_for_main_vm = MemoryArtifacts {
         prepared_decommittment_queries_per_instance: PerCircuitAccumulatorSparse::from_iter(geometry.cycles_per_vm_snapshot as usize, prepared_decommittment_queries.into_iter()),
         memory_queries,
-        memory_queue_entry_states: vec![],
-        decommittment_queue_entry_states: LastPerCircuitAccumulatorSparse::new(geometry.cycles_per_vm_snapshot as usize, (0, QueueState::placeholder_witness()))
+        memory_queue_entry_states: CircuitsEntryAccumulatorSparse::new(geometry.cycles_per_vm_snapshot as usize, (0, QueueState::placeholder_witness())),
+        decommittment_queue_entry_states: CircuitsEntryAccumulatorSparse::new(geometry.cycles_per_vm_snapshot as usize, (0, QueueState::placeholder_witness()))
     };
 
     tracing::debug!("Processing artifacts queue");
@@ -977,7 +976,6 @@ fn process_memory_related_circuits<
         geometry.cycles_per_ram_permutation as usize,
         memory_artifacts_for_main_vm.memory_queries.len()
     );
-    let mut vm_entry_memory_states_builder = MemoryQueueWitnessesForVmCircuitBuilder::new(&vm_snapshots, &memory_artifacts_for_main_vm.memory_queries);
 
     let amount_of_implicit_memory_queries = decommitter_memory_queries_amount(&decommiter_circuit_inputs.deduplicated_decommit_requests_with_data)
     + ecrecover_memory_queries_amount(&precompiles_data.ecrecover_witnesses)
@@ -1000,17 +998,13 @@ fn process_memory_related_circuits<
     );
 
     // very slow
-    for (_, query) in memory_artifacts_for_main_vm.memory_queries.iter() {
+    for (cycle, query) in memory_artifacts_for_main_vm.memory_queries.iter() {
         let (_, intermediate_info) =
             memory_queue_simulator.push_and_output_intermediate_data(*query, round_function);
 
-        memory_queue_states_accumulator
-        .push(intermediate_info);
-        vm_entry_memory_states_builder.push(intermediate_info);
+        memory_queue_states_accumulator.push(intermediate_info);
+        memory_artifacts_for_main_vm.memory_queue_entry_states.push((*cycle, transform_sponge_like_queue_state(intermediate_info)));
     }
-
-    // compress huge data structure into smaller one
-    memory_artifacts_for_main_vm.memory_queue_entry_states = vm_entry_memory_states_builder.into_circuits();
 
     snapshot_prof("Finished memory queue simulation");
 
@@ -1269,7 +1263,9 @@ fn repack_input_for_main_vm(
 
     let mut rollback_queue_head_segments_it = rollback_queue_head_segments.into_circuits(amount_of_circuits).into_iter();
     let mut callstack_values_witnesses_it = callstack_values_witnesses.into_circuits(amount_of_circuits).into_iter();
-    let mut memory_queue_entry_states_it = memory_queue_entry_states.into_iter();
+
+    let last_memory_queue_state = memory_queue_entry_states.last().1.clone();
+    let mut memory_queue_entry_states_it = memory_queue_entry_states.into_circuits(amount_of_circuits).into_iter();
 
     let mut callstack_sponge_encoding_ranges_it = callstack_sponge_encoding_ranges.into_circuits(amount_of_circuits).into_iter(); 
 
@@ -1289,7 +1285,7 @@ fn repack_input_for_main_vm(
             }
         }
 
-        let memory_queue_state_for_entry = memory_queue_entry_states_it.next().unwrap();
+        let memory_queue_state_for_entry = memory_queue_entry_states_it.next().unwrap().1;
 
         let decommitment_queue_state = decommittment_queue_entry_states.next().unwrap().1;
 
@@ -1335,7 +1331,7 @@ fn repack_input_for_main_vm(
 
     // special pass for last one
     {
-        let memory_queue_state_for_entry = memory_queue_entry_states_it.next().unwrap();
+        let memory_queue_state_for_entry = last_memory_queue_state;
 
         let decommitment_queue_state = last_decommittment_queue_state;
         // always an empty one

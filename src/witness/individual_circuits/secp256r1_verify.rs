@@ -10,7 +10,7 @@ use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 use circuit_definitions::encodings::memory_query::MemoryQueueState;
 use circuit_definitions::encodings::*;
 use crate::witness::aux_data_structs::MemoryQueuePerCircuitSimulator;
-use crate::witness::aux_data_structs::last_per_circuit_accumulator::LastPerCircuitAccumulator;
+use crate::witness::aux_data_structs::one_per_circuit_accumulator::LastPerCircuitAccumulator;
 
 pub(crate) fn secp256r1_memory_queries_amount(secp256r1_verify_witnesses: &Vec<(u32, LogQuery_, Secp256r1VerifyRoundWitness)>) -> usize {
     secp256r1_verify_witnesses.iter().fold(0, |inner, (_, _, witness)| {
