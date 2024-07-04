@@ -359,7 +359,7 @@ pub(crate) fn keccak256_decompose_into_per_circuit_witness<
                         internal_state.clone(),
                     );
 
-                let mut keccak_internal_state = encode_kecca256_inner_state(state_inner);
+                let mut keccak_internal_state = encode_keccak256_inner_state(state_inner);
 
                 if early_termination {
                     assert_eq!(precompile_state, Keccak256PrecompileState::Finished);
@@ -380,7 +380,7 @@ pub(crate) fn keccak256_decompose_into_per_circuit_witness<
                             internal_state_over_empty_buffer.clone(),
                         );
 
-                    keccak_internal_state = encode_kecca256_inner_state(empty_state_inner);
+                    keccak_internal_state = encode_keccak256_inner_state(empty_state_inner);
                 }
 
                 let input_is_empty = is_last_request;
@@ -506,7 +506,7 @@ pub(crate) fn keccak256_decompose_into_per_circuit_witness<
     result
 }
 
-pub(crate) fn encode_kecca256_inner_state(state: [u64; 25]) -> [[[u8; 8]; 5]; 5] {
+pub(crate) fn encode_keccak256_inner_state(state: [u64; 25]) -> [[[u8; 8]; 5]; 5] {
     // we need to transpose
     let mut result = [[[0u8; 8]; 5]; 5];
     for (idx, src) in state.iter().enumerate() {

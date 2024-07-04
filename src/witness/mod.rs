@@ -1,7 +1,6 @@
 use super::*;
 
 pub mod artifacts;
-pub mod callstack_handler;
 pub mod individual_circuits;
 pub mod oracle;
 pub mod postprocessing;
@@ -10,7 +9,6 @@ pub use circuit_sequencer_api::sort_storage_access;
 pub mod tracer;
 pub mod tree;
 pub mod utils;
-pub mod vm_snapshot;
 mod aux_data_structs;
 
 // pub mod vk_set_generator;

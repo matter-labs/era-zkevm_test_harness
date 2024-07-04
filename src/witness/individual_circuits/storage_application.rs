@@ -6,7 +6,7 @@ use crate::witness::postprocessing::observable_witness::StorageApplicationObserv
 
 use super::*;
 use crate::boojum::gadgets::keccak256::{self};
-use crate::witness::individual_circuits::keccak256_round_function::encode_kecca256_inner_state;
+use crate::witness::individual_circuits::memory_related::keccak256_round_function::encode_keccak256_inner_state;
 use crate::witness::postprocessing::CircuitMaker;
 use crate::witness::tree::*;
 use crate::zk_evm::sha3::Keccak256;
@@ -222,7 +222,7 @@ pub(crate) fn decompose_into_storage_application_witnesses<
         final_fsm_state.current_root_hash = tree.root();
         final_fsm_state.current_storage_application_log_state =
             take_queue_state_from_simulator(&storage_application_simulator);
-        final_fsm_state.current_diffs_keccak_accumulator_state = encode_kecca256_inner_state(state);
+        final_fsm_state.current_diffs_keccak_accumulator_state = encode_keccak256_inner_state(state);
 
         let wit = transform_queue_witness(
             deduplicated_rollup_storage_queue_simulator

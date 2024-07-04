@@ -18,7 +18,7 @@ use circuit_definitions::zk_evm::aux_structures::DecommittmentQuery;
 use rayon::prelude::*;
 use std::cmp::Ordering;
 use crate::witness::aux_data_structs::one_per_circuit_accumulator::LastPerCircuitAccumulator;
-use crate::witness::individual_circuits::decommit_code::DecommiterCircuitProcessingInputs;
+use crate::witness::individual_circuits::memory_related::decommit_code::DecommiterCircuitProcessingInputs;
 
 pub(crate) fn compute_decommitts_sorter_circuit_snapshots<
     F: SmallField,

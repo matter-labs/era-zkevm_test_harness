@@ -7,7 +7,7 @@ use crate::snark_wrapper::boojum::gadgets::recursion::recursive_tree_hasher::Cir
 use crate::toolset::create_tools;
 use crate::toolset::GeometryConfig;
 use crate::witness::oracle::create_artifacts_from_tracer;
-use crate::witness::tracer::WitnessTracer;
+use crate::witness::tracer::tracer::WitnessTracer;
 use crate::witness::tree::BinarySparseStorageTree;
 use crate::witness::tree::ZkSyncStorageLeaf;
 use crate::witness::utils::{
@@ -236,7 +236,7 @@ pub fn run_vms<
     if !next_snapshot_will_capture_end_of_execution {
         // perform the final snapshot
         let current_cycle_counter = out_of_circuit_vm.witness_tracer.current_cycle_counter;
-        use crate::witness::vm_snapshot::VmSnapshot;
+        use crate::witness::tracer::vm_snapshot::VmSnapshot;
         let snapshot = VmSnapshot {
             local_state: vm_local_state.clone(),
             at_cycle: current_cycle_counter,

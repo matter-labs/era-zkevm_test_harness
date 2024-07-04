@@ -23,6 +23,7 @@ impl<T> PerCircuitAccumulatorContainer<T> {
         let num_circuits = (flat_capacity + cycles_per_circuit - 1)
         / cycles_per_circuit;
 
+        // TODO reserve in sub-vectors
         let mut _self = Self::new(cycles_per_circuit);
         _self.circuits_data.reserve_exact(num_circuits);
         _self

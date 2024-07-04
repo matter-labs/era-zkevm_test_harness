@@ -1,4 +1,5 @@
-use crate::witness::callstack_handler::CallstackWithAuxData;
+use crate::witness::tracer::callstack_handler::CallstackWithAuxData;
+use crate::witness::tracer::vm_snapshot::VmSnapshot;
 use crate::zk_evm::abstractions::PrecompileCyclesWitness;
 use crate::zk_evm::aux_structures::LogQuery;
 use crate::zk_evm::aux_structures::*;
@@ -221,7 +222,8 @@ use crate::zk_evm::vm_state::VmLocalState;
 use crate::zk_evm::witness_trace::VmWitnessTracer;
 
 use crate::witness::aux_data_structs::per_circuit_accumulator::PerCircuitAccumulatorSparse;
-use super::vm_snapshot::VmSnapshot;
+
+
 
 impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
     fn start_new_execution_cycle(&mut self, current_state: &VmLocalState) {

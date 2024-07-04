@@ -3,7 +3,7 @@
 // and then during specialized circuits execution
 
 use super::artifacts::LogCircuitsArtifacts;
-use super::callstack_handler::*;
+use super::tracer::callstack_handler::*;
 use super::postprocessing::{BlockFirstAndLastBasicCircuitsObservableWitnesses, ClosedFormInputField, CsForWitnessGeneration, FirstAndLastCircuitWitness};
 use crate::witness::aux_data_structs::per_circuit_accumulator::PerCircuitAccumulatorSparse;
 use crate::witness::aux_data_structs::MemoryQueuePerCircuitSimulator;
@@ -17,15 +17,10 @@ use crate::toolset::GeometryConfig;
 use crate::witness::artifacts::{
     DemuxedLogQueries, ImplicitMemoryArtifacts, MemoryArtifacts, MemoryCircuitsArtifacts,
 };
-use crate::witness::individual_circuits::decommit_code::decommitter_memory_queries_amount;
-use crate::witness::individual_circuits::ecrecover::ecrecover_memory_queries_amount;
-use crate::witness::individual_circuits::keccak256_round_function::keccak256_memory_queries_amount;
-use crate::witness::individual_circuits::secp256r1_verify::secp256r1_memory_queries_amount;
-use crate::witness::individual_circuits::sha256_round_function::sha256_memory_queries_amount;
 use crate::witness::individual_circuits::log_demux::LogDemuxCircuitArtifacts;
 use crate::witness::postprocessing::{make_circuit, CircuitMaker};
-use crate::witness::tracer::{QueryMarker, WitnessTracer};
-use crate::witness::vm_snapshot::VmSnapshot;
+use crate::witness::tracer::tracer::{QueryMarker, WitnessTracer};
+use crate::witness::tracer::vm_snapshot::VmSnapshot;
 use crate::zk_evm::aux_structures::DecommittmentQuery;
 use crate::zk_evm::aux_structures::LogQuery;
 use crate::zk_evm::aux_structures::PubdataCost;
@@ -941,7 +936,7 @@ fn process_memory_related_circuits<
 
     let mut circuits_data = MemoryCircuitsArtifacts::default();
 
-    use crate::witness::individual_circuits::sort_decommit_requests::compute_decommitts_sorter_circuit_snapshots;
+    use crate::witness::individual_circuits::memory_related::sort_decommit_requests::compute_decommitts_sorter_circuit_snapshots;
 
     tracing::debug!("Running code decommittments sorter simulation");
 
@@ -977,23 +972,22 @@ fn process_memory_related_circuits<
         memory_artifacts_for_main_vm.memory_queries.len()
     );
 
-    let amount_of_implicit_memory_queries = decommitter_memory_queries_amount(&decommiter_circuit_inputs.deduplicated_decommit_requests_with_data)
-    + ecrecover_memory_queries_amount(&precompiles_data.ecrecover_witnesses)
-    + keccak256_memory_queries_amount(&precompiles_data.keccak_round_function_witnesses)
-    + secp256r1_memory_queries_amount(&precompiles_data.secp256r1_verify_witnesses)
-    + sha256_memory_queries_amount(&precompiles_data.sha256_round_function_witnesses);
+    use crate::witness::individual_circuits::memory_related::amount_of_implicit_memory_queries;
 
-    // very big data struct inside
-    //let mut memory_queue_simulator: MemoryQueueSimulator<GoldilocksField> = MemoryQueueSimulator::with_capacity(
-    //    memory_artifacts.vm_memory_queries_accumulated.len() + amount_of_implicit_memory_queries
-    //);
+    let amount_of_implicit_memory_queries = amount_of_implicit_memory_queries(
+        &decommiter_circuit_inputs.deduplicated_decommit_requests_with_data,
+        &precompiles_data.ecrecover_witnesses,
+        &precompiles_data.keccak_round_function_witnesses,
+        &precompiles_data.secp256r1_verify_witnesses,
+        &precompiles_data.sha256_round_function_witnesses
+    );
 
     use crate::witness::aux_data_structs::per_circuit_accumulator::PerCircuitAccumulator;
-
+    // very big data struct inside
     let mut memory_queue_simulator = MemoryQueuePerCircuitSimulator::using_container(
         PerCircuitAccumulator::with_flat_capacity(
             geometry.cycles_per_ram_permutation as usize,
-            memory_artifacts_for_main_vm.memory_queries.len()
+            memory_artifacts_for_main_vm.memory_queries.len() + amount_of_implicit_memory_queries
         )
     );
 
@@ -1026,7 +1020,7 @@ fn process_memory_related_circuits<
     // direct VM related part is done, other subcircuit's functionality is moved to other functions
     // that should properly do sorts and memory writes
 
-    use crate::witness::individual_circuits::decommit_code::compute_decommitter_circuit_snapshots;
+    use crate::witness::individual_circuits::memory_related::decommit_code::compute_decommitter_circuit_snapshots;
 
     // precompiles and decommiter will produce additional implicit memory queries
     let mut implicit_memory_artifacts: ImplicitMemoryArtifacts<GoldilocksField> =
@@ -1051,7 +1045,7 @@ fn process_memory_related_circuits<
 
     // keccak precompile
 
-    use crate::witness::individual_circuits::keccak256_round_function::keccak256_decompose_into_per_circuit_witness;
+    use crate::witness::individual_circuits::memory_related::keccak256_round_function::keccak256_decompose_into_per_circuit_witness;
 
     tracing::debug!("Running keccak simulation");
 
@@ -1073,7 +1067,7 @@ fn process_memory_related_circuits<
 
     // sha256 precompile
 
-    use crate::witness::individual_circuits::sha256_round_function::sha256_decompose_into_per_circuit_witness;
+    use crate::witness::individual_circuits::memory_related::sha256_round_function::sha256_decompose_into_per_circuit_witness;
 
     tracing::debug!("Running sha256 simulation");
 
@@ -1095,7 +1089,7 @@ fn process_memory_related_circuits<
 
     // ecrecover precompile
 
-    use crate::witness::individual_circuits::ecrecover::ecrecover_decompose_into_per_circuit_witness;
+    use crate::witness::individual_circuits::memory_related::ecrecover::ecrecover_decompose_into_per_circuit_witness;
 
     tracing::debug!("Running ecrecover simulation");
 
@@ -1115,7 +1109,7 @@ fn process_memory_related_circuits<
     );
     circuits_data.ecrecover_circuits_data = ecrecover_circuits_data;
 
-    use crate::witness::individual_circuits::secp256r1_verify::secp256r1_verify_decompose_into_per_circuit_witness;
+    use crate::witness::individual_circuits::memory_related::secp256r1_verify::secp256r1_verify_decompose_into_per_circuit_witness;
 
     tracing::debug!("Running secp256r1_simulation simulation");
 
@@ -1137,7 +1131,7 @@ fn process_memory_related_circuits<
 
     assert!(implicit_memory_artifacts.memory_queries.len() == amount_of_implicit_memory_queries);
 
-    use crate::witness::individual_circuits::ram_permutation::compute_ram_circuit_snapshots;
+    use crate::witness::individual_circuits::memory_related::ram_permutation::compute_ram_circuit_snapshots;
 
     tracing::debug!("Running RAM permutation simulation");
 
