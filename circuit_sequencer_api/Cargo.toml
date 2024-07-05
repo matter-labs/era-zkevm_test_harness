@@ -1,20 +1,25 @@
 [package]
 name = "circuit_sequencer_api"
-version = "0.1.0"
+version = "0.133.0"
 edition = "2021"
+authors = ["The Matter Labs Team <hello@matterlabs.dev>"]
+homepage = "https://zksync.io/"
+repository = "https://github.com/matter-labs/era-zkevm_circuits"
 license = "MIT OR Apache-2.0"
+keywords = ["blockchain", "zksync"]
+categories = ["cryptography"]
+description = "ZKsync Era circuits for EraVM"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 
-zk_evm = {git = "https://github.com/matter-labs/era-zk_evm.git", branch = "v1.3.3"}
-bellman = { package = "bellman_ce", git = "https://github.com/matter-labs/bellman", branch = "dev" }
+zk_evm = "=0.133.0"
+bellman = { package = "bellman_ce", version = "=0.7.0" }
 
-
-derivative = "*"
+derivative = "2.2"
 serde = {version = "1", features = ["derive"]}
-rayon = "*"
+rayon = "1.10"
 
 
 [features]
