@@ -141,6 +141,8 @@ fn repack_input_for_main_vm(
     )>,
     flat_new_frames_history: Vec<(Cycle, CallStackEntry)>,
 ) -> Vec<MainVmSimulationInput> {
+    tracing::debug!("Repacking data for MainVM");
+
     let MemoryArtifacts {
         memory_queue_entry_states,
         memory_queries,
@@ -239,7 +241,7 @@ fn repack_input_for_main_vm(
 
     for (circuit_idx, _pair) in vm_snapshots.windows(2).enumerate() {
         if amount_of_circuits / 100 != 0 && circuit_idx % (amount_of_circuits / 100) == 0 {
-            println!("{} / {}", circuit_idx, amount_of_circuits);
+            tracing::debug!("{} / {}", circuit_idx, amount_of_circuits);
         }
 
         let memory_queue_states_for_entry = memory_queue_entry_states_it.next().unwrap().1;
@@ -437,12 +439,15 @@ pub(crate) fn process_main_vm<
     let circuits_len = vm_snapshots.windows(2).len();
 
     let amount_of_circuits = vm_snapshots.windows(2).enumerate().len();
+
+    tracing::debug!("Processing MainVM circuits");
+
     // parallelizable
     for ((circuit_idx, pair), main_vm_input) in
         vm_snapshots.windows(2).enumerate().zip(main_vm_inputs)
     {
         if amount_of_circuits / 100 != 0 && circuit_idx % (amount_of_circuits / 100) == 0 {
-            println!("{} / {}", circuit_idx, amount_of_circuits);
+            tracing::debug!("{} / {}", circuit_idx, amount_of_circuits);
         }
 
         let is_last = circuit_idx == circuits_len - 1;
