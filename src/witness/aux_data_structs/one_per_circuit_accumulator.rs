@@ -62,7 +62,7 @@ impl<T> OnePerCircuitAccumulatorContainer<T> {
     }
 }
 
-/// TODO docs
+/// Accumulates values ​​and saves only the last value for each circuit
 pub struct LastPerCircuitAccumulator<T> {
     container: OnePerCircuitAccumulatorContainer<T>,
 }
@@ -113,6 +113,8 @@ impl<T> Default for LastPerCircuitAccumulator<T> {
 }
 
 #[derive(Default)]
+/// Accumulates values ​​and saves only the entry value for each circuit
+/// Uses sparse input - values arrives unevenly
 pub struct CircuitsEntryAccumulatorSparse<T: TupleFirst>
 where
     T: Clone,

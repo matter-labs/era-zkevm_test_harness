@@ -5,7 +5,7 @@ use crate::witness::artifacts::{DecommitmentArtifactsForMainVM, MemoryArtifacts}
 use crate::witness::aux_data_structs::one_per_circuit_accumulator::CircuitsEntryAccumulatorSparse;
 use crate::witness::aux_data_structs::per_circuit_accumulator::PerCircuitAccumulatorSparse;
 use crate::witness::individual_circuits::SmallField;
-use crate::witness::oracle::StorageLogDetailedState;
+use crate::witness::oracle::FrameLogQueueDetailedState;
 use crate::witness::postprocessing::{
     ClosedFormInputField, CsForWitnessGeneration, FirstAndLastCircuitWitness,
 };
@@ -45,15 +45,14 @@ use derivative::Derivative;
 type Cycle = u32;
 
 pub(crate) struct CallstackSimulationResult<F: SmallField> {
-    pub callstack_sponge_encoding_ranges:
+    pub entry_callstack_states_accumulator:
         CircuitsEntryAccumulatorSparse<(Cycle, [F; FULL_SPONGE_QUEUE_STATE_WIDTH])>,
-    pub callstack_values_witnesses: PerCircuitAccumulatorSparse<(
+    pub callstack_witnesses: PerCircuitAccumulatorSparse<(
         Cycle,
         (ExtendedCallstackEntry<F>, CallstackSimulatorState<F>),
     )>,
-    pub rollback_queue_head_segments: PerCircuitAccumulatorSparse<(Cycle, [F; QUEUE_STATE_WIDTH])>,
-    pub storage_log_states_for_entry:
-        CircuitsEntryAccumulatorSparse<(Cycle, StorageLogDetailedState<F>)>,
+    pub entry_frames_storage_log_detailed_states:
+        CircuitsEntryAccumulatorSparse<(Cycle, FrameLogQueueDetailedState<F>)>,
 }
 
 #[derive(Derivative)]
@@ -107,7 +106,7 @@ struct MainVmSimulationInput {
     decommittment_queue_states_for_entry:
         QueueStateWitness<GoldilocksField, FULL_SPONGE_QUEUE_STATE_WIDTH>,
     callstack_state_for_entry: [GoldilocksField; FULL_SPONGE_QUEUE_STATE_WIDTH],
-    storage_log_queue_detailed_state_for_entry: StorageLogDetailedState<GoldilocksField>,
+    frame_log_queue_detailed_state_for_entry: FrameLogQueueDetailedState<GoldilocksField>,
     storage_queries_witnesses: Vec<(Cycle, LogQuery)>,
     cold_warm_refund_logs: Vec<(Cycle, LogQuery, u32)>,
     pubdata_cost_logs: Vec<(Cycle, LogQuery, PubdataCost)>,
@@ -126,6 +125,7 @@ struct MainVmSimulationInput {
     memory_write_witnesses: Vec<(Cycle, MemoryQuery)>,
 }
 
+/// Repack the input data into one structure for each of the MainVM circuits
 fn repack_input_for_main_vm(
     geometry: &GeometryConfig,
     vm_snapshots: &Vec<VmSnapshot>,
@@ -136,6 +136,7 @@ fn repack_input_for_main_vm(
     cold_warm_refunds_logs: PerCircuitAccumulatorSparse<(Cycle, LogQuery, u32)>,
     pubdata_cost_logs: PerCircuitAccumulatorSparse<(Cycle, LogQuery, PubdataCost)>,
     log_rollback_tails_for_frames: Vec<(Cycle, [GoldilocksField; QUEUE_STATE_WIDTH])>,
+    log_rollback_queue_heads: PerCircuitAccumulatorSparse<(Cycle, [GoldilocksField; QUEUE_STATE_WIDTH])>,
     flat_new_frames_history: Vec<(Cycle, CallStackEntry)>,
 ) -> Vec<MainVmSimulationInput> {
     let MemoryArtifacts {
@@ -149,10 +150,9 @@ fn repack_input_for_main_vm(
     } = decommitment_artifacts_for_main_vm;
 
     let CallstackSimulationResult {
-        callstack_sponge_encoding_ranges,
-        callstack_values_witnesses,
-        rollback_queue_head_segments,
-        storage_log_states_for_entry,
+        entry_callstack_states_accumulator,
+        callstack_witnesses,
+        entry_frames_storage_log_detailed_states,
     } = callstack_simulation_result;
 
     let amount_of_circuits = vm_snapshots.windows(2).enumerate().len();
@@ -190,13 +190,13 @@ fn repack_input_for_main_vm(
         .into_circuits(amount_of_circuits)
         .into_iter();
 
-    let last_storage_log_state = storage_log_states_for_entry.last().1;
-    let mut storage_log_states_for_entry_it = storage_log_states_for_entry
+    let last_storage_log_state = entry_frames_storage_log_detailed_states.last().1;
+    let mut storage_log_states_for_entry_it = entry_frames_storage_log_detailed_states
         .into_circuits(amount_of_circuits)
         .into_iter();
 
     let last_callstack_state_for_entry = [GoldilocksField::ZERO; FULL_SPONGE_QUEUE_STATE_WIDTH]; // always an empty one
-    let mut callstack_sponge_states_it = callstack_sponge_encoding_ranges
+    let mut callstack_sponge_entry_states_it = entry_callstack_states_accumulator
         .into_circuits(amount_of_circuits)
         .into_iter();
 
@@ -227,10 +227,10 @@ fn repack_input_for_main_vm(
     )
     .into_circuits(amount_of_circuits)
     .into_iter();
-    let mut rollback_queue_head_segments_it = rollback_queue_head_segments
+    let mut rollback_queue_head_segments_it = log_rollback_queue_heads
         .into_circuits(amount_of_circuits)
         .into_iter();
-    let mut callstack_values_witnesses_it = callstack_values_witnesses
+    let mut callstack_values_witnesses_it = callstack_witnesses
         .into_circuits(amount_of_circuits)
         .into_iter();
     let mut prepared_decommittment_queries_it = prepared_decommittment_queries
@@ -249,9 +249,9 @@ fn repack_input_for_main_vm(
         let memory_queue_states_for_entry = memory_queue_entry_states_it.next().unwrap().1;
         let decommittment_queue_states_for_entry =
             decommittment_queue_entry_states.next().unwrap().1;
-        let storage_log_queue_detailed_state_for_entry =
+        let frame_log_queue_detailed_state_for_entry =
             storage_log_states_for_entry_it.next().unwrap().1;
-        let callstack_state_for_entry = callstack_sponge_states_it.next().unwrap().1;
+        let callstack_state_for_entry = callstack_sponge_entry_states_it.next().unwrap().1;
 
         let memory_write_witnesses = memory_write_witnesses_it.next().unwrap();
         let memory_read_witnesses = memory_read_witnesses_it.next().unwrap();
@@ -268,7 +268,7 @@ fn repack_input_for_main_vm(
         let main_vm_input = MainVmSimulationInput {
             decommittment_queue_states_for_entry,
             memory_queue_states_for_entry,
-            storage_log_queue_detailed_state_for_entry,
+            frame_log_queue_detailed_state_for_entry,
             callstack_state_for_entry,
             memory_write_witnesses,
             memory_read_witnesses,
@@ -289,13 +289,13 @@ fn repack_input_for_main_vm(
     {
         let decommittment_queue_states_for_entry = last_decommittment_queue_state;
         let memory_queue_states_for_entry = last_memory_queue_state;
-        let storage_log_queue_detailed_state_for_entry = last_storage_log_state;
+        let frame_log_queue_detailed_state_for_entry = last_storage_log_state;
         let callstack_state_for_entry = last_callstack_state_for_entry;
 
         let main_vm_input = MainVmSimulationInput {
             decommittment_queue_states_for_entry,
             memory_queue_states_for_entry,
-            storage_log_queue_detailed_state_for_entry,
+            frame_log_queue_detailed_state_for_entry,
             callstack_state_for_entry,
             memory_write_witnesses: vec![],
             memory_read_witnesses: vec![],
@@ -340,6 +340,7 @@ pub(crate) fn process_main_vm<
     cold_warm_refunds_logs: PerCircuitAccumulatorSparse<(Cycle, LogQuery, u32)>,
     pubdata_cost_logs: PerCircuitAccumulatorSparse<(Cycle, LogQuery, PubdataCost)>,
     log_rollback_tails_for_frames: Vec<(Cycle, [GoldilocksField; QUEUE_STATE_WIDTH])>,
+    log_rollback_queue_heads: PerCircuitAccumulatorSparse<(Cycle, [GoldilocksField; QUEUE_STATE_WIDTH])>,
     callstack_simulation_result: CallstackSimulationResult<GoldilocksField>,
     flat_new_frames_history: Vec<(Cycle, CallStackEntry)>,
     mut vm_snapshots: Vec<VmSnapshot>,
@@ -432,6 +433,7 @@ pub(crate) fn process_main_vm<
         cold_warm_refunds_logs,
         pubdata_cost_logs,
         log_rollback_tails_for_frames,
+        log_rollback_queue_heads,
         flat_new_frames_history,
     );
 
@@ -457,20 +459,19 @@ pub(crate) fn process_main_vm<
         let initial_state = &pair[0];
         let final_state = &pair[1];
 
-        // TODO move all
         let MainVmSimulationInput {
             memory_queue_states_for_entry: memory_queue_state,
             decommittment_queue_states_for_entry: decommittment_queue_state,
             callstack_state_for_entry,
-            storage_log_queue_detailed_state_for_entry: storage_log_queue_detailed_state,
+            frame_log_queue_detailed_state_for_entry: frame_log_queue_detailed_state,
             ..
         } = main_vm_input;
 
         let storage_log_queue_state = QueueStateWitness {
             head: [GoldilocksField::ZERO; QUEUE_STATE_WIDTH],
             tail: QueueTailStateWitness {
-                tail: storage_log_queue_detailed_state.forward_tail,
-                length: storage_log_queue_detailed_state.forward_length,
+                tail: frame_log_queue_detailed_state.forward_tail,
+                length: frame_log_queue_detailed_state.forward_length,
             },
         };
 
@@ -486,9 +487,9 @@ pub(crate) fn process_main_vm<
             decommittment_queue_state,
             memory_queue_state,
             storage_log_queue_state,
-            current_frame_rollback_queue_tail: storage_log_queue_detailed_state.rollback_tail,
-            current_frame_rollback_queue_head: storage_log_queue_detailed_state.rollback_head,
-            current_frame_rollback_queue_segment_length: storage_log_queue_detailed_state
+            current_frame_rollback_queue_tail: frame_log_queue_detailed_state.rollback_tail,
+            current_frame_rollback_queue_head: frame_log_queue_detailed_state.rollback_head,
+            current_frame_rollback_queue_segment_length: frame_log_queue_detailed_state
                 .rollback_length,
         };
 

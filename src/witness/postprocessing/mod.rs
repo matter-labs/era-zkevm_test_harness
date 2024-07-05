@@ -369,7 +369,7 @@ pub(crate) struct CircuitMaker<'a, T: ClosedFormInputField<GoldilocksField>> {
     round_function: Poseidon2Goldilocks,
     observable_input: Option<<T::IN as CSAllocatable<GoldilocksField>>::Witness>,
     cs_for_witness_generation: &'a mut CsForWitnessGeneration,
-    queue_simulator: RecursionQueueSimulator<GoldilocksField>,
+    recurion_queue_simulator: RecursionQueueSimulator<GoldilocksField>,
     compact_form_witnesses: Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
     extremes: FirstAndLastCircuitWitness<ObservableWitness<GoldilocksField, T>>,
 }
@@ -394,7 +394,7 @@ where
             round_function,
             observable_input: None,
             cs_for_witness_generation,
-            queue_simulator: RecursionQueueSimulator::empty(),
+            recurion_queue_simulator: RecursionQueueSimulator::empty(),
             compact_form_witnesses: vec![],
             extremes: FirstAndLastCircuitWitness::default(),
         }
@@ -451,8 +451,8 @@ where
             circuit_type: GoldilocksField::from_u64_unchecked(circuit_type as u64),
             public_input: proof_system_input,
         };
-        let _ = self
-            .queue_simulator
+        self
+            .recurion_queue_simulator
             .push(recursive_request, &self.round_function);
 
         circuit
@@ -487,11 +487,11 @@ where
             self.compact_form_witnesses
         };
 
-        (self.extremes, self.queue_simulator, compact_form_witnesses)
+        (self.extremes, self.recurion_queue_simulator, compact_form_witnesses)
     }
 }
 
-pub(crate) fn make_circuit<
+pub(crate) fn make_circuits<
     T: ClosedFormInputField<GoldilocksField>,
     S: ZkSyncUniformSynthesisFunction<GoldilocksField>,
     CB: FnMut(ZkSyncUniformCircuitInstance<GoldilocksField, S>),
@@ -533,18 +533,18 @@ where
     }
 
     let (
-        ecrecover_precompile_circuits,
-        queue_simulator,
-        ecrecover_precompile_circuits_compact_forms_witnesses,
+        first_and_last_observable_witnesses,
+        recursion_queue_simulator,
+        circuits_compact_forms_witnesses,
     ) = maker.into_results();
     recursion_queue_callback(
         circuit_type as u64,
-        queue_simulator,
-        ecrecover_precompile_circuits_compact_forms_witnesses.clone(),
+        recursion_queue_simulator,
+        circuits_compact_forms_witnesses.clone(),
     );
 
     (
-        ecrecover_precompile_circuits,
-        ecrecover_precompile_circuits_compact_forms_witnesses,
+        first_and_last_observable_witnesses,
+        circuits_compact_forms_witnesses,
     )
 }

@@ -24,7 +24,7 @@ use crate::witness::aux_data_structs::one_per_circuit_accumulator::{
 use crate::witness::aux_data_structs::per_circuit_accumulator::PerCircuitAccumulatorSparse;
 use crate::witness::aux_data_structs::MemoryQueuePerCircuitSimulator;
 use crate::witness::individual_circuits::log_demux::LogDemuxCircuitArtifacts;
-use crate::witness::postprocessing::make_circuit;
+use crate::witness::postprocessing::make_circuits;
 use crate::witness::tracer::tracer::{QueryMarker, WitnessTracer};
 use crate::witness::tracer::vm_snapshot::VmSnapshot;
 use crate::zk_evm::aux_structures::DecommittmentQuery;
@@ -75,7 +75,7 @@ pub struct RollbackQueueStateWitness<F: SmallField> {
     Eq,
     Default(bound = "")
 )]
-pub struct StorageLogDetailedState<F: SmallField> {
+pub struct FrameLogQueueDetailedState<F: SmallField> {
     pub frame_idx: usize,
     pub forward_tail: [F; QUEUE_STATE_WIDTH],
     pub forward_length: u32,
@@ -136,7 +136,8 @@ type LogRollbackTailsForFrames = Vec<(Cycle, [GoldilocksField; QUEUE_STATE_WIDTH
 
 /// Simulates the global multiplexed log queue and produces inputs for log demux circuit processing.
 /// Together with simulation, splits the multiplexed log queue into separate queues.
-/// Also returns the initial tails of the multiplexed log rollback queue for each frame.
+/// Also returns the initial tails of the multiplexed log rollback queue for each call frame
+/// and rollback queue heads for cycles
 fn process_multiplexed_log_queue(
     geometry: GeometryConfig,
     full_callstack_history: &Vec<CallstackActionHistoryEntry>,
@@ -147,6 +148,7 @@ fn process_multiplexed_log_queue(
     LogDemuxCircuitArtifacts<GoldilocksField>,
     DemuxedLogQueries,
     LogRollbackTailsForFrames,
+    PerCircuitAccumulatorSparse<(Cycle, [GoldilocksField; QUEUE_STATE_WIDTH])>
 ) {
     // these queues contain all log queries and some additional markers
     let applied_queries = std::mem::take(&mut last_callstack_entry.forward_queue);
@@ -335,6 +337,22 @@ fn process_multiplexed_log_queue(
             }),
     );
 
+    // we know for every cycle a pointer to the positions of item's forward and rollback action into
+    // the flattened queue
+    // we also know when each cycle begins/end
+    // so we can quickly reconstruct every current state
+    let mut log_rollback_queue_heads: PerCircuitAccumulatorSparse<(
+        Cycle,
+        [GoldilocksField; QUEUE_STATE_WIDTH],
+    )> = PerCircuitAccumulatorSparse::new(geometry.cycles_per_vm_snapshot as usize);
+
+    for (cycle, (_forward, rollback)) in states_data.forward_and_rollback_pointers.iter() {
+        if let Some(pointer) = rollback {
+            let state = &states_data.chain_of_states[*pointer];
+            log_rollback_queue_heads.push((*cycle, state.0));
+        }
+    }
+
     (
         states_data,
         LogDemuxCircuitArtifacts {
@@ -344,6 +362,7 @@ fn process_multiplexed_log_queue(
         },
         demuxed_queries,
         log_rollback_tails_for_frames,
+        log_rollback_queue_heads
     )
 }
 
@@ -351,6 +370,7 @@ use circuit_definitions::encodings::callstack_entry::{
     CallstackSimulator, CallstackSimulatorState,
 };
 
+/// Simulate callstack and prepare callstack-related inputs for MainVM circuits processing
 fn callstack_simulation(
     geometry: &GeometryConfig,
     full_callstack_history: Vec<CallstackActionHistoryEntry>,
@@ -358,28 +378,19 @@ fn callstack_simulation(
     log_rollback_tails_for_frames: &Vec<(Cycle, [GoldilocksField; QUEUE_STATE_WIDTH])>,
     round_function: &Poseidon2Goldilocks,
 ) -> CallstackSimulationResult<GoldilocksField> {
-    let mut callstack_argebraic_simulator = CallstackSimulator::empty();
-
-    let mut callstack_values_witnesses =
-        PerCircuitAccumulatorSparse::new(geometry.cycles_per_vm_snapshot as usize);
-
-    // we need to simultaneously follow the logic of pushes/joins of the storage queues,
+    // we need to simultaneously follow the logic of pushes/joins of the log queue,
     // and encoding of the current callstack state as the sponge state
 
-    // here we are interested in "frozen" elements that are in the stack,
-    // so we never follow the "current", but add on push/pop
+    let mut callstack_argebraic_simulator = CallstackSimulator::empty();
 
     // These are "frozen" states that just lie in the callstack for now and can not be modified
-    let mut callstack_states_accumulator_for_main_vm = CircuitsEntryAccumulatorSparse::new(
+    // so we never follow the "current", but add on push/pop
+    let mut callstack_witnesses_for_main_vm =
+        PerCircuitAccumulatorSparse::new(geometry.cycles_per_vm_snapshot as usize);
+    let mut entry_callstack_states_accumulator_for_main_vm = CircuitsEntryAccumulatorSparse::new(
         geometry.cycles_per_vm_snapshot as usize,
         (0, [GoldilocksField::ZERO; FULL_SPONGE_QUEUE_STATE_WIDTH]),
     );
-
-    // we need some information that spans the whole number of cycles with "what is a frame counter at this time"
-
-    // we have all the spans of when each frame is active, so we can
-    // - simulate what is saved and when
-    // - get witnesses for heads when encountering the new spans
 
     let global_end_of_storage_log = log_states_data
         .chain_of_states
@@ -387,29 +398,12 @@ fn callstack_simulation(
         .map(|el| el.1)
         .unwrap_or([GoldilocksField::ZERO; QUEUE_STATE_WIDTH]);
 
-    // we know for every cycle a pointer to the positions of item's forward and rollback action into
-    // the flattened queue
-    // we also know when each cycle begins/end
-
-    // so we can quickly reconstruct every current state
-
-    let mut rollback_queue_head_segments: PerCircuitAccumulatorSparse<(
-        Cycle,
-        [GoldilocksField; QUEUE_STATE_WIDTH],
-    )> = PerCircuitAccumulatorSparse::new(geometry.cycles_per_vm_snapshot as usize);
-
-    for (cycle, (_forward, rollback)) in log_states_data.forward_and_rollback_pointers.iter() {
-        if let Some(pointer) = rollback {
-            let state = &log_states_data.chain_of_states[*pointer];
-            rollback_queue_head_segments.push((*cycle, state.0));
-        }
-    }
-
-    let mut history_of_storage_log_states = BTreeMap::new();
+    // we need some information that spans the whole number of cycles with "what is a frame counter at this time"
+    // we have all the spans of when each frame is active, so we can simulate what is saved and when
+    let mut log_queue_detailed_states = BTreeMap::new();
 
     // we start with no rollbacks, but non-trivial tail
-
-    let initial_storage_state = StorageLogDetailedState {
+    let initial_storage_state = FrameLogQueueDetailedState {
         rollback_tail: global_end_of_storage_log,
         rollback_head: global_end_of_storage_log,
         ..Default::default()
@@ -419,12 +413,12 @@ fn callstack_simulation(
 
     let mut storage_logs_states_stack = vec![];
 
-    let mut exited_state_to_merge: Option<(bool, StorageLogDetailedState<GoldilocksField>)> = None;
+    let mut exited_state_to_merge: Option<(bool, FrameLogQueueDetailedState<GoldilocksField>)> = None;
 
     let apply_frame_log_changes = |
         callstack_history_entry: &CallstackActionHistoryEntry, 
-        mut storage_log_state: StorageLogDetailedState<GoldilocksField>,
-        history_of_storage_log_states: &mut BTreeMap<u32, StorageLogDetailedState<GoldilocksField>>
+        mut storage_log_state: FrameLogQueueDetailedState<GoldilocksField>,
+        log_queue_detailed_states: &mut BTreeMap<u32, FrameLogQueueDetailedState<GoldilocksField>>
         | {
         let begin_at_cycle = callstack_history_entry.beginning_cycle;
         let end_cycle = callstack_history_entry.end_cycle.expect("frame must end");
@@ -452,7 +446,7 @@ fn callstack_simulation(
             }
 
             let previous =
-                history_of_storage_log_states.insert(*cycle, storage_log_state);
+            log_queue_detailed_states.insert(*cycle, storage_log_state);
             if previous.is_some() {
                 assert_eq!(
                     previous.unwrap(),
@@ -473,16 +467,19 @@ fn callstack_simulation(
         callstack_entry: ExtendedCallstackEntry<GoldilocksField>,
         callstack_simulator_state: CallstackSimulatorState<GoldilocksField>
     | {
-        if let Some((prev_cycle, _)) = callstack_values_witnesses.last() {
+        if let Some((prev_cycle, _)) = callstack_witnesses_for_main_vm.last() {
             assert!(cycle_to_use != *prev_cycle, "trying to add callstack witness for cycle {}, but previous one is on cycle {}", cycle_to_use, prev_cycle);
         }
-        callstack_values_witnesses.push((cycle_to_use, (callstack_entry, callstack_simulator_state)));
+        callstack_witnesses_for_main_vm.push((cycle_to_use, (callstack_entry, callstack_simulator_state)));
 
         // when we push a new one then we need to "finish" the previous range and start a new one
-        callstack_states_accumulator_for_main_vm
+        entry_callstack_states_accumulator_for_main_vm
             .push((cycle_to_use, callstack_simulator_state.new_state));
     };
 
+    // we simulate a series of actions on the stack starting from the outermost frame
+    // each history record contains an information on what was the stack state between points
+    // when it potentially came into and out of scope
     for callstack_history_entry in full_callstack_history.iter() {
         let frame_index = callstack_history_entry.frame_index;
 
@@ -498,7 +495,7 @@ fn callstack_simulation(
                 // `current_storage_log_state` is what we should use for the "current" one,
                 // and we can mutate it, bookkeep and then use in the simulator
 
-                current_storage_log_state = apply_frame_log_changes(callstack_history_entry, current_storage_log_state, &mut history_of_storage_log_states);
+                current_storage_log_state = apply_frame_log_changes(callstack_history_entry, current_storage_log_state, &mut log_queue_detailed_states);
 
                 // push the item to the stack
                 storage_logs_states_stack.push(current_storage_log_state);
@@ -534,7 +531,7 @@ fn callstack_simulation(
                 let beginning_cycle = callstack_history_entry.beginning_cycle;
 
                 let previous =
-                    history_of_storage_log_states.insert(beginning_cycle, current_storage_log_state);
+                log_queue_detailed_states.insert(beginning_cycle, current_storage_log_state);
 
                 if !previous.is_none() {
                     // ensure that basic properties hold: we replace the current frame with a new one, so
@@ -564,7 +561,7 @@ fn callstack_simulation(
                 // we are not too interested, frame just ends, and all the storage log logic was resolved before it
                 assert!(exited_state_to_merge.is_none());
 
-                current_storage_log_state = apply_frame_log_changes(callstack_history_entry, current_storage_log_state, &mut history_of_storage_log_states);
+                current_storage_log_state = apply_frame_log_changes(callstack_history_entry, current_storage_log_state, &mut log_queue_detailed_states);
                 exited_state_to_merge = Some((panic, current_storage_log_state));
             }
             CallstackAction::PopFromStack { panic } => {
@@ -628,7 +625,7 @@ fn callstack_simulation(
 
                 let beginning_cycle = callstack_history_entry.beginning_cycle;
 
-                let previous = history_of_storage_log_states
+                let previous = log_queue_detailed_states
                     .insert(beginning_cycle, current_storage_log_state);
                 if previous.is_some() {
                     assert_eq!(
@@ -643,23 +640,22 @@ fn callstack_simulation(
 
                 assert!(intermediate_info.is_push == false);
                 
-                // we place it at the cycle when it was actually popped, but not one when it becase "active"
+                // we place it at the cycle when it was actually popped, but not one when it became "active"
                 save_callstack_witness_for_main_vm(beginning_cycle, entry, intermediate_info);
             }
         }
     }
 
-    let storage_log_states_for_entry = CircuitsEntryAccumulatorSparse::from_iter(
+    let entry_frames_storage_log_detailed_states = CircuitsEntryAccumulatorSparse::from_iter(
         geometry.cycles_per_vm_snapshot as usize,
         (0, initial_storage_state),
-        history_of_storage_log_states.into_iter(),
+        log_queue_detailed_states.into_iter(),
     );
 
     CallstackSimulationResult {
-        callstack_sponge_encoding_ranges: callstack_states_accumulator_for_main_vm,
-        callstack_values_witnesses,
-        rollback_queue_head_segments,
-        storage_log_states_for_entry,
+        entry_callstack_states_accumulator: entry_callstack_states_accumulator_for_main_vm,
+        callstack_witnesses: callstack_witnesses_for_main_vm,
+        entry_frames_storage_log_detailed_states,
     }
 }
 
@@ -1114,6 +1110,8 @@ fn process_memory_related_circuits<
     )
 }
 
+/// Make basic circuits instances and witnesses,
+/// create artifacts for recursion layer and scheduler
 pub(crate) fn create_artifacts_from_tracer<
     CB: FnMut(ZkSyncBaseLayerCircuit),
     QSCB: FnMut(
@@ -1140,6 +1138,12 @@ pub(crate) fn create_artifacts_from_tracer<
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
     Vec<EIP4844CircuitInstanceWitness<GoldilocksField>>,
 ) {
+    // Our goals are:
+    // - make instances of basic layer circuits and pass them via circuit_callback (inputs for the base layer proving)
+    // - prepare inputs for recursion layer circuits and pass them via recursion_queue_callback (for the recursion layer proving)
+    // - prepare observable witnesses of first and last instances of each basic circuit (part of the scheduler inputs)
+    // - get all compact form witnesses for layer circuits (part of the scheduler inputs)
+
     let WitnessTracer {
         memory_queries: vm_memory_queries_accumulated,
         storage_queries,
@@ -1156,14 +1160,14 @@ pub(crate) fn create_artifacts_from_tracer<
         ..
     } = tracer;
 
-    // we should have an initial query somewhat before the time
+    // we should have an initial decommit query somewhat before the time
     assert!(prepared_decommittment_queries.len() >= 1);
     assert!(executed_decommittment_queries.len() >= 1);
     assert!(prepared_decommittment_queries.len() >= executed_decommittment_queries.len());
-    let (ts, q, w) = &executed_decommittment_queries[0];
-    assert!(*ts < crate::zk_evm::zkevm_opcode_defs::STARTING_TIMESTAMP);
-    assert_eq!(q, &entry_point_decommittment_query.0);
-    assert_eq!(w, &entry_point_decommittment_query.1);
+    let (timestamp, query, witness) = &executed_decommittment_queries[0];
+    assert!(*timestamp < crate::zk_evm::zkevm_opcode_defs::STARTING_TIMESTAMP);
+    assert_eq!(query, &entry_point_decommittment_query.0);
+    assert_eq!(witness, &entry_point_decommittment_query.1);
 
     assert!(vm_snapshots.len() >= 2); // we need at least entry point and the last save (after exit)
 
@@ -1182,11 +1186,14 @@ pub(crate) fn create_artifacts_from_tracer<
 
     tracing::debug!("Running multiplexed log queue simulation");
 
+    // We have all log queries in one multiplexed queue. We need to simulate this queue,
+    // demultiplex it and get log queue rollback tails for every call frame
     let (
         log_states_data,
         log_demux_circuit_inputs,
         demuxed_log_queries,
         log_rollback_tails_for_frames,
+        log_rollback_queue_heads
     ) = process_multiplexed_log_queue(
         *geometry,
         &full_callstack_history,
@@ -1196,6 +1203,8 @@ pub(crate) fn create_artifacts_from_tracer<
 
     snapshot_prof("Muxed log queue processed");
 
+    // Scratch-space constraint system for circuits processing
+    // Used when creating circuit instances and compact form witnesses
     let mut cs_for_witness_generation = CsForWitnessGeneration::new();
 
     snapshot_prof("Cs created");
@@ -1205,8 +1214,8 @@ pub(crate) fn create_artifacts_from_tracer<
 
     tracing::debug!("Running log demux simulation");
 
-    // get circuits and witnesses for logs demultiplexer
-    // also simulate all demuxed log queues states (used for corresponding circuits further)
+    // Get circuits and witnesses for logs demultiplexer.
+    // Also simulate all demuxed log queues states (used for corresponding circuits further)
     let (
         log_demux_circuits,
         log_demux_circuits_compact_forms_witnesses,
@@ -1227,9 +1236,9 @@ pub(crate) fn create_artifacts_from_tracer<
 
     tracing::debug!("Processing log circuits");
 
-    // process part of log circuits that do not use memory
-    // precompiles will be processed in process_memory_related_circuits
-    // also makes storage application circuits and witnesses
+    // Process part of log circuits that do not use memory (I/O-like).
+    // Precompiles will be processed in process_memory_related_circuits.
+    // Also makes storage application circuits and compact form witnesses.
     let (log_circuits_data, storage_application_circuits, storage_application_compact_forms) =
         process_io_log_circuits(
             geometry,
@@ -1255,9 +1264,11 @@ pub(crate) fn create_artifacts_from_tracer<
         logs_queries: demuxed_log_queries.precompiles,
     };
 
-    // process all circuits related to memory
-    // decommiter, precompiles, ram permutation
-    // heavy for CPU and RAM
+    // Prepare inputs for processing of all circuits related to memory
+    // (decommitts sorter, decommiter, precompiles, ram permutation).
+    // Prepare decommitment an memory inputs for MainVM circuits processing.
+    // Also makes ram permutation circuits and compact form witnesses.
+    // The most RAM- and CPU-demanding part of the witness generation.
     let (
         memory_circuits_data,
         memory_artifacts_for_main_vm,
@@ -1282,10 +1293,10 @@ pub(crate) fn create_artifacts_from_tracer<
 
     tracing::debug!("Running callstack sumulation");
 
-    // we simulate a series of actions on the stack starting from the outermost frame
-    // each history record contains an information on what was the stack state between points
-    // when it potentially came into and out of scope
-
+    // We need to simulate all callstack states and prepare for each MainVM circuit:
+    // - entry value of callstack sponge
+    // - callstack witnesses (for every callstack state change)
+    // - detailed log queue state for entry call frame (frame index, log queue state)
     let callstack_simulation_result = callstack_simulation(
         geometry,
         full_callstack_history,
@@ -1295,9 +1306,6 @@ pub(crate) fn create_artifacts_from_tracer<
     );
 
     snapshot_prof("Callstack simulated");
-
-    // NOTE: here we have all the queues processed in the `process` function (actual pushing is done), so we can
-    // just read from the corresponding states
 
     tracing::debug!(
         "Processing VM snapshots queue (total {:?})",
@@ -1312,6 +1320,8 @@ pub(crate) fn create_artifacts_from_tracer<
         evm_simulator_code_hash,
     };
 
+    // Prepares inputs and makes circuit instances and compact forms for MainVM circuits
+    // Time consuming due to usually large number of circuits
     let (main_vm_circuits, main_vm_circuits_compact_forms_witnesses) = process_main_vm(
         geometry,
         in_circuit_global_context,
@@ -1321,6 +1331,7 @@ pub(crate) fn create_artifacts_from_tracer<
         cold_warm_refunds_logs,
         pubdata_cost_logs,
         log_rollback_tails_for_frames,
+        log_rollback_queue_heads,
         callstack_simulation_result,
         flat_new_frames_history,
         vm_snapshots,
@@ -1333,7 +1344,9 @@ pub(crate) fn create_artifacts_from_tracer<
     snapshot_prof("After mainVM processing");
 
     tracing::debug!("Making remaining circuits");
-    // some circuits have already been made in previous functions
+
+    // Some circuit instances and compact form witnesses have already been made in previous functions
+    // Now we'll make the rest
 
     let LogCircuitsArtifacts {
         storage_deduplicator_circuit_data,
@@ -1356,11 +1369,11 @@ pub(crate) fn create_artifacts_from_tracer<
     let (
         code_decommittments_sorter_circuits,
         code_decommittments_sorter_circuits_compact_forms_witnesses,
-    ) = make_circuit(
+    ) = make_circuits(
         geometry.cycles_code_decommitter_sorter,
         BaseLayerCircuitType::DecommitmentsFilter,
         decommittments_deduplicator_circuits_data,
-        round_function.clone(),
+        *round_function,
         |x| circuit_callback(ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(x)),
         &mut recursion_queue_callback,
         &mut cs_for_witness_generation,
@@ -1370,11 +1383,11 @@ pub(crate) fn create_artifacts_from_tracer<
 
     // Actual decommitter
     let (code_decommitter_circuits, code_decommitter_circuits_compact_forms_witnesses) =
-        make_circuit(
+        make_circuits(
             geometry.cycles_per_code_decommitter,
             BaseLayerCircuitType::Decommiter,
             code_decommitter_circuits_data,
-            round_function.clone(),
+            *round_function,
             |x| circuit_callback(ZkSyncBaseLayerCircuit::CodeDecommitter(x)),
             &mut recursion_queue_callback,
             &mut cs_for_witness_generation,
@@ -1384,11 +1397,11 @@ pub(crate) fn create_artifacts_from_tracer<
 
     // keccak precompiles
     let (keccak_precompile_circuits, keccak_precompile_circuits_compact_forms_witnesses) =
-        make_circuit(
+        make_circuits(
             geometry.cycles_per_keccak256_circuit,
             BaseLayerCircuitType::KeccakPrecompile,
             keccak256_circuits_data,
-            round_function.clone(),
+            *round_function,
             |x| circuit_callback(ZkSyncBaseLayerCircuit::KeccakRoundFunction(x)),
             &mut recursion_queue_callback,
             &mut cs_for_witness_generation,
@@ -1398,11 +1411,11 @@ pub(crate) fn create_artifacts_from_tracer<
 
     // sha256 precompiles
     let (sha256_precompile_circuits, sha256_precompile_circuits_compact_forms_witnesses) =
-        make_circuit(
+        make_circuits(
             geometry.cycles_per_sha256_circuit,
             BaseLayerCircuitType::Sha256Precompile,
             sha256_circuits_data,
-            round_function.clone(),
+            *round_function,
             |x| circuit_callback(ZkSyncBaseLayerCircuit::Sha256RoundFunction(x)),
             &mut recursion_queue_callback,
             &mut cs_for_witness_generation,
@@ -1412,11 +1425,11 @@ pub(crate) fn create_artifacts_from_tracer<
 
     // ecrecover precompiles
     let (ecrecover_precompile_circuits, ecrecover_precompile_circuits_compact_forms_witnesses) =
-        make_circuit(
+        make_circuits(
             geometry.cycles_per_ecrecover_circuit,
             BaseLayerCircuitType::EcrecoverPrecompile,
             ecrecover_circuits_data,
-            round_function.clone(),
+            *round_function,
             |x| circuit_callback(ZkSyncBaseLayerCircuit::ECRecover(x)),
             &mut recursion_queue_callback,
             &mut cs_for_witness_generation,
@@ -1426,11 +1439,11 @@ pub(crate) fn create_artifacts_from_tracer<
 
     // secp256r1 verify
     let (secp256r1_verify_circuits, secp256r1_verify_circuits_compact_forms_witnesses) =
-        make_circuit(
+        make_circuits(
             geometry.cycles_per_secp256r1_verify_circuit,
             BaseLayerCircuitType::Secp256r1Verify,
             secp256r1_verify_circuits_data,
-            round_function.clone(),
+            *round_function,
             |x| circuit_callback(ZkSyncBaseLayerCircuit::Secp256r1Verify(x)),
             &mut recursion_queue_callback,
             &mut cs_for_witness_generation,
@@ -1439,11 +1452,11 @@ pub(crate) fn create_artifacts_from_tracer<
     snapshot_prof("Secp256 verify");
 
     // storage sorter
-    let (storage_sorter_circuits, storage_sorter_circuit_compact_form_witnesses) = make_circuit(
+    let (storage_sorter_circuits, storage_sorter_circuit_compact_form_witnesses) = make_circuits(
         geometry.cycles_per_storage_sorter,
         BaseLayerCircuitType::StorageFilter,
         storage_deduplicator_circuit_data,
-        round_function.clone(),
+        *round_function,
         |x| circuit_callback(ZkSyncBaseLayerCircuit::StorageSorter(x)),
         &mut recursion_queue_callback,
         &mut cs_for_witness_generation,
@@ -1452,11 +1465,11 @@ pub(crate) fn create_artifacts_from_tracer<
     snapshot_prof("Storage sorter");
 
     // events sorter
-    let (events_sorter_circuits, events_sorter_circuits_compact_forms_witnesses) = make_circuit(
+    let (events_sorter_circuits, events_sorter_circuits_compact_forms_witnesses) = make_circuits(
         geometry.cycles_per_events_or_l1_messages_sorter,
         BaseLayerCircuitType::EventsRevertsFilter,
         events_deduplicator_circuit_data,
-        round_function.clone(),
+        *round_function,
         |x| circuit_callback(ZkSyncBaseLayerCircuit::EventsSorter(x)),
         &mut recursion_queue_callback,
         &mut cs_for_witness_generation,
@@ -1466,11 +1479,11 @@ pub(crate) fn create_artifacts_from_tracer<
 
     // l1 messages sorter
     let (l1_messages_sorter_circuits, l1_messages_sorter_circuits_compact_forms_witnesses) =
-        make_circuit(
+        make_circuits(
             geometry.cycles_per_events_or_l1_messages_sorter,
             BaseLayerCircuitType::L1MessagesRevertsFilter,
             l1_messages_deduplicator_circuit_data,
-            round_function.clone(),
+            *round_function,
             |x| circuit_callback(ZkSyncBaseLayerCircuit::L1MessagesSorter(x)),
             &mut recursion_queue_callback,
             &mut cs_for_witness_generation,
@@ -1480,11 +1493,11 @@ pub(crate) fn create_artifacts_from_tracer<
 
     // l1 messages pubdata hasher
     let (l1_messages_hasher_circuits, l1_messages_hasher_circuits_compact_forms_witnesses) =
-        make_circuit(
+        make_circuits(
             geometry.limit_for_l1_messages_pudata_hasher,
             BaseLayerCircuitType::L1MessagesHasher,
             l1_messages_linear_hash_data,
-            round_function.clone(),
+            *round_function,
             |x| circuit_callback(ZkSyncBaseLayerCircuit::L1MessagesHasher(x)),
             &mut recursion_queue_callback,
             &mut cs_for_witness_generation,
@@ -1496,11 +1509,11 @@ pub(crate) fn create_artifacts_from_tracer<
     let (
         transient_storage_sorter_circuits,
         transient_storage_sorter_circuits_compact_forms_witnesses,
-    ) = make_circuit(
+    ) = make_circuits(
         geometry.cycles_per_transient_storage_sorter,
         BaseLayerCircuitType::TransientStorageChecker,
         transient_storage_sorter_circuit_data,
-        round_function.clone(),
+        *round_function,
         |x| circuit_callback(ZkSyncBaseLayerCircuit::TransientStorageSorter(x)),
         &mut recursion_queue_callback,
         &mut cs_for_witness_generation,
@@ -1513,11 +1526,11 @@ pub(crate) fn create_artifacts_from_tracer<
     use crate::witness::individual_circuits::eip4844_repack::compute_eip_4844;
     let eip_4844_circuits = compute_eip_4844(eip_4844_repack_inputs, trusted_setup_path);
 
-    let (_eip_4844_circuits, _eip_4844_circuits_compact_forms_witnesses) = make_circuit(
+    let (_eip_4844_circuits, _eip_4844_circuits_compact_forms_witnesses) = make_circuits(
         4096,
         BaseLayerCircuitType::EIP4844Repack,
         eip_4844_circuits.clone(),
-        round_function.clone(),
+        *round_function,
         |x| circuit_callback(ZkSyncBaseLayerCircuit::EIP4844Repack(x)),
         &mut recursion_queue_callback,
         &mut cs_for_witness_generation,
@@ -1525,9 +1538,9 @@ pub(crate) fn create_artifacts_from_tracer<
 
     snapshot_prof("Eip 4844");
 
-    // done!
+    // All done!
 
-    let basic_circuits = BlockFirstAndLastBasicCircuitsObservableWitnesses {
+    let basic_circuits_first_and_last_observable_witnesses = BlockFirstAndLastBasicCircuitsObservableWitnesses {
         main_vm_circuits,
         code_decommittments_sorter_circuits,
         code_decommitter_circuits,
@@ -1567,5 +1580,5 @@ pub(crate) fn create_artifacts_from_tracer<
 
     snapshot_prof("Final");
 
-    (basic_circuits, all_compact_forms, eip_4844_circuits)
+    (basic_circuits_first_and_last_observable_witnesses, all_compact_forms, eip_4844_circuits)
 }

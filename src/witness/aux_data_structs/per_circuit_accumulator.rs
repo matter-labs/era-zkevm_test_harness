@@ -171,6 +171,8 @@ impl<T: TupleFirst> Iterator for PerCircuitAccumulatorIntoIter<T> {
     }
 }
 
+/// Accumulates values ​for each circuit
+/// The contents of the accumulator can be easily divided into circuits
 pub struct PerCircuitAccumulator<T> {
     container: PerCircuitAccumulatorContainer<T>,
 }
@@ -213,8 +215,9 @@ impl<T> Pushable<T> for PerCircuitAccumulator<T> {
     }
 }
 
-/// Used to store queries that will be used for the main VM witness generation.
-/// This data structure internally sorts queries by main VM circuit instances.
+/// Accumulates values ​for each circuit
+/// The contents of the accumulator can be easily divided into circuits
+/// Uses sparse input - values arrives unevenly
 #[derive(Clone, Debug)]
 pub struct PerCircuitAccumulatorSparse<T: TupleFirst> {
     container: PerCircuitAccumulatorContainer<T>,

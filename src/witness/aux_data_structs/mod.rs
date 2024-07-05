@@ -19,7 +19,6 @@ impl<T, U> TupleFirst for (u32, T, U) {
     }
 }
 
-// TODO cleanup
 use crate::witness::aux_data_structs::per_circuit_accumulator::PerCircuitAccumulator;
 use circuit_definitions::encodings::memory_query::QueueWitness;
 use circuit_definitions::encodings::memory_query::{CustomMemoryQueueSimulator, MemoryQueueState};
