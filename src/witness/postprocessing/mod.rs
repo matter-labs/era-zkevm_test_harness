@@ -451,8 +451,7 @@ where
             circuit_type: GoldilocksField::from_u64_unchecked(circuit_type as u64),
             public_input: proof_system_input,
         };
-        self
-            .recurion_queue_simulator
+        self.recurion_queue_simulator
             .push(recursive_request, &self.round_function);
 
         circuit
@@ -487,7 +486,11 @@ where
             self.compact_form_witnesses
         };
 
-        (self.extremes, self.recurion_queue_simulator, compact_form_witnesses)
+        (
+            self.extremes,
+            self.recurion_queue_simulator,
+            compact_form_witnesses,
+        )
     }
 }
 

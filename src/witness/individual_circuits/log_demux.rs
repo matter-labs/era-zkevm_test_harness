@@ -10,6 +10,7 @@ use crate::witness::aux_data_structs::one_per_circuit_accumulator::LastPerCircui
 use crate::witness::postprocessing::CircuitMaker;
 use crate::zkevm_circuits::base_structures::log_query::*;
 use crate::zkevm_circuits::demux_log_queue::input::*;
+use crate::zkevm_circuits::demux_log_queue::ALL_DEMUX_OUTPUTS;
 use crate::zkevm_circuits::demux_log_queue::NUM_DEMUX_OUTPUTS;
 use circuit_definitions::circuit_definitions::base_layer::{
     LogDemuxInstanceSynthesisFunction, ZkSyncBaseLayerCircuit,
@@ -20,7 +21,6 @@ use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use circuit_definitions::{encodings::*, Field, RoundFunction};
 use postprocessing::CsForWitnessGeneration;
 use zk_evm::zkevm_opcode_defs::SECP256R1_VERIFY_PRECOMPILE_ADDRESS;
-use crate::zkevm_circuits::demux_log_queue::ALL_DEMUX_OUTPUTS;
 
 use crate::zk_evm::aux_structures::LogQuery as LogQuery_;
 use std::collections::HashMap;
@@ -46,14 +46,14 @@ pub(crate) struct PrecompilesQueuesStates {
     pub keccak: LogQueueStates<Field>,
     pub sha256: LogQueueStates<Field>,
     pub ecrecover: LogQueueStates<Field>,
-    pub secp256r1_verify: LogQueueStates<Field>
+    pub secp256r1_verify: LogQueueStates<Field>,
 }
 
 pub(crate) struct IOLogsQueuesStates {
     pub rollup_storage: LogQueueStates<Field>,
     pub transient_storage: LogQueueStates<Field>,
     pub events: LogQueueStates<Field>,
-    pub l2_to_l1: LogQueueStates<Field>
+    pub l2_to_l1: LogQueueStates<Field>,
 }
 
 pub struct DemuxedQueuesStatesSimulator {
@@ -100,7 +100,9 @@ impl DemuxedQueuesStatesSimulator {
         }
     }
 
-    pub fn build_empty(round_function: Poseidon2Goldilocks) -> (IOLogsQueuesStates, PrecompilesQueuesStates) {
+    pub fn build_empty(
+        round_function: Poseidon2Goldilocks,
+    ) -> (IOLogsQueuesStates, PrecompilesQueuesStates) {
         let mut sub_queues = HashMap::new();
         for output in ALL_DEMUX_OUTPUTS {
             sub_queues.insert(output, LogQueueStates::<Field>::default());
@@ -109,7 +111,8 @@ impl DemuxedQueuesStatesSimulator {
         Self {
             sub_queues,
             round_function,
-        }.into_results()
+        }
+        .into_results()
     }
 
     pub fn get_sub_queue_for_query(query: &LogQuery_) -> Option<DemuxOutput> {
@@ -133,25 +136,21 @@ impl DemuxedQueuesStatesSimulator {
                     a if a == *SECP256R1_VERIFY_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
                         Some(DemuxOutput::Secp256r1Verify)
                     }
-                    _ => {None}
+                    _ => None,
                 }
-            }   ,
-            _ => unreachable!("Invalid query aux byte")
+            }
+            _ => unreachable!("Invalid query aux byte"),
         }
     }
 
     pub fn simulate_and_push(&mut self, demux_output: DemuxOutput, item: LogQuery_) {
-        let sub_queue = self.sub_queues
-        .get_mut(&demux_output)
-        .unwrap();
+        let sub_queue = self.sub_queues.get_mut(&demux_output).unwrap();
 
         let (_old_tail, intermediate_info) = sub_queue
             .simulator
             .push_and_output_intermediate_data(item, &self.round_function);
 
-        sub_queue
-            .states_accumulator
-            .push(intermediate_info);
+        sub_queue.states_accumulator.push(intermediate_info);
     }
 
     pub fn into_results(self) -> (IOLogsQueuesStates, PrecompilesQueuesStates) {
@@ -167,8 +166,8 @@ impl DemuxedQueuesStatesSimulator {
                 keccak: queries.remove(&DemuxOutput::Keccak).unwrap(),
                 sha256: queries.remove(&DemuxOutput::Sha256).unwrap(),
                 ecrecover: queries.remove(&DemuxOutput::ECRecover).unwrap(),
-                secp256r1_verify: queries.remove(&DemuxOutput::Secp256r1Verify).unwrap()
-            }
+                secp256r1_verify: queries.remove(&DemuxOutput::Secp256r1Verify).unwrap(),
+            },
         )
     }
 }
@@ -190,7 +189,7 @@ pub(crate) fn process_logs_demux_and_make_circuits<
     FirstAndLastCircuitWitness<LogDemuxerObservableWitness<Field>>,
     Vec<ClosedFormInputCompactFormWitness<Field>>,
     IOLogsQueuesStates,
-    PrecompilesQueuesStates
+    PrecompilesQueuesStates,
 ) {
     log_demux_artifacts
         .applied_log_queue_simulator
@@ -221,13 +220,14 @@ pub(crate) fn process_logs_demux_and_make_circuits<
             log_demux_circuits_compact_forms_witnesses.clone(),
         );
 
-        let (io_queues_states, precompiles_queues_states)  = DemuxedQueuesStatesSimulator::build_empty(*round_function);
+        let (io_queues_states, precompiles_queues_states) =
+            DemuxedQueuesStatesSimulator::build_empty(*round_function);
 
         return (
             log_demux_circuits,
             log_demux_circuits_compact_forms_witnesses,
             io_queues_states,
-            precompiles_queues_states
+            precompiles_queues_states,
         );
     }
 
@@ -260,15 +260,33 @@ pub(crate) fn process_logs_demux_and_make_circuits<
         take_queue_state_from_simulator(&log_demux_artifacts.applied_log_queue_simulator);
 
     let mut queries_iterators = HashMap::new();
-    queries_iterators.insert(DemuxOutput::RollupStorage, demuxed_queues.io.rollup_storage.iter());
+    queries_iterators.insert(
+        DemuxOutput::RollupStorage,
+        demuxed_queues.io.rollup_storage.iter(),
+    );
     queries_iterators.insert(DemuxOutput::Events, demuxed_queues.io.event.iter());
     queries_iterators.insert(DemuxOutput::L2ToL1Messages, demuxed_queues.io.to_l1.iter());
-    queries_iterators.insert(DemuxOutput::TransientStorage, demuxed_queues.io.transient_storage.iter());
+    queries_iterators.insert(
+        DemuxOutput::TransientStorage,
+        demuxed_queues.io.transient_storage.iter(),
+    );
 
-    queries_iterators.insert(DemuxOutput::Keccak, demuxed_queues.precompiles.keccak.iter());
-    queries_iterators.insert(DemuxOutput::Sha256, demuxed_queues.precompiles.sha256.iter());
-    queries_iterators.insert(DemuxOutput::ECRecover, demuxed_queues.precompiles.ecrecover.iter());
-    queries_iterators.insert(DemuxOutput::Secp256r1Verify, demuxed_queues.precompiles.secp256r1_verify.iter());
+    queries_iterators.insert(
+        DemuxOutput::Keccak,
+        demuxed_queues.precompiles.keccak.iter(),
+    );
+    queries_iterators.insert(
+        DemuxOutput::Sha256,
+        demuxed_queues.precompiles.sha256.iter(),
+    );
+    queries_iterators.insert(
+        DemuxOutput::ECRecover,
+        demuxed_queues.precompiles.ecrecover.iter(),
+    );
+    queries_iterators.insert(
+        DemuxOutput::Secp256r1Verify,
+        demuxed_queues.precompiles.secp256r1_verify.iter(),
+    );
 
     let mut input_passthrough_data = LogDemuxerInputData::placeholder_witness();
     // we only need the state of the original input
@@ -290,10 +308,16 @@ pub(crate) fn process_logs_demux_and_make_circuits<
         DemuxedQueuesStatesSimulator::new(*geometry, amounts_of_queries, *round_function);
 
     let simulator_witness_it = log_demux_artifacts
-    .applied_log_queue_simulator
-    .witness.as_slices().0.chunks(per_circuit_capacity);
+        .applied_log_queue_simulator
+        .witness
+        .as_slices()
+        .0
+        .chunks(per_circuit_capacity);
 
-    for (circuit_index, (input_chunk, simulator_witness_chunk)) in input_queue_witness.chunks(per_circuit_capacity).zip(simulator_witness_it).enumerate()
+    for (circuit_index, (input_chunk, simulator_witness_chunk)) in input_queue_witness
+        .chunks(per_circuit_capacity)
+        .zip(simulator_witness_it)
+        .enumerate()
     {
         let is_first = circuit_index == 0;
         let is_last = circuit_index == num_chunks - 1;
@@ -302,7 +326,12 @@ pub(crate) fn process_logs_demux_and_make_circuits<
         for (_, _, query) in input_chunk.iter() {
             let sub_queue = DemuxedQueuesStatesSimulator::get_sub_queue_for_query(query);
             if let Some(sub_queue) = sub_queue {
-                let log_query = queries_iterators.get_mut(&sub_queue).unwrap().next().copied().unwrap();
+                let log_query = queries_iterators
+                    .get_mut(&sub_queue)
+                    .unwrap()
+                    .next()
+                    .copied()
+                    .unwrap();
                 demuxed_simulator.simulate_and_push(sub_queue, log_query);
             } else {
                 // just burn ergs
@@ -311,7 +340,8 @@ pub(crate) fn process_logs_demux_and_make_circuits<
 
         // make the output
 
-        let input_witness: VecDeque<_> = simulator_witness_chunk.into_iter()
+        let input_witness: VecDeque<_> = simulator_witness_chunk
+            .into_iter()
             .map(|(_encoding, old_tail, element)| {
                 (log_query_into_circuit_log_query_witness(element), *old_tail)
             })
@@ -320,7 +350,8 @@ pub(crate) fn process_logs_demux_and_make_circuits<
         let mut fsm_output = LogDemuxerFSMInputOutput::placeholder_witness();
 
         let mut initial_log_queue_state = full_log_queue_state.clone();
-        let last_applied_log_queue_state = last_applied_log_queue_states_for_chunks[circuit_index].1;
+        let last_applied_log_queue_state =
+            last_applied_log_queue_states_for_chunks[circuit_index].1;
         initial_log_queue_state.head = last_applied_log_queue_state.tail;
         initial_log_queue_state.tail.length -= last_applied_log_queue_state.num_items;
 
@@ -393,6 +424,6 @@ pub(crate) fn process_logs_demux_and_make_circuits<
         log_demux_circuits,
         log_demux_circuits_compact_forms_witnesses,
         io_queues_states,
-        precompiles_queues_states
+        precompiles_queues_states,
     )
 }

@@ -148,7 +148,7 @@ fn process_multiplexed_log_queue(
     LogDemuxCircuitArtifacts<GoldilocksField>,
     DemuxedLogQueries,
     LogRollbackTailsForFrames,
-    PerCircuitAccumulatorSparse<(Cycle, [GoldilocksField; QUEUE_STATE_WIDTH])>
+    PerCircuitAccumulatorSparse<(Cycle, [GoldilocksField; QUEUE_STATE_WIDTH])>,
 ) {
     // these queues contain all log queries and some additional markers
     let applied_queries = std::mem::take(&mut last_callstack_entry.forward_queue);
@@ -362,7 +362,7 @@ fn process_multiplexed_log_queue(
         },
         demuxed_queries,
         log_rollback_tails_for_frames,
-        log_rollback_queue_heads
+        log_rollback_queue_heads,
     )
 }
 
@@ -413,69 +413,75 @@ fn callstack_simulation(
 
     let mut storage_logs_states_stack = vec![];
 
-    let mut exited_state_to_merge: Option<(bool, FrameLogQueueDetailedState<GoldilocksField>)> = None;
+    let mut exited_state_to_merge: Option<(bool, FrameLogQueueDetailedState<GoldilocksField>)> =
+        None;
 
-    let apply_frame_log_changes = |
-        callstack_history_entry: &CallstackActionHistoryEntry, 
-        mut storage_log_state: FrameLogQueueDetailedState<GoldilocksField>,
-        log_queue_detailed_states: &mut BTreeMap<u32, FrameLogQueueDetailedState<GoldilocksField>>
-        | {
-        let begin_at_cycle = callstack_history_entry.beginning_cycle;
-        let end_cycle = callstack_history_entry.end_cycle.expect("frame must end");
+    let apply_frame_log_changes =
+        |callstack_history_entry: &CallstackActionHistoryEntry,
+         mut storage_log_state: FrameLogQueueDetailedState<GoldilocksField>,
+         log_queue_detailed_states: &mut BTreeMap<
+            u32,
+            FrameLogQueueDetailedState<GoldilocksField>,
+        >| {
+            let begin_at_cycle = callstack_history_entry.beginning_cycle;
+            let end_cycle = callstack_history_entry.end_cycle.expect("frame must end");
 
-        let range_of_interest = (begin_at_cycle + 1)..=end_cycle; // begin_at_cycle is formally bound to the previous one
-        let frame_action_span = log_states_data
-            .forward_and_rollback_pointers
-            .range(range_of_interest);
-        for (cycle, (forward_pointer, rollback_pointer)) in frame_action_span {
-            // always add to the forward
-            let new_forward_tail = log_states_data.chain_of_states[*forward_pointer].1;
-            if new_forward_tail != storage_log_state.forward_tail {
-                // edge case of double data on frame boudary, reword later
-                storage_log_state.forward_tail = new_forward_tail;
-                storage_log_state.forward_length += 1;
-            }
+            let range_of_interest = (begin_at_cycle + 1)..=end_cycle; // begin_at_cycle is formally bound to the previous one
+            let frame_action_span = log_states_data
+                .forward_and_rollback_pointers
+                .range(range_of_interest);
+            for (cycle, (forward_pointer, rollback_pointer)) in frame_action_span {
+                // always add to the forward
+                let new_forward_tail = log_states_data.chain_of_states[*forward_pointer].1;
+                if new_forward_tail != storage_log_state.forward_tail {
+                    // edge case of double data on frame boudary, reword later
+                    storage_log_state.forward_tail = new_forward_tail;
+                    storage_log_state.forward_length += 1;
+                }
 
-            // if there is a rollback then let's process it too
+                // if there is a rollback then let's process it too
 
-            if let Some(rollback_pointer) = rollback_pointer {
-                let new_rollback_head =
-                    log_states_data.chain_of_states[*rollback_pointer].0;
+                if let Some(rollback_pointer) = rollback_pointer {
+                    let new_rollback_head = log_states_data.chain_of_states[*rollback_pointer].0;
                     storage_log_state.rollback_head = new_rollback_head;
                     storage_log_state.rollback_length += 1;
+                }
+
+                let previous = log_queue_detailed_states.insert(*cycle, storage_log_state);
+                if previous.is_some() {
+                    assert_eq!(
+                        previous.unwrap(),
+                        storage_log_state,
+                        "duplicate divergence for cycle {}: previous is {:?}, new is {:?}",
+                        cycle,
+                        previous.unwrap(),
+                        storage_log_state
+                    )
+                }
             }
 
-            let previous =
-            log_queue_detailed_states.insert(*cycle, storage_log_state);
-            if previous.is_some() {
-                assert_eq!(
-                    previous.unwrap(),
-                    storage_log_state,
-                    "duplicate divergence for cycle {}: previous is {:?}, new is {:?}",
-                    cycle,
-                    previous.unwrap(),
-                    storage_log_state
-                )
+            storage_log_state
+        };
+
+    let mut save_callstack_witness_for_main_vm =
+        |cycle_to_use: u32,
+         callstack_entry: ExtendedCallstackEntry<GoldilocksField>,
+         callstack_simulator_state: CallstackSimulatorState<GoldilocksField>| {
+            if let Some((prev_cycle, _)) = callstack_witnesses_for_main_vm.last() {
+                assert!(
+                    cycle_to_use != *prev_cycle,
+                    "trying to add callstack witness for cycle {}, but previous one is on cycle {}",
+                    cycle_to_use,
+                    prev_cycle
+                );
             }
-        }
+            callstack_witnesses_for_main_vm
+                .push((cycle_to_use, (callstack_entry, callstack_simulator_state)));
 
-        storage_log_state
-    };
-
-    let mut save_callstack_witness_for_main_vm = |
-        cycle_to_use: u32,
-        callstack_entry: ExtendedCallstackEntry<GoldilocksField>,
-        callstack_simulator_state: CallstackSimulatorState<GoldilocksField>
-    | {
-        if let Some((prev_cycle, _)) = callstack_witnesses_for_main_vm.last() {
-            assert!(cycle_to_use != *prev_cycle, "trying to add callstack witness for cycle {}, but previous one is on cycle {}", cycle_to_use, prev_cycle);
-        }
-        callstack_witnesses_for_main_vm.push((cycle_to_use, (callstack_entry, callstack_simulator_state)));
-
-        // when we push a new one then we need to "finish" the previous range and start a new one
-        entry_callstack_states_accumulator_for_main_vm
-            .push((cycle_to_use, callstack_simulator_state.new_state));
-    };
+            // when we push a new one then we need to "finish" the previous range and start a new one
+            entry_callstack_states_accumulator_for_main_vm
+                .push((cycle_to_use, callstack_simulator_state.new_state));
+        };
 
     // we simulate a series of actions on the stack starting from the outermost frame
     // each history record contains an information on what was the stack state between points
@@ -495,7 +501,11 @@ fn callstack_simulation(
                 // `current_storage_log_state` is what we should use for the "current" one,
                 // and we can mutate it, bookkeep and then use in the simulator
 
-                current_storage_log_state = apply_frame_log_changes(callstack_history_entry, current_storage_log_state, &mut log_queue_detailed_states);
+                current_storage_log_state = apply_frame_log_changes(
+                    callstack_history_entry,
+                    current_storage_log_state,
+                    &mut log_queue_detailed_states,
+                );
 
                 // push the item to the stack
                 storage_logs_states_stack.push(current_storage_log_state);
@@ -531,7 +541,7 @@ fn callstack_simulation(
                 let beginning_cycle = callstack_history_entry.beginning_cycle;
 
                 let previous =
-                log_queue_detailed_states.insert(beginning_cycle, current_storage_log_state);
+                    log_queue_detailed_states.insert(beginning_cycle, current_storage_log_state);
 
                 if !previous.is_none() {
                     // ensure that basic properties hold: we replace the current frame with a new one, so
@@ -561,7 +571,11 @@ fn callstack_simulation(
                 // we are not too interested, frame just ends, and all the storage log logic was resolved before it
                 assert!(exited_state_to_merge.is_none());
 
-                current_storage_log_state = apply_frame_log_changes(callstack_history_entry, current_storage_log_state, &mut log_queue_detailed_states);
+                current_storage_log_state = apply_frame_log_changes(
+                    callstack_history_entry,
+                    current_storage_log_state,
+                    &mut log_queue_detailed_states,
+                );
                 exited_state_to_merge = Some((panic, current_storage_log_state));
             }
             CallstackAction::PopFromStack { panic } => {
@@ -598,7 +612,8 @@ fn callstack_simulation(
                 current_storage_log_state.frame_idx = frame_index;
                 current_storage_log_state.forward_tail = exited_state_to_merge.forward_tail;
                 assert!(
-                    current_storage_log_state.forward_length <= exited_state_to_merge.forward_length,
+                    current_storage_log_state.forward_length
+                        <= exited_state_to_merge.forward_length,
                     "divergence at frame {}",
                     frame_index
                 );
@@ -612,21 +627,25 @@ fn callstack_simulation(
                     );
 
                     current_storage_log_state.forward_tail = exited_state_to_merge.rollback_tail;
-                    current_storage_log_state.forward_length += exited_state_to_merge.rollback_length;
+                    current_storage_log_state.forward_length +=
+                        exited_state_to_merge.rollback_length;
                 } else {
                     assert_eq!(
-                        current_storage_log_state.rollback_head, exited_state_to_merge.rollback_tail,
+                        current_storage_log_state.rollback_head,
+                        exited_state_to_merge.rollback_tail,
                         "divergence at frame {} without panic: {:?}",
-                        frame_index, callstack_history_entry
+                        frame_index,
+                        callstack_history_entry
                     );
                     current_storage_log_state.rollback_head = exited_state_to_merge.rollback_head;
-                    current_storage_log_state.rollback_length += exited_state_to_merge.rollback_length;
+                    current_storage_log_state.rollback_length +=
+                        exited_state_to_merge.rollback_length;
                 }
 
                 let beginning_cycle = callstack_history_entry.beginning_cycle;
 
-                let previous = log_queue_detailed_states
-                    .insert(beginning_cycle, current_storage_log_state);
+                let previous =
+                    log_queue_detailed_states.insert(beginning_cycle, current_storage_log_state);
                 if previous.is_some() {
                     assert_eq!(
                         previous.unwrap(),
@@ -639,7 +658,7 @@ fn callstack_simulation(
                 }
 
                 assert!(intermediate_info.is_push == false);
-                
+
                 // we place it at the cycle when it was actually popped, but not one when it became "active"
                 save_callstack_witness_for_main_vm(beginning_cycle, entry, intermediate_info);
             }
@@ -659,9 +678,9 @@ fn callstack_simulation(
     }
 }
 
-use crate::zkevm_circuits::demux_log_queue::DemuxOutput;
-use crate::witness::individual_circuits::log_demux::IOLogsQueuesStates;
 use crate::witness::artifacts::DemuxedIOLogQueries;
+use crate::witness::individual_circuits::log_demux::IOLogsQueuesStates;
+use crate::zkevm_circuits::demux_log_queue::DemuxOutput;
 
 /// Process log circuits that do not use memory.
 /// Storage, transient storage, events, l2 to l1 queries
@@ -869,8 +888,8 @@ fn simulate_memory_queue(
     )
 }
 
-use crate::witness::individual_circuits::log_demux::PrecompilesQueuesStates;
 use crate::witness::artifacts::DemuxedPrecompilesLogQueries;
+use crate::witness::individual_circuits::log_demux::PrecompilesQueuesStates;
 
 struct PrecompilesInputData {
     keccak_round_function_witnesses: Vec<(Cycle, LogQuery, Vec<Keccak256RoundWitness>)>,
@@ -1071,9 +1090,7 @@ fn process_memory_related_circuits<
         &memory_queue_states_accumulator,
         &mut memory_queue_simulator,
         precompiles_data.secp256r1_verify_witnesses,
-        precompiles_data
-            .logs_queries
-            .secp256r1_verify,
+        precompiles_data.logs_queries.secp256r1_verify,
         precompiles_data.logs_queues_states.secp256r1_verify,
         geometry.cycles_per_secp256r1_verify_circuit as usize,
         round_function,
@@ -1193,7 +1210,7 @@ pub(crate) fn create_artifacts_from_tracer<
         log_demux_circuit_inputs,
         demuxed_log_queries,
         log_rollback_tails_for_frames,
-        log_rollback_queue_heads
+        log_rollback_queue_heads,
     ) = process_multiplexed_log_queue(
         *geometry,
         &full_callstack_history,
@@ -1540,23 +1557,24 @@ pub(crate) fn create_artifacts_from_tracer<
 
     // All done!
 
-    let basic_circuits_first_and_last_observable_witnesses = BlockFirstAndLastBasicCircuitsObservableWitnesses {
-        main_vm_circuits,
-        code_decommittments_sorter_circuits,
-        code_decommitter_circuits,
-        log_demux_circuits,
-        keccak_precompile_circuits,
-        sha256_precompile_circuits,
-        ecrecover_precompile_circuits,
-        ram_permutation_circuits,
-        storage_sorter_circuits,
-        storage_application_circuits,
-        events_sorter_circuits,
-        l1_messages_sorter_circuits,
-        l1_messages_hasher_circuits,
-        transient_storage_sorter_circuits,
-        secp256r1_verify_circuits,
-    };
+    let basic_circuits_first_and_last_observable_witnesses =
+        BlockFirstAndLastBasicCircuitsObservableWitnesses {
+            main_vm_circuits,
+            code_decommittments_sorter_circuits,
+            code_decommitter_circuits,
+            log_demux_circuits,
+            keccak_precompile_circuits,
+            sha256_precompile_circuits,
+            ecrecover_precompile_circuits,
+            ram_permutation_circuits,
+            storage_sorter_circuits,
+            storage_application_circuits,
+            events_sorter_circuits,
+            l1_messages_sorter_circuits,
+            l1_messages_hasher_circuits,
+            transient_storage_sorter_circuits,
+            secp256r1_verify_circuits,
+        };
 
     // NOTE: this should follow in a sequence same as scheduler's work and `SEQUENCE_OF_CIRCUIT_TYPES`
 
@@ -1580,5 +1598,9 @@ pub(crate) fn create_artifacts_from_tracer<
 
     snapshot_prof("Final");
 
-    (basic_circuits_first_and_last_observable_witnesses, all_compact_forms, eip_4844_circuits)
+    (
+        basic_circuits_first_and_last_observable_witnesses,
+        all_compact_forms,
+        eip_4844_circuits,
+    )
 }

@@ -136,7 +136,10 @@ fn repack_input_for_main_vm(
     cold_warm_refunds_logs: PerCircuitAccumulatorSparse<(Cycle, LogQuery, u32)>,
     pubdata_cost_logs: PerCircuitAccumulatorSparse<(Cycle, LogQuery, PubdataCost)>,
     log_rollback_tails_for_frames: Vec<(Cycle, [GoldilocksField; QUEUE_STATE_WIDTH])>,
-    log_rollback_queue_heads: PerCircuitAccumulatorSparse<(Cycle, [GoldilocksField; QUEUE_STATE_WIDTH])>,
+    log_rollback_queue_heads: PerCircuitAccumulatorSparse<(
+        Cycle,
+        [GoldilocksField; QUEUE_STATE_WIDTH],
+    )>,
     flat_new_frames_history: Vec<(Cycle, CallStackEntry)>,
 ) -> Vec<MainVmSimulationInput> {
     let MemoryArtifacts {
@@ -340,7 +343,10 @@ pub(crate) fn process_main_vm<
     cold_warm_refunds_logs: PerCircuitAccumulatorSparse<(Cycle, LogQuery, u32)>,
     pubdata_cost_logs: PerCircuitAccumulatorSparse<(Cycle, LogQuery, PubdataCost)>,
     log_rollback_tails_for_frames: Vec<(Cycle, [GoldilocksField; QUEUE_STATE_WIDTH])>,
-    log_rollback_queue_heads: PerCircuitAccumulatorSparse<(Cycle, [GoldilocksField; QUEUE_STATE_WIDTH])>,
+    log_rollback_queue_heads: PerCircuitAccumulatorSparse<(
+        Cycle,
+        [GoldilocksField; QUEUE_STATE_WIDTH],
+    )>,
     callstack_simulation_result: CallstackSimulationResult<GoldilocksField>,
     flat_new_frames_history: Vec<(Cycle, CallStackEntry)>,
     mut vm_snapshots: Vec<VmSnapshot>,

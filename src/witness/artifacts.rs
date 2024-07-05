@@ -37,7 +37,7 @@ use crate::zk_evm::zkevm_opcode_defs::system_params::{
 #[derivative(Default)]
 pub struct DemuxedLogQueries {
     pub io: DemuxedIOLogQueries,
-    pub precompiles: DemuxedPrecompilesLogQueries
+    pub precompiles: DemuxedPrecompilesLogQueries,
 }
 
 #[derive(Derivative)]
@@ -47,7 +47,7 @@ pub struct DemuxedIOLogQueries {
     pub porter_storage: Vec<LogQuery>,
     pub transient_storage: Vec<LogQuery>,
     pub event: Vec<LogQuery>,
-    pub to_l1: Vec<LogQuery>
+    pub to_l1: Vec<LogQuery>,
 }
 
 #[derive(Derivative)]
