@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use crate::snapshot_prof;
 use crate::witness::artifacts::{DecommitmentArtifactsForMainVM, MemoryArtifacts};
 use crate::witness::aux_data_structs::one_per_circuit_accumulator::CircuitsEntryAccumulatorSparse;
 use crate::witness::aux_data_structs::per_circuit_accumulator::PerCircuitAccumulatorSparse;
@@ -179,8 +178,6 @@ fn repack_input_for_main_vm(
     );
     drop(memory_queries);
 
-    snapshot_prof("Repack: splitted witnesses");
-
     // prepare some inputs for MainVM circuits
 
     let last_memory_queue_state = memory_queue_entry_states.last().1.clone();
@@ -239,8 +236,6 @@ fn repack_input_for_main_vm(
     let mut prepared_decommittment_queries_it = prepared_decommittment_queries
         .into_circuits(amount_of_circuits)
         .into_iter();
-
-    snapshot_prof("Repack: prepared iters");
 
     for (circuit_idx, _pair) in vm_snapshots.windows(2).enumerate() {
         if amount_of_circuits / 100 != 0 {
@@ -313,8 +308,6 @@ fn repack_input_for_main_vm(
         };
 
         main_vm_inputs.push(main_vm_input);
-
-        snapshot_prof("Repack: repacked last circuit");
     }
 
     main_vm_inputs
@@ -427,8 +420,6 @@ pub(crate) fn process_main_vm<
         VmInstanceWitness<GoldilocksField, VmWitnessOracle<GoldilocksField>>,
     > = None;
 
-    snapshot_prof("Before mainVM processing");
-
     let main_vm_inputs = repack_input_for_main_vm(
         geometry,
         &vm_snapshots,
@@ -446,8 +437,6 @@ pub(crate) fn process_main_vm<
     // duplicate last snapshot to process last circuit
     vm_snapshots.push(vm_snapshots.last().unwrap().clone());
     let circuits_len = vm_snapshots.windows(2).len();
-
-    snapshot_prof("Before mainVM processing cycle");
 
     let amount_of_circuits = vm_snapshots.windows(2).enumerate().len();
     // parallelizable
@@ -557,8 +546,6 @@ pub(crate) fn process_main_vm<
             previous_instance_witness = None;
         }
     }
-
-    snapshot_prof("MainVM processing cycle finished");
 
     recursion_queue_callback(
         BaseLayerCircuitType::VM as u64,

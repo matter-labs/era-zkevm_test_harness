@@ -46,8 +46,6 @@ use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use derivative::Derivative;
 use std::collections::{BTreeMap, HashMap};
 
-use crate::snapshot_prof;
-
 #[derive(Derivative)]
 #[derivative(Clone(bound = ""), Copy(bound = ""), Debug, Default)]
 struct CallframeLogState {
@@ -971,8 +969,6 @@ fn process_memory_related_circuits<
     circuits_data.decommittments_deduplicator_circuits_data =
         decommittments_deduplicator_circuits_data;
 
-    snapshot_prof("Finished compute_decommitts_sorter_circuit_snapshots");
-
     tracing::debug!("Running unsorted memory queue simulation");
 
     use crate::witness::individual_circuits::memory_related::amount_of_implicit_memory_queries;
@@ -993,8 +989,6 @@ fn process_memory_related_circuits<
             amount_of_implicit_memory_queries,
             *round_function,
         );
-
-    snapshot_prof("Finished unsorted memory queue simulation");
 
     // direct VM related part is done, other subcircuit's functionality is moved to other functions
     // that should properly do sorts and memory writes
@@ -1199,8 +1193,6 @@ pub(crate) fn create_artifacts_from_tracer<
         std::mem::take(&mut callstack_with_aux_data.flat_new_frames_history);
     drop(callstack_with_aux_data);
 
-    snapshot_prof("Before log sim");
-
     tracing::debug!("Running multiplexed log queue simulation");
 
     // We have all log queries in one multiplexed queue. We need to simulate this queue,
@@ -1218,13 +1210,9 @@ pub(crate) fn create_artifacts_from_tracer<
         *round_function,
     );
 
-    snapshot_prof("Muxed log queue processed");
-
     // Scratch-space constraint system for circuits processing
     // Used when creating circuit instances and compact form witnesses
     let mut cs_for_witness_generation = CsForWitnessGeneration::new();
-
-    snapshot_prof("Cs created");
 
     // demux log queue
     use crate::witness::individual_circuits::log_demux::process_logs_demux_and_make_circuits;
@@ -1249,8 +1237,6 @@ pub(crate) fn create_artifacts_from_tracer<
         &mut recursion_queue_callback,
     );
 
-    snapshot_prof("Log demux processed");
-
     tracing::debug!("Processing log circuits");
 
     // Process part of log circuits that do not use memory (I/O-like).
@@ -1267,8 +1253,6 @@ pub(crate) fn create_artifacts_from_tracer<
             &mut circuit_callback,
             &mut recursion_queue_callback,
         );
-
-    snapshot_prof("Main io log circuits processed");
 
     tracing::debug!("Processing memory-related circuits");
 
@@ -1306,8 +1290,6 @@ pub(crate) fn create_artifacts_from_tracer<
         &mut recursion_queue_callback,
     );
 
-    snapshot_prof("Memory-related circuits processed");
-
     tracing::debug!("Running callstack sumulation");
 
     // We need to simulate all callstack states and prepare for each MainVM circuit:
@@ -1321,8 +1303,6 @@ pub(crate) fn create_artifacts_from_tracer<
         &log_rollback_tails_for_frames,
         round_function,
     );
-
-    snapshot_prof("Callstack simulated");
 
     tracing::debug!(
         "Processing VM snapshots queue (total {:?})",
@@ -1357,8 +1337,6 @@ pub(crate) fn create_artifacts_from_tracer<
         &mut circuit_callback,
         &mut recursion_queue_callback,
     );
-
-    snapshot_prof("After mainVM processing");
 
     tracing::debug!("Making remaining circuits");
 
@@ -1396,8 +1374,6 @@ pub(crate) fn create_artifacts_from_tracer<
         &mut cs_for_witness_generation,
     );
 
-    snapshot_prof("Decommitments dedup");
-
     // Actual decommitter
     let (code_decommitter_circuits, code_decommitter_circuits_compact_forms_witnesses) =
         make_circuits(
@@ -1409,8 +1385,6 @@ pub(crate) fn create_artifacts_from_tracer<
             &mut recursion_queue_callback,
             &mut cs_for_witness_generation,
         );
-
-    snapshot_prof("Decommiter");
 
     // keccak precompiles
     let (keccak_precompile_circuits, keccak_precompile_circuits_compact_forms_witnesses) =
@@ -1424,8 +1398,6 @@ pub(crate) fn create_artifacts_from_tracer<
             &mut cs_for_witness_generation,
         );
 
-    snapshot_prof("Keccak");
-
     // sha256 precompiles
     let (sha256_precompile_circuits, sha256_precompile_circuits_compact_forms_witnesses) =
         make_circuits(
@@ -1437,8 +1409,6 @@ pub(crate) fn create_artifacts_from_tracer<
             &mut recursion_queue_callback,
             &mut cs_for_witness_generation,
         );
-
-    snapshot_prof("Sha256");
 
     // ecrecover precompiles
     let (ecrecover_precompile_circuits, ecrecover_precompile_circuits_compact_forms_witnesses) =
@@ -1452,8 +1422,6 @@ pub(crate) fn create_artifacts_from_tracer<
             &mut cs_for_witness_generation,
         );
 
-    snapshot_prof("Ecrecover");
-
     // secp256r1 verify
     let (secp256r1_verify_circuits, secp256r1_verify_circuits_compact_forms_witnesses) =
         make_circuits(
@@ -1466,8 +1434,6 @@ pub(crate) fn create_artifacts_from_tracer<
             &mut cs_for_witness_generation,
         );
 
-    snapshot_prof("Secp256 verify");
-
     // storage sorter
     let (storage_sorter_circuits, storage_sorter_circuit_compact_form_witnesses) = make_circuits(
         geometry.cycles_per_storage_sorter,
@@ -1479,8 +1445,6 @@ pub(crate) fn create_artifacts_from_tracer<
         &mut cs_for_witness_generation,
     );
 
-    snapshot_prof("Storage sorter");
-
     // events sorter
     let (events_sorter_circuits, events_sorter_circuits_compact_forms_witnesses) = make_circuits(
         geometry.cycles_per_events_or_l1_messages_sorter,
@@ -1491,8 +1455,6 @@ pub(crate) fn create_artifacts_from_tracer<
         &mut recursion_queue_callback,
         &mut cs_for_witness_generation,
     );
-
-    snapshot_prof("Events sorter");
 
     // l1 messages sorter
     let (l1_messages_sorter_circuits, l1_messages_sorter_circuits_compact_forms_witnesses) =
@@ -1506,8 +1468,6 @@ pub(crate) fn create_artifacts_from_tracer<
             &mut cs_for_witness_generation,
         );
 
-    snapshot_prof("L1 sorter");
-
     // l1 messages pubdata hasher
     let (l1_messages_hasher_circuits, l1_messages_hasher_circuits_compact_forms_witnesses) =
         make_circuits(
@@ -1519,8 +1479,6 @@ pub(crate) fn create_artifacts_from_tracer<
             &mut recursion_queue_callback,
             &mut cs_for_witness_generation,
         );
-
-    snapshot_prof("L1 messages hasher");
 
     // transient storage sorter
     let (
@@ -1536,8 +1494,6 @@ pub(crate) fn create_artifacts_from_tracer<
         &mut cs_for_witness_generation,
     );
 
-    snapshot_prof("Transient storage sorter");
-
     // eip 4844 circuits are basic, but they do not need closed form input commitments
 
     use crate::witness::individual_circuits::eip4844_repack::compute_eip_4844;
@@ -1552,8 +1508,6 @@ pub(crate) fn create_artifacts_from_tracer<
         &mut recursion_queue_callback,
         &mut cs_for_witness_generation,
     );
-
-    snapshot_prof("Eip 4844");
 
     // All done!
 
@@ -1595,8 +1549,6 @@ pub(crate) fn create_artifacts_from_tracer<
         .chain(transient_storage_sorter_circuits_compact_forms_witnesses)
         .chain(secp256r1_verify_circuits_compact_forms_witnesses)
         .collect();
-
-    snapshot_prof("Final");
 
     (
         basic_circuits_first_and_last_observable_witnesses,

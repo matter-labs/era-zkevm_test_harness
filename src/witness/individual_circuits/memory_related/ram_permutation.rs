@@ -68,8 +68,6 @@ pub(crate) fn compute_ram_circuit_snapshots<
         "VM should have made some memory requests"
     );
 
-    snapshot_prof("Inside RAM permutation circuit computing");
-
     let amount_of_circuits =
         (total_amount_of_queries + per_circuit_capacity - 1) / per_circuit_capacity;
 
@@ -85,8 +83,6 @@ pub(crate) fn compute_ram_circuit_snapshots<
         amount_of_circuits
     );
 
-    snapshot_prof("Ram circuit: prepared unsorted chunks");
-
     let mut sorted_memory_queue_chunk_final_states = Vec::with_capacity(amount_of_circuits);
 
     let mut sorted_memory_queries_simulator =
@@ -101,15 +97,11 @@ pub(crate) fn compute_ram_circuit_snapshots<
             .chain(implicit_memory_artifacts.memory_queries.iter())
             .collect();
 
-        snapshot_prof("Ram circuit: created 'sorted' vec");
-
         // sort by memory location, and then by timestamp
         sorted_memory_queries_accumulated.par_sort_by(|a, b| match a.location.cmp(&b.location) {
             Ordering::Equal => a.timestamp.cmp(&b.timestamp),
             a @ _ => a,
         });
-
-        snapshot_prof("Ram circuit: sorting done");
 
         // those two thins are parallelizable, and can be internally parallelized too
 
@@ -130,12 +122,9 @@ pub(crate) fn compute_ram_circuit_snapshots<
             sorted_memory_queue_chunk_final_states.push(intermediate_info);
         }
 
-        snapshot_prof("Ram circuit: simulation done");
     }
 
     drop(implicit_memory_artifacts.memory_queries);
-
-    snapshot_prof("Inside RAM permutation circuit computing 2");
 
     assert_eq!(
         unsorted_memory_queue_chunk_final_states.len(),
@@ -258,8 +247,6 @@ pub(crate) fn compute_ram_circuit_snapshots<
         sorted_global_final_state.num_items
     );
 
-    snapshot_prof("Ram circuit: chains created");
-
     let it = unsorted_memory_queue_chunk_final_states
         .into_iter()
         .zip(sorted_memory_queue_chunk_final_states.into_iter())
@@ -293,8 +280,6 @@ pub(crate) fn compute_ram_circuit_snapshots<
         round_function.clone(),
         cs_for_witness_generation,
     );
-
-    snapshot_prof("Inside RAM permutation circuit computing before cycle");
 
     for (
         idx,
@@ -505,8 +490,6 @@ pub(crate) fn compute_ram_circuit_snapshots<
         queue_simulator,
         ram_permutation_circuits_compact_forms_witnesses.clone(),
     );
-
-    snapshot_prof("After RAM permutation circuit computing");
 
     (
         ram_permutation_circuits,
