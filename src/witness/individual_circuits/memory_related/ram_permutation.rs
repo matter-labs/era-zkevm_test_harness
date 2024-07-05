@@ -121,7 +121,6 @@ pub(crate) fn compute_ram_circuit_snapshots<
                 .unwrap();
             sorted_memory_queue_chunk_final_states.push(intermediate_info);
         }
-
     }
 
     drop(implicit_memory_artifacts.memory_queries);

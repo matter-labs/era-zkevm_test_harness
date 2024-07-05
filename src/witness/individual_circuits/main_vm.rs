@@ -474,10 +474,7 @@ pub(crate) fn process_main_vm<
         let auxilary_initial_parameters = VmInCircuitAuxilaryParameters {
             callstack_state: (
                 callstack_state_for_entry,
-                *initial_state
-                    .local_state
-                    .callstack
-                    .get_current_stack(),
+                *initial_state.local_state.callstack.get_current_stack(),
             ),
             decommittment_queue_state,
             memory_queue_state,
