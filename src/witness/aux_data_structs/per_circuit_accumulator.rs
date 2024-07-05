@@ -208,8 +208,8 @@ impl<T> PerCircuitAccumulator<T> {
     }
 }
 
-use circuit_definitions::encodings::Pushable;
-impl<T> Pushable<T> for PerCircuitAccumulator<T> {
+use circuit_definitions::encodings::ContainerForSimulator;
+impl<T> ContainerForSimulator<T> for PerCircuitAccumulator<T> {
     fn push(&mut self, val: T) {
         self.push(val);
     }

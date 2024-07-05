@@ -520,15 +520,16 @@ impl<
     }
 }
 
-pub trait Pushable<T> {
+pub trait ContainerForSimulator<T> {
     fn push(&mut self, val: T);
 }
 
 use core::marker::PhantomData;
+/// Simplified version of FullWidthQueueSimulator with custom container instead of VecDeque
 pub struct FullWidthMemoryQueueSimulator<
     F: SmallField,
     I,
-    C: Pushable<([F; N], [F; SW], I)>,
+    C: ContainerForSimulator<([F; N], [F; SW], I)>,
     const N: usize,
     const SW: usize,
     const ROUNDS: usize,
@@ -545,7 +546,7 @@ I: OutOfCircuitFixedLengthEncodable<F, N>,
 impl<
         F: SmallField,
         I: OutOfCircuitFixedLengthEncodable<F, N>,
-        C: Pushable<([F; N], [F; SW], I)>,
+        C: ContainerForSimulator<([F; N], [F; SW], I)>,
         const N: usize,
         const SW: usize,
         const ROUNDS: usize,
