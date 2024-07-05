@@ -133,7 +133,11 @@ pub type CustomMemoryQueueSimulator<F, C> = FullWidthMemoryQueueSimulator<
     1,
 >;
 
-pub type QueueWitness<F> = ([F; MEMORY_QUERY_PACKED_WIDTH], [F; FULL_SPONGE_QUEUE_STATE_WIDTH], MemoryQuery);
+pub type QueueWitness<F> = (
+    [F; MEMORY_QUERY_PACKED_WIDTH],
+    [F; FULL_SPONGE_QUEUE_STATE_WIDTH],
+    MemoryQuery,
+);
 
 pub type MemoryQueueState<F> =
     FullWidthQueueIntermediateStates<F, FULL_SPONGE_QUEUE_STATE_WIDTH, 1>;

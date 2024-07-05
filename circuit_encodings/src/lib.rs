@@ -533,8 +533,8 @@ pub struct FullWidthMemoryQueueSimulator<
     const N: usize,
     const SW: usize,
     const ROUNDS: usize,
-> where 
-I: OutOfCircuitFixedLengthEncodable<F, N>,
+> where
+    I: OutOfCircuitFixedLengthEncodable<F, N>,
 {
     pub head: [F; SW],
     pub tail: [F; SW],
@@ -558,7 +558,7 @@ impl<
             tail: [F::ZERO; SW],
             num_items: 0,
             witness: container,
-            _marker: Default::default()
+            _marker: Default::default(),
         }
     }
 
@@ -570,7 +570,7 @@ impl<
                 length: self.num_items,
             },
         };
-    
+
         result
     }
 
