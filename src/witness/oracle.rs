@@ -330,7 +330,7 @@ fn process_multiplexed_log_queue(
             .map(|(frame_index, (beginning_cycle, tail))| {
                 (
                     beginning_cycle,
-                    tail.expect(&format!("No rollback tail for frame {frame_index}")),
+                    tail.unwrap_or_else(|| panic!("No rollback tail for frame {frame_index}")),
                 )
             }),
     );
@@ -407,7 +407,7 @@ fn callstack_simulation(
         ..Default::default()
     };
 
-    let mut current_storage_log_state = initial_storage_state.clone();
+    let mut current_storage_log_state = initial_storage_state;
 
     let mut storage_logs_states_stack = vec![];
 
@@ -522,7 +522,7 @@ fn callstack_simulation(
                     .push_and_output_intermediate_data(entry, round_function);
 
                 // we do push the witness at the cycle numbered at when the element was pushed
-                assert!(intermediate_info.is_push == true);
+                assert!(intermediate_info.is_push);
                 save_callstack_witness_for_main_vm(end_cycle, entry, intermediate_info);
             }
             CallstackAction::OutOfScope(OutOfScopeReason::Fresh) => {
@@ -541,7 +541,7 @@ fn callstack_simulation(
                 let previous =
                     log_queue_detailed_states.insert(beginning_cycle, current_storage_log_state);
 
-                if !previous.is_none() {
+                if previous.is_some() {
                     // ensure that basic properties hold: we replace the current frame with a new one, so
                     // it should have larger frame_idx and the same forward tail and length
                     let previous = previous.unwrap();
@@ -655,7 +655,7 @@ fn callstack_simulation(
                     )
                 }
 
-                assert!(intermediate_info.is_push == false);
+                assert!(!intermediate_info.is_push);
 
                 // we place it at the cycle when it was actually popped, but not one when it became "active"
                 save_callstack_witness_for_main_vm(beginning_cycle, entry, intermediate_info);
@@ -666,7 +666,7 @@ fn callstack_simulation(
     let entry_frames_storage_log_detailed_states = CircuitsEntryAccumulatorSparse::from_iter(
         geometry.cycles_per_vm_snapshot as usize,
         (0, initial_storage_state),
-        log_queue_detailed_states.into_iter(),
+        log_queue_detailed_states,
     );
 
     CallstackSimulationResult {
@@ -696,7 +696,7 @@ fn process_io_log_circuits<
     demuxed_log_queues_states: IOLogsQueuesStates,
     demuxed_log_queries: DemuxedIOLogQueries,
     round_function: &Poseidon2Goldilocks,
-    mut cs_for_witness_generation: &mut CsForWitnessGeneration,
+    cs_for_witness_generation: &mut CsForWitnessGeneration,
     mut circuit_callback: &mut CB,
     mut recursion_queue_callback: &mut QSCB,
 ) -> (
@@ -794,7 +794,7 @@ fn process_io_log_circuits<
             round_function,
             geometry.cycles_per_storage_application as usize,
             geometry,
-            &mut cs_for_witness_generation,
+            cs_for_witness_generation,
             &mut circuit_callback,
             &mut recursion_queue_callback,
         );
@@ -914,7 +914,7 @@ fn process_memory_related_circuits<
     executed_decommittment_queries: Vec<(Cycle, DecommittmentQuery, Vec<U256>)>,
     precompiles_data: PrecompilesInputData,
     round_function: &Poseidon2Goldilocks,
-    mut cs_for_witness_generation: &mut CsForWitnessGeneration,
+    cs_for_witness_generation: &mut CsForWitnessGeneration,
     mut circuit_callback: &mut CB,
     mut recursion_queue_callback: &mut QSCB,
 ) -> (
@@ -956,7 +956,7 @@ fn process_memory_related_circuits<
     let decommitment_artifacts_for_main_vm = DecommitmentArtifactsForMainVM {
         prepared_decommittment_queries: PerCircuitAccumulatorSparse::from_iter(
             geometry.cycles_per_vm_snapshot as usize,
-            prepared_decommittment_queries.into_iter(),
+            prepared_decommittment_queries,
         ),
         decommittment_queue_entry_states: CircuitsEntryAccumulatorSparse::from_iter(
             geometry.cycles_per_vm_snapshot as usize,
@@ -1107,7 +1107,7 @@ fn process_memory_related_circuits<
             num_non_deterministic_heap_queries,
             geometry.cycles_per_ram_permutation as usize,
             geometry,
-            &mut cs_for_witness_generation,
+            cs_for_witness_generation,
             &mut circuit_callback,
             &mut recursion_queue_callback,
         );
@@ -1172,8 +1172,8 @@ pub(crate) fn create_artifacts_from_tracer<
     } = tracer;
 
     // we should have an initial decommit query somewhat before the time
-    assert!(prepared_decommittment_queries.len() >= 1);
-    assert!(executed_decommittment_queries.len() >= 1);
+    assert!(!prepared_decommittment_queries.is_empty());
+    assert!(!executed_decommittment_queries.is_empty());
     assert!(prepared_decommittment_queries.len() >= executed_decommittment_queries.len());
     let (timestamp, query, witness) = &executed_decommittment_queries[0];
     assert!(*timestamp < crate::zk_evm::zkevm_opcode_defs::STARTING_TIMESTAMP);
@@ -1332,7 +1332,7 @@ pub(crate) fn create_artifacts_from_tracer<
         callstack_simulation_result,
         flat_new_frames_history,
         vm_snapshots,
-        round_function.clone(),
+        *round_function,
         &mut cs_for_witness_generation,
         &mut circuit_callback,
         &mut recursion_queue_callback,

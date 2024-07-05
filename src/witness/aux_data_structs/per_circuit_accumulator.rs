@@ -34,9 +34,7 @@ impl<T> PerCircuitAccumulatorContainer<T> {
 
     pub fn last(&self) -> Option<&T> {
         let last_batch = self.circuits_data.last();
-        if last_batch.is_none() {
-            return None;
-        }
+        last_batch?;
 
         last_batch.unwrap().last()
     }
@@ -90,7 +88,7 @@ impl<T> PerCircuitAccumulatorContainer<T> {
 
     pub fn iter(&self) -> PerCircuitAccumulatorIterator<T> {
         PerCircuitAccumulatorIterator {
-            container: &self,
+            container: self,
             batch_index: 0,
             inner_index: 0,
         }
@@ -115,17 +113,13 @@ impl<'a, T> Iterator for PerCircuitAccumulatorIterator<'a, T> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut batch = self.container.get_batch(self.batch_index);
-        if batch.is_none() {
-            return None;
-        }
+        batch?;
 
         if self.inner_index >= batch.unwrap().len() {
             self.batch_index += 1;
             self.inner_index = 0;
             batch = self.container.get_batch(self.batch_index);
-            if batch.is_none() {
-                return None;
-            }
+            batch?;
         }
 
         let res = batch.unwrap().get(self.inner_index);
@@ -146,18 +140,14 @@ impl<T: TupleFirst> Iterator for PerCircuitAccumulatorIntoIter<T> {
     fn next(&mut self) -> Option<Self::Item> {
         // TODO can be optimized
         let batch = self.container.get_batch_mut(self.batch_index);
-        if batch.is_none() {
-            return None;
-        }
+        batch.as_ref()?;
 
         let mut batch = batch.unwrap();
 
         if batch.is_empty() {
             self.batch_index += 1;
             let next_batch = self.container.get_batch_mut(self.batch_index);
-            if next_batch.is_none() {
-                return None;
-            }
+            next_batch.as_ref()?;
             batch = next_batch.unwrap();
         }
 
@@ -195,7 +185,7 @@ impl<T> PerCircuitAccumulator<T> {
         assert!(self.container.cycles_per_circuit != 0);
         let idx = self.container.len();
 
-        let circuit_index = (idx as usize) / self.container.cycles_per_circuit;
+        let circuit_index = idx / self.container.cycles_per_circuit;
         self.container.push_for_circuit(circuit_index, val);
     }
 
@@ -233,9 +223,9 @@ impl<T: TupleFirst> PerCircuitAccumulatorSparse<T> {
     pub fn from_iter<I: IntoIterator<Item = T>>(cycles_per_circuit: usize, iterator: I) -> Self {
         let mut _self = Self::new(cycles_per_circuit);
 
-        let mut iterator = iterator.into_iter();
+        let iterator = iterator.into_iter();
 
-        while let Some(element) = iterator.next() {
+        for element in iterator {
             _self.push(element);
         }
 
@@ -274,9 +264,9 @@ impl<T: TupleFirst> PerCircuitAccumulatorSparse<T> {
 impl<T: TupleFirst> Extend<T> for PerCircuitAccumulatorSparse<T> {
     #[inline]
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
-        let mut iterator = iter.into_iter();
+        let iterator = iter.into_iter();
 
-        while let Some(element) = iterator.next() {
+        for element in iterator {
             self.push(element);
         }
     }

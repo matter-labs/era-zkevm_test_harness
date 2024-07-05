@@ -141,9 +141,9 @@ where
         iterator: I,
     ) -> Self {
         let mut _self = Self::new(cycles_per_circuit, initial_value);
-        let mut iterator = iterator.into_iter();
+        let iterator = iterator.into_iter();
 
-        while let Some(element) = iterator.next() {
+        for element in iterator {
             _self.push(element);
         }
 
@@ -151,8 +151,8 @@ where
     }
 
     pub fn extend<I: IntoIterator<Item = T>>(&mut self, iterator: I) {
-        let mut iterator = iterator.into_iter();
-        while let Some(element) = iterator.next() {
+        let iterator = iterator.into_iter();
+        for element in iterator {
             self.push(element);
         }
     }

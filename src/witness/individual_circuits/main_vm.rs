@@ -217,13 +217,13 @@ fn repack_input_for_main_vm(
         .into_iter();
     let mut flat_new_frames_history_it = PerCircuitAccumulatorSparse::from_iter(
         geometry.cycles_per_vm_snapshot as usize,
-        flat_new_frames_history.into_iter(),
+        flat_new_frames_history,
     )
     .into_circuits(amount_of_circuits)
     .into_iter();
     let mut rollback_queue_tails_for_frames_it = PerCircuitAccumulatorSparse::from_iter(
         geometry.cycles_per_vm_snapshot as usize,
-        log_rollback_tails_for_frames.into_iter(),
+        log_rollback_tails_for_frames,
     )
     .into_circuits(amount_of_circuits)
     .into_iter();
@@ -238,10 +238,8 @@ fn repack_input_for_main_vm(
         .into_iter();
 
     for (circuit_idx, _pair) in vm_snapshots.windows(2).enumerate() {
-        if amount_of_circuits / 100 != 0 {
-            if circuit_idx % (amount_of_circuits / 100) == 0 {
-                println!("{} / {}", circuit_idx, amount_of_circuits);
-            }
+        if amount_of_circuits / 100 != 0 && circuit_idx % (amount_of_circuits / 100) == 0 {
+            println!("{} / {}", circuit_idx, amount_of_circuits);
         }
 
         let memory_queue_states_for_entry = memory_queue_entry_states_it.next().unwrap().1;
@@ -410,7 +408,7 @@ pub(crate) fn process_main_vm<
             ),
             public_input: proof_system_input,
         };
-        let _ = queue_simulator.push(recursive_request, &round_function);
+        queue_simulator.push(recursive_request, &round_function);
 
         circuit_callback(instance);
         main_vm_circuits_compact_forms_witnesses.push(compact_form_witness);
@@ -443,10 +441,8 @@ pub(crate) fn process_main_vm<
     for ((circuit_idx, pair), main_vm_input) in
         vm_snapshots.windows(2).enumerate().zip(main_vm_inputs)
     {
-        if amount_of_circuits / 100 != 0 {
-            if circuit_idx % (amount_of_circuits / 100) == 0 {
-                println!("{} / {}", circuit_idx, amount_of_circuits);
-            }
+        if amount_of_circuits / 100 != 0 && circuit_idx % (amount_of_circuits / 100) == 0 {
+            println!("{} / {}", circuit_idx, amount_of_circuits);
         }
 
         let is_last = circuit_idx == circuits_len - 1;
@@ -473,11 +469,10 @@ pub(crate) fn process_main_vm<
         let auxilary_initial_parameters = VmInCircuitAuxilaryParameters {
             callstack_state: (
                 callstack_state_for_entry,
-                initial_state
+                *initial_state
                     .local_state
                     .callstack
-                    .get_current_stack()
-                    .clone(),
+                    .get_current_stack(),
             ),
             decommittment_queue_state,
             memory_queue_state,
