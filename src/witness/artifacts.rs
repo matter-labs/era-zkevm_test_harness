@@ -36,15 +36,27 @@ use crate::zk_evm::zkevm_opcode_defs::system_params::{
 #[derive(Derivative)]
 #[derivative(Default)]
 pub struct DemuxedLogQueries {
-    pub rollup_storage_queries: Vec<LogQuery>,
-    pub porter_storage_queries: Vec<LogQuery>,
-    pub event_queries: Vec<LogQuery>,
-    pub to_l1_queries: Vec<LogQuery>,
-    pub keccak_precompile_queries: Vec<LogQuery>,
-    pub sha256_precompile_queries: Vec<LogQuery>,
-    pub ecrecover_queries: Vec<LogQuery>,
-    pub secp256r1_verify_queries: Vec<LogQuery>,
-    pub transient_storage_queries: Vec<LogQuery>,
+    pub io: DemuxedIOLogQueries,
+    pub precompiles: DemuxedPrecompilesLogQueries
+}
+
+#[derive(Derivative)]
+#[derivative(Default)]
+pub struct DemuxedIOLogQueries {
+    pub rollup_storage: Vec<LogQuery>,
+    pub porter_storage: Vec<LogQuery>,
+    pub transient_storage: Vec<LogQuery>,
+    pub event: Vec<LogQuery>,
+    pub to_l1: Vec<LogQuery>
+}
+
+#[derive(Derivative)]
+#[derivative(Default)]
+pub struct DemuxedPrecompilesLogQueries {
+    pub keccak: Vec<LogQuery>,
+    pub sha256: Vec<LogQuery>,
+    pub ecrecover: Vec<LogQuery>,
+    pub secp256r1_verify: Vec<LogQuery>,
 }
 
 impl DemuxedLogQueries {
@@ -54,37 +66,38 @@ impl DemuxedLogQueries {
                 // sort rollup and porter
                 match query.shard_id {
                     0 => {
-                        self.rollup_storage_queries.push(query);
+                        self.io.rollup_storage.push(query);
                     }
                     1 => {
-                        self.porter_storage_queries.push(query);
+                        self.io.porter_storage.push(query);
                     }
                     _ => unreachable!(),
                 }
             }
             TRANSIENT_STORAGE_AUX_BYTE => {
-                self.transient_storage_queries.push(query);
+                self.io.transient_storage.push(query);
             }
             L1_MESSAGE_AUX_BYTE => {
-                self.to_l1_queries.push(query);
+                self.io.to_l1.push(query);
             }
             EVENT_AUX_BYTE => {
-                self.event_queries.push(query);
+                self.io.event.push(query);
             }
             PRECOMPILE_AUX_BYTE => {
+                let precomplies = &mut self.precompiles;
                 assert!(!query.rollback);
                 match query.address {
                     a if a == *KECCAK256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
-                        self.keccak_precompile_queries.push(query);
+                        precomplies.keccak.push(query);
                     }
                     a if a == *SHA256_ROUND_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
-                        self.sha256_precompile_queries.push(query);
+                        precomplies.sha256.push(query);
                     }
                     a if a == *ECRECOVER_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
-                        self.ecrecover_queries.push(query);
+                        precomplies.ecrecover.push(query);
                     }
                     a if a == *SECP256R1_VERIFY_INNER_FUNCTION_PRECOMPILE_FORMAL_ADDRESS => {
-                        self.secp256r1_verify_queries.push(query);
+                        precomplies.secp256r1_verify.push(query);
                     }
                     _ => {
                         // just burn ergs
