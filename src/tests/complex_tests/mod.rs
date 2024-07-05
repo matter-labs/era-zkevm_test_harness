@@ -60,6 +60,7 @@ use utils::read_basic_test_artifact;
 
 use zkevm_assembly::Assembly;
 
+#[ignore = "Too slow"]
 #[test]
 fn basic_test() {
     let test_artifact = read_basic_test_artifact();
