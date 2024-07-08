@@ -1,22 +1,27 @@
 [package]
 name = "circuit_definitions"
-version = "0.1.0"
+version = "0.140.0-gpu-wrapper.0"
 edition = "2021"
+authors = ["The Matter Labs Team <hello@matterlabs.dev>"]
+homepage = "https://zksync.io/"
+repository = "https://github.com/matter-labs/era-zkevm_test_harness/"
 license = "MIT OR Apache-2.0"
+keywords = ["blockchain", "zksync"]
+categories = ["cryptography"]
+description = "ZKsync Era circuits definitions"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 # zk_evm = {path = "../../zk_evm"}
 # zkevm_circuits = {path = "../../zkevm_circuits", features = ["verbose_circuits"]}
-
-snark_wrapper = {git = "https://github.com/matter-labs/snark-wrapper.git", branch = "main"}
 # snark_wrapper = {path = "../../snark_wrapper"}
 
-zkevm_circuits = {git = "https://github.com/matter-labs/era-zkevm_circuits.git", branch = "main"}
-zk_evm = {git = "https://github.com/matter-labs/era-zk_evm.git", branch = "v1.4.0"}
+snark_wrapper = "=0.1.0"
+zkevm_circuits = "=0.140.0"
+zk_evm = "=0.140.0"
 
-derivative = "*"
+derivative = "2.2"
 serde = {version = "1", features = ["derive"]}
 crossbeam = "0.8"
 seq-macro = "0.3.5"
