@@ -148,7 +148,7 @@ fn process_multiplexed_log_queue(
     LogRollbackTailsForFrames,
     PerCircuitAccumulatorSparse<(Cycle, [GoldilocksField; QUEUE_STATE_WIDTH])>,
 ) {
-    // Every execution frame has forward and rollback log queues. Forward queue contains "executed" queries, 
+    // Every execution frame has forward and rollback log queues. Forward queue contains "executed" queries,
     // rollback queue - potential (not executed yet) rollbacks. When a frame ends, its queues are merged to the parent frame queues.
     // Since we finished the VM execution, final callstack entry (root, outermost frame) contains all logs.
     // These queues also contain some additional markers
@@ -215,7 +215,7 @@ fn process_multiplexed_log_queue(
                 .zip(std::iter::repeat(false)),
         )
     {
-        // Later we will mainle need only the result of "applied" part simulation. 
+        // Later we will mainle need only the result of "applied" part simulation.
         // So we will save a copy of simulator the first time we encounter an unapplied query.
         if !was_applied {
             if applied_log_queue_simulator.is_none() {
