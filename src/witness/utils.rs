@@ -194,7 +194,7 @@ pub type ConstraintSystemImpl<F, R> = CSReferenceImplementation<
 
 pub const TRACE_LEN_LOG_2_FOR_CALCULATION: usize = 20;
 pub const MAX_VARS_LOG_2_FOR_CALCULATION: usize = 26;
-pub const CYCLES_PER_SCRATCH_SPACE: usize = 256;
+pub const CYCLES_PER_SCRATCH_SPACE: usize = 5000;
 
 pub fn create_cs_for_witness_generation<
     F: SmallField,
