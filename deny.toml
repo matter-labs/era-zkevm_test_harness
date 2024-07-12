@@ -24,7 +24,6 @@ allow = [
     "BSD-2-Clause",
     "BSD-3-Clause",
     "Zlib",
-    "Unicode-3.0",
 ]
 deny = [
     #"Nokia",
