@@ -139,7 +139,7 @@ type LogRollbackTailsForFrames = Vec<(Cycle, [GoldilocksField; QUEUE_STATE_WIDTH
 fn process_multiplexed_log_queue(
     geometry: GeometryConfig,
     full_callstack_history: &Vec<CallstackActionHistoryEntry>,
-    mut last_callstack_entry: CallstackEntryWithAuxData,
+    mut final_callstack_entry: CallstackEntryWithAuxData,
     round_function: Poseidon2Goldilocks,
 ) -> (
     LogMuxedStatesData<GoldilocksField>,
@@ -148,11 +148,15 @@ fn process_multiplexed_log_queue(
     LogRollbackTailsForFrames,
     PerCircuitAccumulatorSparse<(Cycle, [GoldilocksField; QUEUE_STATE_WIDTH])>,
 ) {
-    // these queues contain all log queries and some additional markers
-    let applied_queries = std::mem::take(&mut last_callstack_entry.forward_queue);
-    let not_applied_rollbacks = std::mem::take(&mut last_callstack_entry.rollback_queue);
-    drop(last_callstack_entry);
+    // Every execution frame has forward and rollback log queues. Forward queue contains "executed" queries, 
+    // rollback queue - potential (not executed yet) rollbacks. When a frame ends, its queues are merged to the parent frame queues.
+    // Since we finished the VM execution, final callstack entry (root, outermost frame) contains all logs.
+    // These queues also contain some additional markers
+    let applied_queries = std::mem::take(&mut final_callstack_entry.forward_queue);
+    let not_applied_rollbacks = std::mem::take(&mut final_callstack_entry.rollback_queue);
+    drop(final_callstack_entry);
 
+    // OutOfScope(Fresh) - record about creating a new execution frame
     let total_amount_of_frames = full_callstack_history
         .iter()
         .filter(|x| x.action == CallstackAction::OutOfScope(OutOfScopeReason::Fresh))
@@ -211,11 +215,12 @@ fn process_multiplexed_log_queue(
                 .zip(std::iter::repeat(false)),
         )
     {
+        // Later we will mainle need only the result of "applied" part simulation. 
+        // So we will save a copy of simulator the first time we encounter an unapplied query.
         if !was_applied {
             if applied_log_queue_simulator.is_none() {
                 // save the applied queue simulator
                 applied_log_queue_simulator = Some(log_queue_simulator.clone());
-                // allocate memory for not applied rollbacks
             }
         } else {
             // check for no gaps
@@ -1188,7 +1193,8 @@ pub(crate) fn create_artifacts_from_tracer<
     );
 
     let full_callstack_history = std::mem::take(&mut callstack_with_aux_data.full_history);
-    let last_callstack_entry = std::mem::take(&mut callstack_with_aux_data.current_entry);
+    // Since we finished the VM execution, current callstack entry now should be a root (outermost) frame
+    let final_callstack_entry = std::mem::take(&mut callstack_with_aux_data.current_entry);
     let flat_new_frames_history =
         std::mem::take(&mut callstack_with_aux_data.flat_new_frames_history);
     drop(callstack_with_aux_data);
@@ -1206,7 +1212,7 @@ pub(crate) fn create_artifacts_from_tracer<
     ) = process_multiplexed_log_queue(
         *geometry,
         &full_callstack_history,
-        last_callstack_entry,
+        final_callstack_entry,
         *round_function,
     );
 
@@ -1214,7 +1220,7 @@ pub(crate) fn create_artifacts_from_tracer<
     // Used when creating circuit instances and compact form witnesses
     let mut cs_for_witness_generation = CsForWitnessGeneration::new();
 
-    // demux log queue
+    // demux log queue circuit
     use crate::witness::individual_circuits::log_demux::process_logs_demux_and_make_circuits;
 
     tracing::debug!("Running log demux simulation");
