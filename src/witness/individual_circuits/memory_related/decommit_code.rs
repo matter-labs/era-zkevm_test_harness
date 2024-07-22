@@ -57,7 +57,7 @@ pub(crate) fn compute_decommitter_circuit_snapshots<
     amount_of_memory_queries: usize,
     implicit_memory_queries: &ImplicitMemoryQueries,
     implicit_memory_states: &ImplicitMemoryStates<F>,
-    memory_queue_states_accumulator: &LastPerCircuitAccumulator<MemoryQueueState<F>>,
+    final_explicit_memory_queue_state: MemoryQueueState<F>,
     decommiter_circuit_inputs: DecommiterCircuitProcessingInputs<F>,
     round_function: &R,
     decommiter_circuit_capacity: usize,
@@ -168,7 +168,7 @@ pub(crate) fn compute_decommitter_circuit_snapshots<
         };
 
         let wintess_state = if start_idx_for_memory_accumulator + memory_queue_state_offset == 0 {
-            memory_queue_states_accumulator.last().unwrap()
+            &final_explicit_memory_queue_state
         } else {
             implicit_memory_states
                 .decommitter_memory_states
@@ -384,7 +384,7 @@ pub(crate) fn compute_decommitter_circuit_snapshots<
         );
 
         let wintess_state = if start_idx_for_memory_accumulator + memory_queue_state_offset == 0 {
-            memory_queue_states_accumulator.last().unwrap()
+            &final_explicit_memory_queue_state
         } else {
             implicit_memory_states
                 .decommitter_memory_states

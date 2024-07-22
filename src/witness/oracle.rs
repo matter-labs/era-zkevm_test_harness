@@ -837,6 +837,7 @@ fn simulate_memory_queue(
     round_function: Poseidon2Goldilocks,
 ) -> (
     MemoryArtifacts<GoldilocksField>,
+    MemoryQueueState<GoldilocksField>,
     LastPerCircuitAccumulator<MemoryQueueState<GoldilocksField>>,
     MemoryQueuePerCircuitSimulator<GoldilocksField>,
     ImplicitMemoryStates<GoldilocksField>,
@@ -887,6 +888,8 @@ fn simulate_memory_queue(
         );
     }
 
+    let final_explicit_memory_queue_state = memory_queue_states_accumulator.last().unwrap().clone();
+
     use crate::witness::individual_circuits::memory_related::simulate_implicit_memory_queues;
     let implicit_memory_states = simulate_implicit_memory_queues(
         &mut memory_queue_simulator,
@@ -894,8 +897,15 @@ fn simulate_memory_queue(
         round_function,
     );
 
+    // push implicit queries
+    memory_queue_states_accumulator.reserve_exact_flat(implicit_memory_states.amount_of_states());
+    for state in implicit_memory_states.iter() {
+        memory_queue_states_accumulator.push(*state);
+    }
+
     (
         memory_artifacts_for_main_vm,
+        final_explicit_memory_queue_state,
         memory_queue_states_accumulator,
         memory_queue_simulator,
         implicit_memory_states,
@@ -927,13 +937,9 @@ fn simulate_sorted_memory_queue(
         a @ _ => a,
     });
 
-    // those two things are parallelizable, and can be internally parallelized too
-
-    // now we can finish reconstruction of each sorted and unsorted memory queries
-
-    // reconstruct sorted one in full
+    // can be internally parallelized
+    
     let amount_of_queries = memory_queries.len() + implicit_memory_queries.amount_of_queries();
-    //let sorted_handle = thread::spawn(move || {
     let mut sorted_memory_queries_simulator =
         MemoryQueuePerCircuitSimulator::using_container(PerCircuitAccumulator::with_flat_capacity(
             geometry.cycles_per_ram_permutation as usize,
@@ -1072,6 +1078,7 @@ fn process_memory_related_circuits<
 
     let (
         memory_artifacts_for_main_vm,
+        final_explicit_memory_queue_state,
         memory_queue_states_accumulator,
         memory_queue_simulator,
         implicit_memory_states,
@@ -1096,7 +1103,7 @@ fn process_memory_related_circuits<
         amount_of_memory_queries,
         &implicit_memory_queries,
         &implicit_memory_states,
-        &memory_queue_states_accumulator,
+        final_explicit_memory_queue_state,
         decommiter_circuit_inputs,
         round_function,
         geometry.cycles_per_code_decommitter as usize,
@@ -1181,6 +1188,8 @@ fn process_memory_related_circuits<
         implicit_memory_states.amount_of_states()
     );
 
+    drop(implicit_memory_states);
+
     use crate::witness::individual_circuits::memory_related::ram_permutation::compute_ram_circuit_snapshots;
 
     tracing::debug!("Running RAM permutation simulation");
@@ -1191,7 +1200,6 @@ fn process_memory_related_circuits<
             memory_queue_states_accumulator,
             sorted_memory_queue_states_accumulator,
             implicit_memory_queries,
-            implicit_memory_states,
             memory_queue_simulator,
             sorted_memory_queue_simulator,
             round_function,

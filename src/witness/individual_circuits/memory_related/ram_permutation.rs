@@ -38,10 +38,9 @@ pub(crate) fn compute_ram_circuit_snapshots<
     QSCB: FnMut(u64, RecursionQueueSimulator<Field>, Vec<ClosedFormInputCompactFormWitness<Field>>),
 >(
     memory_queries: &Vec<(u32, MemoryQuery)>,
-    mut memory_queue_states_accumulator: LastPerCircuitAccumulator<MemoryQueueState<Field>>,
+    memory_queue_states_accumulator: LastPerCircuitAccumulator<MemoryQueueState<Field>>,
     sorted_memory_queue_states_accumulator: LastPerCircuitAccumulator<MemoryQueueState<Field>>,
     implicit_memory_queries: ImplicitMemoryQueries,
-    implicit_memory_states: ImplicitMemoryStates<Field>,
     memory_queue_simulator: MemoryQueuePerCircuitSimulator<Field>,
     sorted_memory_queries_simulator: MemoryQueuePerCircuitSimulator<Field>,
     round_function: &RoundFunction,
@@ -55,23 +54,10 @@ pub(crate) fn compute_ram_circuit_snapshots<
     FirstAndLastCircuitWitness<RamPermutationObservableWitness<Field>>,
     Vec<ClosedFormInputCompactFormWitness<Field>>,
 ) {
-    assert_eq!(
-        implicit_memory_queries.amount_of_queries(),
-        implicit_memory_states.amount_of_states()
-    );
 
     // including additional queries from precompiles
     let total_amount_of_queries =
         memory_queries.len() + implicit_memory_queries.amount_of_queries();
-
-    assert_eq!(memory_queries.len(), memory_queue_states_accumulator.len());
-
-    // push implicit queries
-
-    memory_queue_states_accumulator.reserve_exact_flat(implicit_memory_states.amount_of_states());
-    for state in implicit_memory_states.into_iter() {
-        memory_queue_states_accumulator.push(state);
-    }
 
     assert_eq!(
         total_amount_of_queries,

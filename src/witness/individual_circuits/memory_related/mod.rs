@@ -157,20 +157,20 @@ impl<F: SmallField> ImplicitMemoryStates<F> {
             + self.sha256_memory_states.len()
     }
 
-    fn get_vectors(self) -> [Vec<MemoryQueueState<F>>; 5] {
+    fn get_vectors(&self) -> [&Vec<MemoryQueueState<F>>; 5] {
         [
-            self.decommitter_memory_states,
-            self.keccak256_memory_states,
-            self.sha256_memory_states,
-            self.ecrecover_memory_states,
-            self.secp256r1_memory_states,
+            &self.decommitter_memory_states,
+            &self.keccak256_memory_states,
+            &self.sha256_memory_states,
+            &self.ecrecover_memory_states,
+            &self.secp256r1_memory_states,
         ]
     }
 
-    fn into_iter(self) -> ImplicitMemoryStatesIntoIter<F> {
+    pub fn iter(&self) -> ImplicitMemoryStatesIter<F> {
         let mut outer_iter = self.get_vectors().into_iter();
-        let last_vector_iter = outer_iter.next().unwrap().into_iter();
-        ImplicitMemoryStatesIntoIter {
+        let last_vector_iter = outer_iter.next().unwrap().iter();
+        ImplicitMemoryStatesIter {
             last_vector: last_vector_iter,
             outer_iter,
         }
@@ -179,14 +179,13 @@ impl<F: SmallField> ImplicitMemoryStates<F> {
 
 use core::array::IntoIter as ArrayIntoIter;
 use core::slice::Iter;
-use std::vec::IntoIter as VecIntoIter;
-pub struct ImplicitMemoryStatesIntoIter<F: SmallField> {
-    last_vector: VecIntoIter<MemoryQueueState<F>>,
-    outer_iter: ArrayIntoIter<Vec<MemoryQueueState<F>>, 5>,
+pub struct ImplicitMemoryStatesIter<'a, F: SmallField> {
+    last_vector: Iter<'a, MemoryQueueState<F>>,
+    outer_iter: ArrayIntoIter<&'a Vec<MemoryQueueState<F>>, 5>,
 }
 
-impl<F: SmallField> Iterator for ImplicitMemoryStatesIntoIter<F> {
-    type Item = MemoryQueueState<F>;
+impl<'a, F: SmallField> Iterator for ImplicitMemoryStatesIter<'a, F> {
+    type Item = &'a MemoryQueueState<F>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut next = self.last_vector.next();
