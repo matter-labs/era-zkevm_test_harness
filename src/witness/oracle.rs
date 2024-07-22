@@ -903,8 +903,8 @@ fn simulate_memory_queue(
 
 fn simulate_sorted_memory_queue(
     geometry: GeometryConfig,
-    memory_queries: &Vec<(Cycle, MemoryQuery)>,
-    implicit_memory_queries: &ImplicitMemoryQueries,
+    memory_queries: Vec<(Cycle, MemoryQuery)>,
+    implicit_memory_queries: ImplicitMemoryQueries,
     round_function: Poseidon2Goldilocks,
 ) -> (
     LastPerCircuitAccumulator<MemoryQueueState<GoldilocksField>>,
@@ -953,7 +953,6 @@ fn simulate_sorted_memory_queue(
         }
 
         (sorted_memory_queue_states_accumulator, sorted_memory_queries_simulator)
-    //});
 }
 
 use crate::witness::artifacts::DemuxedPrecompilesLogQueries;
@@ -1043,6 +1042,7 @@ fn process_memory_related_circuits<
 
     use crate::witness::individual_circuits::memory_related::get_implicit_memory_queries;
 
+    // precompiles and decommiter will produce additional implicit memory queries
     let implicit_memory_queries = get_implicit_memory_queries(
         &decommiter_circuit_inputs.deduplicated_decommit_requests_with_data, 
         &precompiles_data
@@ -1059,13 +1059,22 @@ fn process_memory_related_circuits<
         &precompiles_data.sha256_round_function_witnesses,
     );
 
-    let (sorted_memory_queue_states_accumulator, sorted_memory_queue_simulator) = simulate_sorted_memory_queue(
-        *geometry,
-        &memory_queries,
-        &implicit_memory_queries,
-        *round_function
-    );
-
+    use std::thread;
+    let sorted_handle = {
+        let memory_queries = memory_queries.clone();
+        let implicit_memory_queries = implicit_memory_queries.clone();
+        let geometry = *geometry;
+        let round_function = *round_function;
+        thread::spawn(move || {
+            simulate_sorted_memory_queue(
+                geometry,
+                memory_queries,
+                implicit_memory_queries,
+                round_function
+            )
+        })
+    };
+    
     let (memory_artifacts_for_main_vm, memory_queue_states_accumulator, memory_queue_simulator, implicit_memory_states) =
         simulate_memory_queue(
             *geometry,
@@ -1074,16 +1083,12 @@ fn process_memory_related_circuits<
             *round_function,
         );
 
+    let (sorted_memory_queue_states_accumulator, sorted_memory_queue_simulator) = sorted_handle.join().unwrap();
+
     // direct VM related part is done, other subcircuit's functionality is moved to other functions
     // that should properly do sorts and memory writes
 
     use crate::witness::individual_circuits::memory_related::decommit_code::compute_decommitter_circuit_snapshots;
-
-    // precompiles and decommiter will produce additional implicit memory queries
-    let mut implicit_memory_artifacts: ImplicitMemoryArtifacts<GoldilocksField> =
-        ImplicitMemoryArtifacts::default();
-    implicit_memory_artifacts.memory_queries =
-        Vec::with_capacity(amount_of_implicit_memory_queries);
 
     tracing::debug!("Running code code decommitter simulation");
 
@@ -1295,6 +1300,26 @@ pub(crate) fn create_artifacts_from_tracer<
         *round_function,
     );
 
+    use std::thread;
+    let callstack_handle = {
+        let log_rollback_tails_for_frames = log_rollback_tails_for_frames.clone();
+        let geometry = *geometry;
+        let round_function = *round_function;
+        thread::spawn(move || {
+            // We need to simulate all callstack states and prepare for each MainVM circuit:
+            // - entry value of callstack sponge
+            // - callstack witnesses (for every callstack state change)
+            // - detailed log queue state for entry call frame (frame index, log queue state)
+            callstack_simulation(
+                &geometry,
+                full_callstack_history,
+                log_states_data,
+                &log_rollback_tails_for_frames,
+                &round_function,
+            )
+        })
+    };
+
     // Scratch-space constraint system for circuits processing
     // Used when creating circuit instances and compact form witnesses
     let mut cs_for_witness_generation = CsForWitnessGeneration::new();
@@ -1375,19 +1400,9 @@ pub(crate) fn create_artifacts_from_tracer<
         &mut recursion_queue_callback,
     );
 
-    tracing::debug!("Running callstack sumulation");
+    tracing::debug!("Waiting for callstack sumulation");
 
-    // We need to simulate all callstack states and prepare for each MainVM circuit:
-    // - entry value of callstack sponge
-    // - callstack witnesses (for every callstack state change)
-    // - detailed log queue state for entry call frame (frame index, log queue state)
-    let callstack_simulation_result = callstack_simulation(
-        geometry,
-        full_callstack_history,
-        log_states_data,
-        &log_rollback_tails_for_frames,
-        round_function,
-    );
+    let callstack_simulation_result = callstack_handle.join().unwrap();
 
     tracing::debug!(
         "Processing VM snapshots queue (total {:?})",
