@@ -4,6 +4,7 @@
 
 use super::artifacts::LogCircuitsArtifacts;
 use super::individual_circuits::main_vm::CallstackSimulationResult;
+use super::individual_circuits::memory_related::{ImplicitMemoryQueries, ImplicitMemoryStates};
 use super::postprocessing::{
     BlockFirstAndLastBasicCircuitsObservableWitnesses, CsForWitnessGeneration,
     FirstAndLastCircuitWitness,
@@ -832,12 +833,13 @@ use circuit_definitions::encodings::memory_query::MemoryQueueState;
 fn simulate_memory_queue(
     geometry: GeometryConfig,
     memory_queries: Vec<(Cycle, MemoryQuery)>,
-    amount_of_implicit_memory_queries: usize,
+    implicit_memory_queries: &ImplicitMemoryQueries,
     round_function: Poseidon2Goldilocks,
 ) -> (
     MemoryArtifacts<GoldilocksField>,
     LastPerCircuitAccumulator<MemoryQueueState<GoldilocksField>>,
     MemoryQueuePerCircuitSimulator<GoldilocksField>,
+    ImplicitMemoryStates<GoldilocksField>
 ) {
     let mut memory_artifacts_for_main_vm = MemoryArtifacts {
         memory_queries,
@@ -859,7 +861,7 @@ fn simulate_memory_queue(
     let mut memory_queue_simulator =
         MemoryQueuePerCircuitSimulator::using_container(PerCircuitAccumulator::with_flat_capacity(
             geometry.cycles_per_ram_permutation as usize,
-            memory_artifacts_for_main_vm.memory_queries.len() + amount_of_implicit_memory_queries,
+            memory_artifacts_for_main_vm.memory_queries.len() + implicit_memory_queries.amount_of_queries(),
         ));
 
     // very slow
@@ -884,23 +886,86 @@ fn simulate_memory_queue(
         );
     }
 
+    use crate::witness::individual_circuits::memory_related::simulate_implicit_memory_queues;
+    let implicit_memory_states = simulate_implicit_memory_queues(
+        &mut memory_queue_simulator, 
+        &implicit_memory_queries, 
+        round_function
+    );
+
     (
         memory_artifacts_for_main_vm,
         memory_queue_states_accumulator,
         memory_queue_simulator,
+        implicit_memory_states
     )
+}
+
+fn simulate_sorted_memory_queue(
+    geometry: GeometryConfig,
+    memory_queries: &Vec<(Cycle, MemoryQuery)>,
+    implicit_memory_queries: &ImplicitMemoryQueries,
+    round_function: Poseidon2Goldilocks,
+) -> (
+    LastPerCircuitAccumulator<MemoryQueueState<GoldilocksField>>,
+    MemoryQueuePerCircuitSimulator<GoldilocksField>
+) {
+    let mut all_memory_queries_sorted: Vec<&MemoryQuery> = memory_queries
+    .iter()
+    .map(|(_, query)| query)
+    .chain(implicit_memory_queries.iter())
+    .collect();
+
+    use std::cmp::Ordering;
+    use rayon::prelude::*;
+    use crate::witness::aux_data_structs::per_circuit_accumulator::PerCircuitAccumulator;
+
+    // sort by memory location, and then by timestamp
+    all_memory_queries_sorted.par_sort_by(|a, b| match a.location.cmp(&b.location) {
+        Ordering::Equal => a.timestamp.cmp(&b.timestamp),
+        a @ _ => a,
+    });
+
+    // those two things are parallelizable, and can be internally parallelized too
+
+    // now we can finish reconstruction of each sorted and unsorted memory queries
+
+    // reconstruct sorted one in full
+    let amount_of_queries = memory_queries.len() + implicit_memory_queries.amount_of_queries();
+    //let sorted_handle = thread::spawn(move || {
+        let mut sorted_memory_queries_simulator =
+        MemoryQueuePerCircuitSimulator::using_container(PerCircuitAccumulator::with_flat_capacity(
+            geometry.cycles_per_ram_permutation as usize,
+            amount_of_queries,
+        ));
+
+    // for RAM permutation circuits
+    let mut sorted_memory_queue_states_accumulator =
+        LastPerCircuitAccumulator::<MemoryQueueState<GoldilocksField>>::with_flat_capacity(
+            geometry.cycles_per_ram_permutation as usize,
+            amount_of_queries,
+        );
+        
+        for query in all_memory_queries_sorted.into_iter() {
+            let (_, intermediate_info) = sorted_memory_queries_simulator
+            .push_and_output_intermediate_data(*query, &round_function);
+            sorted_memory_queue_states_accumulator.push(intermediate_info);
+        }
+
+        (sorted_memory_queue_states_accumulator, sorted_memory_queries_simulator)
+    //});
 }
 
 use crate::witness::artifacts::DemuxedPrecompilesLogQueries;
 use crate::witness::individual_circuits::log_demux::PrecompilesQueuesStates;
 
-struct PrecompilesInputData {
-    keccak_round_function_witnesses: Vec<(Cycle, LogQuery, Vec<Keccak256RoundWitness>)>,
-    sha256_round_function_witnesses: Vec<(Cycle, LogQuery, Vec<Sha256RoundWitness>)>,
-    ecrecover_witnesses: Vec<(Cycle, LogQuery, ECRecoverRoundWitness)>,
-    secp256r1_verify_witnesses: Vec<(Cycle, LogQuery, Secp256r1VerifyRoundWitness)>,
-    logs_queues_states: PrecompilesQueuesStates,
-    logs_queries: DemuxedPrecompilesLogQueries,
+pub(crate) struct PrecompilesInputData {
+    pub keccak_round_function_witnesses: Vec<(Cycle, LogQuery, Vec<Keccak256RoundWitness>)>,
+    pub sha256_round_function_witnesses: Vec<(Cycle, LogQuery, Vec<Sha256RoundWitness>)>,
+    pub ecrecover_witnesses: Vec<(Cycle, LogQuery, ECRecoverRoundWitness)>,
+    pub secp256r1_verify_witnesses: Vec<(Cycle, LogQuery, Secp256r1VerifyRoundWitness)>,
+    pub logs_queues_states: PrecompilesQueuesStates,
+    pub logs_queries: DemuxedPrecompilesLogQueries,
 }
 
 fn process_memory_related_circuits<
@@ -976,6 +1041,13 @@ fn process_memory_related_circuits<
 
     tracing::debug!("Running unsorted memory queue simulation");
 
+    use crate::witness::individual_circuits::memory_related::get_implicit_memory_queries;
+
+    let implicit_memory_queries = get_implicit_memory_queries(
+        &decommiter_circuit_inputs.deduplicated_decommit_requests_with_data, 
+        &precompiles_data
+    );
+
     use crate::witness::individual_circuits::memory_related::amount_of_implicit_memory_queries;
 
     let amount_of_memory_queries = memory_queries.len();
@@ -987,11 +1059,18 @@ fn process_memory_related_circuits<
         &precompiles_data.sha256_round_function_witnesses,
     );
 
-    let (memory_artifacts_for_main_vm, memory_queue_states_accumulator, mut memory_queue_simulator) =
+    let (sorted_memory_queue_states_accumulator, sorted_memory_queue_simulator) = simulate_sorted_memory_queue(
+        *geometry,
+        &memory_queries,
+        &implicit_memory_queries,
+        *round_function
+    );
+
+    let (memory_artifacts_for_main_vm, memory_queue_states_accumulator, memory_queue_simulator, implicit_memory_states) =
         simulate_memory_queue(
             *geometry,
             memory_queries,
-            amount_of_implicit_memory_queries,
+            &implicit_memory_queries,
             *round_function,
         );
 
@@ -1010,9 +1089,9 @@ fn process_memory_related_circuits<
 
     let code_decommitter_circuits_data = compute_decommitter_circuit_snapshots(
         amount_of_memory_queries,
-        &mut implicit_memory_artifacts,
+        &implicit_memory_queries,
+        &implicit_memory_states,
         &memory_queue_states_accumulator,
-        &mut memory_queue_simulator,
         decommiter_circuit_inputs,
         round_function,
         geometry.cycles_per_code_decommitter as usize,
@@ -1030,9 +1109,8 @@ fn process_memory_related_circuits<
 
     let keccak256_circuits_data = keccak256_decompose_into_per_circuit_witness(
         amount_of_memory_queries,
-        &mut implicit_memory_artifacts,
-        &memory_queue_states_accumulator,
-        &mut memory_queue_simulator,
+        &implicit_memory_queries,
+        &implicit_memory_states,
         precompiles_data.keccak_round_function_witnesses,
         precompiles_data.logs_queries.keccak,
         precompiles_data.logs_queues_states.keccak,
@@ -1049,9 +1127,8 @@ fn process_memory_related_circuits<
 
     let sha256_circuits_data = sha256_decompose_into_per_circuit_witness(
         amount_of_memory_queries,
-        &mut implicit_memory_artifacts,
-        &memory_queue_states_accumulator,
-        &mut memory_queue_simulator,
+        &implicit_memory_queries,
+        &implicit_memory_states,
         precompiles_data.sha256_round_function_witnesses,
         precompiles_data.logs_queries.sha256,
         precompiles_data.logs_queues_states.sha256,
@@ -1068,9 +1145,8 @@ fn process_memory_related_circuits<
 
     let ecrecover_circuits_data = ecrecover_decompose_into_per_circuit_witness(
         amount_of_memory_queries,
-        &mut implicit_memory_artifacts,
-        &memory_queue_states_accumulator,
-        &mut memory_queue_simulator,
+        &implicit_memory_queries,
+        &implicit_memory_states,
         precompiles_data.ecrecover_witnesses,
         precompiles_data.logs_queries.ecrecover,
         precompiles_data.logs_queues_states.ecrecover,
@@ -1085,9 +1161,8 @@ fn process_memory_related_circuits<
 
     let secp256r1_verify_circuits_data = secp256r1_verify_decompose_into_per_circuit_witness(
         amount_of_memory_queries,
-        &mut implicit_memory_artifacts,
-        &memory_queue_states_accumulator,
-        &mut memory_queue_simulator,
+        &implicit_memory_queries,
+        &implicit_memory_states,
         precompiles_data.secp256r1_verify_witnesses,
         precompiles_data.logs_queries.secp256r1_verify,
         precompiles_data.logs_queues_states.secp256r1_verify,
@@ -1096,7 +1171,8 @@ fn process_memory_related_circuits<
     );
     circuits_data.secp256r1_verify_circuits_data = secp256r1_verify_circuits_data;
 
-    assert!(implicit_memory_artifacts.memory_queries.len() == amount_of_implicit_memory_queries);
+    assert_eq!(implicit_memory_queries.amount_of_queries(), amount_of_implicit_memory_queries);
+    assert_eq!(implicit_memory_states.amount_of_states(), amount_of_implicit_memory_queries);
 
     use crate::witness::individual_circuits::memory_related::ram_permutation::compute_ram_circuit_snapshots;
 
@@ -1105,9 +1181,12 @@ fn process_memory_related_circuits<
     let (ram_permutation_circuits, ram_permutation_circuits_compact_forms_witnesses) =
         compute_ram_circuit_snapshots(
             &memory_artifacts_for_main_vm.memory_queries,
-            implicit_memory_artifacts,
             memory_queue_states_accumulator,
+            sorted_memory_queue_states_accumulator,
+            implicit_memory_queries,
+            implicit_memory_states,
             memory_queue_simulator,
+            sorted_memory_queue_simulator,
             round_function,
             num_non_deterministic_heap_queries,
             geometry.cycles_per_ram_permutation as usize,

@@ -38,9 +38,12 @@ pub(crate) fn compute_ram_circuit_snapshots<
     QSCB: FnMut(u64, RecursionQueueSimulator<Field>, Vec<ClosedFormInputCompactFormWitness<Field>>),
 >(
     memory_queries: &Vec<(u32, MemoryQuery)>,
-    implicit_memory_artifacts: ImplicitMemoryArtifacts<Field>,
     mut memory_queue_states_accumulator: LastPerCircuitAccumulator<MemoryQueueState<Field>>,
+    sorted_memory_queue_states_accumulator: LastPerCircuitAccumulator<MemoryQueueState<Field>>,
+    implicit_memory_queries: ImplicitMemoryQueries,
+    implicit_memory_states: ImplicitMemoryStates<Field>,
     memory_queue_simulator: MemoryQueuePerCircuitSimulator<Field>,
+    sorted_memory_queries_simulator: MemoryQueuePerCircuitSimulator<Field>,
     round_function: &RoundFunction,
     num_non_deterministic_heap_queries: usize,
     per_circuit_capacity: usize,
@@ -52,16 +55,37 @@ pub(crate) fn compute_ram_circuit_snapshots<
     FirstAndLastCircuitWitness<RamPermutationObservableWitness<Field>>,
     Vec<ClosedFormInputCompactFormWitness<Field>>,
 ) {
-    assert_eq!(memory_queries.len(), memory_queue_states_accumulator.len());
-
     assert_eq!(
-        implicit_memory_artifacts.memory_queries.len(),
-        implicit_memory_artifacts.memory_queue_states.len()
+        implicit_memory_queries.amount_of_queries(),
+        implicit_memory_states.amount_of_states()
     );
 
     // including additional queries from precompiles
     let total_amount_of_queries =
-        memory_queries.len() + implicit_memory_artifacts.memory_queries.len();
+        memory_queries.len() + implicit_memory_queries.amount_of_queries();
+
+    assert_eq!(
+        memory_queries.len(),
+        memory_queue_states_accumulator.len()
+    );
+
+
+    // push implicit queries 
+
+    memory_queue_states_accumulator.reserve_exact_flat(implicit_memory_states.amount_of_states());
+    for state in implicit_memory_states.into_iter() {
+        memory_queue_states_accumulator.push(state);
+    }
+
+    assert_eq!(
+        total_amount_of_queries,
+        memory_queue_states_accumulator.len()
+    );
+
+    assert_eq!(
+        total_amount_of_queries,
+        sorted_memory_queue_states_accumulator.len()
+    );
 
     assert!(
         total_amount_of_queries > 0,
@@ -71,11 +95,6 @@ pub(crate) fn compute_ram_circuit_snapshots<
     let amount_of_circuits =
         (total_amount_of_queries + per_circuit_capacity - 1) / per_circuit_capacity;
 
-    memory_queue_states_accumulator
-        .reserve_exact_flat(implicit_memory_artifacts.memory_queue_states.len());
-    for state in implicit_memory_artifacts.memory_queue_states.into_iter() {
-        memory_queue_states_accumulator.push(state);
-    }
     let unsorted_memory_queue_chunk_final_states = memory_queue_states_accumulator.into_circuits();
 
     assert_eq!(
@@ -83,47 +102,7 @@ pub(crate) fn compute_ram_circuit_snapshots<
         amount_of_circuits
     );
 
-    let mut sorted_memory_queue_chunk_final_states = Vec::with_capacity(amount_of_circuits);
-
-    let mut sorted_memory_queries_simulator =
-        MemoryQueuePerCircuitSimulator::using_container(PerCircuitAccumulator::with_flat_capacity(
-            per_circuit_capacity,
-            memory_queries.len() + implicit_memory_artifacts.memory_queries.len(),
-        ));
-    {
-        let mut sorted_memory_queries_accumulated: Vec<&MemoryQuery> = memory_queries
-            .iter()
-            .map(|(_, query)| query)
-            .chain(implicit_memory_artifacts.memory_queries.iter())
-            .collect();
-
-        // sort by memory location, and then by timestamp
-        sorted_memory_queries_accumulated.par_sort_by(|a, b| match a.location.cmp(&b.location) {
-            Ordering::Equal => a.timestamp.cmp(&b.timestamp),
-            a @ _ => a,
-        });
-
-        // those two thins are parallelizable, and can be internally parallelized too
-
-        // now we can finish reconstruction of each sorted and unsorted memory queries
-
-        // reconstruct sorted one in full
-
-        for chunk in sorted_memory_queries_accumulated.chunks(per_circuit_capacity) {
-            let intermediate_info = chunk
-                .iter()
-                .map(|query| {
-                    let (_, _intermediate_info) = sorted_memory_queries_simulator
-                        .push_and_output_intermediate_data(**query, round_function);
-                    _intermediate_info
-                })
-                .last()
-                .unwrap();
-            sorted_memory_queue_chunk_final_states.push(intermediate_info);
-        }
-    }
-
-    drop(implicit_memory_artifacts.memory_queries);
+    let sorted_memory_queue_chunk_final_states = sorted_memory_queue_states_accumulator.into_circuits();
 
     assert_eq!(
         unsorted_memory_queue_chunk_final_states.len(),
