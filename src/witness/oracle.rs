@@ -839,7 +839,7 @@ fn simulate_memory_queue(
     MemoryArtifacts<GoldilocksField>,
     LastPerCircuitAccumulator<MemoryQueueState<GoldilocksField>>,
     MemoryQueuePerCircuitSimulator<GoldilocksField>,
-    ImplicitMemoryStates<GoldilocksField>
+    ImplicitMemoryStates<GoldilocksField>,
 ) {
     let mut memory_artifacts_for_main_vm = MemoryArtifacts {
         memory_queries,
@@ -861,7 +861,8 @@ fn simulate_memory_queue(
     let mut memory_queue_simulator =
         MemoryQueuePerCircuitSimulator::using_container(PerCircuitAccumulator::with_flat_capacity(
             geometry.cycles_per_ram_permutation as usize,
-            memory_artifacts_for_main_vm.memory_queries.len() + implicit_memory_queries.amount_of_queries(),
+            memory_artifacts_for_main_vm.memory_queries.len()
+                + implicit_memory_queries.amount_of_queries(),
         ));
 
     // very slow
@@ -888,16 +889,16 @@ fn simulate_memory_queue(
 
     use crate::witness::individual_circuits::memory_related::simulate_implicit_memory_queues;
     let implicit_memory_states = simulate_implicit_memory_queues(
-        &mut memory_queue_simulator, 
-        &implicit_memory_queries, 
-        round_function
+        &mut memory_queue_simulator,
+        &implicit_memory_queries,
+        round_function,
     );
 
     (
         memory_artifacts_for_main_vm,
         memory_queue_states_accumulator,
         memory_queue_simulator,
-        implicit_memory_states
+        implicit_memory_states,
     )
 }
 
@@ -908,17 +909,17 @@ fn simulate_sorted_memory_queue(
     round_function: Poseidon2Goldilocks,
 ) -> (
     LastPerCircuitAccumulator<MemoryQueueState<GoldilocksField>>,
-    MemoryQueuePerCircuitSimulator<GoldilocksField>
+    MemoryQueuePerCircuitSimulator<GoldilocksField>,
 ) {
     let mut all_memory_queries_sorted: Vec<&MemoryQuery> = memory_queries
-    .iter()
-    .map(|(_, query)| query)
-    .chain(implicit_memory_queries.iter())
-    .collect();
+        .iter()
+        .map(|(_, query)| query)
+        .chain(implicit_memory_queries.iter())
+        .collect();
 
-    use std::cmp::Ordering;
-    use rayon::prelude::*;
     use crate::witness::aux_data_structs::per_circuit_accumulator::PerCircuitAccumulator;
+    use rayon::prelude::*;
+    use std::cmp::Ordering;
 
     // sort by memory location, and then by timestamp
     all_memory_queries_sorted.par_sort_by(|a, b| match a.location.cmp(&b.location) {
@@ -933,7 +934,7 @@ fn simulate_sorted_memory_queue(
     // reconstruct sorted one in full
     let amount_of_queries = memory_queries.len() + implicit_memory_queries.amount_of_queries();
     //let sorted_handle = thread::spawn(move || {
-        let mut sorted_memory_queries_simulator =
+    let mut sorted_memory_queries_simulator =
         MemoryQueuePerCircuitSimulator::using_container(PerCircuitAccumulator::with_flat_capacity(
             geometry.cycles_per_ram_permutation as usize,
             amount_of_queries,
@@ -945,14 +946,17 @@ fn simulate_sorted_memory_queue(
             geometry.cycles_per_ram_permutation as usize,
             amount_of_queries,
         );
-        
-        for query in all_memory_queries_sorted.into_iter() {
-            let (_, intermediate_info) = sorted_memory_queries_simulator
-            .push_and_output_intermediate_data(*query, &round_function);
-            sorted_memory_queue_states_accumulator.push(intermediate_info);
-        }
 
-        (sorted_memory_queue_states_accumulator, sorted_memory_queries_simulator)
+    for query in all_memory_queries_sorted.into_iter() {
+        let (_, intermediate_info) = sorted_memory_queries_simulator
+            .push_and_output_intermediate_data(*query, &round_function);
+        sorted_memory_queue_states_accumulator.push(intermediate_info);
+    }
+
+    (
+        sorted_memory_queue_states_accumulator,
+        sorted_memory_queries_simulator,
+    )
 }
 
 use crate::witness::artifacts::DemuxedPrecompilesLogQueries;
@@ -1044,8 +1048,8 @@ fn process_memory_related_circuits<
 
     // precompiles and decommiter will produce additional implicit memory queries
     let implicit_memory_queries = get_implicit_memory_queries(
-        &decommiter_circuit_inputs.deduplicated_decommit_requests_with_data, 
-        &precompiles_data
+        &decommiter_circuit_inputs.deduplicated_decommit_requests_with_data,
+        &precompiles_data,
     );
 
     let amount_of_memory_queries = memory_queries.len();
@@ -1061,20 +1065,25 @@ fn process_memory_related_circuits<
                 geometry,
                 memory_queries,
                 implicit_memory_queries,
-                round_function
+                round_function,
             )
         })
     };
-    
-    let (memory_artifacts_for_main_vm, memory_queue_states_accumulator, memory_queue_simulator, implicit_memory_states) =
-        simulate_memory_queue(
-            *geometry,
-            memory_queries,
-            &implicit_memory_queries,
-            *round_function,
-        );
 
-    let (sorted_memory_queue_states_accumulator, sorted_memory_queue_simulator) = sorted_handle.join().unwrap();
+    let (
+        memory_artifacts_for_main_vm,
+        memory_queue_states_accumulator,
+        memory_queue_simulator,
+        implicit_memory_states,
+    ) = simulate_memory_queue(
+        *geometry,
+        memory_queries,
+        &implicit_memory_queries,
+        *round_function,
+    );
+
+    let (sorted_memory_queue_states_accumulator, sorted_memory_queue_simulator) =
+        sorted_handle.join().unwrap();
 
     // direct VM related part is done, other subcircuit's functionality is moved to other functions
     // that should properly do sorts and memory writes
@@ -1167,7 +1176,10 @@ fn process_memory_related_circuits<
     );
     circuits_data.secp256r1_verify_circuits_data = secp256r1_verify_circuits_data;
 
-    assert_eq!(implicit_memory_queries.amount_of_queries(), implicit_memory_states.amount_of_states());
+    assert_eq!(
+        implicit_memory_queries.amount_of_queries(),
+        implicit_memory_states.amount_of_states()
+    );
 
     use crate::witness::individual_circuits::memory_related::ram_permutation::compute_ram_circuit_snapshots;
 

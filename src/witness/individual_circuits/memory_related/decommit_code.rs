@@ -17,26 +17,25 @@ use circuit_definitions::encodings::memory_query::MemoryQueueState;
 use circuit_definitions::zk_evm::aux_structures::DecommittmentQuery;
 use std::collections::VecDeque;
 
-pub(crate) fn decommitter_memory_queries(deduplicated_decommit_requests_with_data: &Vec<(DecommittmentQuery, Vec<U256>)>) -> Vec<MemoryQuery> {
+pub(crate) fn decommitter_memory_queries(
+    deduplicated_decommit_requests_with_data: &Vec<(DecommittmentQuery, Vec<U256>)>,
+) -> Vec<MemoryQuery> {
     let mut result = vec![];
     for (query, writes) in deduplicated_decommit_requests_with_data.iter() {
         assert!(query.is_fresh);
 
         // now feed the queries into it
-        let as_queries_it = writes
-            .iter()
-            .enumerate()
-            .map(|(idx, el)| MemoryQuery {
-                timestamp: query.timestamp,
-                location: zk_evm::aux_structures::MemoryLocation {
-                    memory_type: zk_evm::abstractions::MemoryType::Code,
-                    page: query.memory_page,
-                    index: MemoryIndex(idx as u32),
-                },
-                rw_flag: true,
-                value: *el,
-                value_is_pointer: false,
-            });
+        let as_queries_it = writes.iter().enumerate().map(|(idx, el)| MemoryQuery {
+            timestamp: query.timestamp,
+            location: zk_evm::aux_structures::MemoryLocation {
+                memory_type: zk_evm::abstractions::MemoryType::Code,
+                page: query.memory_page,
+                index: MemoryIndex(idx as u32),
+            },
+            rw_flag: true,
+            value: *el,
+            value_is_pointer: false,
+        });
 
         // and plain test memory queues
         result.extend(as_queries_it);
@@ -432,9 +431,8 @@ pub(crate) fn compute_decommitter_circuit_snapshots<
     let memory_simulator_after = &implicit_memory_states.decommitter_simulator_snapshots[1];
 
     assert_eq!(
-        amount_of_memory_queries
-            + implicit_memory_queries.decommitter_memory_queries.len(),
-            memory_simulator_after.num_items as usize
+        amount_of_memory_queries + implicit_memory_queries.decommitter_memory_queries.len(),
+        memory_simulator_after.num_items as usize
     );
 
     results

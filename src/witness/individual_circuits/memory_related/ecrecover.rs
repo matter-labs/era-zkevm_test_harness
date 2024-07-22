@@ -11,12 +11,14 @@ use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 use circuit_definitions::encodings::memory_query::MemoryQueueState;
 use circuit_definitions::encodings::*;
 
-pub(crate) fn ecrecover_memory_queries(ecrecover_witnesses: &Vec<(u32, LogQuery_, ECRecoverRoundWitness)>) -> Vec<MemoryQuery> {
+pub(crate) fn ecrecover_memory_queries(
+    ecrecover_witnesses: &Vec<(u32, LogQuery_, ECRecoverRoundWitness)>,
+) -> Vec<MemoryQuery> {
     let amount_of_queries = ecrecover_witnesses
-    .iter()
-    .fold(0, |inner, (_, _, witness)| {
-        inner + witness.reads.len() + witness.writes.len()
-    });
+        .iter()
+        .fold(0, |inner, (_, _, witness)| {
+            inner + witness.reads.len() + witness.writes.len()
+        });
 
     let mut ecrecover_memory_queries = Vec::with_capacity(amount_of_queries);
 
@@ -141,7 +143,8 @@ pub(crate) fn ecrecover_decompose_into_per_circuit_witness<
             assert!(read_query.rw_flag == false);
             memory_reads_per_request.push(read_query.value);
 
-            current_memory_queue_state = transform_sponge_like_queue_state(*memory_queue_states_it.next().unwrap());
+            current_memory_queue_state =
+                transform_sponge_like_queue_state(*memory_queue_states_it.next().unwrap());
 
             precompile_request.input_memory_offset += 1;
             amount_of_queries += 1;
@@ -153,7 +156,8 @@ pub(crate) fn ecrecover_decompose_into_per_circuit_witness<
             assert!(write == write_query);
             assert!(write_query.rw_flag == true);
 
-            current_memory_queue_state = transform_sponge_like_queue_state(*memory_queue_states_it.next().unwrap());
+            current_memory_queue_state =
+                transform_sponge_like_queue_state(*memory_queue_states_it.next().unwrap());
 
             precompile_request.output_memory_offset += 1;
             amount_of_queries += 1;

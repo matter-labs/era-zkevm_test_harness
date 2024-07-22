@@ -64,13 +64,9 @@ pub(crate) fn compute_ram_circuit_snapshots<
     let total_amount_of_queries =
         memory_queries.len() + implicit_memory_queries.amount_of_queries();
 
-    assert_eq!(
-        memory_queries.len(),
-        memory_queue_states_accumulator.len()
-    );
+    assert_eq!(memory_queries.len(), memory_queue_states_accumulator.len());
 
-
-    // push implicit queries 
+    // push implicit queries
 
     memory_queue_states_accumulator.reserve_exact_flat(implicit_memory_states.amount_of_states());
     for state in implicit_memory_states.into_iter() {
@@ -102,7 +98,8 @@ pub(crate) fn compute_ram_circuit_snapshots<
         amount_of_circuits
     );
 
-    let sorted_memory_queue_chunk_final_states = sorted_memory_queue_states_accumulator.into_circuits();
+    let sorted_memory_queue_chunk_final_states =
+        sorted_memory_queue_states_accumulator.into_circuits();
 
     assert_eq!(
         unsorted_memory_queue_chunk_final_states.len(),
