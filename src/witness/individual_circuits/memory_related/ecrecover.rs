@@ -11,18 +11,14 @@ use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 use circuit_definitions::encodings::memory_query::MemoryQueueState;
 use circuit_definitions::encodings::*;
 
-pub(crate) fn ecrecover_memory_queries_amount(
-    ecrecover_witnesses: &Vec<(u32, LogQuery_, ECRecoverRoundWitness)>,
-) -> usize {
-    ecrecover_witnesses
-        .iter()
-        .fold(0, |inner, (_, _, witness)| {
-            inner + witness.reads.len() + witness.writes.len()
-        })
-}
-
 pub(crate) fn ecrecover_memory_queries(ecrecover_witnesses: &Vec<(u32, LogQuery_, ECRecoverRoundWitness)>) -> Vec<MemoryQuery> {
-    let mut ecrecover_memory_queries = Vec::with_capacity(ecrecover_memory_queries_amount(&ecrecover_witnesses));
+    let amount_of_queries = ecrecover_witnesses
+    .iter()
+    .fold(0, |inner, (_, _, witness)| {
+        inner + witness.reads.len() + witness.writes.len()
+    });
+
+    let mut ecrecover_memory_queries = Vec::with_capacity(amount_of_queries);
 
     for (_cycle, _query, witness) in ecrecover_witnesses.iter() {
         let initial_memory_len = ecrecover_memory_queries.len();
@@ -71,7 +67,7 @@ pub(crate) fn ecrecover_decompose_into_per_circuit_witness<
 
     use crate::zk_evm::zk_evm_abstractions::precompiles::ecrecover::ECRecoverRoundWitness;
     let mut ecrecover_memory_queries =
-        Vec::with_capacity(ecrecover_memory_queries_amount(&ecrecover_witnesses));
+        Vec::with_capacity(implicit_memory_queries.ecrecover_memory_queries.len());
 
     for (_cycle, _query, witness) in ecrecover_witnesses.iter() {
         let ECRecoverRoundWitness {

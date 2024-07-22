@@ -17,15 +17,6 @@ use circuit_definitions::encodings::memory_query::MemoryQueueState;
 use circuit_definitions::zk_evm::aux_structures::DecommittmentQuery;
 use std::collections::VecDeque;
 
-// TODO docs
-pub(crate) fn decommitter_memory_queries_amount(
-    deduplicated_decommit_requests_with_data: &Vec<(DecommittmentQuery, Vec<U256>)>,
-) -> usize {
-    deduplicated_decommit_requests_with_data
-        .iter()
-        .fold(0, |inner, (_, writes)| inner + writes.len())
-}
-
 pub(crate) fn decommitter_memory_queries(deduplicated_decommit_requests_with_data: &Vec<(DecommittmentQuery, Vec<U256>)>) -> Vec<MemoryQuery> {
     let mut result = vec![];
     for (query, writes) in deduplicated_decommit_requests_with_data.iter() {

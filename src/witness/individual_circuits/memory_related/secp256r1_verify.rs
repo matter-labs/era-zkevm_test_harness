@@ -11,18 +11,14 @@ use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 use circuit_definitions::encodings::memory_query::MemoryQueueState;
 use circuit_definitions::encodings::*;
 
-pub(crate) fn secp256r1_memory_queries_amount(
-    secp256r1_verify_witnesses: &Vec<(u32, LogQuery_, Secp256r1VerifyRoundWitness)>,
-) -> usize {
-    secp256r1_verify_witnesses
-        .iter()
-        .fold(0, |inner, (_, _, witness)| {
-            inner + witness.reads.len() + witness.writes.len()
-        })
-}
-
 pub(crate) fn secp256r1_memory_queries(secp256r1_verify_witnesses: &Vec<(u32, LogQuery_, Secp256r1VerifyRoundWitness)>) -> Vec<MemoryQuery> {
-    let mut secp256r1_memory_queries = Vec::with_capacity(secp256r1_memory_queries_amount(&secp256r1_verify_witnesses));
+    let amount_of_queries = secp256r1_verify_witnesses
+    .iter()
+    .fold(0, |inner, (_, _, witness)| {
+        inner + witness.reads.len() + witness.writes.len()
+    });
+
+    let mut secp256r1_memory_queries = Vec::with_capacity(amount_of_queries);
 
     for (_cycle, _query, witness) in secp256r1_verify_witnesses.iter() {
         let initial_memory_len = secp256r1_memory_queries.len();
@@ -72,7 +68,7 @@ pub(crate) fn secp256r1_verify_decompose_into_per_circuit_witness<
 
     use crate::zk_evm::zk_evm_abstractions::precompiles::secp256r1_verify::Secp256r1VerifyRoundWitness;
     let mut memory_queries =
-        Vec::with_capacity(secp256r1_memory_queries_amount(&secp256r1_verify_witnesses));
+        Vec::with_capacity(implicit_memory_queries.secp256r1_memory_queries.len());
 
     for (_cycle, _query, witness) in secp256r1_verify_witnesses.iter() {
         let Secp256r1VerifyRoundWitness {

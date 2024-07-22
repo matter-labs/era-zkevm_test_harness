@@ -15,33 +15,21 @@ use circuit_definitions::encodings::memory_query::MemoryQueueState;
 use circuit_definitions::encodings::*;
 use derivative::*;
 
-pub(crate) fn sha256_memory_queries_amount(
-    sha256_round_function_witnesses: &Vec<(u32, LogQuery_, Vec<Sha256RoundWitness>)>,
-) -> usize {
-    let result = sha256_round_function_witnesses
-        .iter()
-        .fold(0, |mut inner, (_, _, witness)| {
-            for el in witness.iter() {
-                let Sha256RoundWitness {
-                    new_request: _,
-                    reads,
-                    writes,
-                } = el;
-
-                inner += reads.len();
-
-                if let Some(writes) = writes.as_ref() {
-                    inner += writes.len()
-                }
-            }
-            inner
-        });
-
-    result
-}
-
 pub(crate) fn sha256_memory_queries(sha256_round_function_witnesses: &Vec<(u32, LogQuery_, Vec<Sha256RoundWitness>)>) -> Vec<MemoryQuery> {
-    let mut sha256_memory_queries = Vec::with_capacity(sha256_memory_queries_amount(&sha256_round_function_witnesses));
+    let amount_of_queries = sha256_round_function_witnesses
+    .iter()
+    .fold(0, |mut inner, (_, _, witness)| {
+        for el in witness.iter() {
+            inner += el.reads.len();
+
+            if let Some(writes) = el.writes.as_ref() {
+                inner += writes.len()
+            }
+        }
+        inner
+    });
+
+    let mut sha256_memory_queries = Vec::with_capacity(amount_of_queries);
 
     for (_cycle, _query, witness) in sha256_round_function_witnesses.iter() {
         for el in witness.iter() {
@@ -103,9 +91,7 @@ pub(crate) fn sha256_decompose_into_per_circuit_witness<
 
     // split into aux witness, don't mix with the memory
     use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Sha256RoundWitness;
-    let mut sha256_memory_queries = Vec::with_capacity(sha256_memory_queries_amount(
-        &sha256_round_function_witnesses,
-    ));
+    let mut sha256_memory_queries = Vec::with_capacity(implicit_memory_queries.sha256_memory_queries.len());
 
     for (_cycle, _query, witness) in sha256_round_function_witnesses.iter() {
         for el in witness.iter() {

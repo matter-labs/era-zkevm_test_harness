@@ -1048,16 +1048,7 @@ fn process_memory_related_circuits<
         &precompiles_data
     );
 
-    use crate::witness::individual_circuits::memory_related::amount_of_implicit_memory_queries;
-
     let amount_of_memory_queries = memory_queries.len();
-    let amount_of_implicit_memory_queries = amount_of_implicit_memory_queries(
-        &decommiter_circuit_inputs.deduplicated_decommit_requests_with_data,
-        &precompiles_data.ecrecover_witnesses,
-        &precompiles_data.keccak_round_function_witnesses,
-        &precompiles_data.secp256r1_verify_witnesses,
-        &precompiles_data.sha256_round_function_witnesses,
-    );
 
     use std::thread;
     let sorted_handle = {
@@ -1176,8 +1167,7 @@ fn process_memory_related_circuits<
     );
     circuits_data.secp256r1_verify_circuits_data = secp256r1_verify_circuits_data;
 
-    assert_eq!(implicit_memory_queries.amount_of_queries(), amount_of_implicit_memory_queries);
-    assert_eq!(implicit_memory_states.amount_of_states(), amount_of_implicit_memory_queries);
+    assert_eq!(implicit_memory_queries.amount_of_queries(), implicit_memory_states.amount_of_states());
 
     use crate::witness::individual_circuits::memory_related::ram_permutation::compute_ram_circuit_snapshots;
 

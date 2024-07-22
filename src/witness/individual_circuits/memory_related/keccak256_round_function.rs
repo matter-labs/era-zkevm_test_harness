@@ -14,37 +14,26 @@ use circuit_definitions::encodings::memory_query::MemoryQueueState;
 use circuit_definitions::encodings::*;
 use derivative::*;
 
-pub(crate) fn keccak256_memory_queries_amount(
-    keccak_round_function_witnesses: &Vec<(u32, LogQuery_, Vec<Keccak256RoundWitness>)>,
-) -> usize {
-    let result = keccak_round_function_witnesses
-        .iter()
-        .fold(0, |mut inner, (_, _, witness)| {
-            for el in witness.iter() {
-                let Keccak256RoundWitness {
-                    new_request: _,
-                    reads,
-                    writes,
-                } = el;
-
-                reads.iter().for_each(|read| {
-                    if read.is_some() {
-                        inner += 1;
-                    }
-                });
-
-                if let Some(writes) = writes.as_ref() {
-                    inner += writes.len()
+pub(crate) fn keccak256_memory_queries(keccak_round_function_witnesses: &Vec<(u32, LogQuery_, Vec<Keccak256RoundWitness>)>) -> Vec<MemoryQuery> {
+    let amount_of_queries = keccak_round_function_witnesses
+    .iter()
+    .fold(0, |mut inner, (_, _, witness)| {
+        witness.iter().for_each(|el | {
+            el.reads.iter().for_each(|read| {
+                if read.is_some() {
+                    inner += 1;
                 }
+            });
+
+            if el.writes.is_some() {
+                inner += 1;
             }
-            inner
         });
 
-    result
-}
+        inner
+    });
 
-pub(crate) fn keccak256_memory_queries(keccak_round_function_witnesses: &Vec<(u32, LogQuery_, Vec<Keccak256RoundWitness>)>) -> Vec<MemoryQuery> {
-    let mut keccak_256_memory_queries = Vec::with_capacity(keccak256_memory_queries_amount(&keccak_round_function_witnesses));
+    let mut keccak_256_memory_queries = Vec::with_capacity(amount_of_queries);
 
     for (_cycle, _query, witness) in keccak_round_function_witnesses.iter() {
         for el in witness.iter() {
@@ -66,6 +55,8 @@ pub(crate) fn keccak256_memory_queries(keccak_round_function_witnesses: &Vec<(u3
             }
         }
     }
+
+    keccak_256_memory_queries.shrink_to_fit();
 
     keccak_256_memory_queries
 }
@@ -110,9 +101,7 @@ pub(crate) fn keccak256_decompose_into_per_circuit_witness<
 
     // split into aux witness, don't mix with the memory
 
-    let mut keccak_256_memory_queries = Vec::with_capacity(keccak256_memory_queries_amount(
-        &keccak_round_function_witnesses,
-    ));
+    let mut keccak_256_memory_queries = Vec::with_capacity(implicit_memory_queries.keccak256_memory_queries.len());
 
     for (_cycle, _query, witness) in keccak_round_function_witnesses.iter() {
         for el in witness.iter() {
