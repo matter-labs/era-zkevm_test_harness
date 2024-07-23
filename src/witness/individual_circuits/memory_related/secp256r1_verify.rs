@@ -118,7 +118,7 @@ pub(crate) fn secp256r1_verify_decompose_into_per_circuit_witness<
     let mut memory_queue_input_state = memory_simulator_before.take_sponge_like_queue_state();
     let mut current_memory_queue_state = memory_queue_input_state.clone();
 
-    let mut memory_queue_states_it = implicit_memory_states.ecrecover_memory_states.iter();
+    let mut memory_queue_states_it = implicit_memory_states.secp256r1_memory_states.iter();
 
     for (request_idx, (request, per_request_work)) in precompile_calls
         .into_iter()
