@@ -22,12 +22,12 @@ pub enum LogAction {
     ForwardNoRollback(usize),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ExtendedLogQuery {
     Query {
         marker: QueryMarker,
         cycle: u32,
-        query: LogQuery,
+        query: Box<LogQuery>,
     },
     FrameForwardHeadMarker(usize),
     FrameForwardTailMarker(usize),
@@ -369,7 +369,7 @@ impl CallstackWithAuxData {
             let full_query = ExtendedLogQuery::Query {
                 marker,
                 cycle: monotonic_cycle_counter,
-                query: log_query,
+                query: Box::new(log_query),
             };
 
             self.current_entry.forward_queue.push(full_query);
@@ -393,7 +393,7 @@ impl CallstackWithAuxData {
             let full_query = ExtendedLogQuery::Query {
                 marker,
                 cycle: monotonic_cycle_counter,
-                query: rollback_query,
+                query: Box::new(rollback_query),
             };
 
             self.current_entry.rollback_queue.push(full_query);
@@ -450,7 +450,7 @@ impl CallstackWithAuxData {
             let full_query = ExtendedLogQuery::Query {
                 marker,
                 cycle: monotonic_cycle_counter,
-                query: log_query,
+                query: Box::new(log_query),
             };
 
             self.current_entry.forward_queue.push(full_query);

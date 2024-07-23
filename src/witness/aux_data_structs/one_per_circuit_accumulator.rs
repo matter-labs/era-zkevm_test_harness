@@ -123,7 +123,6 @@ where
     last: T,
 }
 
-// TODO can be optimized for sparse values
 impl<T: TupleFirst> CircuitsEntryAccumulatorSparse<T>
 where
     T: Clone,

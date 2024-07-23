@@ -265,7 +265,7 @@ fn process_multiplexed_log_queue(
 
         // actually simulate new queue state
         let (_, simulator_state) =
-            log_queue_simulator.push_and_output_intermediate_data(query, &round_function);
+            log_queue_simulator.push_and_output_intermediate_data(*query, &round_function);
 
         let pointer_to_chain_of_states = states_data.chain_of_states.len();
         states_data
@@ -274,7 +274,7 @@ fn process_multiplexed_log_queue(
 
         if was_applied {
             applied_queue_states_accumulator.push((cycle, simulator_state));
-            demuxed_queries.sort_and_push(query);
+            demuxed_queries.sort_and_push(*query);
         }
 
         let timestamp = query.timestamp.0; // special "timestamp-like" value
