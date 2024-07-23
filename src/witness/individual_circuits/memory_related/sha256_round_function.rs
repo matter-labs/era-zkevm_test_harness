@@ -80,10 +80,7 @@ pub(crate) fn sha256_decompose_into_per_circuit_witness<
     num_rounds_per_circuit: usize,
     round_function: &R,
 ) -> (Vec<Sha256RoundFunctionCircuitInstanceWitness<F>>, usize) {
-    assert_eq!(
-        sha256_memory_queries.len(),
-        sha256_memory_states.len()
-    );
+    assert_eq!(sha256_memory_queries.len(), sha256_memory_states.len());
 
     let memory_simulator_before = &sha256_simulator_snapshots[0];
     assert_eq!(
@@ -345,7 +342,8 @@ pub(crate) fn sha256_decompose_into_per_circuit_witness<
     }
 
     let memory_simulator_after = &sha256_simulator_snapshots[1];
-    let amount_of_memory_queries_after = amount_of_memory_queries_before + amount_sha256_memory_queries;
+    let amount_of_memory_queries_after =
+        amount_of_memory_queries_before + amount_sha256_memory_queries;
 
     assert_eq!(
         amount_of_memory_queries_after,

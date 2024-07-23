@@ -226,7 +226,8 @@ pub(crate) fn secp256r1_verify_decompose_into_per_circuit_witness<
     }
 
     let memory_simulator_after = &secp256r1_simulator_snapshots[1];
-    let amount_of_memory_queries_after = amount_of_memory_queries_before + amount_secp256r1_memory_queries;
+    let amount_of_memory_queries_after =
+        amount_of_memory_queries_before + amount_secp256r1_memory_queries;
 
     assert_eq!(
         amount_of_memory_queries_after,

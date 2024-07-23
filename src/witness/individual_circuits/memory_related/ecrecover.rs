@@ -221,7 +221,8 @@ pub(crate) fn ecrecover_decompose_into_per_circuit_witness<
     }
 
     let memory_simulator_after = &ecrecover_simulator_snapshots[1];
-    let amount_of_memory_queries_after = amount_of_memory_queries_before + amount_ecrecover_memory_queries;
+    let amount_of_memory_queries_after =
+        amount_of_memory_queries_before + amount_ecrecover_memory_queries;
 
     assert_eq!(
         amount_of_memory_queries_after,

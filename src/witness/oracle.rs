@@ -1106,16 +1106,17 @@ fn process_memory_related_circuits<
 
     tracing::debug!("Running code code decommitter simulation");
 
-    let (code_decommitter_circuits_data, amount_of_memory_queries) = compute_decommitter_circuit_snapshots(
-        amount_of_explicit_memory_queries,
-        implicit_memory_queries.decommitter_memory_queries,
-        implicit_memory_states.decommitter_simulator_snapshots,
-        implicit_memory_states.decommitter_memory_states,
-        final_explicit_memory_queue_state,
-        decommiter_circuit_inputs,
-        round_function,
-        geometry.cycles_per_code_decommitter as usize,
-    );
+    let (code_decommitter_circuits_data, amount_of_memory_queries) =
+        compute_decommitter_circuit_snapshots(
+            amount_of_explicit_memory_queries,
+            implicit_memory_queries.decommitter_memory_queries,
+            implicit_memory_states.decommitter_simulator_snapshots,
+            implicit_memory_states.decommitter_memory_states,
+            final_explicit_memory_queue_state,
+            decommiter_circuit_inputs,
+            round_function,
+            geometry.cycles_per_code_decommitter as usize,
+        );
 
     circuits_data.code_decommitter_circuits_data = code_decommitter_circuits_data;
 
@@ -1127,17 +1128,18 @@ fn process_memory_related_circuits<
 
     tracing::debug!("Running keccak simulation");
 
-    let (keccak256_circuits_data, amount_of_memory_queries) = keccak256_decompose_into_per_circuit_witness(
-        amount_of_memory_queries,
-        implicit_memory_queries.keccak256_memory_queries,
-        implicit_memory_states.keccak256_simulator_snapshots,
-        implicit_memory_states.keccak256_memory_states,
-        precompiles_data.keccak_round_function_witnesses,
-        precompiles_data.logs_queries.keccak,
-        precompiles_data.logs_queues_states.keccak,
-        geometry.cycles_per_keccak256_circuit as usize,
-        round_function,
-    );
+    let (keccak256_circuits_data, amount_of_memory_queries) =
+        keccak256_decompose_into_per_circuit_witness(
+            amount_of_memory_queries,
+            implicit_memory_queries.keccak256_memory_queries,
+            implicit_memory_states.keccak256_simulator_snapshots,
+            implicit_memory_states.keccak256_memory_states,
+            precompiles_data.keccak_round_function_witnesses,
+            precompiles_data.logs_queries.keccak,
+            precompiles_data.logs_queues_states.keccak,
+            geometry.cycles_per_keccak256_circuit as usize,
+            round_function,
+        );
     circuits_data.keccak256_circuits_data = keccak256_circuits_data;
 
     // sha256 precompile
@@ -1146,17 +1148,18 @@ fn process_memory_related_circuits<
 
     tracing::debug!("Running sha256 simulation");
 
-    let (sha256_circuits_data, amount_of_memory_queries) = sha256_decompose_into_per_circuit_witness(
-        amount_of_memory_queries,
-        implicit_memory_queries.sha256_memory_queries,
-        implicit_memory_states.sha256_simulator_snapshots,
-        implicit_memory_states.sha256_memory_states,
-        precompiles_data.sha256_round_function_witnesses,
-        precompiles_data.logs_queries.sha256,
-        precompiles_data.logs_queues_states.sha256,
-        geometry.cycles_per_sha256_circuit as usize,
-        round_function,
-    );
+    let (sha256_circuits_data, amount_of_memory_queries) =
+        sha256_decompose_into_per_circuit_witness(
+            amount_of_memory_queries,
+            implicit_memory_queries.sha256_memory_queries,
+            implicit_memory_states.sha256_simulator_snapshots,
+            implicit_memory_states.sha256_memory_states,
+            precompiles_data.sha256_round_function_witnesses,
+            precompiles_data.logs_queries.sha256,
+            precompiles_data.logs_queues_states.sha256,
+            geometry.cycles_per_sha256_circuit as usize,
+            round_function,
+        );
     circuits_data.sha256_circuits_data = sha256_circuits_data;
 
     // ecrecover precompile
@@ -1165,34 +1168,36 @@ fn process_memory_related_circuits<
 
     tracing::debug!("Running ecrecover simulation");
 
-    let (ecrecover_circuits_data, amount_of_memory_queries) = ecrecover_decompose_into_per_circuit_witness(
-        amount_of_memory_queries,
-        implicit_memory_queries.ecrecover_memory_queries,
-        implicit_memory_states.ecrecover_simulator_snapshots,
-        implicit_memory_states.ecrecover_memory_states,
-        precompiles_data.ecrecover_witnesses,
-        precompiles_data.logs_queries.ecrecover,
-        precompiles_data.logs_queues_states.ecrecover,
-        geometry.cycles_per_ecrecover_circuit as usize,
-        round_function,
-    );
+    let (ecrecover_circuits_data, amount_of_memory_queries) =
+        ecrecover_decompose_into_per_circuit_witness(
+            amount_of_memory_queries,
+            implicit_memory_queries.ecrecover_memory_queries,
+            implicit_memory_states.ecrecover_simulator_snapshots,
+            implicit_memory_states.ecrecover_memory_states,
+            precompiles_data.ecrecover_witnesses,
+            precompiles_data.logs_queries.ecrecover,
+            precompiles_data.logs_queues_states.ecrecover,
+            geometry.cycles_per_ecrecover_circuit as usize,
+            round_function,
+        );
     circuits_data.ecrecover_circuits_data = ecrecover_circuits_data;
 
     use crate::witness::individual_circuits::memory_related::secp256r1_verify::secp256r1_verify_decompose_into_per_circuit_witness;
 
     tracing::debug!("Running secp256r1_simulation simulation");
 
-    let (secp256r1_verify_circuits_data, amount_of_memory_queries) = secp256r1_verify_decompose_into_per_circuit_witness(
-        amount_of_memory_queries,
-        implicit_memory_queries.secp256r1_memory_queries,
-        implicit_memory_states.secp256r1_simulator_snapshots,
-        implicit_memory_states.secp256r1_memory_states,
-        precompiles_data.secp256r1_verify_witnesses,
-        precompiles_data.logs_queries.secp256r1_verify,
-        precompiles_data.logs_queues_states.secp256r1_verify,
-        geometry.cycles_per_secp256r1_verify_circuit as usize,
-        round_function,
-    );
+    let (secp256r1_verify_circuits_data, amount_of_memory_queries) =
+        secp256r1_verify_decompose_into_per_circuit_witness(
+            amount_of_memory_queries,
+            implicit_memory_queries.secp256r1_memory_queries,
+            implicit_memory_states.secp256r1_simulator_snapshots,
+            implicit_memory_states.secp256r1_memory_states,
+            precompiles_data.secp256r1_verify_witnesses,
+            precompiles_data.logs_queries.secp256r1_verify,
+            precompiles_data.logs_queues_states.secp256r1_verify,
+            geometry.cycles_per_secp256r1_verify_circuit as usize,
+            round_function,
+        );
     circuits_data.secp256r1_verify_circuits_data = secp256r1_verify_circuits_data;
 
     use crate::witness::individual_circuits::memory_related::ram_permutation::compute_ram_circuit_snapshots;

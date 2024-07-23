@@ -429,7 +429,8 @@ pub(crate) fn compute_decommitter_circuit_snapshots<
 
     let memory_simulator_after = &decommitter_simulator_snapshots[1];
 
-    let amount_of_memory_queries_after = amount_of_memory_queries + decommitter_memory_queries.len();
+    let amount_of_memory_queries_after =
+        amount_of_memory_queries + decommitter_memory_queries.len();
     assert_eq!(
         amount_of_memory_queries_after,
         memory_simulator_after.num_items as usize

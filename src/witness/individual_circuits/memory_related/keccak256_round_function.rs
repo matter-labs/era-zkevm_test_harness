@@ -470,7 +470,8 @@ pub(crate) fn keccak256_decompose_into_per_circuit_witness<
     }
 
     let memory_simulator_after = &keccak256_simulator_snapshots[1];
-    let amount_of_memory_queries_after = amount_of_memory_queries_before + keccak256_memory_queries.len();
+    let amount_of_memory_queries_after =
+        amount_of_memory_queries_before + keccak256_memory_queries.len();
 
     assert_eq!(
         amount_of_memory_queries_after,
