@@ -1058,7 +1058,7 @@ fn process_memory_related_circuits<
         &precompiles_data,
     );
 
-    let amount_of_memory_queries = memory_queries.len();
+    let amount_of_explicit_memory_queries = memory_queries.len();
 
     use std::thread;
     let sorted_handle = {
@@ -1095,14 +1095,22 @@ fn process_memory_related_circuits<
     // direct VM related part is done, other subcircuit's functionality is moved to other functions
     // that should properly do sorts and memory writes
 
+    let amount_of_implicit_queries = implicit_memory_queries.amount_of_queries();
+
+    assert_eq!(
+        amount_of_implicit_queries,
+        implicit_memory_states.amount_of_states()
+    );
+
     use crate::witness::individual_circuits::memory_related::decommit_code::compute_decommitter_circuit_snapshots;
 
     tracing::debug!("Running code code decommitter simulation");
 
-    let code_decommitter_circuits_data = compute_decommitter_circuit_snapshots(
-        amount_of_memory_queries,
-        &implicit_memory_queries,
-        &implicit_memory_states,
+    let (code_decommitter_circuits_data, amount_of_memory_queries) = compute_decommitter_circuit_snapshots(
+        amount_of_explicit_memory_queries,
+        implicit_memory_queries.decommitter_memory_queries,
+        implicit_memory_states.decommitter_simulator_snapshots,
+        implicit_memory_states.decommitter_memory_states,
         final_explicit_memory_queue_state,
         decommiter_circuit_inputs,
         round_function,
@@ -1119,10 +1127,11 @@ fn process_memory_related_circuits<
 
     tracing::debug!("Running keccak simulation");
 
-    let keccak256_circuits_data = keccak256_decompose_into_per_circuit_witness(
+    let (keccak256_circuits_data, amount_of_memory_queries) = keccak256_decompose_into_per_circuit_witness(
         amount_of_memory_queries,
-        &implicit_memory_queries,
-        &implicit_memory_states,
+        implicit_memory_queries.keccak256_memory_queries,
+        implicit_memory_states.keccak256_simulator_snapshots,
+        implicit_memory_states.keccak256_memory_states,
         precompiles_data.keccak_round_function_witnesses,
         precompiles_data.logs_queries.keccak,
         precompiles_data.logs_queues_states.keccak,
@@ -1137,10 +1146,11 @@ fn process_memory_related_circuits<
 
     tracing::debug!("Running sha256 simulation");
 
-    let sha256_circuits_data = sha256_decompose_into_per_circuit_witness(
+    let (sha256_circuits_data, amount_of_memory_queries) = sha256_decompose_into_per_circuit_witness(
         amount_of_memory_queries,
-        &implicit_memory_queries,
-        &implicit_memory_states,
+        implicit_memory_queries.sha256_memory_queries,
+        implicit_memory_states.sha256_simulator_snapshots,
+        implicit_memory_states.sha256_memory_states,
         precompiles_data.sha256_round_function_witnesses,
         precompiles_data.logs_queries.sha256,
         precompiles_data.logs_queues_states.sha256,
@@ -1155,10 +1165,11 @@ fn process_memory_related_circuits<
 
     tracing::debug!("Running ecrecover simulation");
 
-    let ecrecover_circuits_data = ecrecover_decompose_into_per_circuit_witness(
+    let (ecrecover_circuits_data, amount_of_memory_queries) = ecrecover_decompose_into_per_circuit_witness(
         amount_of_memory_queries,
-        &implicit_memory_queries,
-        &implicit_memory_states,
+        implicit_memory_queries.ecrecover_memory_queries,
+        implicit_memory_states.ecrecover_simulator_snapshots,
+        implicit_memory_states.ecrecover_memory_states,
         precompiles_data.ecrecover_witnesses,
         precompiles_data.logs_queries.ecrecover,
         precompiles_data.logs_queues_states.ecrecover,
@@ -1171,10 +1182,11 @@ fn process_memory_related_circuits<
 
     tracing::debug!("Running secp256r1_simulation simulation");
 
-    let secp256r1_verify_circuits_data = secp256r1_verify_decompose_into_per_circuit_witness(
+    let (secp256r1_verify_circuits_data, amount_of_memory_queries) = secp256r1_verify_decompose_into_per_circuit_witness(
         amount_of_memory_queries,
-        &implicit_memory_queries,
-        &implicit_memory_states,
+        implicit_memory_queries.secp256r1_memory_queries,
+        implicit_memory_states.secp256r1_simulator_snapshots,
+        implicit_memory_states.secp256r1_memory_states,
         precompiles_data.secp256r1_verify_witnesses,
         precompiles_data.logs_queries.secp256r1_verify,
         precompiles_data.logs_queues_states.secp256r1_verify,
@@ -1183,28 +1195,19 @@ fn process_memory_related_circuits<
     );
     circuits_data.secp256r1_verify_circuits_data = secp256r1_verify_circuits_data;
 
-    assert_eq!(
-        implicit_memory_queries.amount_of_queries(),
-        implicit_memory_states.amount_of_states()
-    );
-
-    drop(implicit_memory_states);
-
     use crate::witness::individual_circuits::memory_related::ram_permutation::compute_ram_circuit_snapshots;
 
     tracing::debug!("Running RAM permutation simulation");
 
     let (ram_permutation_circuits, ram_permutation_circuits_compact_forms_witnesses) =
         compute_ram_circuit_snapshots(
-            &memory_artifacts_for_main_vm.memory_queries,
+            amount_of_memory_queries,
             memory_queue_states_accumulator,
             sorted_memory_queue_states_accumulator,
-            implicit_memory_queries,
             memory_queue_simulator,
             sorted_memory_queue_simulator,
             round_function,
             num_non_deterministic_heap_queries,
-            geometry.cycles_per_ram_permutation as usize,
             geometry,
             cs_for_witness_generation,
             &mut circuit_callback,

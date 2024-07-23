@@ -70,49 +70,26 @@ pub(crate) fn sha256_decompose_into_per_circuit_witness<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
-    amount_of_memory_queries: usize,
-    implicit_memory_queries: &ImplicitMemoryQueries,
-    implicit_memory_states: &ImplicitMemoryStates<F>,
+    amount_of_memory_queries_before: usize,
+    sha256_memory_queries: Vec<MemoryQuery>,
+    sha256_simulator_snapshots: Vec<SimulatorSnapshot<F, FULL_SPONGE_QUEUE_STATE_WIDTH>>,
+    sha256_memory_states: Vec<MemoryQueueState<F>>,
     sha256_round_function_witnesses: Vec<(u32, LogQuery_, Vec<Sha256RoundWitness>)>,
     sha256_precompile_queries: Vec<LogQuery_>,
     mut demuxed_sha256_precompile_queue: LogQueueStates<F>,
     num_rounds_per_circuit: usize,
     round_function: &R,
-) -> Vec<Sha256RoundFunctionCircuitInstanceWitness<F>> {
+) -> (Vec<Sha256RoundFunctionCircuitInstanceWitness<F>>, usize) {
     assert_eq!(
-        implicit_memory_queries.sha256_memory_queries.len(),
-        implicit_memory_states.sha256_memory_states.len()
+        sha256_memory_queries.len(),
+        sha256_memory_states.len()
     );
 
-    let memory_simulator_before = &implicit_memory_states.sha256_simulator_snapshots[0];
+    let memory_simulator_before = &sha256_simulator_snapshots[0];
     assert_eq!(
-        amount_of_memory_queries
-            + implicit_memory_queries.decommitter_memory_queries.len()
-            + implicit_memory_queries.keccak256_memory_queries.len(),
+        amount_of_memory_queries_before,
         memory_simulator_before.num_items as usize
     );
-
-    // split into aux witness, don't mix with the memory
-    use crate::zk_evm::zk_evm_abstractions::precompiles::sha256::Sha256RoundWitness;
-    let mut sha256_memory_queries =
-        Vec::with_capacity(implicit_memory_queries.sha256_memory_queries.len());
-
-    for (_cycle, _query, witness) in sha256_round_function_witnesses.iter() {
-        for el in witness.iter() {
-            let Sha256RoundWitness {
-                new_request: _,
-                reads,
-                writes,
-            } = el;
-
-            // we read, then write
-            sha256_memory_queries.extend_from_slice(reads);
-
-            if let Some(writes) = writes.as_ref() {
-                sha256_memory_queries.extend_from_slice(writes);
-            }
-        }
-    }
 
     let mut result = vec![];
 
@@ -124,15 +101,13 @@ pub(crate) fn sha256_decompose_into_per_circuit_witness<
         .into();
     let round_function_witness = sha256_round_function_witnesses;
 
-    let memory_queries = sha256_memory_queries;
-
     // check basic consistency
     assert!(precompile_calls.len() == demuxed_sha256_precompile_queue.states_accumulator.len());
     drop(demuxed_sha256_precompile_queue.states_accumulator);
     assert!(precompile_calls.len() == round_function_witness.len());
 
     if precompile_calls.len() == 0 {
-        return vec![];
+        return (vec![], amount_of_memory_queries_before);
     }
 
     let mut round_counter = 0;
@@ -144,7 +119,8 @@ pub(crate) fn sha256_decompose_into_per_circuit_witness<
     let mut hidden_fsm_input_state = Sha256RoundFunctionFSM::<F>::placeholder_witness();
     hidden_fsm_input_state.read_precompile_call = true;
 
-    let mut memory_queries_it = memory_queries.into_iter();
+    let amount_sha256_memory_queries = sha256_memory_queries.len();
+    let mut memory_queries_it = sha256_memory_queries.into_iter();
 
     let mut memory_read_witnesses = vec![];
 
@@ -156,7 +132,7 @@ pub(crate) fn sha256_decompose_into_per_circuit_witness<
     let mut memory_queue_input_state = memory_simulator_before.take_sponge_like_queue_state();
     let mut current_memory_queue_state = memory_queue_input_state.clone();
 
-    let mut memory_queue_states_it = implicit_memory_states.sha256_memory_states.iter();
+    let mut memory_queue_states_it = sha256_memory_states.iter();
 
     for (request_idx, (request, per_request_work)) in precompile_calls
         .into_iter()
@@ -368,15 +344,13 @@ pub(crate) fn sha256_decompose_into_per_circuit_witness<
         }
     }
 
-    let memory_simulator_after = &implicit_memory_states.sha256_simulator_snapshots[1];
+    let memory_simulator_after = &sha256_simulator_snapshots[1];
+    let amount_of_memory_queries_after = amount_of_memory_queries_before + amount_sha256_memory_queries;
 
     assert_eq!(
-        amount_of_memory_queries
-            + implicit_memory_queries.decommitter_memory_queries.len()
-            + implicit_memory_queries.keccak256_memory_queries.len()
-            + implicit_memory_queries.sha256_memory_queries.len(),
+        amount_of_memory_queries_after,
         memory_simulator_after.num_items as usize
     );
 
-    result
+    (result, amount_of_memory_queries_after)
 }

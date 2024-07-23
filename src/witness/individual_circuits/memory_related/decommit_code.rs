@@ -55,19 +55,20 @@ pub(crate) fn compute_decommitter_circuit_snapshots<
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     amount_of_memory_queries: usize,
-    implicit_memory_queries: &ImplicitMemoryQueries,
-    implicit_memory_states: &ImplicitMemoryStates<F>,
+    decommitter_memory_queries: Vec<MemoryQuery>,
+    decommitter_simulator_snapshots: Vec<SimulatorSnapshot<F, FULL_SPONGE_QUEUE_STATE_WIDTH>>,
+    decommitter_memory_states: Vec<MemoryQueueState<F>>,
     final_explicit_memory_queue_state: MemoryQueueState<F>,
     decommiter_circuit_inputs: DecommiterCircuitProcessingInputs<F>,
     round_function: &R,
     decommiter_circuit_capacity: usize,
-) -> Vec<CodeDecommitterCircuitInstanceWitness<F>> {
+) -> (Vec<CodeDecommitterCircuitInstanceWitness<F>>, usize) {
     assert_eq!(
-        implicit_memory_queries.decommitter_memory_queries.len(),
-        implicit_memory_states.decommitter_memory_states.len()
+        decommitter_memory_queries.len(),
+        decommitter_memory_states.len()
     );
 
-    let memory_simulator_before = &implicit_memory_states.decommitter_simulator_snapshots[0];
+    let memory_simulator_before = &decommitter_simulator_snapshots[0];
     assert_eq!(
         amount_of_memory_queries,
         memory_simulator_before.num_items as usize
@@ -170,8 +171,7 @@ pub(crate) fn compute_decommitter_circuit_snapshots<
         let wintess_state = if start_idx_for_memory_accumulator + memory_queue_state_offset == 0 {
             &final_explicit_memory_queue_state
         } else {
-            implicit_memory_states
-                .decommitter_memory_states
+            decommitter_memory_states
                 .get(start_idx_for_memory_accumulator + memory_queue_state_offset - 1)
                 .unwrap()
         };
@@ -386,8 +386,7 @@ pub(crate) fn compute_decommitter_circuit_snapshots<
         let wintess_state = if start_idx_for_memory_accumulator + memory_queue_state_offset == 0 {
             &final_explicit_memory_queue_state
         } else {
-            implicit_memory_states
-                .decommitter_memory_states
+            decommitter_memory_states
                 .get(start_idx_for_memory_accumulator + memory_queue_state_offset - 1)
                 .unwrap()
         };
@@ -428,12 +427,13 @@ pub(crate) fn compute_decommitter_circuit_snapshots<
         }
     }
 
-    let memory_simulator_after = &implicit_memory_states.decommitter_simulator_snapshots[1];
+    let memory_simulator_after = &decommitter_simulator_snapshots[1];
 
+    let amount_of_memory_queries_after = amount_of_memory_queries + decommitter_memory_queries.len();
     assert_eq!(
-        amount_of_memory_queries + implicit_memory_queries.decommitter_memory_queries.len(),
+        amount_of_memory_queries_after,
         memory_simulator_after.num_items as usize
     );
 
-    results
+    (results, amount_of_memory_queries_after)
 }

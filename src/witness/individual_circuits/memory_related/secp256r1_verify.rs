@@ -42,48 +42,26 @@ pub(crate) fn secp256r1_verify_decompose_into_per_circuit_witness<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
-    amount_of_memory_queries: usize,
-    implicit_memory_queries: &ImplicitMemoryQueries,
-    implicit_memory_states: &ImplicitMemoryStates<F>,
+    amount_of_memory_queries_before: usize,
+    secp256r1_memory_queries: Vec<MemoryQuery>,
+    secp256r1_simulator_snapshots: Vec<SimulatorSnapshot<F, FULL_SPONGE_QUEUE_STATE_WIDTH>>,
+    secp256r1_memory_states: Vec<MemoryQueueState<F>>,
     secp256r1_verify_witnesses: Vec<(u32, LogQuery_, Secp256r1VerifyRoundWitness)>,
     secp256r1_verify_queries: Vec<LogQuery_>,
     mut demuxed_secp256r1_verify_queue: LogQueueStates<F>,
     num_rounds_per_circuit: usize,
     round_function: &R,
-) -> Vec<Secp256r1VerifyCircuitInstanceWitness<F>> {
+) -> (Vec<Secp256r1VerifyCircuitInstanceWitness<F>>, usize) {
     assert_eq!(
-        implicit_memory_queries.secp256r1_memory_queries.len(),
-        implicit_memory_states.secp256r1_memory_states.len()
+        secp256r1_memory_queries.len(),
+        secp256r1_memory_states.len()
     );
 
-    let memory_simulator_before = &implicit_memory_states.secp256r1_simulator_snapshots[0];
+    let memory_simulator_before = &secp256r1_simulator_snapshots[0];
     assert_eq!(
-        amount_of_memory_queries
-            + implicit_memory_queries.decommitter_memory_queries.len()
-            + implicit_memory_queries.keccak256_memory_queries.len()
-            + implicit_memory_queries.sha256_memory_queries.len()
-            + implicit_memory_queries.ecrecover_memory_queries.len(),
+        amount_of_memory_queries_before,
         memory_simulator_before.num_items as usize
     );
-
-    // split into aux witness, don't mix with the memory
-
-    use crate::zk_evm::zk_evm_abstractions::precompiles::secp256r1_verify::Secp256r1VerifyRoundWitness;
-    let mut memory_queries =
-        Vec::with_capacity(implicit_memory_queries.secp256r1_memory_queries.len());
-
-    for (_cycle, _query, witness) in secp256r1_verify_witnesses.iter() {
-        let Secp256r1VerifyRoundWitness {
-            new_request: _,
-            reads,
-            writes,
-        } = witness;
-
-        // we read, then write
-        memory_queries.extend_from_slice(reads);
-
-        memory_queries.extend_from_slice(writes);
-    }
 
     let mut result = vec![];
 
@@ -101,7 +79,7 @@ pub(crate) fn secp256r1_verify_decompose_into_per_circuit_witness<
     assert!(precompile_calls.len() == round_function_witness.len());
 
     if precompile_calls.len() == 0 {
-        return vec![];
+        return (vec![], amount_of_memory_queries_before);
     }
 
     let mut round_counter = 0;
@@ -110,7 +88,8 @@ pub(crate) fn secp256r1_verify_decompose_into_per_circuit_witness<
     // convension
     let mut log_queue_input_state =
         take_queue_state_from_simulator(&demuxed_secp256r1_verify_queue.simulator);
-    let mut memory_queries_it = memory_queries.into_iter();
+    let amount_secp256r1_memory_queries = secp256r1_memory_queries.len();
+    let mut memory_queries_it = secp256r1_memory_queries.into_iter();
 
     let mut memory_read_witnesses = vec![];
     let mut starting_request_idx = 0;
@@ -118,7 +97,7 @@ pub(crate) fn secp256r1_verify_decompose_into_per_circuit_witness<
     let mut memory_queue_input_state = memory_simulator_before.take_sponge_like_queue_state();
     let mut current_memory_queue_state = memory_queue_input_state.clone();
 
-    let mut memory_queue_states_it = implicit_memory_states.secp256r1_memory_states.iter();
+    let mut memory_queue_states_it = secp256r1_memory_states.iter();
 
     for (request_idx, (request, per_request_work)) in precompile_calls
         .into_iter()
@@ -246,12 +225,13 @@ pub(crate) fn secp256r1_verify_decompose_into_per_circuit_witness<
         }
     }
 
-    let memory_simulator_after = &implicit_memory_states.secp256r1_simulator_snapshots[1];
+    let memory_simulator_after = &secp256r1_simulator_snapshots[1];
+    let amount_of_memory_queries_after = amount_of_memory_queries_before + amount_secp256r1_memory_queries;
 
     assert_eq!(
-        amount_of_memory_queries + implicit_memory_queries.amount_of_queries(),
+        amount_of_memory_queries_after,
         memory_simulator_after.num_items as usize
     );
 
-    result
+    (result, amount_of_memory_queries_after)
 }

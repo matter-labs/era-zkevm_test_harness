@@ -37,15 +37,13 @@ pub(crate) fn compute_ram_circuit_snapshots<
     CB: FnMut(ZkSyncBaseLayerCircuit),
     QSCB: FnMut(u64, RecursionQueueSimulator<Field>, Vec<ClosedFormInputCompactFormWitness<Field>>),
 >(
-    memory_queries: &Vec<(u32, MemoryQuery)>,
+    total_amount_of_queries: usize, // including additional queries from precompiles
     memory_queue_states_accumulator: LastPerCircuitAccumulator<MemoryQueueState<Field>>,
     sorted_memory_queue_states_accumulator: LastPerCircuitAccumulator<MemoryQueueState<Field>>,
-    implicit_memory_queries: ImplicitMemoryQueries,
     memory_queue_simulator: MemoryQueuePerCircuitSimulator<Field>,
     sorted_memory_queries_simulator: MemoryQueuePerCircuitSimulator<Field>,
     round_function: &RoundFunction,
     num_non_deterministic_heap_queries: usize,
-    per_circuit_capacity: usize,
     geometry: &GeometryConfig,
     cs_for_witness_generation: &mut CsForWitnessGeneration,
     mut circuit_callback: CB,
@@ -54,10 +52,6 @@ pub(crate) fn compute_ram_circuit_snapshots<
     FirstAndLastCircuitWitness<RamPermutationObservableWitness<Field>>,
     Vec<ClosedFormInputCompactFormWitness<Field>>,
 ) {
-    // including additional queries from precompiles
-    let total_amount_of_queries =
-        memory_queries.len() + implicit_memory_queries.amount_of_queries();
-
     assert_eq!(
         total_amount_of_queries,
         memory_queue_states_accumulator.len()
@@ -72,6 +66,8 @@ pub(crate) fn compute_ram_circuit_snapshots<
         total_amount_of_queries > 0,
         "VM should have made some memory requests"
     );
+
+    let per_circuit_capacity = geometry.cycles_per_ram_permutation as usize;
 
     let amount_of_circuits =
         (total_amount_of_queries + per_circuit_capacity - 1) / per_circuit_capacity;

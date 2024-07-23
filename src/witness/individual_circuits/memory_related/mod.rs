@@ -27,11 +27,11 @@ pub(crate) mod sort_decommit_requests;
 
 #[derive(Clone)]
 pub(crate) struct ImplicitMemoryQueries {
-    decommitter_memory_queries: Vec<MemoryQuery>,
-    ecrecover_memory_queries: Vec<MemoryQuery>,
-    keccak256_memory_queries: Vec<MemoryQuery>,
-    secp256r1_memory_queries: Vec<MemoryQuery>,
-    sha256_memory_queries: Vec<MemoryQuery>,
+    pub decommitter_memory_queries: Vec<MemoryQuery>,
+    pub ecrecover_memory_queries: Vec<MemoryQuery>,
+    pub keccak256_memory_queries: Vec<MemoryQuery>,
+    pub secp256r1_memory_queries: Vec<MemoryQuery>,
+    pub sha256_memory_queries: Vec<MemoryQuery>,
 }
 
 impl ImplicitMemoryQueries {
@@ -136,16 +136,16 @@ impl<F: SmallField, const SW: usize> SimulatorSnapshot<F, SW> {
 
 #[derive(Default)]
 pub(crate) struct ImplicitMemoryStates<F: SmallField> {
-    decommitter_simulator_snapshots: Vec<SimulatorSnapshot<F, FULL_SPONGE_QUEUE_STATE_WIDTH>>,
-    decommitter_memory_states: Vec<MemoryQueueState<F>>,
-    ecrecover_simulator_snapshots: Vec<SimulatorSnapshot<F, FULL_SPONGE_QUEUE_STATE_WIDTH>>,
-    ecrecover_memory_states: Vec<MemoryQueueState<F>>,
-    keccak256_simulator_snapshots: Vec<SimulatorSnapshot<F, FULL_SPONGE_QUEUE_STATE_WIDTH>>,
-    keccak256_memory_states: Vec<MemoryQueueState<F>>,
-    secp256r1_simulator_snapshots: Vec<SimulatorSnapshot<F, FULL_SPONGE_QUEUE_STATE_WIDTH>>,
-    secp256r1_memory_states: Vec<MemoryQueueState<F>>,
-    sha256_simulator_snapshots: Vec<SimulatorSnapshot<F, FULL_SPONGE_QUEUE_STATE_WIDTH>>,
-    sha256_memory_states: Vec<MemoryQueueState<F>>,
+    pub decommitter_simulator_snapshots: Vec<SimulatorSnapshot<F, FULL_SPONGE_QUEUE_STATE_WIDTH>>,
+    pub decommitter_memory_states: Vec<MemoryQueueState<F>>,
+    pub ecrecover_simulator_snapshots: Vec<SimulatorSnapshot<F, FULL_SPONGE_QUEUE_STATE_WIDTH>>,
+    pub ecrecover_memory_states: Vec<MemoryQueueState<F>>,
+    pub keccak256_simulator_snapshots: Vec<SimulatorSnapshot<F, FULL_SPONGE_QUEUE_STATE_WIDTH>>,
+    pub keccak256_memory_states: Vec<MemoryQueueState<F>>,
+    pub secp256r1_simulator_snapshots: Vec<SimulatorSnapshot<F, FULL_SPONGE_QUEUE_STATE_WIDTH>>,
+    pub secp256r1_memory_states: Vec<MemoryQueueState<F>>,
+    pub sha256_simulator_snapshots: Vec<SimulatorSnapshot<F, FULL_SPONGE_QUEUE_STATE_WIDTH>>,
+    pub sha256_memory_states: Vec<MemoryQueueState<F>>,
 }
 
 impl<F: SmallField> ImplicitMemoryStates<F> {
