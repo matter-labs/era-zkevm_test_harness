@@ -938,7 +938,7 @@ fn simulate_sorted_memory_queue(
     });
 
     // can be internally parallelized
-    
+
     let amount_of_queries = memory_queries.len() + implicit_memory_queries.amount_of_queries();
     let mut sorted_memory_queries_simulator =
         MemoryQueuePerCircuitSimulator::using_container(PerCircuitAccumulator::with_flat_capacity(

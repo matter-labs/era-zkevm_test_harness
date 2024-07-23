@@ -54,7 +54,6 @@ pub(crate) fn compute_ram_circuit_snapshots<
     FirstAndLastCircuitWitness<RamPermutationObservableWitness<Field>>,
     Vec<ClosedFormInputCompactFormWitness<Field>>,
 ) {
-
     // including additional queries from precompiles
     let total_amount_of_queries =
         memory_queries.len() + implicit_memory_queries.amount_of_queries();
