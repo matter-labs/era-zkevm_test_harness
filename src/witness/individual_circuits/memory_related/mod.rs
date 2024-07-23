@@ -156,25 +156,6 @@ impl<F: SmallField> ImplicitMemoryStates<F> {
             + self.secp256r1_memory_states.len()
             + self.sha256_memory_states.len()
     }
-
-    fn get_vectors(&self) -> [&Vec<MemoryQueueState<F>>; 5] {
-        [
-            &self.decommitter_memory_states,
-            &self.keccak256_memory_states,
-            &self.sha256_memory_states,
-            &self.ecrecover_memory_states,
-            &self.secp256r1_memory_states,
-        ]
-    }
-
-    pub fn iter(&self) -> ImplicitMemoryStatesIter<F> {
-        let mut outer_iter = self.get_vectors().into_iter();
-        let last_vector_iter = outer_iter.next().unwrap().iter();
-        ImplicitMemoryStatesIter {
-            last_vector: last_vector_iter,
-            outer_iter,
-        }
-    }
 }
 
 use core::array::IntoIter as ArrayIntoIter;
@@ -215,11 +196,14 @@ fn get_simulator_snapshot<F: SmallField>(
     }
 }
 
+use crate::witness::aux_data_structs::one_per_circuit_accumulator::LastPerCircuitAccumulator;
+
 pub(crate) fn simulate_implicit_memory_queues<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     memory_queue_simulator: &mut MemoryQueuePerCircuitSimulator<F>,
+    memory_queue_states_accumulator: &mut LastPerCircuitAccumulator<MemoryQueueState<F>>,
     implicit_memory_queries: &ImplicitMemoryQueries,
     round_function: R,
 ) -> ImplicitMemoryStates<F> {
@@ -234,6 +218,7 @@ pub(crate) fn simulate_implicit_memory_queues<
                     .push_and_output_intermediate_data(*query, &round_function);
 
                 memory_states.push(intermediate_info);
+                memory_queue_states_accumulator.push(intermediate_info);
             }
             snapshots.push(get_simulator_snapshot(memory_queue_simulator)); // after
 

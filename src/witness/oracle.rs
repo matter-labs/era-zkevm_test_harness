@@ -17,7 +17,7 @@ use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 use crate::ethereum_types::U256;
 use crate::toolset::GeometryConfig;
 use crate::witness::artifacts::{
-    DemuxedLogQueries, ImplicitMemoryArtifacts, MemoryArtifacts, MemoryCircuitsArtifacts,
+    DemuxedLogQueries, MemoryArtifacts, MemoryCircuitsArtifacts,
 };
 use crate::witness::aux_data_structs::one_per_circuit_accumulator::{
     CircuitsEntryAccumulatorSparse, LastPerCircuitAccumulator,
@@ -893,15 +893,10 @@ fn simulate_memory_queue(
     use crate::witness::individual_circuits::memory_related::simulate_implicit_memory_queues;
     let implicit_memory_states = simulate_implicit_memory_queues(
         &mut memory_queue_simulator,
+        &mut memory_queue_states_accumulator,
         &implicit_memory_queries,
         round_function,
     );
-
-    // push implicit queries
-    memory_queue_states_accumulator.reserve_exact_flat(implicit_memory_states.amount_of_states());
-    for state in implicit_memory_states.iter() {
-        memory_queue_states_accumulator.push(*state);
-    }
 
     (
         memory_artifacts_for_main_vm,
@@ -1095,10 +1090,8 @@ fn process_memory_related_circuits<
     // direct VM related part is done, other subcircuit's functionality is moved to other functions
     // that should properly do sorts and memory writes
 
-    let amount_of_implicit_queries = implicit_memory_queries.amount_of_queries();
-
     assert_eq!(
-        amount_of_implicit_queries,
+        implicit_memory_queries.amount_of_queries(),
         implicit_memory_states.amount_of_states()
     );
 

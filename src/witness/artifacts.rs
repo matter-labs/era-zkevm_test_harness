@@ -123,13 +123,6 @@ pub struct MemoryArtifacts<F: SmallField> {
 
 #[derive(Derivative)]
 #[derivative(Default)]
-pub struct ImplicitMemoryArtifacts<F: SmallField> {
-    pub memory_queries: Vec<MemoryQuery>,
-    pub memory_queue_states: Vec<MemoryQueueState<F>>,
-}
-
-#[derive(Derivative)]
-#[derivative(Default)]
 pub struct LogCircuitsArtifacts<F: SmallField> {
     // IO related circuits
     pub storage_deduplicator_circuit_data: Vec<StorageDeduplicatorInstanceWitness<F>>,

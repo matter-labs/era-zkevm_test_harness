@@ -12,7 +12,7 @@ use crate::zk_evm::ethereum_types::U256;
 use crate::zkevm_circuits::{
     base_structures::memory_query::MEMORY_QUERY_PACKED_WIDTH, ram_permutation::input::*,
 };
-use artifacts::{ImplicitMemoryArtifacts, MemoryArtifacts};
+use artifacts::MemoryArtifacts;
 use circuit_definitions::circuit_definitions::base_layer::{
     RAMPermutationInstanceSynthesisFunction, ZkSyncBaseLayerCircuit,
 };

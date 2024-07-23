@@ -8,7 +8,6 @@ use crate::zk_evm::ethereum_types::U256;
 use crate::zkevm_circuits::base_structures::decommit_query::DecommitQueryWitness;
 use crate::zkevm_circuits::base_structures::decommit_query::DECOMMIT_QUERY_PACKED_WIDTH;
 use crate::zkevm_circuits::code_unpacker_sha256::input::*;
-use artifacts::ImplicitMemoryArtifacts;
 use circuit_definitions::encodings::decommittment_request::normalized_preimage_as_u256;
 use circuit_definitions::encodings::decommittment_request::DecommittmentQueueSimulator;
 use circuit_definitions::encodings::decommittment_request::DecommittmentQueueState;

@@ -1,6 +1,6 @@
 use super::*;
 use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
-use crate::witness::artifacts::{DemuxedLogQueries, ImplicitMemoryArtifacts, LogQueueStates};
+use crate::witness::artifacts::{DemuxedLogQueries, LogQueueStates};
 use crate::witness::aux_data_structs::one_per_circuit_accumulator::LastPerCircuitAccumulator;
 use crate::witness::aux_data_structs::MemoryQueuePerCircuitSimulator;
 use crate::zk_evm::aux_structures::LogQuery as LogQuery_;
