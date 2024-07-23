@@ -127,7 +127,7 @@ use crate::boojum::algebraic_props::round_function::AbsorptionModeOverwrite;
 use crate::boojum::algebraic_props::sponge::GoldilocksPoseidon2Sponge;
 use crate::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
 use crate::data_source::in_memory_data_source::InMemoryDataSource;
-use crate::witness::full_block_artifact::*;
+use crate::witness::artifacts::*;
 
 /// Lover memory requirements
 /// Used only for base layer debugging
@@ -268,7 +268,7 @@ pub(crate) fn generate_base_layer(
         cycle_limit,
         geometry,
         storage_impl,
-        &mut tree,
+        tree,
         "kzg/src/trusted_setup.json",
         blobs,
         |circuit| basic_block_circuits.push(circuit),
@@ -423,6 +423,7 @@ fn run_and_try_create_witness_inner(
         if options.try_reuse_artifacts {
             if let Ok(_) = source.get_base_layer_proof(el.numeric_circuit_type(), instance_idx) {
                 instance_idx += 1;
+                previous_circuit_type = el.numeric_circuit_type();
                 continue;
             }
         }

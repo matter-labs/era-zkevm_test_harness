@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
 use self::toolset::GeometryConfig;
-use self::witness::postprocessing::FirstAndLastCircuit;
+use self::witness::postprocessing::FirstAndLastCircuitWitness;
+use crate::witness::postprocessing::observable_witness::StorageApplicationObservableWitness;
 
 use super::*;
 use crate::boojum::gadgets::keccak256::{self};
-use crate::witness::individual_circuits::keccak256_round_function::encode_kecca256_inner_state;
+use crate::witness::individual_circuits::memory_related::keccak256_round_function::encode_keccak256_inner_state;
 use crate::witness::postprocessing::CircuitMaker;
 use crate::witness::tree::*;
 use crate::zk_evm::sha3::Keccak256;
@@ -18,12 +19,15 @@ use circuit_definitions::circuit_definitions::base_layer::{
 };
 use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::encodings::state_diff_record::StateDiffRecord;
+use circuit_definitions::encodings::LogQueueSimulator;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
+use postprocessing::CsForWitnessGeneration;
 use tracing;
+use zk_evm::aux_structures::LogQuery;
 
 use crate::sha3::Digest;
 
-pub fn decompose_into_storage_application_witnesses<
+pub(crate) fn decompose_into_storage_application_witnesses<
     CB: FnMut(ZkSyncBaseLayerCircuit),
     QSCB: FnMut(
         u64,
@@ -31,17 +35,17 @@ pub fn decompose_into_storage_application_witnesses<
         Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
     ),
 >(
-    artifacts: &mut FullBlockArtifacts<GoldilocksField>,
-    tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
+    deduplicated_rollup_storage_queue_simulator: LogQueueSimulator<GoldilocksField>,
+    deduplicated_rollup_storage_queries: Vec<LogQuery>,
+    mut tree: impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
     round_function: &Poseidon2Goldilocks,
     num_rounds_per_circuit: usize,
     geometry: &GeometryConfig,
-    cs_for_witness_generation: &mut ConstraintSystemImpl<GoldilocksField, Poseidon2Goldilocks>,
-    cycles_used: &mut usize,
+    cs_for_witness_generation: &mut CsForWitnessGeneration,
     mut circuit_callback: CB,
     mut recursion_queue_callback: QSCB,
 ) -> (
-    FirstAndLastCircuit<StorageApplicationInstanceSynthesisFunction>,
+    FirstAndLastCircuitWitness<StorageApplicationObservableWitness<GoldilocksField>>,
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
 ) {
     const SHARD_ID_TO_PROCEED: u8 = 0; // rollup shard ID
@@ -49,12 +53,11 @@ pub fn decompose_into_storage_application_witnesses<
     let circuit_type = BaseLayerCircuitType::StorageApplicator;
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_storage_application,
-        Arc::new(round_function.clone()),
+        round_function.clone(),
         cs_for_witness_generation,
-        cycles_used,
     );
 
-    if artifacts.deduplicated_rollup_storage_queries.is_empty() {
+    if deduplicated_rollup_storage_queries.is_empty() {
         let (
             storage_application_circuits,
             _queue_simulator,
@@ -75,7 +78,7 @@ pub fn decompose_into_storage_application_witnesses<
 
     let mut current_chunk = vec![];
 
-    for el in artifacts.deduplicated_rollup_storage_queries.iter() {
+    for el in deduplicated_rollup_storage_queries.iter() {
         if el.rw_flag {
             total_tree_queries += 2;
         } else {
@@ -86,7 +89,7 @@ pub fn decompose_into_storage_application_witnesses<
 
         // we leave 1 to make a final application of "write"
         if total_tree_queries >= num_rounds_per_circuit - 1 {
-            let current = std::mem::replace(&mut current_chunk, vec![]);
+            let current = std::mem::take(&mut current_chunk);
             assert!(current.len() <= num_rounds_per_circuit);
             chunks.push(current);
             total_tree_queries = 0;
@@ -94,7 +97,7 @@ pub fn decompose_into_storage_application_witnesses<
     }
 
     if total_tree_queries != 0 {
-        let current = std::mem::replace(&mut current_chunk, vec![]);
+        let current = std::mem::take(&mut current_chunk);
         assert!(current.len() <= num_rounds_per_circuit);
         chunks.push(current);
     }
@@ -110,9 +113,7 @@ pub fn decompose_into_storage_application_witnesses<
 
     let num_chunks = chunks.len();
 
-    let mut storage_application_simulator = artifacts
-        .deduplicated_rollup_storage_queue_simulator
-        .clone();
+    let mut storage_application_simulator = deduplicated_rollup_storage_queue_simulator.clone();
 
     tracing::debug!(
         "Initial enumeration index = {}",
@@ -132,9 +133,8 @@ pub fn decompose_into_storage_application_witnesses<
                 u64_as_u32_le(tree.next_enumeration_index());
             passthrough_input.initial_root_hash = tree.root();
             passthrough_input.shard = SHARD_ID_TO_PROCEED;
-            passthrough_input.storage_application_log_state = take_queue_state_from_simulator(
-                &artifacts.deduplicated_rollup_storage_queue_simulator,
-            );
+            passthrough_input.storage_application_log_state =
+                take_queue_state_from_simulator(&deduplicated_rollup_storage_queue_simulator);
         }
 
         let chunk_len = chunk.len();
@@ -222,11 +222,11 @@ pub fn decompose_into_storage_application_witnesses<
         final_fsm_state.current_root_hash = tree.root();
         final_fsm_state.current_storage_application_log_state =
             take_queue_state_from_simulator(&storage_application_simulator);
-        final_fsm_state.current_diffs_keccak_accumulator_state = encode_kecca256_inner_state(state);
+        final_fsm_state.current_diffs_keccak_accumulator_state =
+            encode_keccak256_inner_state(state);
 
         let wit = transform_queue_witness(
-            artifacts
-                .deduplicated_rollup_storage_queue_simulator
+            deduplicated_rollup_storage_queue_simulator
                 .witness
                 .iter()
                 .skip(storage_queue_state_idx)

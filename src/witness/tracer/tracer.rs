@@ -1,4 +1,5 @@
-use crate::witness::callstack_handler::CallstackWithAuxData;
+use crate::witness::tracer::callstack_handler::CallstackWithAuxData;
+use crate::witness::tracer::vm_snapshot::VmSnapshot;
 use crate::zk_evm::abstractions::PrecompileCyclesWitness;
 use crate::zk_evm::aux_structures::LogQuery;
 use crate::zk_evm::aux_structures::*;
@@ -73,9 +74,9 @@ pub struct WitnessTracer {
     pub current_cycle_counter: u32,
     pub cycle_counter_of_last_snapshot: u32,
     pub memory_queries: Vec<(u32, MemoryQuery)>, // flattened memory queries, with cycle indicators
-    pub storage_queries: Vec<(u32, LogQuery)>,   // storage read queries with cycle indicators
-    pub cold_warm_refunds_logs: Vec<(u32, LogQuery, u32)>,
-    pub pubdata_cost_logs: Vec<(u32, LogQuery, PubdataCost)>,
+    pub storage_queries: PerCircuitAccumulatorSparse<(u32, LogQuery)>, // storage read queries with cycle indicators
+    pub cold_warm_refunds_logs: PerCircuitAccumulatorSparse<(u32, LogQuery, u32)>,
+    pub pubdata_cost_logs: PerCircuitAccumulatorSparse<(u32, LogQuery, PubdataCost)>,
     pub prepared_decommittment_queries: Vec<(u32, DecommittmentQuery)>,
     pub executed_decommittment_queries: Vec<(u32, DecommittmentQuery, Vec<U256>)>,
     pub keccak_round_function_witnesses: Vec<(u32, LogQuery, Vec<Keccak256RoundWitness>)>,
@@ -134,9 +135,9 @@ impl WitnessTracer {
             current_cycle_counter: 0,
             cycle_counter_of_last_snapshot: 0,
             memory_queries: vec![],
-            storage_queries: vec![],
-            cold_warm_refunds_logs: vec![],
-            pubdata_cost_logs: vec![],
+            storage_queries: PerCircuitAccumulatorSparse::new(cycles_per_snapshot as usize),
+            cold_warm_refunds_logs: PerCircuitAccumulatorSparse::new(cycles_per_snapshot as usize),
+            pubdata_cost_logs: PerCircuitAccumulatorSparse::new(cycles_per_snapshot as usize),
             prepared_decommittment_queries: vec![],
             executed_decommittment_queries: vec![],
             keccak_round_function_witnesses: vec![],
@@ -220,7 +221,7 @@ impl AuxCallstackProto {
 use crate::zk_evm::vm_state::VmLocalState;
 use crate::zk_evm::witness_trace::VmWitnessTracer;
 
-use super::vm_snapshot::VmSnapshot;
+use crate::witness::aux_data_structs::per_circuit_accumulator::PerCircuitAccumulatorSparse;
 
 impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
     fn start_new_execution_cycle(&mut self, current_state: &VmLocalState) {
@@ -240,7 +241,6 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
                 "Made INITIAL snapshot at cycle {:?}",
                 self.current_cycle_counter
             );
-            println!("Made INITIAL at cycle {:?}", self.current_cycle_counter);
             self.cycle_counter_of_last_snapshot = current_state.monotonic_cycle_counter;
         }
 
@@ -259,8 +259,6 @@ impl VmWitnessTracer<8, EncodingModeProduction> for WitnessTracer {
             };
             self.vm_snapshots.push(snapshot);
             tracing::debug!("Made snapshot at cycle {:?}", self.current_cycle_counter);
-            println!("Made snapshot at cycle {:?}", self.current_cycle_counter);
-
             // we made a snapshot now, but the cycle itself will be the first one for the next snapshot
             self.cycle_counter_of_last_snapshot = current_state.monotonic_cycle_counter;
         }

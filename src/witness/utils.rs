@@ -30,6 +30,8 @@ use circuit_definitions::boojum::cs::GateTypeEntry;
 use circuit_definitions::boojum::cs::Tool;
 use circuit_definitions::boojum::cs::Variable;
 use circuit_definitions::encodings::*;
+use individual_circuits::main_vm::VmInCircuitAuxilaryParameters;
+use individual_circuits::main_vm::VmInstanceWitness;
 
 use super::*;
 
@@ -192,7 +194,7 @@ pub type ConstraintSystemImpl<F, R> = CSReferenceImplementation<
 
 pub const TRACE_LEN_LOG_2_FOR_CALCULATION: usize = 20;
 pub const MAX_VARS_LOG_2_FOR_CALCULATION: usize = 26;
-pub const CYCLES_PER_SCRATCH_SPACE: usize = 256;
+pub const CYCLES_PER_SCRATCH_SPACE: usize = 5000;
 
 pub fn create_cs_for_witness_generation<
     F: SmallField,
@@ -296,8 +298,6 @@ where
 
     (public_input, compact_form_witness)
 }
-
-use crate::witness::oracle::VmInCircuitAuxilaryParameters;
 
 pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
     vm_state: &zk_evm::vm_state::VmLocalState,
@@ -414,7 +414,6 @@ pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
     hidden_fsm
 }
 
-use crate::witness::oracle::VmInstanceWitness;
 use crate::zkevm_circuits::fsm_input_output::circuit_inputs::main_vm::VmCircuitWitness;
 use crate::zkevm_circuits::main_vm::witness_oracle::WitnessOracle;
 
@@ -542,8 +541,8 @@ pub fn produce_fs_challenges<
 const PARALLELIZATION_CHUNK_SIZE: usize = 1 << 16;
 
 pub(crate) fn compute_grand_product_chains<F: SmallField, const N: usize, const M: usize>(
-    lhs_contributions: &Vec<[F; N]>,
-    rhs_contributions: &Vec<[F; N]>,
+    lhs_contributions: &Vec<&[F; N]>,
+    rhs_contributions: &Vec<&[F; N]>,
     challenges: &[F; M],
 ) -> (Vec<F>, Vec<F>) {
     assert_eq!(N + 1, M);

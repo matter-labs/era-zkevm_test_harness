@@ -7,6 +7,7 @@ use crate::snark_wrapper::boojum::gadgets::recursion::recursive_tree_hasher::Cir
 use crate::toolset::create_tools;
 use crate::toolset::GeometryConfig;
 use crate::witness::oracle::create_artifacts_from_tracer;
+use crate::witness::tracer::tracer::WitnessTracer;
 use crate::witness::tree::BinarySparseStorageTree;
 use crate::witness::tree::ZkSyncStorageLeaf;
 use crate::witness::utils::{
@@ -81,7 +82,7 @@ pub fn run_vms<
     cycle_limit: usize,
     geometry: GeometryConfig,
     storage: S,
-    tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
+    tree: impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
     trusted_setup_path: &str,
     eip_4844_repack_inputs: [Option<Vec<u8>>; MAX_4844_BLOBS_PER_BLOCK],
     circuit_callback: CB,
@@ -222,12 +223,12 @@ pub fn run_vms<
 
     println!("Out of circuit tracing is complete, now running witness generation");
 
-    let vm_local_state = out_of_circuit_vm.local_state;
+    let vm_local_state = out_of_circuit_vm.local_state.clone();
 
     if !next_snapshot_will_capture_end_of_execution {
         // perform the final snapshot
         let current_cycle_counter = out_of_circuit_vm.witness_tracer.current_cycle_counter;
-        use crate::witness::vm_snapshot::VmSnapshot;
+        use crate::witness::tracer::vm_snapshot::VmSnapshot;
         let snapshot = VmSnapshot {
             local_state: vm_local_state.clone(),
             at_cycle: current_cycle_counter,
@@ -235,10 +236,11 @@ pub fn run_vms<
         out_of_circuit_vm.witness_tracer.vm_snapshots.push(snapshot);
     }
 
-    // dbg!(tools.witness_tracer.vm_snapshots.len());
+    let witness_tracer = out_of_circuit_vm.witness_tracer.clone();
+    drop(out_of_circuit_vm);
 
     let (basic_circuits, compact_form_witnesses, eip4844_circuits) = create_artifacts_from_tracer(
-        out_of_circuit_vm.witness_tracer,
+        witness_tracer,
         &round_function,
         &geometry,
         (
@@ -289,15 +291,8 @@ pub fn run_vms<
         let t = basic_circuits
             .events_sorter_circuits
             .last
-            .clone()
-            .map(|el| {
-                let wit = el.clone_witness().unwrap();
-                wit.closed_form_input
-                    .observable_output
-                    .final_queue_state
-                    .tail
-                    .tail
-            })
+            .as_ref()
+            .map(|wit| wit.observable_output.final_queue_state.tail.tail)
             .unwrap_or([MainField::ZERO; QUEUE_STATE_WIDTH]);
 
         use crate::finalize_queue_state;
@@ -309,14 +304,8 @@ pub fn run_vms<
         let t = basic_circuits
             .main_vm_circuits
             .first
-            .clone()
-            .map(|el| {
-                let wit = el.clone_witness().unwrap();
-                wit.closed_form_input
-                    .observable_input
-                    .memory_queue_initial_state
-                    .tail
-            })
+            .as_ref()
+            .map(|wit| wit.observable_input.memory_queue_initial_state.tail)
             .unwrap_or([MainField::ZERO; FULL_SPONGE_QUEUE_STATE_WIDTH]);
 
         let bootloader_heap_initial_content = finalize_queue_state(t, &round_function);
@@ -326,23 +315,15 @@ pub fn run_vms<
         let rollup_state_diff_for_compression = basic_circuits
             .storage_application_circuits
             .last
-            .clone()
-            .map(|el| {
-                let wit = el.clone_witness().unwrap();
-                wit.closed_form_input
-                    .observable_output
-                    .state_diffs_keccak256_hash
-            })
+            .as_ref()
+            .map(|wit| wit.observable_output.state_diffs_keccak256_hash)
             .unwrap_or([0u8; 32]);
 
         let l1_messages_linear_hash = basic_circuits
             .l1_messages_hasher_circuits
             .last
-            .clone()
-            .map(|el| {
-                let wit = el.clone_witness().unwrap();
-                wit.closed_form_input.observable_output.keccak256_hash
-            })
+            .as_ref()
+            .map(|wit| wit.observable_output.keccak256_hash)
             .unwrap_or([0u8; 32]);
 
         // aux
@@ -360,11 +341,12 @@ pub fn run_vms<
 
         // VM can not be skipped
 
-        use crate::witness::full_block_artifact::LogQueue;
+        use crate::witness::artifacts::LogQueueStates;
         use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
 
-        let empty_log_queue_state =
-            take_queue_state_from_simulator(&LogQueue::<GoldilocksField>::default().simulator);
+        let empty_log_queue_state = take_queue_state_from_simulator(
+            &LogQueueStates::<GoldilocksField>::default().simulator,
+        );
         let empty_sponge_like_queue_state = take_sponge_like_queue_state_from_simulator(
             &MemoryQueueSimulator::<GoldilocksField>::empty(),
         );
@@ -373,11 +355,7 @@ pub fn run_vms<
         let decommits_sorter_observable_output = if let Some(last) =
             basic_circuits.code_decommittments_sorter_circuits.last
         {
-            let observable_output = last
-                .clone_witness()
-                .unwrap()
-                .closed_form_input
-                .observable_output;
+            let observable_output = last.observable_output;
 
             observable_output
         } else {
@@ -392,11 +370,7 @@ pub fn run_vms<
         let code_decommitter_observable_output = if let Some(last) =
             basic_circuits.code_decommitter_circuits.last
         {
-            let observable_output = last
-                .clone_witness()
-                .unwrap()
-                .closed_form_input
-                .observable_output;
+            let observable_output = last.observable_output;
 
             observable_output
         } else {
@@ -410,11 +384,7 @@ pub fn run_vms<
         // demux must produce empty output
         let log_demuxer_observable_output =
             if let Some(last) = basic_circuits.log_demux_circuits.last {
-                let observable_output = last
-                    .clone_witness()
-                    .unwrap()
-                    .closed_form_input
-                    .observable_output;
+                let observable_output = last.observable_output;
 
                 observable_output
             } else {
@@ -440,42 +410,22 @@ pub fn run_vms<
                 .keccak_precompile_circuits
                 .last
                 .as_ref()
-                .map(|el| {
-                    el.clone_witness()
-                        .unwrap()
-                        .closed_form_input
-                        .observable_output
-                }),
+                .map(|wit| wit.observable_output.clone()),
             basic_circuits
                 .sha256_precompile_circuits
                 .last
                 .as_ref()
-                .map(|el| {
-                    el.clone_witness()
-                        .unwrap()
-                        .closed_form_input
-                        .observable_output
-                }),
+                .map(|wit| wit.observable_output.clone()),
             basic_circuits
                 .ecrecover_precompile_circuits
                 .last
                 .as_ref()
-                .map(|el| {
-                    el.clone_witness()
-                        .unwrap()
-                        .closed_form_input
-                        .observable_output
-                }),
+                .map(|wit| wit.observable_output.clone()),
             basic_circuits
                 .secp256r1_verify_circuits
                 .last
                 .as_ref()
-                .map(|el| {
-                    el.clone_witness()
-                        .unwrap()
-                        .closed_form_input
-                        .observable_output
-                }),
+                .map(|wit| wit.observable_output.clone()),
         ];
 
         for (dst, src) in outputs.iter_mut().zip(testsing_locations.into_iter()) {
@@ -496,11 +446,7 @@ pub fn run_vms<
         let storage_sorter_observable_output = if let Some(last) =
             basic_circuits.storage_sorter_circuits.last
         {
-            let observable_output = last
-                .clone_witness()
-                .unwrap()
-                .closed_form_input
-                .observable_output;
+            let observable_output = last.observable_output;
 
             observable_output
         } else {
@@ -515,11 +461,7 @@ pub fn run_vms<
         let storage_application_observable_output = if let Some(last) =
             basic_circuits.storage_application_circuits.last
         {
-            let observable_output = last
-                .clone_witness()
-                .unwrap()
-                .closed_form_input
-                .observable_output;
+            let observable_output = last.observable_output;
 
             observable_output
         } else {
@@ -535,11 +477,7 @@ pub fn run_vms<
         // event sorter must produce an empty queue
         let events_sorter_observable_output =
             if let Some(last) = basic_circuits.events_sorter_circuits.last {
-                let observable_output = last
-                    .clone_witness()
-                    .unwrap()
-                    .closed_form_input
-                    .observable_output;
+                let observable_output = last.observable_output;
 
                 observable_output
             } else {
@@ -553,11 +491,7 @@ pub fn run_vms<
         // same for L2 to L1 logs
         let l1messages_sorter_observable_output =
             if let Some(last) = basic_circuits.l1_messages_sorter_circuits.last {
-                let observable_output = last
-                    .clone_witness()
-                    .unwrap()
-                    .closed_form_input
-                    .observable_output;
+                let observable_output = last.observable_output;
 
                 observable_output
             } else {
@@ -569,14 +503,11 @@ pub fn run_vms<
             };
 
         // also create intermediate queue states if needed
-        let ram_sorted_queue_state = if let Some(state) =
-            basic_circuits.ram_permutation_circuits.first.map(|el| {
-                el.clone_witness()
-                    .unwrap()
-                    .closed_form_input
-                    .observable_input
-                    .sorted_queue_initial_state
-            }) {
+        let ram_sorted_queue_state = if let Some(state) = basic_circuits
+            .ram_permutation_circuits
+            .first
+            .map(|wit| wit.observable_input.sorted_queue_initial_state)
+        {
             state.tail
         } else {
             empty_sponge_like_queue_state.clone().tail
@@ -585,52 +516,38 @@ pub fn run_vms<
         let decommits_sorter_intermediate_queue_state = if let Some(state) = basic_circuits
             .code_decommittments_sorter_circuits
             .first
-            .map(|el| {
-                el.clone_witness()
-                    .unwrap()
-                    .closed_form_input
-                    .observable_input
-                    .sorted_queue_initial_state
-            }) {
+            .map(|wit| wit.observable_input.sorted_queue_initial_state)
+        {
             state.tail
         } else {
             empty_sponge_like_queue_state.clone().tail
         };
 
-        let events_sorter_intermediate_queue_state = if let Some(state) =
-            basic_circuits.events_sorter_circuits.first.map(|el| {
-                el.clone_witness()
-                    .unwrap()
-                    .closed_form_input
-                    .observable_input
-                    .intermediate_sorted_queue_state
-            }) {
+        let events_sorter_intermediate_queue_state = if let Some(state) = basic_circuits
+            .events_sorter_circuits
+            .first
+            .map(|wit| wit.observable_input.intermediate_sorted_queue_state)
+        {
             state.tail
         } else {
             empty_log_queue_state.clone().tail
         };
 
-        let l1messages_sorter_intermediate_queue_state = if let Some(state) =
-            basic_circuits.l1_messages_sorter_circuits.first.map(|el| {
-                el.clone_witness()
-                    .unwrap()
-                    .closed_form_input
-                    .observable_input
-                    .intermediate_sorted_queue_state
-            }) {
+        let l1messages_sorter_intermediate_queue_state = if let Some(state) = basic_circuits
+            .l1_messages_sorter_circuits
+            .first
+            .map(|wit| wit.observable_input.intermediate_sorted_queue_state)
+        {
             state.tail
         } else {
             empty_log_queue_state.clone().tail
         };
 
-        let rollup_storage_sorter_intermediate_queue_state = if let Some(state) =
-            basic_circuits.storage_sorter_circuits.first.map(|el| {
-                el.clone_witness()
-                    .unwrap()
-                    .closed_form_input
-                    .observable_input
-                    .intermediate_sorted_queue_state
-            }) {
+        let rollup_storage_sorter_intermediate_queue_state = if let Some(state) = basic_circuits
+            .storage_sorter_circuits
+            .first
+            .map(|wit| wit.observable_input.intermediate_sorted_queue_state)
+        {
             state.tail
         } else {
             empty_log_queue_state.clone().tail
@@ -639,13 +556,8 @@ pub fn run_vms<
         let transient_storage_sorter_intermediate_queue_state = if let Some(state) = basic_circuits
             .transient_storage_sorter_circuits
             .first
-            .map(|el| {
-                el.clone_witness()
-                    .unwrap()
-                    .closed_form_input
-                    .observable_input
-                    .intermediate_sorted_queue_state
-            }) {
+            .map(|wit| wit.observable_input.intermediate_sorted_queue_state)
+        {
             state.tail
         } else {
             empty_log_queue_state.clone().tail
@@ -653,10 +565,7 @@ pub fn run_vms<
 
         let l1messages_linear_hasher_observable_output =
             if let Some(last) = basic_circuits.l1_messages_hasher_circuits.last {
-                last.clone_witness()
-                    .unwrap()
-                    .closed_form_input
-                    .observable_output
+                last.observable_output
             } else {
                 let mut empty_digest = [0u8; 32];
                 use crate::zk_evm::zkevm_opcode_defs::sha3::{Digest, Keccak256};
@@ -686,9 +595,6 @@ pub fn run_vms<
                 .main_vm_circuits
                 .last
                 .unwrap()
-                .clone_witness()
-                .unwrap()
-                .closed_form_input
                 .observable_output,
             decommits_sorter_observable_output,
             code_decommitter_observable_output,
@@ -706,11 +612,8 @@ pub fn run_vms<
             storage_log_tail: basic_circuits
                 .main_vm_circuits
                 .first
-                .clone()
+                .as_ref()
                 .unwrap()
-                .clone_witness()
-                .unwrap()
-                .closed_form_input
                 .observable_input
                 .rollback_queue_tail_for_block,
             per_circuit_closed_form_inputs: compact_form_witnesses.into(),
@@ -720,9 +623,6 @@ pub fn run_vms<
                 .main_vm_circuits
                 .first
                 .unwrap()
-                .clone_witness()
-                .unwrap()
-                .closed_form_input
                 .observable_input
                 .memory_queue_initial_state,
             ram_sorted_queue_state,

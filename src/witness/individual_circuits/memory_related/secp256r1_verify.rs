@@ -1,37 +1,59 @@
 use super::*;
-use crate::witness::full_block_artifact::LogQueue;
+use crate::witness::artifacts::{DemuxedLogQueries, ImplicitMemoryArtifacts, LogQueueStates};
+use crate::witness::aux_data_structs::one_per_circuit_accumulator::LastPerCircuitAccumulator;
+use crate::witness::aux_data_structs::MemoryQueuePerCircuitSimulator;
+use crate::zk_evm::aux_structures::LogQuery as LogQuery_;
+use crate::zk_evm::zk_evm_abstractions::precompiles::secp256r1_verify::Secp256r1VerifyRoundWitness;
 use crate::zkevm_circuits::base_structures::log_query::*;
 use crate::zkevm_circuits::secp256r1_verify::*;
+use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
+use circuit_definitions::encodings::memory_query::MemoryQueueState;
 use circuit_definitions::encodings::*;
+
+pub(crate) fn secp256r1_memory_queries_amount(
+    secp256r1_verify_witnesses: &Vec<(u32, LogQuery_, Secp256r1VerifyRoundWitness)>,
+) -> usize {
+    secp256r1_verify_witnesses
+        .iter()
+        .fold(0, |inner, (_, _, witness)| {
+            inner + witness.reads.len() + witness.writes.len()
+        })
+}
 
 // we want to simulate splitting of data into many separate instances of the same circuit.
 // So we basically need to reconstruct the FSM state on input/output, and passthrough data.
 // In practice the only difficulty is buffer state, everything else is provided by out-of-circuit VM
 
-pub fn secp256r1_verify_decompose_into_per_circuit_witness<
+pub(crate) fn secp256r1_verify_decompose_into_per_circuit_witness<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
-    artifacts: &mut FullBlockArtifacts<F>,
-    mut demuxed_secp256r1_verify_queue: LogQueue<F>,
+    amount_of_memory_queries: usize,
+    implicit_memory_artifacts: &mut ImplicitMemoryArtifacts<F>,
+    memory_queue_states_accumulator: &LastPerCircuitAccumulator<MemoryQueueState<F>>,
+    memory_queue_simulator: &mut MemoryQueuePerCircuitSimulator<F>,
+    secp256r1_verify_witnesses: Vec<(u32, LogQuery_, Secp256r1VerifyRoundWitness)>,
+    secp256r1_verify_queries: Vec<LogQuery_>,
+    mut demuxed_secp256r1_verify_queue: LogQueueStates<F>,
     num_rounds_per_circuit: usize,
     round_function: &R,
 ) -> Vec<Secp256r1VerifyCircuitInstanceWitness<F>> {
     assert_eq!(
-        artifacts.all_memory_queries_accumulated.len(),
-        artifacts.all_memory_queue_states.len()
+        amount_of_memory_queries + implicit_memory_artifacts.memory_queries.len(),
+        memory_queue_states_accumulator.len() + implicit_memory_artifacts.memory_queue_states.len()
     );
     assert_eq!(
-        artifacts.all_memory_queries_accumulated.len(),
-        artifacts.memory_queue_simulator.num_items as usize
+        amount_of_memory_queries + implicit_memory_artifacts.memory_queries.len(),
+        memory_queue_simulator.num_items as usize
     );
 
     // split into aux witness, don't mix with the memory
 
     use crate::zk_evm::zk_evm_abstractions::precompiles::secp256r1_verify::Secp256r1VerifyRoundWitness;
-    let mut memory_queries = vec![];
+    let mut memory_queries =
+        Vec::with_capacity(secp256r1_memory_queries_amount(&secp256r1_verify_witnesses));
 
-    for (_cycle, _query, witness) in artifacts.secp256r1_verify_witnesses.iter() {
+    for (_cycle, _query, witness) in secp256r1_verify_witnesses.iter() {
         let Secp256r1VerifyRoundWitness {
             new_request: _,
             reads,
@@ -46,20 +68,17 @@ pub fn secp256r1_verify_decompose_into_per_circuit_witness<
 
     let mut result = vec![];
 
-    let precompile_calls =
-        std::mem::replace(&mut artifacts.demuxed_secp256r1_verify_queries, vec![]);
-    let precompile_calls_queue_states =
-        std::mem::replace(&mut demuxed_secp256r1_verify_queue.states, vec![]);
+    let precompile_calls = secp256r1_verify_queries;
     let simulator_witness: Vec<_> = demuxed_secp256r1_verify_queue
         .simulator
         .witness
         .clone()
         .into();
-    let round_function_witness =
-        std::mem::replace(&mut artifacts.secp256r1_verify_witnesses, vec![]);
+    let round_function_witness = secp256r1_verify_witnesses;
 
     // check basic consistency
-    assert!(precompile_calls.len() == precompile_calls_queue_states.len());
+    assert!(precompile_calls.len() == demuxed_secp256r1_verify_queue.states_accumulator.len());
+    drop(demuxed_secp256r1_verify_queue.states_accumulator);
     assert!(precompile_calls.len() == round_function_witness.len());
 
     if precompile_calls.len() == 0 {
@@ -77,20 +96,18 @@ pub fn secp256r1_verify_decompose_into_per_circuit_witness<
     let mut memory_read_witnesses = vec![];
     let mut starting_request_idx = 0;
 
-    let mut memory_queue_input_state =
-        take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
+    let mut memory_queue_input_state = memory_queue_simulator.take_sponge_like_queue_state();
     let mut current_memory_queue_state = memory_queue_input_state.clone();
 
-    for (request_idx, ((request, _queue_transition_state), per_request_work)) in precompile_calls
+    for (request_idx, (request, per_request_work)) in precompile_calls
         .into_iter()
-        .zip(precompile_calls_queue_states.into_iter())
         .zip(round_function_witness.into_iter())
         .enumerate()
     {
         let _ = demuxed_secp256r1_verify_queue
             .simulator
             .pop_and_output_intermediate_data(round_function);
-        let initial_memory_len = artifacts.memory_queue_simulator.num_items;
+        let initial_memory_len = memory_queue_simulator.num_items;
 
         let mut memory_reads_per_request = vec![];
 
@@ -108,13 +125,13 @@ pub fn secp256r1_verify_decompose_into_per_circuit_witness<
             assert!(read_query.rw_flag == false);
             memory_reads_per_request.push(read_query.value);
 
-            artifacts.all_memory_queries_accumulated.push(read);
-            let (_, intermediate_info) = artifacts
-                .memory_queue_simulator
-                .push_and_output_intermediate_data(read, round_function);
-            artifacts.all_memory_queue_states.push(intermediate_info);
-            current_memory_queue_state =
-                take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
+            implicit_memory_artifacts.memory_queries.push(read);
+            let (_, intermediate_info) =
+                memory_queue_simulator.push_and_output_intermediate_data(read, round_function);
+            implicit_memory_artifacts
+                .memory_queue_states
+                .push(intermediate_info);
+            current_memory_queue_state = memory_queue_simulator.take_sponge_like_queue_state();
 
             precompile_request.input_memory_offset += 1;
         }
@@ -125,21 +142,18 @@ pub fn secp256r1_verify_decompose_into_per_circuit_witness<
             assert!(write == write_query);
             assert!(write_query.rw_flag == true);
 
-            artifacts.all_memory_queries_accumulated.push(write);
-            let (_, intermediate_info) = artifacts
-                .memory_queue_simulator
-                .push_and_output_intermediate_data(write, round_function);
-            artifacts.all_memory_queue_states.push(intermediate_info);
-            current_memory_queue_state =
-                take_sponge_like_queue_state_from_simulator(&artifacts.memory_queue_simulator);
+            implicit_memory_artifacts.memory_queries.push(write);
+            let (_, intermediate_info) =
+                memory_queue_simulator.push_and_output_intermediate_data(write, round_function);
+            implicit_memory_artifacts
+                .memory_queue_states
+                .push(intermediate_info);
+            current_memory_queue_state = memory_queue_simulator.take_sponge_like_queue_state();
 
             precompile_request.output_memory_offset += 1;
         }
 
-        assert_eq!(
-            artifacts.memory_queue_simulator.num_items - initial_memory_len,
-            7
-        );
+        assert_eq!(memory_queue_simulator.num_items - initial_memory_len, 7);
         round_counter += 1;
 
         if round_counter == num_rounds_per_circuit || is_last_request {
@@ -156,8 +170,8 @@ pub fn secp256r1_verify_decompose_into_per_circuit_witness<
                 .map(|el| (log_query_into_circuit_log_query_witness(&el.2), el.1))
                 .collect();
 
-            let current_reads = std::mem::replace(&mut memory_reads_per_request, vec![]);
-            let mut current_witness = std::mem::replace(&mut memory_read_witnesses, vec![]);
+            let current_reads = std::mem::take(&mut memory_reads_per_request);
+            let mut current_witness = std::mem::take(&mut memory_read_witnesses);
             current_witness.push(current_reads);
 
             let mut observable_input_data = PrecompileFunctionInputData::placeholder_witness();
@@ -217,6 +231,15 @@ pub fn secp256r1_verify_decompose_into_per_circuit_witness<
             memory_read_witnesses.push(memory_reads_per_request);
         }
     }
+
+    assert_eq!(
+        amount_of_memory_queries + implicit_memory_artifacts.memory_queries.len(),
+        memory_queue_states_accumulator.len() + implicit_memory_artifacts.memory_queue_states.len()
+    );
+    assert_eq!(
+        amount_of_memory_queries + implicit_memory_artifacts.memory_queries.len(),
+        memory_queue_simulator.num_items as usize
+    );
 
     result
 }

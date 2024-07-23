@@ -28,6 +28,19 @@ mod tests {
     }
 
     #[test_log::test]
+    fn test_storage_write_after_panic() {
+        run_asm_based_test(
+            "src/tests/simple_tests/testdata/log/storage/storage_write_after_panic",
+            &[],
+            Options {
+                // Do only 1 cycle per VM snapshot to really test all the boundary conditions.
+                cycles_per_vm_snapshot: 1,
+                ..Default::default()
+            },
+        )
+    }
+
+    #[test_log::test]
     fn test_storage_pubdata_refunds() {
         run_asm_based_test(
             "src/tests/simple_tests/testdata/log/storage/storage_pubdata_refunds",

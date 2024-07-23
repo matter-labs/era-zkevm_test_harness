@@ -2,6 +2,8 @@ use super::*;
 use crate::boojum::gadgets::queue::full_state_queue::FullStateCircuitQueueRawWitness;
 use crate::boojum::gadgets::u256::decompose_u256_as_u32x8;
 use crate::ethereum_types::U256;
+use crate::witness::aux_data_structs::one_per_circuit_accumulator::LastPerCircuitAccumulator;
+use crate::witness::individual_circuits::memory_related::decommit_code::DecommiterCircuitProcessingInputs;
 use crate::witness::utils::produce_fs_challenges;
 use crate::zkevm_circuits::base_structures::decommit_query::DecommitQuery;
 use crate::zkevm_circuits::base_structures::decommit_query::DecommitQueryWitness;
@@ -9,67 +11,72 @@ use crate::zkevm_circuits::base_structures::decommit_query::DECOMMIT_QUERY_PACKE
 use crate::zkevm_circuits::base_structures::vm_state::FULL_SPONGE_QUEUE_STATE_WIDTH;
 use crate::zkevm_circuits::sort_decommittment_requests::input::*;
 use crate::zkevm_circuits::DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS;
+use artifacts::MemoryArtifacts;
 use circuit_definitions::encodings::decommittment_request::*;
+use circuit_definitions::encodings::memory_query::MemoryQueueSimulator;
+use circuit_definitions::encodings::memory_query::MemoryQueueState;
 use circuit_definitions::encodings::CircuitEquivalentReflection;
 use circuit_definitions::zk_evm::aux_structures::DecommittmentQuery;
 use rayon::prelude::*;
 use std::cmp::Ordering;
 
-pub fn compute_decommitts_sorter_circuit_snapshots<
+pub(crate) fn compute_decommitts_sorter_circuit_snapshots<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
-    artifacts: &mut FullBlockArtifacts<F>,
-    deduplicated_decommittment_queue_simulator: &mut DecommittmentQueueSimulator<F>,
-    deduplicated_decommittment_queue_states: &mut Vec<DecommittmentQueueState<F>>,
-    deduplicated_decommit_requests_with_data: &mut Vec<(DecommittmentQuery, Vec<U256>)>,
+    mut executed_decommittment_queries: Vec<(u32, DecommittmentQuery, Vec<U256>)>,
     round_function: &R,
     deduplicator_circuit_capacity: usize,
-) -> Vec<CodeDecommittmentsDeduplicatorInstanceWitness<F>> {
-    assert_eq!(
-        artifacts.all_memory_queries_accumulated.len(),
-        artifacts.all_memory_queue_states.len()
-    );
-    assert_eq!(
-        artifacts.all_memory_queries_accumulated.len(),
-        artifacts.memory_queue_simulator.num_items as usize
-    );
+) -> (
+    Vec<(u32, DecommittmentQueueState<F>)>,
+    Vec<CodeDecommittmentsDeduplicatorInstanceWitness<F>>,
+    DecommiterCircuitProcessingInputs<F>,
+) {
+    // TODO cleanup
+    let mut deduplicated_decommittment_queue_simulator: DecommittmentQueueSimulator<F> =
+        Default::default();
+    let mut deduplicated_decommittment_queue_states: Vec<DecommittmentQueueState<F>> =
+        Default::default();
+    let mut deduplicated_decommit_requests_with_data: Vec<(DecommittmentQuery, Vec<U256>)> =
+        Default::default();
+
+    let total_executed_queries = executed_decommittment_queries.len();
 
     assert!(
-        artifacts.all_executed_decommittment_queries.len() > 0,
+        total_executed_queries > 0,
         "VM should have made some code decommits"
     );
 
+    let mut all_decommittment_queue_states: Vec<(u32, DecommittmentQueueState<F>)> =
+        Vec::with_capacity(total_executed_queries);
+
     // we produce witness for two circuits at once
 
-    let mut unsorted_decommittment_queue_simulator = DecommittmentQueueSimulator::<F>::empty();
-    let mut sorted_decommittment_queue_simulator = DecommittmentQueueSimulator::<F>::empty();
+    let mut unsorted_decommittment_queue_simulator =
+        DecommittmentQueueSimulator::<F>::with_capacity(total_executed_queries);
+    let mut sorted_decommittment_queue_simulator =
+        DecommittmentQueueSimulator::<F>::with_capacity(total_executed_queries);
 
     // sort decommittment requests
 
-    let mut sorted_decommittment_queue_states = vec![];
+    let mut sorted_decommittment_queue_states = Vec::with_capacity(total_executed_queries);
+    let mut unsorted_decommittment_requests_with_data = Vec::with_capacity(total_executed_queries);
 
-    let mut unsorted_decommittment_requests_with_data = vec![];
-    for (_cycle, decommittment_request, writes) in
-        artifacts.all_executed_decommittment_queries.iter_mut()
-    {
-        let data = std::mem::replace(writes, vec![]);
+    for (_cycle, decommittment_request, writes) in executed_decommittment_queries.iter_mut() {
+        let data = std::mem::take(writes);
         unsorted_decommittment_requests_with_data.push((*decommittment_request, data));
     }
 
-    let num_circuits =
-        (artifacts.all_executed_decommittment_queries.len() + deduplicator_circuit_capacity - 1)
-            / deduplicator_circuit_capacity;
+    let num_circuits = (executed_decommittment_queries.len() + deduplicator_circuit_capacity - 1)
+        / deduplicator_circuit_capacity;
 
     // internally parallelizable by the factor of 3
-    for (cycle, decommittment_request, _) in artifacts.all_executed_decommittment_queries.iter() {
+    for (cycle, decommittment_request, _) in executed_decommittment_queries.iter() {
         // sponge
-        let (_old_tail, intermediate_info) = unsorted_decommittment_queue_simulator
+        let (_, intermediate_info) = unsorted_decommittment_queue_simulator
             .push_and_output_intermediate_data(*decommittment_request, round_function);
 
-        artifacts
-            .all_decommittment_queue_states
-            .push((*cycle, intermediate_info));
+        all_decommittment_queue_states.push((*cycle, intermediate_info));
     }
 
     // sort queries
@@ -189,11 +196,6 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
         first_encountered_timestamps.push(0);
     }
 
-    assert_eq!(
-        artifacts.all_memory_queue_states.len(),
-        artifacts.all_memory_queries_accumulated.len()
-    );
-
     // create witnesses
 
     let mut decommittments_deduplicator_witness: Vec<
@@ -223,12 +225,12 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
     let lhs_contributions: Vec<_> = unsorted_decommittment_queue_simulator
         .witness
         .iter()
-        .map(|el| el.0)
+        .map(|el| &el.0)
         .collect();
     let rhs_contributions: Vec<_> = sorted_decommittment_queue_simulator
         .witness
         .iter()
-        .map(|el| el.0)
+        .map(|el| &el.0)
         .collect();
 
     let mut lhs_grand_product_chains = vec![];
@@ -281,7 +283,7 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
 
         unsorted_decommittment_queue_simulator.pop_and_output_intermediate_data(round_function);
         if input_witness_chunk.len() == deduplicator_circuit_capacity {
-            let completed_chunk = std::mem::replace(&mut input_witness_chunk, VecDeque::new());
+            let completed_chunk = std::mem::take(&mut input_witness_chunk);
             for j in 0..DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS {
                 input_products[j] = lhs_grand_product_chains[j][i as usize];
             }
@@ -325,7 +327,7 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
 
         sorted_decommittment_queue_simulator.pop_and_output_intermediate_data(round_function);
         if sorted_witness_chunk.len() == deduplicator_circuit_capacity {
-            let completed_chunk = std::mem::replace(&mut sorted_witness_chunk, VecDeque::new());
+            let completed_chunk = std::mem::take(&mut sorted_witness_chunk);
             sorted_witness.push(completed_chunk);
             for j in 0..DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS {
                 sorted_products[j] = rhs_grand_product_chains[j][i as usize];
@@ -428,7 +430,15 @@ pub fn compute_decommitts_sorter_circuit_snapshots<
         decommittments_deduplicator_witness.push(current_witness);
     }
 
-    decommittments_deduplicator_witness
+    (
+        all_decommittment_queue_states,
+        decommittments_deduplicator_witness,
+        DecommiterCircuitProcessingInputs {
+            deduplicated_decommit_requests_with_data,
+            deduplicated_decommittment_queue_simulator,
+            deduplicated_decommittment_queue_states,
+        },
+    )
 }
 
 fn concatenate_key(hash: U256, timestamp: u32) -> [u32; PACKED_KEY_LENGTH] {

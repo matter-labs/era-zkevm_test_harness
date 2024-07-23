@@ -1,23 +1,25 @@
 use super::*;
-use crate::witness::full_block_artifact::LogQueue;
+use crate::witness::artifacts::LogQueueStates;
+use crate::witness::aux_data_structs::one_per_circuit_accumulator::LastPerCircuitAccumulator;
+use crate::zk_evm::aux_structures::*;
 use crate::zkevm_circuits::base_structures::log_query::LOG_QUERY_PACKED_WIDTH;
 use crate::zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
 use crate::zkevm_circuits::transient_storage_validity_by_grand_product::input::*;
 use crate::zkevm_circuits::DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS;
 use circuit_definitions::encodings::*;
 
-pub fn compute_transient_storage_dedup_and_sort<
+pub(crate) fn compute_transient_storage_dedup_and_sort<
     F: SmallField,
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
-    artifacts: &mut FullBlockArtifacts<F>,
-    mut demuxed_transient_storage_queue: LogQueue<F>,
+    transient_storage_queries: Vec<LogQuery>,
+    mut demuxed_transient_storage_queue: LogQueueStates<F>,
     per_circuit_capacity: usize,
     round_function: &R,
 ) -> Vec<TransientStorageDeduplicatorInstanceWitness<F>> {
     // trivial case if nothing to process
 
-    if artifacts.demuxed_transient_storage_queries.is_empty() {
+    if transient_storage_queries.is_empty() {
         return vec![];
     }
 
@@ -25,21 +27,31 @@ pub fn compute_transient_storage_dedup_and_sort<
 
     use crate::witness::sort_storage_access::sort_transient_storage_access_queries;
 
+    let total_amount_of_queries = transient_storage_queries.len();
+
     let sorted_storage_queries_with_extra_timestamp =
-        sort_transient_storage_access_queries(&artifacts.demuxed_transient_storage_queries);
+        sort_transient_storage_access_queries(&transient_storage_queries);
 
-    // dbg!(&sorted_storage_queries_with_extra_timestamp);
-    // dbg!(&deduplicated_rollup_storage_queries);
-
+    let mut sorted_log_simulator_states_accumulator = LastPerCircuitAccumulator::with_flat_capacity(
+        per_circuit_capacity,
+        total_amount_of_queries,
+    );
     let mut intermediate_sorted_log_simulator =
-        LogWithExtendedEnumerationQueueSimulator::<F>::empty();
-    let mut intermediate_sorted_log_simulator_states =
-        Vec::with_capacity(sorted_storage_queries_with_extra_timestamp.len());
-    for el in sorted_storage_queries_with_extra_timestamp.iter() {
+        LogWithExtendedEnumerationQueueSimulator::<F>::with_capacity(
+            sorted_storage_queries_with_extra_timestamp.len(),
+        );
+    for el in sorted_storage_queries_with_extra_timestamp.into_iter() {
         let (_, intermediate_state) = intermediate_sorted_log_simulator
             .push_and_output_intermediate_data(el.clone(), round_function);
-        intermediate_sorted_log_simulator_states.push(intermediate_state);
+
+        sorted_log_simulator_states_accumulator.push(intermediate_state);
     }
+
+    let sorted_log_simulator_states_chunk_final_states =
+        sorted_log_simulator_states_accumulator.into_circuits();
+    let unsorted_log_simulator_states_chunk_final_states = demuxed_transient_storage_queue
+        .states_accumulator
+        .into_circuits();
 
     let unsorted_simulator_final_state =
         take_queue_state_from_simulator(&demuxed_transient_storage_queue.simulator);
@@ -75,13 +87,12 @@ pub fn compute_transient_storage_dedup_and_sort<
         intermediate_sorted_log_simulator_final_state.tail.length
     );
 
-    let lhs_contributions: Vec<_> = artifacts
-        .demuxed_transient_storage_queries
-        .iter()
+    let lhs_contributions: Vec<_> = transient_storage_queries
+        .into_iter()
         .enumerate()
         .map(|(idx, el)| {
             let extended_query = LogQueryWithExtendedEnumeration {
-                raw_query: *el,
+                raw_query: el,
                 extended_timestamp: idx as u32,
             };
 
@@ -92,11 +103,13 @@ pub fn compute_transient_storage_dedup_and_sort<
         })
         .collect();
 
+    let lhs_contributions_refs = lhs_contributions.iter().collect();
+
     // let lhs_contributions: Vec<_> = demuxed_rollup_storage_queue.simulator.witness.iter().map(|el| el.0).collect();
     let rhs_contributions: Vec<_> = intermediate_sorted_log_simulator
         .witness
         .iter()
-        .map(|el| el.0)
+        .map(|el| &el.0)
         .collect();
 
     // --------------------
@@ -112,7 +125,7 @@ pub fn compute_transient_storage_dedup_and_sort<
             LOG_QUERY_PACKED_WIDTH,
             { LOG_QUERY_PACKED_WIDTH + 1 },
         >(
-            &lhs_contributions,
+            &lhs_contributions_refs,
             &rhs_contributions,
             &challenges[idx],
         );
@@ -162,10 +175,9 @@ pub fn compute_transient_storage_dedup_and_sort<
         .1
         .is_empty());
 
-    let it = demuxed_transient_storage_queue
-        .states
-        .chunks(per_circuit_capacity)
-        .zip(intermediate_sorted_log_simulator_states.chunks(per_circuit_capacity))
+    let it = unsorted_log_simulator_states_chunk_final_states
+        .into_iter()
+        .zip(sorted_log_simulator_states_chunk_final_states)
         .zip(transposed_lhs_chains.into_iter())
         .zip(transposed_rhs_chains.into_iter())
         .zip(
@@ -264,8 +276,8 @@ pub fn compute_transient_storage_dedup_and_sort<
         let is_first = idx == 0;
         let is_last = idx == num_circuits - 1;
 
-        let last_unsorted_state = unsorted_sponge_states.last().unwrap().clone();
-        let last_sorted_state = sorted_sponge_states.last().unwrap().clone();
+        let last_unsorted_state = unsorted_sponge_states;
+        let last_sorted_state = sorted_sponge_states;
 
         let accumulated_lhs: [F; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS] = lhs_grand_product
             .iter()

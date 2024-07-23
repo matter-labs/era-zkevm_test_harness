@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::witness::tracer::QueryMarker;
+use crate::witness::tracer::tracer::QueryMarker;
 use crate::zk_evm::{aux_structures::LogQuery, vm_state::CallStackEntry};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -55,6 +55,12 @@ impl CallstackEntryWithAuxData {
             forward_queue: vec![ExtendedLogQuery::FrameForwardHeadMarker(0)],
             rollback_queue: vec![ExtendedLogQuery::FrameRollbackTailMarker(0)],
         }
+    }
+}
+
+impl Default for CallstackEntryWithAuxData {
+    fn default() -> Self {
+        Self::empty()
     }
 }
 
@@ -226,7 +232,6 @@ impl CallstackWithAuxData {
         let mut previous = self.stack.pop().unwrap();
         self.depth -= 1;
 
-        previous.current_history_record.beginning_cycle = monotonic_cycle_counter;
         previous.current_history_record.beginning_cycle = monotonic_cycle_counter;
         previous.current_history_record.actions = vec![]; // cleanup
         previous.current_history_record.end_cycle = None;

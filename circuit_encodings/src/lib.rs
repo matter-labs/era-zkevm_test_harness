@@ -2,6 +2,8 @@ use crate::boojum::algebraic_props::round_function::{
     absorb_multiple_rounds, AbsorptionModeOverwrite, AlgebraicRoundFunction,
 };
 use crate::boojum::field::SmallField;
+use crate::boojum::gadgets::queue::QueueStateWitness;
+use crate::boojum::gadgets::queue::QueueTailStateWitness;
 use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 use crate::boojum::gadgets::traits::round_function::*;
 use crate::boojum::gadgets::u160::decompose_address_as_u32x5;
@@ -117,6 +119,12 @@ impl<
             num_items: 0,
             witness: VecDeque::new(),
         }
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        let mut new = Self::empty();
+        new.witness.reserve_exact(capacity);
+        new
     }
 
     pub fn split(mut self, at: u32) -> (Self, Self) {
@@ -362,6 +370,12 @@ impl<
         }
     }
 
+    pub fn with_capacity(capacity: usize) -> Self {
+        let mut new = Self::empty();
+        new.witness.reserve_exact(capacity);
+        new
+    }
+
     pub fn merge(first: Self, second: Self) -> Self {
         assert_eq!(first.tail, second.head);
 
@@ -503,6 +517,101 @@ impl<
         assert_eq!(self.tail, result.last().unwrap().tail);
 
         result
+    }
+}
+
+pub trait ContainerForSimulator<T> {
+    fn push(&mut self, val: T);
+}
+
+use core::marker::PhantomData;
+/// Simplified version of FullWidthQueueSimulator with custom container instead of VecDeque
+pub struct FullWidthMemoryQueueSimulator<
+    F: SmallField,
+    I,
+    C: ContainerForSimulator<([F; N], [F; SW], I)>,
+    const N: usize,
+    const SW: usize,
+    const ROUNDS: usize,
+> where
+    I: OutOfCircuitFixedLengthEncodable<F, N>,
+{
+    pub head: [F; SW],
+    pub tail: [F; SW],
+    pub num_items: u32,
+    pub witness: C,
+    _marker: PhantomData<I>,
+}
+
+impl<
+        F: SmallField,
+        I: OutOfCircuitFixedLengthEncodable<F, N>,
+        C: ContainerForSimulator<([F; N], [F; SW], I)>,
+        const N: usize,
+        const SW: usize,
+        const ROUNDS: usize,
+    > FullWidthMemoryQueueSimulator<F, I, C, N, SW, ROUNDS>
+{
+    pub fn using_container(container: C) -> Self {
+        Self {
+            head: [F::ZERO; SW],
+            tail: [F::ZERO; SW],
+            num_items: 0,
+            witness: container,
+            _marker: Default::default(),
+        }
+    }
+
+    pub fn take_sponge_like_queue_state(&self) -> QueueStateWitness<F, SW> {
+        let result = QueueStateWitness {
+            head: self.head,
+            tail: QueueTailStateWitness {
+                tail: self.tail,
+                length: self.num_items,
+            },
+        };
+
+        result
+    }
+
+    pub fn push_and_output_intermediate_data<
+        R: CircuitRoundFunction<F, AW, SW, CW> + AlgebraicRoundFunction<F, AW, SW, CW>,
+        const AW: usize,
+        const CW: usize,
+    >(
+        &mut self,
+        element: I,
+        _round_function: &R,
+    ) -> (
+        [F; SW], // old tail
+        FullWidthQueueIntermediateStates<F, SW, ROUNDS>,
+    ) {
+        let old_tail = self.tail;
+        assert!(N % AW == 0);
+        let encoding = element.encoding_witness();
+
+        let mut state = old_tail;
+        let states = absorb_multiple_rounds::<F, R, AbsorptionModeOverwrite, AW, SW, CW, ROUNDS>(
+            &mut state, &encoding,
+        );
+        let new_tail = state;
+
+        let states = make_round_function_pairs(old_tail, states);
+
+        self.witness.push((encoding, new_tail, element));
+        self.num_items += 1;
+        self.tail = new_tail;
+
+        let intermediate_info = FullWidthQueueIntermediateStates {
+            head: self.head,
+            tail: new_tail,
+            old_head: self.head,
+            old_tail,
+            num_items: self.num_items,
+            round_function_execution_pairs: states,
+        };
+
+        (old_tail, intermediate_info)
     }
 }
 

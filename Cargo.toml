@@ -45,16 +45,11 @@ env_logger = "0.9"
 smallvec = "1.13"
 structopt = "0.3.26"
 codegen = "0.2.0"
-lazy_static = "1.4"
-reqwest = { version = "0.11", features = ["blocking"] }
-curl = "0.4"
-walkdir = "2.4"
 regex = { version = "1.10.4", features = ["pattern"] }
 
 [dev-dependencies]
 rand = "0.4"
 indicatif = "0.16"
-
 
 [profile.release]
 debug = false

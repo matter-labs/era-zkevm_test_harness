@@ -49,7 +49,7 @@ pub fn run<
     cycle_limit: usize,
     geometry: GeometryConfig,
     storage: S,
-    tree: &mut impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
+    tree: impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
     trusted_setup_path: &str,
     eip_4844_repack_inputs: [Option<Vec<u8>>; MAX_4844_BLOBS_PER_BLOCK],
     circuit_callback: CB,
