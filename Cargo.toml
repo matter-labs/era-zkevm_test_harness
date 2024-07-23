@@ -46,6 +46,7 @@ smallvec = "1.13"
 structopt = "0.3.26"
 codegen = "0.2.0"
 regex = { version = "1.10.4", features = ["pattern"] }
+peak_alloc = "*"
 
 [dev-dependencies]
 rand = "0.4"

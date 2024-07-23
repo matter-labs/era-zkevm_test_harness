@@ -1,5 +1,6 @@
 use crate::blake2::Blake2s256;
 use crate::ethereum_types::{Address, U256};
+use crate::print_peak_mem_snapshots;
 use crate::run_vms::{run_vms, RunVMsResult, RunVmError};
 pub use crate::run_vms::SCHEDULER_TIMESTAMP;
 use crate::snark_wrapper::boojum::field::goldilocks::GoldilocksExt2;
@@ -79,7 +80,10 @@ pub fn run<
         queue_simulator_callback,
         &mut out_of_circuit_tracer,
     ) {
-        Ok((scheduler_circuit_witness, aux_data)) => (scheduler_circuit_witness, aux_data),
+        Ok((scheduler_circuit_witness, aux_data)) => {
+            print_peak_mem_snapshots();
+            (scheduler_circuit_witness, aux_data)
+        },
         Err(err) => {
             let error_text = match err {
                 RunVmError::InvalidInput(msg) => {

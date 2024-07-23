@@ -14,6 +14,7 @@ use crate::boojum::field::SmallField;
 use crate::boojum::gadgets::queue::QueueState;
 use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 use crate::ethereum_types::U256;
+use crate::snapshot_prof;
 use crate::toolset::GeometryConfig;
 use crate::witness::artifacts::{
     DemuxedLogQueries, ImplicitMemoryArtifacts, MemoryArtifacts, MemoryCircuitsArtifacts,
@@ -1154,6 +1155,7 @@ pub(crate) fn create_artifacts_from_tracer<
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
     Vec<EIP4844CircuitInstanceWitness<GoldilocksField>>,
 ) {
+    snapshot_prof("Init");
     // Our goals are:
     // - make instances of basic layer circuits and pass them via circuit_callback (inputs for the base layer proving)
     // - prepare inputs for recursion layer circuits and pass them via recursion_queue_callback (for the recursion layer proving)
@@ -1216,6 +1218,8 @@ pub(crate) fn create_artifacts_from_tracer<
         *round_function,
     );
 
+    snapshot_prof("Multiplexed log queue processed");
+
     // Scratch-space constraint system for circuits processing
     // Used when creating circuit instances and compact form witnesses
     let mut cs_for_witness_generation = CsForWitnessGeneration::new();
@@ -1243,6 +1247,8 @@ pub(crate) fn create_artifacts_from_tracer<
         &mut recursion_queue_callback,
     );
 
+    snapshot_prof("Logs demux processed");
+
     tracing::debug!("Processing log circuits");
 
     // Process part of log circuits that do not use memory (I/O-like).
@@ -1259,6 +1265,8 @@ pub(crate) fn create_artifacts_from_tracer<
             &mut circuit_callback,
             &mut recursion_queue_callback,
         );
+
+    snapshot_prof("IO log circuits processed");
 
     tracing::debug!("Processing memory-related circuits");
 
@@ -1296,6 +1304,8 @@ pub(crate) fn create_artifacts_from_tracer<
         &mut recursion_queue_callback,
     );
 
+    snapshot_prof("Memory related circuits processed");
+
     tracing::debug!("Running callstack sumulation");
 
     // We need to simulate all callstack states and prepare for each MainVM circuit:
@@ -1309,6 +1319,8 @@ pub(crate) fn create_artifacts_from_tracer<
         &log_rollback_tails_for_frames,
         round_function,
     );
+
+    snapshot_prof("Callstack simulated");
 
     tracing::debug!(
         "Processing VM snapshots queue (total {:?})",
@@ -1344,6 +1356,7 @@ pub(crate) fn create_artifacts_from_tracer<
         &mut recursion_queue_callback,
     );
 
+    snapshot_prof("Main VM simulated");
     tracing::debug!("Making remaining circuits");
 
     // Some circuit instances and compact form witnesses have already been made in previous functions
