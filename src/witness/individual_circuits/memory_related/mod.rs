@@ -225,80 +225,44 @@ pub(crate) fn simulate_implicit_memory_queues<
 ) -> ImplicitMemoryStates<F> {
     let mut implicit_memory_states = ImplicitMemoryStates::default();
 
-    implicit_memory_states
-        .decommitter_simulator_snapshots
-        .push(get_simulator_snapshot(memory_queue_simulator));
-    for query in implicit_memory_queries.decommitter_memory_queries.iter() {
-        let (_old_tail, intermediate_info) =
-            memory_queue_simulator.push_and_output_intermediate_data(*query, &round_function);
+    let mut simulate_subqueue = |memory_queries: &Vec<MemoryQuery>, memory_states: &mut Vec<MemoryQueueState<F>>| {
+        let mut snapshots = vec![];
+        snapshots.push(get_simulator_snapshot(memory_queue_simulator)); // before
+        for query in memory_queries.iter() {
+            let (_old_tail, intermediate_info) =
+                memory_queue_simulator.push_and_output_intermediate_data(*query, &round_function);
+    
+            memory_states.push(intermediate_info);
+        }
+        snapshots.push(get_simulator_snapshot(memory_queue_simulator)); // after
 
-        implicit_memory_states
-            .decommitter_memory_states
-            .push(intermediate_info);
-    }
-    implicit_memory_states
-        .decommitter_simulator_snapshots
-        .push(get_simulator_snapshot(memory_queue_simulator));
+        snapshots
+    };
 
-    implicit_memory_states
-        .keccak256_simulator_snapshots
-        .push(get_simulator_snapshot(memory_queue_simulator));
-    for query in implicit_memory_queries.keccak256_memory_queries.iter() {
-        let (_old_tail, intermediate_info) =
-            memory_queue_simulator.push_and_output_intermediate_data(*query, &round_function);
+    implicit_memory_states.decommitter_simulator_snapshots = simulate_subqueue(
+        &implicit_memory_queries.decommitter_memory_queries,
+        &mut implicit_memory_states.decommitter_memory_states
+    );
 
-        implicit_memory_states
-            .keccak256_memory_states
-            .push(intermediate_info);
-    }
-    implicit_memory_states
-        .keccak256_simulator_snapshots
-        .push(get_simulator_snapshot(memory_queue_simulator));
+    implicit_memory_states.keccak256_simulator_snapshots = simulate_subqueue(
+        &implicit_memory_queries.keccak256_memory_queries,
+        &mut implicit_memory_states.keccak256_memory_states
+    );
 
-    implicit_memory_states
-        .sha256_simulator_snapshots
-        .push(get_simulator_snapshot(memory_queue_simulator));
-    for query in implicit_memory_queries.sha256_memory_queries.iter() {
-        let (_old_tail, intermediate_info) =
-            memory_queue_simulator.push_and_output_intermediate_data(*query, &round_function);
+    implicit_memory_states.sha256_simulator_snapshots = simulate_subqueue(
+        &implicit_memory_queries.sha256_memory_queries,
+        &mut implicit_memory_states.sha256_memory_states
+    );
 
-        implicit_memory_states
-            .sha256_memory_states
-            .push(intermediate_info);
-    }
-    implicit_memory_states
-        .sha256_simulator_snapshots
-        .push(get_simulator_snapshot(memory_queue_simulator));
+    implicit_memory_states.ecrecover_simulator_snapshots = simulate_subqueue(
+        &implicit_memory_queries.ecrecover_memory_queries,
+        &mut implicit_memory_states.ecrecover_memory_states
+    );
 
-    implicit_memory_states
-        .ecrecover_simulator_snapshots
-        .push(get_simulator_snapshot(memory_queue_simulator));
-    for query in implicit_memory_queries.ecrecover_memory_queries.iter() {
-        let (_old_tail, intermediate_info) =
-            memory_queue_simulator.push_and_output_intermediate_data(*query, &round_function);
-
-        implicit_memory_states
-            .ecrecover_memory_states
-            .push(intermediate_info);
-    }
-    implicit_memory_states
-        .ecrecover_simulator_snapshots
-        .push(get_simulator_snapshot(memory_queue_simulator));
-
-    implicit_memory_states
-        .secp256r1_simulator_snapshots
-        .push(get_simulator_snapshot(memory_queue_simulator));
-    for query in implicit_memory_queries.secp256r1_memory_queries.iter() {
-        let (_old_tail, intermediate_info) =
-            memory_queue_simulator.push_and_output_intermediate_data(*query, &round_function);
-
-        implicit_memory_states
-            .secp256r1_memory_states
-            .push(intermediate_info);
-    }
-    implicit_memory_states
-        .secp256r1_simulator_snapshots
-        .push(get_simulator_snapshot(memory_queue_simulator));
+    implicit_memory_states.secp256r1_simulator_snapshots = simulate_subqueue(
+        &implicit_memory_queries.secp256r1_memory_queries,
+        &mut implicit_memory_states.secp256r1_memory_states
+    );
 
     implicit_memory_states
 }
