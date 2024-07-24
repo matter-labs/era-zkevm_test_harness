@@ -1224,6 +1224,8 @@ pub(crate) fn create_artifacts_from_tracer<
     // Used when creating circuit instances and compact form witnesses
     let mut cs_for_witness_generation = CsForWitnessGeneration::new();
 
+    snapshot_prof("Cs created");
+
     // demux log queue circuit
     use crate::witness::individual_circuits::log_demux::process_logs_demux_and_make_circuits;
 
@@ -1334,6 +1336,8 @@ pub(crate) fn create_artifacts_from_tracer<
         default_aa_code_hash,
         evm_simulator_code_hash,
     };
+
+    println!("Simulating Main VM, circuits: {}", vm_snapshots.windows(2).len());
 
     // Prepares inputs and makes circuit instances and compact forms for MainVM circuits
     // Time consuming due to usually large number of circuits
