@@ -308,7 +308,7 @@ fn process_multiplexed_log_queue(
                 .1 = Some(pointer_to_chain_of_states);
         }
 
-        match query_marker {
+        match *query_marker {
             QueryMarker::Forward { cycle: c, .. } => {
                 assert_eq!(cycle, c);
                 assert!(!query.rollback);

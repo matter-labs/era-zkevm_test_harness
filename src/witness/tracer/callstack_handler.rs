@@ -25,7 +25,7 @@ pub enum LogAction {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ExtendedLogQuery {
     Query {
-        marker: QueryMarker,
+        marker: Box<QueryMarker>,
         cycle: u32,
         query: Box<LogQuery>,
     },
@@ -265,7 +265,7 @@ impl CallstackWithAuxData {
 
             let adjusted_rollbacks = rollback_queue.into_iter().rev().map(|mut el| {
                 match &mut el {
-                    ExtendedLogQuery::Query { mut marker, .. } => match &mut marker {
+                    ExtendedLogQuery::Query { ref mut marker, .. } => match &mut **marker {
                         QueryMarker::Rollback {
                             cycle_of_applied_rollback,
                             ..
@@ -367,7 +367,7 @@ impl CallstackWithAuxData {
                 cycle: monotonic_cycle_counter,
             };
             let full_query = ExtendedLogQuery::Query {
-                marker,
+                marker: Box::new(marker),
                 cycle: monotonic_cycle_counter,
                 query: Box::new(log_query),
             };
@@ -391,7 +391,7 @@ impl CallstackWithAuxData {
                 cycle_of_applied_rollback: None,
             };
             let full_query = ExtendedLogQuery::Query {
-                marker,
+                marker: Box::new(marker),
                 cycle: monotonic_cycle_counter,
                 query: Box::new(rollback_query),
             };
@@ -448,7 +448,7 @@ impl CallstackWithAuxData {
                 cycle: monotonic_cycle_counter,
             };
             let full_query = ExtendedLogQuery::Query {
-                marker,
+                marker: Box::new(marker),
                 cycle: monotonic_cycle_counter,
                 query: Box::new(log_query),
             };
