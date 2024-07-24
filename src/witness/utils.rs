@@ -579,7 +579,9 @@ pub(crate) fn compute_grand_product_subchain<F: SmallField, const N: usize, cons
 ) -> (Vec<F>, Vec<F>) {
     assert_eq!(N + 1, M);
     let mut lhs_grand_product_chain: Vec<F> = vec![F::ZERO; lhs_contributions.len()];
+    lhs_grand_product_chain.shrink_to_fit();
     let mut rhs_grand_product_chain: Vec<F> = vec![F::ZERO; rhs_contributions.len()];
+    rhs_grand_product_chain.shrink_to_fit();
 
     let challenges: [F; M] = *challenges;
 

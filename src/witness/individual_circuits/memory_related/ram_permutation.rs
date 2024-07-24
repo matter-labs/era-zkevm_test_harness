@@ -145,75 +145,20 @@ pub(crate) fn compute_ram_circuit_snapshots<
         total_amount_of_queries
     );
 
-    let mut lhs_grand_product_chains =
-        Vec::with_capacity(DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS);
-    let mut rhs_grand_product_chains =
-        Vec::with_capacity(DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS);
-    {
-        let challenges = produce_fs_challenges::<
-            Field,
-            RoundFunction,
-            FULL_SPONGE_QUEUE_STATE_WIDTH,
-            { MEMORY_QUERY_PACKED_WIDTH + 1 },
-            2,
-        >(
-            memory_queue_simulator.take_sponge_like_queue_state().tail,
-            sorted_memory_queries_simulator
-                .take_sponge_like_queue_state()
-                .tail,
-            round_function,
-        );
-
-        let lhs_contributions: Vec<_> = memory_queue_simulator
-            .witness
-            .iter()
-            .map(|el| &el.0)
-            .collect();
-        let rhs_contributions: Vec<_> = sorted_memory_queries_simulator
-            .witness
-            .iter()
-            .map(|el| &el.0)
-            .collect();
-
-        for idx in 0..DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS {
-            let (lhs_grand_product_chain, rhs_grand_product_chain) = compute_grand_product_chains(
-                &lhs_contributions,
-                &rhs_contributions,
-                &challenges[idx],
-            );
-
-            assert_eq!(lhs_grand_product_chain.len(), total_amount_of_queries);
-            assert_eq!(rhs_grand_product_chain.len(), total_amount_of_queries);
-            assert_eq!(
-                lhs_grand_product_chain.len(),
-                memory_queue_simulator.witness.len()
-            );
-            assert_eq!(
-                rhs_grand_product_chain.len(),
-                sorted_memory_queries_simulator.witness.len()
-            );
-
-            lhs_grand_product_chains.push(lhs_grand_product_chain);
-            rhs_grand_product_chains.push(rhs_grand_product_chain);
-        }
-    }
-
-    let transposed_lhs_chains = transpose_chunks(&lhs_grand_product_chains, per_circuit_capacity);
-    let transposed_rhs_chains = transpose_chunks(&rhs_grand_product_chains, per_circuit_capacity);
-
-    // now we need to split them into individual circuits
-    // splitting is not extra hard here, we walk over iterator over everything and save states on checkpoints
-
-    // we also want to have chunks of witness for each of all the intermediate states
-
-    assert_eq!(
-        unsorted_memory_queue_chunk_final_states.len(),
-        transposed_lhs_chains.len()
+    let fs_challenges = produce_fs_challenges::<
+        Field,
+        RoundFunction,
+        FULL_SPONGE_QUEUE_STATE_WIDTH,
+        { MEMORY_QUERY_PACKED_WIDTH + 1 },
+        2,
+    >(
+        memory_queue_simulator.take_sponge_like_queue_state().tail,
+        sorted_memory_queries_simulator
+            .take_sponge_like_queue_state()
+            .tail,
+        round_function,
     );
-    assert_eq!(
-        unsorted_memory_queue_chunk_final_states.len(),
-        transposed_rhs_chains.len()
-    );
+
     let unsorted_witness_chunks = memory_queue_simulator
         .witness
         .into_circuits(amount_of_circuits);
@@ -249,8 +194,6 @@ pub(crate) fn compute_ram_circuit_snapshots<
     let it = unsorted_memory_queue_chunk_final_states
         .into_iter()
         .zip(sorted_memory_queue_chunk_final_states.into_iter())
-        .zip(transposed_lhs_chains.into_iter())
-        .zip(transposed_rhs_chains.into_iter())
         .zip(unsorted_witness_chunks)
         .zip(sorted_witness_chunks);
 
@@ -284,16 +227,95 @@ pub(crate) fn compute_ram_circuit_snapshots<
         idx,
         (
             (
-                (
-                    ((unsorted_sponge_final_state, sorted_sponge_final_state), lhs_grand_product),
-                    rhs_grand_product,
-                ),
+                (unsorted_sponge_final_state, sorted_sponge_final_state),
                 unsorted_states,
             ),
             sorted_states,
         ),
     ) in it.enumerate()
     {
+
+        let last_sorted_query = sorted_states.last().unwrap().2;
+        let num_nondet_writes_in_chunk = sorted_states
+        .iter()
+        .filter(|el| {
+            let query = &el.2;
+            query.rw_flag == true
+                && query.timestamp.0 == 0
+                && query.location.page.0 == BOOTLOADER_HEAP_PAGE
+        })
+        .count();
+        let amount_of_states = unsorted_states.len();
+
+        // split simulator witness
+        // we need witnesses to pop elements from the front of the queue
+
+        let mut unsorted_encodings:Vec<[Field; 8]> = Vec::with_capacity(amount_of_states);
+        let mut unsorted_witness = FullStateCircuitQueueRawWitness {
+            elements: VecDeque::with_capacity(amount_of_states)
+        };
+        for value in unsorted_states.into_iter() {
+            unsorted_encodings.push(value.0);
+            let witness = value.2.reflect();
+            unsorted_witness.elements.push_back((witness, value.1));
+        }
+
+        let mut sorted_encodings:Vec<[Field; 8]> = Vec::with_capacity(amount_of_states);
+        let mut sorted_witness = FullStateCircuitQueueRawWitness {
+            elements: VecDeque::with_capacity(amount_of_states)
+        };
+        for value in sorted_states.into_iter() {
+            sorted_encodings.push(value.0);
+            let witness = value.2.reflect();
+            sorted_witness.elements.push_back((witness, value.1));
+        }
+
+        // calculate grand product subchains
+
+        let mut lhs_grand_product: Vec<Vec<Field>> =
+        Vec::with_capacity(DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS);
+        let mut rhs_grand_product: Vec<Vec<Field>> =
+        Vec::with_capacity(DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS);
+
+        let if_first = idx == 0;
+        let is_last = idx == num_circuits - 1;
+
+        for idx in 0..DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS {
+            let (lhs_grand_product_chain, rhs_grand_product_chain) = compute_grand_product_subchain(
+                &unsorted_encodings.iter().collect(),
+                &sorted_encodings.iter().collect(),
+                &fs_challenges[idx],
+                current_lhs_product[idx],
+                current_rhs_product[idx],
+                is_last
+            );
+
+            assert_eq!(lhs_grand_product_chain.len(), amount_of_states);
+            assert_eq!(rhs_grand_product_chain.len(), amount_of_states);
+            assert_eq!(
+                lhs_grand_product_chain.len(),
+                unsorted_encodings.len()
+            );
+            assert_eq!(
+                rhs_grand_product_chain.len(),
+                sorted_encodings.len()
+            );
+
+            lhs_grand_product.push(lhs_grand_product_chain);
+            rhs_grand_product.push(rhs_grand_product_chain);
+        }
+
+        drop(unsorted_encodings);
+        drop(sorted_encodings);
+
+        // now we need to have final grand product value that will also become an input for the next circuit
+
+        let new_num_nondet_writes =
+            current_number_of_nondet_writes + (num_nondet_writes_in_chunk as u32);
+
+        let last_unsorted_state = unsorted_sponge_final_state;
+        let last_sorted_state = sorted_sponge_final_state;
+
         assert_eq!(
             lhs_grand_product.len(),
             DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS
@@ -302,49 +324,6 @@ pub(crate) fn compute_ram_circuit_snapshots<
             rhs_grand_product.len(),
             DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS
         );
-
-        // we need witnesses to pop elements from the front of the queue
-
-        let unsorted_witness = FullStateCircuitQueueRawWitness {
-            elements: unsorted_states
-                .into_iter()
-                .map(|el| {
-                    let witness = el.2.reflect();
-                    (witness, el.1)
-                })
-                .collect(),
-        };
-
-        let sorted_witness = FullStateCircuitQueueRawWitness {
-            elements: sorted_states
-                .iter()
-                .map(|el| {
-                    let witness = el.2.reflect();
-                    (witness, el.1)
-                })
-                .collect(),
-        };
-
-        // now we need to have final grand product value that will also become an input for the next circuit
-
-        let if_first = idx == 0;
-        let is_last = idx == num_circuits - 1;
-        // TODO into_iter
-        let num_nondet_writes_in_chunk = sorted_states
-            .iter()
-            .filter(|el| {
-                let query = &el.2;
-                query.rw_flag == true
-                    && query.timestamp.0 == 0
-                    && query.location.page.0 == BOOTLOADER_HEAP_PAGE
-            })
-            .count();
-
-        let new_num_nondet_writes =
-            current_number_of_nondet_writes + (num_nondet_writes_in_chunk as u32);
-
-        let last_unsorted_state = unsorted_sponge_final_state;
-        let last_sorted_state = sorted_sponge_final_state;
 
         let accumulated_lhs: [Field; DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS] =
             lhs_grand_product
@@ -361,7 +340,6 @@ pub(crate) fn compute_ram_circuit_snapshots<
                 .try_into()
                 .unwrap();
 
-        let last_sorted_query = sorted_states.last().unwrap().2;
         use circuit_definitions::encodings::memory_query::*;
         let sorting_key = sorting_key(&last_sorted_query);
         let comparison_key = comparison_key(&last_sorted_query);
@@ -435,7 +413,7 @@ pub(crate) fn compute_ram_circuit_snapshots<
             sorted_queue_witness: sorted_witness,
         };
 
-        if sorted_states.len() % per_circuit_capacity != 0 {
+        if amount_of_states % per_circuit_capacity != 0 {
             // RAM circuit does padding, so all previous values must be reset
             instance_witness
                 .closed_form_input
@@ -475,9 +453,6 @@ pub(crate) fn compute_ram_circuit_snapshots<
             maker.process(instance_witness, circuit_type),
         ));
     }
-
-    drop(lhs_grand_product_chains);
-    drop(rhs_grand_product_chains);
 
     let (
         ram_permutation_circuits,
