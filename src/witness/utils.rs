@@ -545,6 +545,38 @@ pub(crate) fn compute_grand_product_chains<F: SmallField, const N: usize, const 
     rhs_contributions: &Vec<&[F; N]>,
     challenges: &[F; M],
 ) -> (Vec<F>, Vec<F>) {
+    let (lhs_grand_product_chain, rhs_grand_product_chain) = compute_grand_product_subchain(
+        lhs_contributions,
+        rhs_contributions,
+        challenges,
+        F::ONE,
+        F::ONE,
+        true
+    );
+
+    // sanity check
+    match (
+        lhs_grand_product_chain.last(),
+        rhs_grand_product_chain.last(),
+    ) {
+        (Some(lhs), Some(rhs)) => {
+            assert_eq!(lhs, rhs);
+        }
+        (None, None) => {}
+        _ => unreachable!(),
+    }
+
+    (lhs_grand_product_chain, rhs_grand_product_chain)
+}
+
+pub(crate) fn compute_grand_product_subchain<F: SmallField, const N: usize, const M: usize>(
+    lhs_contributions: &Vec<&[F; N]>,
+    rhs_contributions: &Vec<&[F; N]>,
+    challenges: &[F; M],
+    lhs_last_value: F,
+    rhs_last_value: F,
+    is_last: bool
+) -> (Vec<F>, Vec<F>) {
     assert_eq!(N + 1, M);
     let mut lhs_grand_product_chain: Vec<F> = vec![F::ZERO; lhs_contributions.len()];
     let mut rhs_grand_product_chain: Vec<F> = vec![F::ZERO; rhs_contributions.len()];
@@ -581,9 +613,9 @@ pub(crate) fn compute_grand_product_chains<F: SmallField, const N: usize, const 
     elementwise_product(&mut rhs_grand_product_chain, rhs_contributions);
 
     // elementwise products are done, now must fold
-
-    let prepare_intermediates = |grand_product_chain: &Vec<F>| {
-        let mut intermediates = vec![F::ONE];
+    
+    let prepare_intermediates = |grand_product_chain: &Vec<F>, last_value| {
+        let mut intermediates = vec![last_value];
         intermediates.extend(grand_product_chain
             .par_chunks(PARALLELIZATION_CHUNK_SIZE)
             .map(|slice: &[F]| *slice.last().unwrap())
@@ -610,15 +642,17 @@ pub(crate) fn compute_grand_product_chains<F: SmallField, const N: usize, const 
         intermediates
     };
 
-    let lhs_intermediates: Vec<F> = prepare_intermediates(&lhs_grand_product_chain);
-    let rhs_intermediates: Vec<F> = prepare_intermediates(&rhs_grand_product_chain);
+    let lhs_intermediates: Vec<F> = prepare_intermediates(&lhs_grand_product_chain, lhs_last_value);
+    let rhs_intermediates: Vec<F> = prepare_intermediates(&rhs_grand_product_chain, rhs_last_value);
 
-    match (lhs_intermediates.last(), rhs_intermediates.last()) {
-        (Some(lhs), Some(rhs)) => {
-            assert_eq!(lhs, rhs);
+    if is_last {
+        match (lhs_intermediates.last(), rhs_intermediates.last()) {
+            (Some(lhs), Some(rhs)) => {
+                assert_eq!(lhs, rhs);
+            }
+            (None, None) => {}
+            _ => unreachable!(),
         }
-        (None, None) => {}
-        _ => unreachable!(),
     }
 
     let mul_by_intermediates = |grand_product_chain: &mut Vec<F>, intermediates: &Vec<F>| {
@@ -634,22 +668,24 @@ pub(crate) fn compute_grand_product_chains<F: SmallField, const N: usize, const 
             for dst in dst.iter_mut() {
                 dst.mul_assign(&src);
             }
-        });        
+        }); 
     };
 
     mul_by_intermediates(&mut lhs_grand_product_chain, &lhs_intermediates);
     mul_by_intermediates(&mut rhs_grand_product_chain, &rhs_intermediates);
 
-    // sanity check
-    match (
-        lhs_grand_product_chain.last(),
-        rhs_grand_product_chain.last(),
-    ) {
-        (Some(lhs), Some(rhs)) => {
-            assert_eq!(lhs, rhs);
+    if is_last {
+        // sanity check
+        match (
+            lhs_grand_product_chain.last(),
+            rhs_grand_product_chain.last(),
+        ) {
+            (Some(lhs), Some(rhs)) => {
+                assert_eq!(lhs, rhs);
+            }
+            (None, None) => {}
+            _ => unreachable!(),
         }
-        (None, None) => {}
-        _ => unreachable!(),
     }
 
     (lhs_grand_product_chain, rhs_grand_product_chain)
