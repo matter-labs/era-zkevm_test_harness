@@ -553,92 +553,65 @@ pub(crate) fn compute_grand_product_chains<F: SmallField, const N: usize, const 
 
     use rayon::prelude::*;
 
-    lhs_grand_product_chain
+    let elementwise_product = |grand_product_chain: &mut Vec<F>, contributions: &Vec<&[F; N]>| {
+        grand_product_chain
         .par_chunks_mut(PARALLELIZATION_CHUNK_SIZE)
-        .zip(lhs_contributions.par_chunks(PARALLELIZATION_CHUNK_SIZE))
+        .zip(contributions.par_chunks(PARALLELIZATION_CHUNK_SIZE))
         .for_each(|(dst, src)| {
             let mut grand_product = F::ONE;
             for (dst, src) in dst.iter_mut().zip(src.iter()) {
                 let mut acc = challenges[M - 1];
-
+    
                 debug_assert_eq!(challenges[..(M - 1)].len(), src.len());
-
+    
                 for (a, b) in src.iter().zip(challenges[..(M - 1)].iter()) {
                     let mut tmp = *a;
                     tmp.mul_assign(b);
                     acc.add_assign(&tmp);
                 }
-
+    
                 grand_product.mul_assign(&acc);
-
+    
                 *dst = grand_product;
             }
         });
+    };
 
-    rhs_grand_product_chain
-        .par_chunks_mut(PARALLELIZATION_CHUNK_SIZE)
-        .zip(rhs_contributions.par_chunks(PARALLELIZATION_CHUNK_SIZE))
-        .for_each(|(dst, src)| {
-            let mut grand_product = F::ONE;
-            for (dst, src) in dst.iter_mut().zip(src.iter()) {
-                let mut acc = challenges[M - 1];
-
-                debug_assert_eq!(challenges[..(M - 1)].len(), src.len());
-
-                for (a, b) in src.iter().zip(challenges[..(M - 1)].iter()) {
-                    let mut tmp = *a;
-                    tmp.mul_assign(b);
-                    acc.add_assign(&tmp);
-                }
-
-                grand_product.mul_assign(&acc);
-
-                *dst = grand_product;
-            }
-        });
+    elementwise_product(&mut lhs_grand_product_chain, lhs_contributions);
+    elementwise_product(&mut rhs_grand_product_chain, rhs_contributions);
 
     // elementwise products are done, now must fold
 
-    let mut lhs_intermediates: Vec<F> = lhs_grand_product_chain
-        .par_chunks(PARALLELIZATION_CHUNK_SIZE)
-        .map(|slice: &[F]| *slice.last().unwrap())
-        .collect();
+    let prepare_intermediates = |grand_product_chain: &Vec<F>| {
+        let mut intermediates = vec![F::ONE];
+        intermediates.extend(grand_product_chain
+            .par_chunks(PARALLELIZATION_CHUNK_SIZE)
+            .map(|slice: &[F]| *slice.last().unwrap())
+            .collect::<Vec<_>>()
+        );
 
-    let mut rhs_intermediates: Vec<F> = rhs_grand_product_chain
-        .par_chunks(PARALLELIZATION_CHUNK_SIZE)
-        .map(|slice: &[F]| *slice.last().unwrap())
-        .collect();
+        assert_eq!(
+            intermediates.len(),
+            grand_product_chain
+                .chunks(PARALLELIZATION_CHUNK_SIZE)
+                .len() + 1
+        );
 
-    assert_eq!(
-        lhs_intermediates.len(),
-        lhs_grand_product_chain
-            .chunks(PARALLELIZATION_CHUNK_SIZE)
-            .len()
-    );
-    assert_eq!(
-        rhs_intermediates.len(),
-        rhs_grand_product_chain
-            .chunks(PARALLELIZATION_CHUNK_SIZE)
-            .len()
-    );
+        // accumulate intermediate products
+        // we should multiply element [1] by element [0],
+        // element [2] by [0] * [1],
+        // etc
+        let mut acc = F::ONE;
+        for el in intermediates.iter_mut() {
+            let tmp = *el;
+            el.mul_assign(&acc);
+            acc.mul_assign(&tmp);
+        }
+        intermediates
+    };
 
-    // accumulate intermediate products
-    // we should multiply element [1] by element [0],
-    // element [2] by [0] * [1],
-    // etc
-    let mut acc_lhs = F::ONE;
-    for el in lhs_intermediates.iter_mut() {
-        let tmp = *el;
-        el.mul_assign(&acc_lhs);
-        acc_lhs.mul_assign(&tmp);
-    }
-
-    let mut acc_rhs = F::ONE;
-    for el in rhs_intermediates.iter_mut() {
-        let tmp = *el;
-        el.mul_assign(&acc_rhs);
-        acc_rhs.mul_assign(&tmp);
-    }
+    let lhs_intermediates: Vec<F> = prepare_intermediates(&lhs_grand_product_chain);
+    let rhs_intermediates: Vec<F> = prepare_intermediates(&rhs_grand_product_chain);
 
     match (lhs_intermediates.last(), rhs_intermediates.last()) {
         (Some(lhs), Some(rhs)) => {
@@ -648,27 +621,24 @@ pub(crate) fn compute_grand_product_chains<F: SmallField, const N: usize, const 
         _ => unreachable!(),
     }
 
-    lhs_grand_product_chain
+    let mul_by_intermediates = |grand_product_chain: &mut Vec<F>, intermediates: &Vec<F>| {
+        grand_product_chain
         .par_chunks_mut(PARALLELIZATION_CHUNK_SIZE)
-        .skip(1)
-        .zip(lhs_intermediates.par_chunks(1))
+        .zip(intermediates.par_chunks(1))
         .for_each(|(dst, src)| {
             let src = src[0];
-            for dst in dst.iter_mut() {
-                dst.mul_assign(&src);
+            if src == F::ONE {
+                return;
             }
-        });
 
-    rhs_grand_product_chain
-        .par_chunks_mut(PARALLELIZATION_CHUNK_SIZE)
-        .skip(1)
-        .zip(rhs_intermediates.par_chunks(1))
-        .for_each(|(dst, src)| {
-            let src = src[0];
             for dst in dst.iter_mut() {
                 dst.mul_assign(&src);
             }
-        });
+        });        
+    };
+
+    mul_by_intermediates(&mut lhs_grand_product_chain, &lhs_intermediates);
+    mul_by_intermediates(&mut rhs_grand_product_chain, &rhs_intermediates);
 
     // sanity check
     match (
