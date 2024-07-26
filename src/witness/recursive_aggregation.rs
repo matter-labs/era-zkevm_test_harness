@@ -79,10 +79,10 @@ pub fn create_leaf_witnesses(
     leaf_params: (u8, RecursionLeafParametersWitness<F>), // (cirtuit_type, and ??)
 ) -> (
     Vec<(
-        u64,                         // type of the basic circuit
-        RecursionQueueSimulator<F>,  // chunk
-        ZkSyncRecursiveLayerCircuit, // proof for that chunk
+        u64,                        // type of the basic circuit
+        RecursionQueueSimulator<F>, // chunk
     )>,
+    Vec<ZkSyncRecursiveLayerCircuit>, // proofs for chunks
     Vec<ZkSyncBaseLayerClosedFormInput<F>>,
 ) {
     let round_function = ZkSyncDefaultRoundFunction::default();
@@ -98,6 +98,7 @@ pub fn create_leaf_witnesses(
     let mut proofs_iter = proofs.into_iter();
 
     let mut results = Vec::with_capacity(queue_splits.len());
+    let mut recursive_circuits = Vec::with_capacity(queue_splits.len());
 
     for el in queue_splits.iter().cloned() {
         let mut proof_witnesses = VecDeque::new();
@@ -149,15 +150,11 @@ pub fn create_leaf_witnesses(
             circuit,
         );
 
-        results.push((
-            circuit_type,
-            el,
-            circuit,
-            // leaf_input,
-        ));
+        results.push((circuit_type, el));
+        recursive_circuits.push(circuit);
     }
 
-    (results, closed_form_inputs)
+    (results, recursive_circuits, closed_form_inputs)
 }
 
 pub fn compute_leaf_params(
@@ -264,19 +261,20 @@ pub fn compute_node_vk_commitment(
 /// Creates nodes witnesses, one witness is aggregating up to RECURSION_ARITY (32) leaves (or nodes) of a single circuit type.
 pub fn create_node_witnesses(
     chunks: Vec<(
-        u64,                         // circuit type
-        RecursionQueueSimulator<F>,  // chunk
-        ZkSyncRecursiveLayerCircuit, // proof for that chunk
+        u64,                        // circuit type
+        RecursionQueueSimulator<F>, // chunk
     )>,
     proofs: Vec<ZkSyncRecursionLayerProof>,
     vk: ZkSyncRecursionLayerVerificationKey,
     node_vk_commitment: [F; VK_COMMITMENT_LENGTH],
     leaf_layer_params: &Vec<(u8, RecursionLeafParametersWitness<F>)>,
-) -> Vec<(
-    u64,
-    RecursionQueueSimulator<F>,  // chunk
-    ZkSyncRecursiveLayerCircuit, // proof for that chunk
-)> {
+) -> (
+    Vec<(
+        u64,
+        RecursionQueueSimulator<F>, // chunks
+    )>,
+    Vec<ZkSyncRecursiveLayerCircuit>, // proofs for chunks
+) {
     use crate::boojum::gadgets::queue::QueueState;
     use crate::zkevm_circuits::recursion::NUM_BASE_LAYER_CIRCUITS;
 
@@ -319,11 +317,12 @@ pub fn create_node_witnesses(
     };
 
     let mut results = vec![];
+    let mut recursive_circuits = vec![];
 
     for chunk in chunks.chunks(RECURSION_ARITY) {
         assert!(chunk.len() > 0);
         // if chunk exists it's elements are non-trivial
-        for (_, c, _) in chunk.iter() {
+        for (_, c) in chunk.iter() {
             assert!(c.num_items > 0);
         }
         let num_chunks = chunk.len();
@@ -340,7 +339,7 @@ pub fn create_node_witnesses(
         let mut it = chunk.into_iter();
 
         // Take the first chunk (guaranteed to exist)
-        let (circuit_type, queue, _) = (&mut it).next().unwrap();
+        let (circuit_type, queue) = (&mut it).next().unwrap();
         let circuit_type = *circuit_type;
         let mut queue = queue.clone();
         split_points.push(QueueTailStateWitness {
@@ -349,7 +348,7 @@ pub fn create_node_witnesses(
         });
 
         // merge all of them, and record split points
-        for (_, c, _) in it {
+        for (_, c) in it {
             // Split point is a tail of the subqueue
             split_points.push(QueueTailStateWitness {
                 tail: c.tail,
@@ -407,10 +406,11 @@ pub fn create_node_witnesses(
 
         let circuit = ZkSyncRecursiveLayerCircuit::NodeLayerCircuit(circuit);
 
-        results.push((circuit_type, queue, circuit));
+        results.push((circuit_type, queue));
+        recursive_circuits.push(circuit);
     }
 
     assert!(proofs_iter.next().is_none());
 
-    results
+    (results, recursive_circuits)
 }
