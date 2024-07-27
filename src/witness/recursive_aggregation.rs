@@ -44,29 +44,6 @@ use circuit_definitions::circuit_definitions::recursion_layer::{
 use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::encodings::CircuitEquivalentReflection;
 
-pub(crate) fn compute_encodable_item_from_witness<
-    T: CSAllocatable<F> + CircuitVarLengthEncodable<F>,
-    const N: usize,
-    CS: ConstraintSystem<F>,
-    R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-        + AlgebraicRoundFunction<F, 8, 12, 4>
-        + serde::Serialize
-        + serde::de::DeserializeOwned,
->(
-    wit: T::Witness,
-    cs: &mut CS,
-    round_function: &R,
-) -> [F; N] {
-    // allocate in full
-
-    let element = T::allocate(cs, wit);
-
-    let commitment = commit_variable_length_encodable_item(cs, &element, round_function);
-    let commitment = commitment.witness_hook(&*cs)().unwrap();
-
-    commitment
-}
-
 /// Creates leaf witnesses: each leaf aggregates RECURSION_ARITY (32) basic circuits of a given type.
 pub fn create_leaf_witnesses(
     subset: (
@@ -177,31 +154,21 @@ pub fn compute_leaf_params(
         leaf_layer_vk.numeric_circuit_type()
     );
 
-    let mut cs_for_witness_generation =
-        create_cs_for_witness_generation::<F, ZkSyncDefaultRoundFunction>(
-            TRACE_LEN_LOG_2_FOR_CALCULATION,
-            MAX_VARS_LOG_2_FOR_CALCULATION,
-        );
-
-    let base_vk_commitment: [_; VK_COMMITMENT_LENGTH] = compute_encodable_item_from_witness::<
+    let base_vk_commitment: [_; VK_COMMITMENT_LENGTH] = compute_encodable_item_from_witness_dummy_cs::<
         AllocatedVerificationKey<F, H>,
         VK_COMMITMENT_LENGTH,
-        _,
         _,
     >(
         base_layer_vk.into_inner(),
-        &mut cs_for_witness_generation,
         &round_function,
     );
 
-    let leaf_vk_commitment: [_; VK_COMMITMENT_LENGTH] = compute_encodable_item_from_witness::<
+    let leaf_vk_commitment: [_; VK_COMMITMENT_LENGTH] = compute_encodable_item_from_witness_dummy_cs::<
         AllocatedVerificationKey<F, H>,
         VK_COMMITMENT_LENGTH,
         _,
-        _,
     >(
         leaf_layer_vk.into_inner(),
-        &mut cs_for_witness_generation,
         &round_function,
     );
 
@@ -219,19 +186,13 @@ pub fn compute_leaf_vks_and_params_commitment(
 ) -> [F; LEAF_LAYER_PARAMETERS_COMMITMENT_LENGTH] {
     let round_function = ZkSyncDefaultRoundFunction::default();
     use crate::witness::utils::*;
-    let mut cs_for_witness_generation =
-        create_cs_for_witness_generation::<F, ZkSyncDefaultRoundFunction>(
-            TRACE_LEN_LOG_2_FOR_CALCULATION,
-            MAX_VARS_LOG_2_FOR_CALCULATION,
-        );
 
     let params_commitment: [_; LEAF_LAYER_PARAMETERS_COMMITMENT_LENGTH] =
-        compute_encodable_item_from_witness::<
+        compute_encodable_item_from_witness_dummy_cs::<
             [RecursionLeafParameters<F>; NUM_CIRCUIT_TYPES_TO_SCHEDULE],
             LEAF_LAYER_PARAMETERS_COMMITMENT_LENGTH,
             _,
-            _,
-        >(leaf_params, &mut cs_for_witness_generation, &round_function);
+        >(leaf_params,  &round_function);
 
     params_commitment
 }
@@ -241,20 +202,13 @@ pub fn compute_node_vk_commitment(
 ) -> [F; VK_COMMITMENT_LENGTH] {
     let round_function = ZkSyncDefaultRoundFunction::default();
     use crate::witness::utils::*;
-    let mut cs_for_witness_generation =
-        create_cs_for_witness_generation::<F, ZkSyncDefaultRoundFunction>(
-            TRACE_LEN_LOG_2_FOR_CALCULATION,
-            MAX_VARS_LOG_2_FOR_CALCULATION,
-        );
 
-    let vk_commitment: [_; VK_COMMITMENT_LENGTH] = compute_encodable_item_from_witness::<
+    let vk_commitment: [_; VK_COMMITMENT_LENGTH] = compute_encodable_item_from_witness_dummy_cs::<
         AllocatedVerificationKey<F, H>,
         VK_COMMITMENT_LENGTH,
         _,
-        _,
     >(
         node_vk.into_inner(),
-        &mut cs_for_witness_generation,
         &round_function,
     );
 

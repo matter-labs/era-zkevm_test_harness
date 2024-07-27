@@ -10,6 +10,7 @@ mod aux_data_structs;
 pub mod tracer;
 pub mod tree;
 pub mod utils;
+pub(crate) mod dummy_cs;
 
 // pub mod vk_set_generator;
 // pub mod block_header;

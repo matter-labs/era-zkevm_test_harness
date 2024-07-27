@@ -22,6 +22,8 @@ use crate::zkevm_circuits::base_structures::vm_state::{
     FULL_SPONGE_QUEUE_STATE_WIDTH, QUEUE_STATE_WIDTH,
 };
 use crate::zkevm_circuits::fsm_input_output::circuit_inputs::INPUT_OUTPUT_COMMITMENT_LENGTH;
+use boojum::cs::Place;
+use boojum::dag::CSWitnessValues;
 use circuit_definitions::boojum::cs::gates::lookup_marker::LookupFormalGate;
 use circuit_definitions::boojum::cs::gates::ConstantToVariableMappingToolMarker;
 use circuit_definitions::boojum::cs::gates::FmaGateInBaseWithoutConstantParams;
@@ -30,6 +32,7 @@ use circuit_definitions::boojum::cs::GateTypeEntry;
 use circuit_definitions::boojum::cs::Tool;
 use circuit_definitions::boojum::cs::Variable;
 use circuit_definitions::encodings::*;
+use dummy_cs::CSDummyImplementation;
 use individual_circuits::main_vm::VmInCircuitAuxilaryParameters;
 use individual_circuits::main_vm::VmInstanceWitness;
 
@@ -695,4 +698,102 @@ pub fn transpose_chunks<T: Clone>(original: &Vec<Vec<T>>, chunk_size: usize) -> 
     }
 
     transposed
+}
+
+pub fn commit_encoding_round_function<
+    F: SmallField,
+    const AW: usize,
+    const SW: usize,
+    const CW: usize,
+    const N: usize,
+    R: AlgebraicRoundFunction<F, AW, SW, CW>,
+>(
+    input: &[F],
+    _round_function: &R,
+) -> [F; N] {
+    // we use length specialization here
+    let expected_length = input.len();
+
+    let mut state = R::initial_state();
+    R::specialize_for_len(expected_length as u32, &mut state);
+
+    // pad with zeroes
+
+    let mut buffer_length = expected_length / AW;
+    if expected_length % AW != 0 {
+        buffer_length += 1;
+    }
+
+    buffer_length *= AW;
+
+    let mut buffer = Vec::with_capacity(buffer_length);
+    buffer.extend_from_slice(input);
+
+    buffer.resize(buffer_length, F::ZERO);
+
+    for chunk in buffer.array_chunks::<AW>() {
+        R::absorb_into_state::<AbsorptionModeOverwrite>(&mut state, chunk);
+        R::round_function(&mut state);
+    }
+
+    let output = R::state_into_commitment::<N>(&state);
+    output
+}
+
+pub fn commit_variable_length_encodable_item_round_function<
+    F: SmallField,
+    CS: ConstraintSystem<F>,
+    T: CircuitVarLengthEncodable<F>,
+    const AW: usize,
+    const SW: usize,
+    const CW: usize,
+    const N: usize,
+    R: AlgebraicRoundFunction<F, AW, SW, CW>,
+>(
+    cs: &mut CS,
+    item: &T,
+    _round_function: &R,
+) -> [F; N] {
+    let expected_length = item.encoding_length();
+
+    let mut buffer = Vec::with_capacity(expected_length);
+    item.encode_to_buffer(cs, &mut buffer);
+
+    assert_eq!(buffer.len(), expected_length);
+
+    let buffer: Vec<_> = buffer.into_iter().map(
+        |x| {
+            let wit = cs.get_value(Place::from_variable(x));
+
+            if let CSWitnessValues::Ready(x) = wit {
+                return x[0];
+            } else {
+                unreachable!();
+            }
+        }
+    ).collect();
+
+    commit_encoding_round_function::<F, AW, SW, CW, N, R>(&buffer, _round_function)
+}
+
+pub(crate) fn compute_encodable_item_from_witness_dummy_cs<
+    T: CSAllocatable<GoldilocksField> + CircuitVarLengthEncodable<GoldilocksField>,
+    const N: usize,
+    R: BuildableCircuitRoundFunction<GoldilocksField, 8, 12, 4>
+        + AlgebraicRoundFunction<GoldilocksField, 8, 12, 4>
+        + serde::Serialize
+        + serde::de::DeserializeOwned,
+>(
+    wit: T::Witness,
+    round_function: &R,
+) -> [GoldilocksField; N] {
+    // allocate in full
+
+    let mut cs: CSDummyImplementation<GoldilocksField> = CSDummyImplementation::new();
+
+    let element = T::allocate(&mut cs, wit);
+
+    let commitment = commit_variable_length_encodable_item_round_function(&mut cs, &element, round_function);
+
+    commitment
 }
