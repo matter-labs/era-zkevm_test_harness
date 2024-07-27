@@ -9,6 +9,7 @@ use crate::witness::postprocessing::{
     ClosedFormInputField, CsForWitnessGeneration, FirstAndLastCircuitWitness,
 };
 use crate::witness::tracer::vm_snapshot::VmSnapshot;
+use crate::witness::utils::{create_cs_for_witness_generation, simulate_public_input_value_from_witness_dummy_cs, MAX_VARS_LOG_2_FOR_CALCULATION, TRACE_LEN_LOG_2_FOR_CALCULATION};
 use crate::zk_evm::aux_structures::MemoryQuery;
 use crate::zk_evm::vm_state::VmLocalState;
 use crate::zkevm_circuits::base_structures::vm_state::{
@@ -344,7 +345,6 @@ pub(crate) fn process_main_vm<
     flat_new_frames_history: Vec<(Cycle, CallStackEntry)>,
     mut vm_snapshots: Vec<VmSnapshot>,
     round_function: Poseidon2Goldilocks,
-    cs_for_witness_generation: &mut CsForWitnessGeneration,
     circuit_callback: &mut CB,
     recursion_queue_callback: &mut QSCB,
 ) -> (
@@ -371,9 +371,8 @@ pub(crate) fn process_main_vm<
             circuit_input.closed_form_input.observable_input =
                 observable_input.as_ref().unwrap().clone();
         }
-
-        let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
-            cs_for_witness_generation.take_cs(),
+        
+        let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness_dummy_cs(
             circuit_input.closed_form_input.clone(),
             &round_function,
         );

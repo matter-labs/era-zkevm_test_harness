@@ -364,17 +364,16 @@ impl CsForWitnessGeneration {
     }
 }
 
-pub(crate) struct CircuitMaker<'a, T: ClosedFormInputField<GoldilocksField>> {
+pub(crate) struct CircuitMaker<T: ClosedFormInputField<GoldilocksField>> {
     geometry: u32,
     round_function: Poseidon2Goldilocks,
     observable_input: Option<<T::IN as CSAllocatable<GoldilocksField>>::Witness>,
-    cs_for_witness_generation: &'a mut CsForWitnessGeneration,
     recurion_queue_simulator: RecursionQueueSimulator<GoldilocksField>,
     compact_form_witnesses: Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
     extremes: FirstAndLastCircuitWitness<ObservableWitness<GoldilocksField, T>>,
 }
 
-impl<'a, T> CircuitMaker<'a, T>
+impl<T> CircuitMaker<T>
 where
     T: ClosedFormInputField<GoldilocksField>,
     <T::T as CSAllocatable<GoldilocksField>>::Witness:
@@ -386,14 +385,12 @@ where
 {
     pub(crate) fn new(
         geometry: u32,
-        round_function: Poseidon2Goldilocks,
-        cs_for_witness_generation: &'a mut CsForWitnessGeneration,
+        round_function: Poseidon2Goldilocks
     ) -> Self {
         Self {
             geometry,
             round_function,
             observable_input: None,
-            cs_for_witness_generation,
             recurion_queue_simulator: RecursionQueueSimulator::empty(),
             compact_form_witnesses: vec![],
             extremes: FirstAndLastCircuitWitness::default(),
@@ -421,8 +418,7 @@ where
                 self.observable_input.as_ref().unwrap().clone();
         }
 
-        let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
-            self.cs_for_witness_generation.take_cs(),
+        let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness_dummy_cs(
             circuit_input.closed_form_input().clone(),
             &self.round_function,
         );
@@ -509,8 +505,7 @@ pub(crate) fn make_circuits<
     circuits_data: Vec<T>,
     round_function: Poseidon2Goldilocks,
     mut circuit_callback: CB,
-    recursion_queue_callback: &mut QSCB,
-    cs_for_witness_generation: &mut CsForWitnessGeneration,
+    recursion_queue_callback: &mut QSCB
 ) -> (
     FirstAndLastCircuitWitness<ObservableWitness<GoldilocksField, T>>,
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
@@ -529,7 +524,7 @@ where
         RoundFunction = Poseidon2Goldilocks,
     >,
 {
-    let mut maker = CircuitMaker::new(geometry, round_function.clone(), cs_for_witness_generation);
+    let mut maker = CircuitMaker::new(geometry, round_function.clone());
 
     for circuit_input in circuits_data.into_iter() {
         circuit_callback(maker.process(circuit_input, circuit_type));

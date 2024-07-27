@@ -35,6 +35,7 @@ use circuit_definitions::encodings::*;
 use dummy_cs::CSDummyImplementation;
 use individual_circuits::main_vm::VmInCircuitAuxilaryParameters;
 use individual_circuits::main_vm::VmInstanceWitness;
+use serde::Serialize;
 
 use super::*;
 
@@ -300,6 +301,134 @@ where
     let public_input = input_commitment.witness_hook(&*cs)().unwrap();
 
     (public_input, compact_form_witness)
+}
+
+pub fn simulate_public_input_value_from_witness_dummy_cs<
+    F: SmallField,
+    const AW: usize,
+    const SW: usize,
+    const CW: usize,
+    R: AlgebraicRoundFunction<F, AW, SW, CW>,
+    T: Clone + std::fmt::Debug + CSAllocatable<F> + CircuitVarLengthEncodable<F> + WitnessHookable<F>,
+    IN: Clone + std::fmt::Debug + CSAllocatable<F> + CircuitVarLengthEncodable<F> + WitnessHookable<F>,
+    OUT: Clone + std::fmt::Debug + CSAllocatable<F> + CircuitVarLengthEncodable<F> + WitnessHookable<F>,
+>(
+    input_witness: ClosedFormInputWitness<F, T, IN, OUT>,
+    round_function: &R,
+) -> (
+    [F; INPUT_OUTPUT_COMMITMENT_LENGTH],
+    ClosedFormInputCompactFormWitness<F>,
+)
+where
+    <T as CSAllocatable<F>>::Witness: serde::Serialize + serde::de::DeserializeOwned + Eq,
+    <IN as CSAllocatable<F>>::Witness: serde::Serialize + serde::de::DeserializeOwned + Eq,
+    <OUT as CSAllocatable<F>>::Witness: serde::Serialize + serde::de::DeserializeOwned + Eq,
+{
+    let mut cs: CSDummyImplementation<F> = CSDummyImplementation::new();
+
+    // allocate in full
+    let full_input = ClosedFormInput::allocate(&mut cs, input_witness);
+
+    // compute the encoding and committment of compact form
+    let compact_form_witness = closed_form_witness_from_full_form(&mut cs, &full_input, round_function);
+
+    let compact_form = ClosedFormInputCompactForm::allocate(&mut cs, compact_form_witness.clone());
+
+    let public_input = commit_variable_length_encodable_item_round_function(&mut cs, &compact_form, round_function);
+
+    (public_input, compact_form_witness)
+}
+
+pub fn closed_form_witness_from_full_form<
+F: SmallField,
+const AW: usize,
+const SW: usize,
+const CW: usize,
+CS: ConstraintSystem<F>,
+T: Clone
+    + std::fmt::Debug
+    + CSAllocatable<F>
+    + CircuitVarLengthEncodable<F>
+    + WitnessHookable<F>,
+IN: Clone
+    + std::fmt::Debug
+    + CSAllocatable<F>
+    + CircuitVarLengthEncodable<F>
+    + WitnessHookable<F>,
+OUT: Clone
+    + std::fmt::Debug
+    + CSAllocatable<F>
+    + CircuitVarLengthEncodable<F>
+    + WitnessHookable<F>,
+R: AlgebraicRoundFunction<F, AW, SW, CW>,
+>(
+    cs: &mut CS,
+    full_form: &ClosedFormInput<F, T, IN, OUT>,
+    round_function: &R,
+) -> ClosedFormInputCompactFormWitness<F>
+where
+<T as CSAllocatable<F>>::Witness: serde::Serialize + serde::de::DeserializeOwned + Eq,
+<IN as CSAllocatable<F>>::Witness: serde::Serialize + serde::de::DeserializeOwned + Eq,
+<OUT as CSAllocatable<F>>::Witness: serde::Serialize + serde::de::DeserializeOwned + Eq,
+{
+    let observable_input_committment =
+    commit_variable_length_encodable_item_round_function(cs, &full_form.observable_input, round_function);
+    let observable_output_committment =
+    commit_variable_length_encodable_item_round_function(cs, &full_form.observable_output, round_function);
+
+    let hidden_fsm_input_committment =
+    commit_variable_length_encodable_item_round_function(cs, &full_form.hidden_fsm_input, round_function);
+    let hidden_fsm_output_committment =
+    commit_variable_length_encodable_item_round_function(cs, &full_form.hidden_fsm_output, round_function);
+
+    // mask FSM part. Observable part is NEVER masked
+
+    let empty_committment = [F::ZERO; CLOSED_FORM_COMMITTMENT_LENGTH];
+
+    let get_value = |variable| {
+        let wit = cs.get_value(Place::from_variable(variable));
+
+        if let CSWitnessValues::Ready(x) = wit {
+            return x[0];
+        } else {
+            unreachable!();
+        }
+    };
+    let start_flag = get_value(full_form.start_flag.get_variable()) == F::from_u64_unchecked(true as u64);
+    let completion_flag = get_value(full_form.completion_flag.get_variable()) == F::from_u64_unchecked(true as u64);
+
+    // mask FSM part. Observable part is NEVER masked
+
+    let hidden_fsm_input_committment = if start_flag {
+        empty_committment.clone()
+    } else {
+        hidden_fsm_input_committment.clone()
+    };
+
+    // mask output. Observable output is zero is not the last indeed
+    let observable_output_committment = if completion_flag {
+        observable_output_committment.clone()
+    } else {
+        empty_committment.clone()
+    };
+
+    // and vice versa for FSM
+    let hidden_fsm_output_committment = if completion_flag {
+        empty_committment.clone()
+    } else {
+        hidden_fsm_output_committment.clone()
+    };
+
+    let new = ClosedFormInputCompactFormWitness {
+        start_flag,
+        completion_flag,
+        observable_input_committment,
+        observable_output_committment,
+        hidden_fsm_input_committment,
+        hidden_fsm_output_committment,
+    };
+
+new
 }
 
 pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(

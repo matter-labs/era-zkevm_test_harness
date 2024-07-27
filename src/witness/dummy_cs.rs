@@ -1,19 +1,41 @@
-use std::{collections::HashMap, marker::PhantomData};
+use std::{any::TypeId, collections::HashMap, marker::PhantomData};
 
-use circuit_definitions::boojum::{config::{CSConfig, CSResolverConfig, ProvingCSConfig}, cs::{gates::{ConstantToVariableMappingTool, ConstantToVariableMappingToolMarker, Poseidon2RoundFunctionFlattenedEvaluator}, implementations::lookup_table::{LookupTable, LookupTableWrapper, Wrappable}, traits::{cs::{ConstraintSystem, DstBuffer}, evaluator::GateConstraintEvaluator, gate::Gate}, CSGeometry, GateConfigurationHolder, GateTool, LookupParameters, Place, StaticToolboxHolder, Tool, Variable, Witness}, dag::{CSWitnessValues, CircuitResolver, DefaultCircuitResolver, NullCircuitResolver}, field::{self, SmallField}};
+use circuit_definitions::boojum::{config::{CSConfig, CSResolverConfig, DoEvaluateWitenss, DontEvaluateWitenss, DontKeepSetup, DontPerformRuntimeAsserts, ProvingCSConfig, Resolver}, cs::{gates::{ConstantToVariableMappingTool, ConstantToVariableMappingToolMarker, Poseidon2RoundFunctionFlattenedEvaluator}, implementations::lookup_table::{LookupTable, LookupTableWrapper, Wrappable}, traits::{cs::{ConstraintSystem, DstBuffer}, evaluator::GateConstraintEvaluator, gate::Gate}, CSGeometry, GateConfigurationHolder, GateTool, LookupParameters, Place, StaticToolboxHolder, Tool, Variable, Witness}, dag::{CSWitnessValues, CircuitResolver, DefaultCircuitResolver, NullCircuitResolver}, field::{self, SmallField}, gadgets::{tables::BinopTable, u32::UInt32DecompositionTooling}, utils::PipeOp};
+use derivative::Derivative;
+
+#[derive(Derivative)]
+#[derivative(Clone, Copy, Debug)]
+pub struct DummyCSConfig;
+
+impl CSConfig for DummyCSConfig {
+    type WitnessConfig = DoEvaluateWitenss;
+    type DebugConfig = DontPerformRuntimeAsserts;
+    type SetupConfig = DontKeepSetup;
+    type ResolverConfig = Resolver<DontPerformRuntimeAsserts>;
+}
 
 pub struct CSDummyImplementation<F: 'static + Send + Sync> {
     _marker: PhantomData<F>,
     storage: HashMap<Place, F>,
-    next_available_place_idx: u64
+    next_available_place_idx: u64,
+    toolbox: (Tool<ConstantToVariableMappingToolMarker, ConstantToVariableMappingTool<F>>, ()),
+    pub(crate) dynamic_tools:
+        HashMap<TypeId, (TypeId, Box<dyn std::any::Any + Send + Sync + 'static>)>,
+    pub(crate) lookup_table_marker_into_id: HashMap<TypeId, u32>,
 }
 
 impl<F: 'static + Send + Sync> CSDummyImplementation<F> {
     pub fn new() -> Self {
+        let toolbox = ().add_tool(ConstantToVariableMappingTool::<F>::new());
+        let mut lookup_table_marker_into_id: HashMap<_,_> = Default::default();
+        lookup_table_marker_into_id.insert(std::any::TypeId::of::<BinopTable>(), 0);
         Self {
             _marker: PhantomData,
             storage: Default::default(),
-            next_available_place_idx: 0
+            next_available_place_idx: 0,
+            toolbox,
+            dynamic_tools: Default::default(),
+            lookup_table_marker_into_id
         }
     }
 }
@@ -87,8 +109,8 @@ impl<
         F: SmallField,
     > ConstraintSystem<F> for CSDummyImplementation<F>
 {
-    type Config = ProvingCSConfig;
-    type WitnessSource = NullCircuitResolver<F, <ProvingCSConfig as CSConfig>::ResolverConfig>;
+    type Config = DummyCSConfig;
+    type WitnessSource = NullCircuitResolver<F, <DummyCSConfig as CSConfig>::ResolverConfig>;
     type GatesConfig = DummyGateConfigurationHolder<F>;
     type StaticToolbox = (Tool<ConstantToVariableMappingToolMarker, ConstantToVariableMappingTool<F>>, ());
 
@@ -109,7 +131,7 @@ impl<
 
     #[inline(always)]
     fn get_static_toolbox_mut(&mut self) -> &mut Self::StaticToolbox {
-        unimplemented!();
+        &mut self.toolbox
     }
 
     // for 1 variable
@@ -122,7 +144,14 @@ impl<
     }
     #[inline]
     fn alloc_multiple_variables_without_values<const N: usize>(&mut self) -> [Variable; N] {
-        unimplemented!();
+        debug_assert!(N < u32::MAX as usize);
+        let current_idx = self.next_available_place_idx;
+        self.next_available_place_idx += N as u64;
+
+        let result: [Variable; N] =
+            std::array::from_fn(|i| Variable::from_variable_index(current_idx + (i as u64)));
+
+        result
     }
     #[inline]
     fn alloc_witness_without_value(&mut self) -> Witness {
@@ -147,11 +176,23 @@ impl<
         FN: FnOnce([F; INS]) -> [F; OUTS] + 'static + Send + Sync,
     >(
         &mut self,
-        _dependencies: &[Place; INS],
-        _outputs: &[Place; OUTS],
-        _value_fn: FN,
+        dependencies: &[Place; INS],
+        outputs: &[Place; OUTS],
+        value_fn: FN,
     ) {
-        unimplemented!();
+        let get_value = |place| {
+            let wit = self.get_value(place);
+    
+            if let CSWitnessValues::Ready(x) = wit {
+                return x[0];
+            } else {
+                unreachable!();
+            }
+        };
+
+        let ins = dependencies.map(|x| get_value(x));
+        let outputs_values = value_fn(ins);
+        self.set_values(outputs, outputs_values);
     }
 
     #[track_caller]
@@ -160,11 +201,27 @@ impl<
         FN: FnOnce(&[F], &mut DstBuffer<'_, '_, F>) + 'static + Send + Sync,
     >(
         &mut self,
-        _dependencies: &[Place],
-        _outputs: &[Place],
-        _value_fn: FN,
+        dependencies: &[Place],
+        outputs: &[Place],
+        value_fn: FN,
     ) {
-        unimplemented!();
+        let get_value = |place| {
+            let wit = self.get_value(place);
+    
+            if let CSWitnessValues::Ready(x) = wit {
+                return x[0];
+            } else {
+                unreachable!();
+            }
+        };
+
+        let ins: Vec<_> = dependencies.iter().map(|x| get_value(*x)).collect();
+        let mut outputs_values = vec![];
+        value_fn(&ins, &mut DstBuffer::Vector(&mut outputs_values));
+        
+        for (output, value) in outputs.iter().zip(outputs_values) {
+            self.set_values(&[*output], [value])
+        }
     }
 
     // Getters
@@ -195,16 +252,62 @@ impl<
 
     // Gate tooling
     #[inline]
-    fn add_dynamic_tool<M: 'static + Send + Sync, TT: GateTool>(&mut self, _tool: TT) {
-        unimplemented!();
+    fn add_dynamic_tool<M: 'static + Send + Sync, TT: GateTool>(&mut self, tool: TT) {
+        let marker_id = std::any::TypeId::of::<M>();
+        let type_id = std::any::TypeId::of::<TT>();
+        let as_box_any = Box::new(tool) as Box<dyn std::any::Any + Send + Sync + 'static>;
+        let existing = self.dynamic_tools.insert(marker_id, (type_id, as_box_any));
+        assert!(existing.is_none());
     }
     #[inline]
     fn get_dynamic_tool<M: 'static + Send + Sync, TT: GateTool>(&self) -> Option<&TT> {
-        unimplemented!();
+        let marker_id = std::any::TypeId::of::<M>();
+        let type_id = std::any::TypeId::of::<TT>();
+        let (expected_type_id, as_any_ref) = self
+            .dynamic_tools
+            .get(&marker_id)
+            .map(|el| (&el.0, &el.1))
+            .unzip();
+        if let Some(expected_type_id) = expected_type_id {
+            if expected_type_id != &type_id {
+                panic!(
+                    "Trying to get tooling for marker {} with mismathing type",
+                    std::any::type_name::<M>()
+                );
+            }
+        }
+        as_any_ref.map(|el| {
+            el.downcast_ref().expect(&format!(
+                "must downcast to proper tool type for type ID {:?} and marker {}",
+                type_id,
+                std::any::type_name::<M>(),
+            ))
+        })
     }
     #[inline]
     fn get_dynamic_tool_mut<M: 'static + Send + Sync, TT: GateTool>(&mut self) -> Option<&mut TT> {
-        unimplemented!();
+        let marker_id = std::any::TypeId::of::<M>();
+        let type_id = std::any::TypeId::of::<TT>();
+        let (expected_type_id, as_any_ref) = self
+            .dynamic_tools
+            .get_mut(&marker_id)
+            .map(|el| (&mut el.0, &mut el.1))
+            .unzip();
+        if let Some(expected_type_id) = expected_type_id {
+            if expected_type_id != &type_id {
+                panic!(
+                    "Trying to get tooling for marker {} with mismathing type",
+                    std::any::type_name::<M>()
+                );
+            }
+        }
+        as_any_ref.map(|el| {
+            el.downcast_mut().expect(&format!(
+                "must downcast to proper tool type for type ID {:?} and marker {}",
+                type_id,
+                std::any::type_name::<M>(),
+            ))
+        })
     }
     #[inline]
     fn take_dynamic_tool<M: 'static + Send + Sync, TT: GateTool>(&mut self) -> Option<TT> {
@@ -221,7 +324,7 @@ impl<
 
     #[inline]
     fn gate_is_allowed<G: Gate<F>>(&self) -> bool {
-        false
+        true
     }
 
     #[inline]
@@ -304,13 +407,41 @@ impl<
 
     fn perform_lookup<const KEYS: usize, const VALUES: usize>(
         &mut self,
-        _table_id: u32,
-        _keys: &[Variable; KEYS],
+        table_id: u32,
+        keys: &[Variable; KEYS],
     ) -> [Variable; VALUES]
     where
         [(); KEYS + VALUES]:,
     {
-        unimplemented!();
+        if table_id != 0 {
+            unimplemented!();
+        }
+
+        // BINARYOP "lookup"
+        let get_value = |variable| {
+            let wit = self.get_value(Place::from_variable(variable));
+    
+            if let CSWitnessValues::Ready(x) = wit {
+                return x[0];
+            } else {
+                unreachable!();
+            }
+        };
+
+        let key_0 = get_value(keys[0]);
+        let key_1 = get_value(keys[1]);
+
+        let a = key_0.as_u64_reduced() as u8;
+        let b = key_1.as_u64_reduced() as u8;
+
+        let xor_result = a ^ b;
+        let or_result = a | b;
+        let and_result = a & b;
+        let value = (xor_result as u64) << 32 | (or_result as u64) << 16 | (and_result as u64);
+        
+        let var = self.alloc_single_variable_from_witness(F::from_u64_unchecked(value));
+        [var; VALUES]
+        
     }
 
     fn enforce_lookup<const N: usize>(&mut self, _table_id: u32,_keys_and_valuess: &[Variable; N]) {
@@ -338,7 +469,9 @@ impl<
     }
     #[inline]
     fn get_table_id_for_marker<M: 'static + Send + Sync>(&self) -> Option<u32> {
-        unimplemented!();
+        self.lookup_table_marker_into_id
+            .get(&std::any::TypeId::of::<M>())
+            .copied()
     }
     #[inline]
     fn get_table(&self, _table_num: u32) -> std::sync::Arc<LookupTableWrapper<F>> {

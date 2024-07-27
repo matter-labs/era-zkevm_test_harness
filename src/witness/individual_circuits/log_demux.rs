@@ -182,7 +182,6 @@ pub(crate) fn process_logs_demux_and_make_circuits<
     per_circuit_capacity: usize,
     round_function: &RoundFunction,
     geometry: &GeometryConfig,
-    cs_for_witness_generation: &mut CsForWitnessGeneration,
     mut circuit_callback: CB,
     mut recursion_queue_callback: QSCB,
 ) -> (
@@ -201,7 +200,6 @@ pub(crate) fn process_logs_demux_and_make_circuits<
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_log_demuxer,
         round_function.clone(),
-        cs_for_witness_generation,
     );
 
     // trivial empty case

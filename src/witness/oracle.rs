@@ -701,7 +701,6 @@ fn process_io_log_circuits<
     demuxed_log_queues_states: IOLogsQueuesStates,
     demuxed_log_queries: DemuxedIOLogQueries,
     round_function: &Poseidon2Goldilocks,
-    cs_for_witness_generation: &mut CsForWitnessGeneration,
     mut circuit_callback: &mut CB,
     mut recursion_queue_callback: &mut QSCB,
 ) -> (
@@ -799,7 +798,6 @@ fn process_io_log_circuits<
             round_function,
             geometry.cycles_per_storage_application as usize,
             geometry,
-            cs_for_witness_generation,
             &mut circuit_callback,
             &mut recursion_queue_callback,
         );
@@ -919,7 +917,6 @@ fn process_memory_related_circuits<
     executed_decommittment_queries: Vec<(Cycle, DecommittmentQuery, Vec<U256>)>,
     precompiles_data: PrecompilesInputData,
     round_function: &Poseidon2Goldilocks,
-    cs_for_witness_generation: &mut CsForWitnessGeneration,
     mut circuit_callback: &mut CB,
     mut recursion_queue_callback: &mut QSCB,
 ) -> (
@@ -1112,7 +1109,6 @@ fn process_memory_related_circuits<
             num_non_deterministic_heap_queries,
             geometry.cycles_per_ram_permutation as usize,
             geometry,
-            cs_for_witness_generation,
             &mut circuit_callback,
             &mut recursion_queue_callback,
         );
@@ -1216,10 +1212,6 @@ pub(crate) fn create_artifacts_from_tracer<
         *round_function,
     );
 
-    // Scratch-space constraint system for circuits processing
-    // Used when creating circuit instances and compact form witnesses
-    let mut cs_for_witness_generation = CsForWitnessGeneration::new();
-
     // demux log queue circuit
     use crate::witness::individual_circuits::log_demux::process_logs_demux_and_make_circuits;
 
@@ -1238,7 +1230,6 @@ pub(crate) fn create_artifacts_from_tracer<
         geometry.cycles_per_log_demuxer as usize,
         round_function,
         geometry,
-        &mut cs_for_witness_generation,
         &mut circuit_callback,
         &mut recursion_queue_callback,
     );
@@ -1255,7 +1246,6 @@ pub(crate) fn create_artifacts_from_tracer<
             io_logs_queues_states,
             demuxed_log_queries.io,
             round_function,
-            &mut cs_for_witness_generation,
             &mut circuit_callback,
             &mut recursion_queue_callback,
         );
@@ -1291,7 +1281,6 @@ pub(crate) fn create_artifacts_from_tracer<
         executed_decommittment_queries,
         precompiles_data,
         round_function,
-        &mut cs_for_witness_generation,
         &mut circuit_callback,
         &mut recursion_queue_callback,
     );
@@ -1339,7 +1328,6 @@ pub(crate) fn create_artifacts_from_tracer<
         flat_new_frames_history,
         vm_snapshots,
         *round_function,
-        &mut cs_for_witness_generation,
         &mut circuit_callback,
         &mut recursion_queue_callback,
     );
@@ -1377,7 +1365,6 @@ pub(crate) fn create_artifacts_from_tracer<
         *round_function,
         |x| circuit_callback(ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(x)),
         &mut recursion_queue_callback,
-        &mut cs_for_witness_generation,
     );
 
     // Actual decommitter
@@ -1389,7 +1376,6 @@ pub(crate) fn create_artifacts_from_tracer<
             *round_function,
             |x| circuit_callback(ZkSyncBaseLayerCircuit::CodeDecommitter(x)),
             &mut recursion_queue_callback,
-            &mut cs_for_witness_generation,
         );
 
     // keccak precompiles
@@ -1401,7 +1387,6 @@ pub(crate) fn create_artifacts_from_tracer<
             *round_function,
             |x| circuit_callback(ZkSyncBaseLayerCircuit::KeccakRoundFunction(x)),
             &mut recursion_queue_callback,
-            &mut cs_for_witness_generation,
         );
 
     // sha256 precompiles
@@ -1413,7 +1398,6 @@ pub(crate) fn create_artifacts_from_tracer<
             *round_function,
             |x| circuit_callback(ZkSyncBaseLayerCircuit::Sha256RoundFunction(x)),
             &mut recursion_queue_callback,
-            &mut cs_for_witness_generation,
         );
 
     // ecrecover precompiles
@@ -1425,7 +1409,6 @@ pub(crate) fn create_artifacts_from_tracer<
             *round_function,
             |x| circuit_callback(ZkSyncBaseLayerCircuit::ECRecover(x)),
             &mut recursion_queue_callback,
-            &mut cs_for_witness_generation,
         );
 
     // secp256r1 verify
@@ -1437,7 +1420,6 @@ pub(crate) fn create_artifacts_from_tracer<
             *round_function,
             |x| circuit_callback(ZkSyncBaseLayerCircuit::Secp256r1Verify(x)),
             &mut recursion_queue_callback,
-            &mut cs_for_witness_generation,
         );
 
     // storage sorter
@@ -1448,7 +1430,6 @@ pub(crate) fn create_artifacts_from_tracer<
         *round_function,
         |x| circuit_callback(ZkSyncBaseLayerCircuit::StorageSorter(x)),
         &mut recursion_queue_callback,
-        &mut cs_for_witness_generation,
     );
 
     // events sorter
@@ -1459,7 +1440,6 @@ pub(crate) fn create_artifacts_from_tracer<
         *round_function,
         |x| circuit_callback(ZkSyncBaseLayerCircuit::EventsSorter(x)),
         &mut recursion_queue_callback,
-        &mut cs_for_witness_generation,
     );
 
     // l1 messages sorter
@@ -1471,7 +1451,6 @@ pub(crate) fn create_artifacts_from_tracer<
             *round_function,
             |x| circuit_callback(ZkSyncBaseLayerCircuit::L1MessagesSorter(x)),
             &mut recursion_queue_callback,
-            &mut cs_for_witness_generation,
         );
 
     // l1 messages pubdata hasher
@@ -1483,7 +1462,6 @@ pub(crate) fn create_artifacts_from_tracer<
             *round_function,
             |x| circuit_callback(ZkSyncBaseLayerCircuit::L1MessagesHasher(x)),
             &mut recursion_queue_callback,
-            &mut cs_for_witness_generation,
         );
 
     // transient storage sorter
@@ -1497,7 +1475,6 @@ pub(crate) fn create_artifacts_from_tracer<
         *round_function,
         |x| circuit_callback(ZkSyncBaseLayerCircuit::TransientStorageSorter(x)),
         &mut recursion_queue_callback,
-        &mut cs_for_witness_generation,
     );
 
     // eip 4844 circuits are basic, but they do not need closed form input commitments
@@ -1512,7 +1489,6 @@ pub(crate) fn create_artifacts_from_tracer<
         *round_function,
         |x| circuit_callback(ZkSyncBaseLayerCircuit::EIP4844Repack(x)),
         &mut recursion_queue_callback,
-        &mut cs_for_witness_generation,
     );
 
     // All done!

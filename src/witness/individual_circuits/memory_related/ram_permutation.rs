@@ -45,7 +45,6 @@ pub(crate) fn compute_ram_circuit_snapshots<
     num_non_deterministic_heap_queries: usize,
     per_circuit_capacity: usize,
     geometry: &GeometryConfig,
-    cs_for_witness_generation: &mut CsForWitnessGeneration,
     mut circuit_callback: CB,
     mut recursion_queue_callback: QSCB,
 ) -> (
@@ -277,7 +276,6 @@ pub(crate) fn compute_ram_circuit_snapshots<
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_ram_permutation,
         round_function.clone(),
-        cs_for_witness_generation,
     );
 
     for (
