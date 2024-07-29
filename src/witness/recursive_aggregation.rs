@@ -102,15 +102,15 @@ pub fn create_leaf_witnesses(
     let mut results = Vec::with_capacity(queue_splits.len());
     let mut recursive_circuits = Vec::with_capacity(queue_splits.len());
 
-    for el in queue_splits.iter().cloned() {
-        let mut proofs_ = vec![];
+    for el in queue_splits.into_iter() {
+        let mut proofs = vec![];
         for _ in 0..el.num_items {
             let t = proofs_iter.next().expect("proof");
-            proofs_.push(t);
+            proofs.push(t);
         }
 
         let (circuit_type, circuit) =
-            create_leaf_witness(circuit_type, el.clone(), proofs_, &vk, &leaf_params);
+            create_leaf_witness(circuit_type, el.clone(), proofs, &vk, &leaf_params);
 
         results.push((circuit_type, el));
         recursive_circuits.push(circuit);
@@ -155,7 +155,7 @@ pub fn create_leaf_witness(
     let witness = RecursionLeafInstanceWitness::<F, H, EXT> {
         input: leaf_input,
         vk_witness: vk.clone().into_inner(),
-        queue_witness: FullStateCircuitQueueRawWitness { elements: elements },
+        queue_witness: FullStateCircuitQueueRawWitness { elements },
         proof_witnesses,
     };
 
@@ -429,7 +429,7 @@ pub fn create_node_witnesses(
         };
 
         let circuit = ZkSyncNodeLayerRecursiveCircuit {
-            witness: witness,
+            witness,
             config: config.clone(),
             transcript_params: (),
             _marker: std::marker::PhantomData,
