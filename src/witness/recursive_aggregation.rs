@@ -109,13 +109,8 @@ pub fn create_leaf_witnesses(
             proofs_.push(t);
         }
 
-        let (circuit_type, circuit) = create_leaf_witness(
-            circuit_type,
-            el.clone(),
-            proofs_,
-            &vk,
-            &leaf_params,
-        );
+        let (circuit_type, circuit) =
+            create_leaf_witness(circuit_type, el.clone(), proofs_, &vk, &leaf_params);
 
         results.push((circuit_type, el));
         recursive_circuits.push(circuit);
@@ -131,7 +126,7 @@ pub fn create_leaf_witness(
     vk: &ZkSyncBaseLayerVerificationKey,
     leaf_params: &(u8, RecursionLeafParametersWitness<F>), // (cirtuit_type, and ??)
 ) -> (
-    u64,                        // type of the basic circuit
+    u64,                         // type of the basic circuit
     ZkSyncRecursiveLayerCircuit, // proofs for chunks
 ) {
     assert_eq!(queue.num_items as usize, proofs.len());
@@ -142,55 +137,55 @@ pub fn create_leaf_witness(
 
     let mut proofs_iter = proofs.into_iter();
     let mut proof_witnesses = VecDeque::new();
-        for _ in 0..queue.num_items {
-            let t = proofs_iter.next().expect("proof");
-            proof_witnesses.push_back(t.into_inner());
-        }
-        let leaf_input = RecursionLeafInputWitness::<F> {
-            params: params.clone(),
-            queue_state: take_sponge_like_queue_state_from_simulator(&queue),
-        };
+    for _ in 0..queue.num_items {
+        let t = proofs_iter.next().expect("proof");
+        proof_witnesses.push_back(t.into_inner());
+    }
+    let leaf_input = RecursionLeafInputWitness::<F> {
+        params: params.clone(),
+        queue_state: take_sponge_like_queue_state_from_simulator(&queue),
+    };
 
-        let elements: VecDeque<_> = queue
-            .witness
-            .iter()
-            .map(|(_, old_tail, element)| (element.reflect(), *old_tail))
-            .collect();
+    let elements: VecDeque<_> = queue
+        .witness
+        .iter()
+        .map(|(_, old_tail, element)| (element.reflect(), *old_tail))
+        .collect();
 
-        let witness = RecursionLeafInstanceWitness::<F, H, EXT> {
-            input: leaf_input,
-            vk_witness: vk.clone().into_inner(),
-            queue_witness: FullStateCircuitQueueRawWitness { elements: elements },
-            proof_witnesses,
-        };
+    let witness = RecursionLeafInstanceWitness::<F, H, EXT> {
+        input: leaf_input,
+        vk_witness: vk.clone().into_inner(),
+        queue_witness: FullStateCircuitQueueRawWitness { elements: elements },
+        proof_witnesses,
+    };
 
-        let config = LeafLayerRecursionConfig::<
-            F,
-            <H as RecursiveTreeHasher<F, Num<F>>>::NonCircuitSimulator,
-            EXT,
-        > {
-            proof_config: recursion_layer_proof_config(),
-            vk_fixed_parameters: vk.clone().into_inner().fixed_parameters,
-            capacity: RECURSION_ARITY,
-            _marker: std::marker::PhantomData,
-        };
+    let config = LeafLayerRecursionConfig::<
+        F,
+        <H as RecursiveTreeHasher<F, Num<F>>>::NonCircuitSimulator,
+        EXT,
+    > {
+        proof_config: recursion_layer_proof_config(),
+        vk_fixed_parameters: vk.clone().into_inner().fixed_parameters,
+        capacity: RECURSION_ARITY,
+        _marker: std::marker::PhantomData,
+    };
 
-        let base_layer_circuit_type =
-            BaseLayerCircuitType::from_numeric_value(vk.numeric_circuit_type());
-        let circuit = ZkSyncLeafLayerRecursiveCircuit {
-            witness,
-            config,
-            transcript_params: (),
-            base_layer_circuit_type,
-            _marker: std::marker::PhantomData,
-        };
+    let base_layer_circuit_type =
+        BaseLayerCircuitType::from_numeric_value(vk.numeric_circuit_type());
+    let circuit = ZkSyncLeafLayerRecursiveCircuit {
+        witness,
+        config,
+        transcript_params: (),
+        base_layer_circuit_type,
+        _marker: std::marker::PhantomData,
+    };
 
-        let circuit = ZkSyncRecursiveLayerCircuit::leaf_circuit_from_base_type(
-            BaseLayerCircuitType::from_numeric_value(vk.numeric_circuit_type()),
-            circuit,
-        );
+    let circuit = ZkSyncRecursiveLayerCircuit::leaf_circuit_from_base_type(
+        BaseLayerCircuitType::from_numeric_value(vk.numeric_circuit_type()),
+        circuit,
+    );
 
-        (circuit_type, circuit)
+    (circuit_type, circuit)
 }
 
 pub fn compute_leaf_params(
