@@ -952,15 +952,10 @@ pub(crate) fn compute_encodable_item_from_witness_dummy_cs<
     wit: T::Witness,
     round_function: &R,
 ) -> [GoldilocksField; N] {
-    let commitment = commit_variable_length_encodable_item_round_function::<
-        _,
-        T,
-        8,
-        12,
-        4,
-        N,
-        R,
-    >(&wit, round_function);
+    let commitment = commit_variable_length_encodable_item_round_function::<_, T, 8, 12, 4, N, R>(
+        &wit,
+        round_function,
+    );
 
     commitment
 }
