@@ -67,7 +67,7 @@ pub(crate) fn compute_encodable_item_from_witness<
     commitment
 }
 
-pub fn split_reqursion_queue(queue: RecursionQueueSimulator<F>) -> Vec<RecursionQueueSimulator<F>> {
+pub fn split_recursion_queue(queue: RecursionQueueSimulator<F>) -> Vec<RecursionQueueSimulator<F>> {
     let round_function = ZkSyncDefaultRoundFunction::default();
     queue.split_by(RECURSION_ARITY, &round_function)
 }
