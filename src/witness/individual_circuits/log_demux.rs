@@ -197,10 +197,7 @@ pub(crate) fn process_logs_demux_and_make_circuits<
 
     let circuit_type = BaseLayerCircuitType::LogDemultiplexer;
 
-    let mut maker = CircuitMaker::new(
-        geometry.cycles_per_log_demuxer,
-        round_function.clone(),
-    );
+    let mut maker = CircuitMaker::new(geometry.cycles_per_log_demuxer, round_function.clone());
 
     // trivial empty case
     if log_demux_artifacts

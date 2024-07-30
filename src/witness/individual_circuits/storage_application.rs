@@ -52,7 +52,7 @@ pub(crate) fn decompose_into_storage_application_witnesses<
     let circuit_type = BaseLayerCircuitType::StorageApplicator;
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_storage_application,
-        round_function.clone()
+        round_function.clone(),
     );
 
     if deduplicated_rollup_storage_queries.is_empty() {

@@ -154,23 +154,19 @@ pub fn compute_leaf_params(
         leaf_layer_vk.numeric_circuit_type()
     );
 
-    let base_vk_commitment: [_; VK_COMMITMENT_LENGTH] = compute_encodable_item_from_witness_dummy_cs::<
-        AllocatedVerificationKey<F, H>,
-        VK_COMMITMENT_LENGTH,
-        _,
-    >(
-        base_layer_vk.into_inner(),
-        &round_function,
-    );
+    let base_vk_commitment: [_; VK_COMMITMENT_LENGTH] =
+        compute_encodable_item_from_witness_dummy_cs::<
+            AllocatedVerificationKey<F, H>,
+            VK_COMMITMENT_LENGTH,
+            _,
+        >(base_layer_vk.into_inner(), &round_function);
 
-    let leaf_vk_commitment: [_; VK_COMMITMENT_LENGTH] = compute_encodable_item_from_witness_dummy_cs::<
-        AllocatedVerificationKey<F, H>,
-        VK_COMMITMENT_LENGTH,
-        _,
-    >(
-        leaf_layer_vk.into_inner(),
-        &round_function,
-    );
+    let leaf_vk_commitment: [_; VK_COMMITMENT_LENGTH] =
+        compute_encodable_item_from_witness_dummy_cs::<
+            AllocatedVerificationKey<F, H>,
+            VK_COMMITMENT_LENGTH,
+            _,
+        >(leaf_layer_vk.into_inner(), &round_function);
 
     let params = RecursionLeafParametersWitness::<F> {
         circuit_type: F::from_u64_unchecked(circuit_type as u64),
@@ -192,7 +188,7 @@ pub fn compute_leaf_vks_and_params_commitment(
             [RecursionLeafParameters<F>; NUM_CIRCUIT_TYPES_TO_SCHEDULE],
             LEAF_LAYER_PARAMETERS_COMMITMENT_LENGTH,
             _,
-        >(leaf_params,  &round_function);
+        >(leaf_params, &round_function);
 
     params_commitment
 }
@@ -207,10 +203,7 @@ pub fn compute_node_vk_commitment(
         AllocatedVerificationKey<F, H>,
         VK_COMMITMENT_LENGTH,
         _,
-    >(
-        node_vk.into_inner(),
-        &round_function,
-    );
+    >(node_vk.into_inner(), &round_function);
 
     vk_commitment
 }

@@ -273,10 +273,7 @@ pub(crate) fn compute_ram_circuit_snapshots<
     let mut last_queue_state = (placeholder_witness.clone(), placeholder_witness);
 
     let circuit_type = BaseLayerCircuitType::RamValidation;
-    let mut maker = CircuitMaker::new(
-        geometry.cycles_per_ram_permutation,
-        round_function.clone(),
-    );
+    let mut maker = CircuitMaker::new(geometry.cycles_per_ram_permutation, round_function.clone());
 
     for (
         idx,

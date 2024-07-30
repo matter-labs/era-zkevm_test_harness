@@ -2,6 +2,7 @@ use super::*;
 
 use crate::witness::utils::*;
 use crate::zkevm_circuits::eip_4844::input::EIP4844OutputData;
+use boojum::gadgets::traits::encodable::WitnessVarLengthEncodable;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use circuit_definitions::boojum::field::U64Representable;
 use circuit_definitions::boojum::gadgets::traits::allocatable::CSAllocatable;
@@ -131,18 +132,21 @@ pub(crate) trait ClosedFormInputField<F: SmallField> {
         + std::fmt::Debug
         + CSAllocatable<F>
         + CircuitVarLengthEncodable<F>
+        + WitnessVarLengthEncodable<F>
         + WitnessHookable<F>;
 
     type IN: Clone
         + std::fmt::Debug
         + CSAllocatable<F>
         + CircuitVarLengthEncodable<F>
+        + WitnessVarLengthEncodable<F>
         + WitnessHookable<F>;
 
     type OUT: Clone
         + std::fmt::Debug
         + CSAllocatable<F>
         + CircuitVarLengthEncodable<F>
+        + WitnessVarLengthEncodable<F>
         + WitnessHookable<F>;
 
     fn closed_form_input(&mut self) -> &mut ClosedFormInputWitness<F, Self::T, Self::IN, Self::OUT>
@@ -383,10 +387,7 @@ where
     <T::OUT as CSAllocatable<GoldilocksField>>::Witness:
         serde::Serialize + serde::de::DeserializeOwned + Eq,
 {
-    pub(crate) fn new(
-        geometry: u32,
-        round_function: Poseidon2Goldilocks
-    ) -> Self {
+    pub(crate) fn new(geometry: u32, round_function: Poseidon2Goldilocks) -> Self {
         Self {
             geometry,
             round_function,
@@ -418,10 +419,11 @@ where
                 self.observable_input.as_ref().unwrap().clone();
         }
 
-        let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness_dummy_cs(
-            circuit_input.closed_form_input().clone(),
-            &self.round_function,
-        );
+        let (proof_system_input, compact_form_witness) =
+            simulate_public_input_value_from_witness_dummy_cs(
+                circuit_input.closed_form_input().clone(),
+                &self.round_function,
+            );
 
         self.compact_form_witnesses.push(compact_form_witness);
 
@@ -505,7 +507,7 @@ pub(crate) fn make_circuits<
     circuits_data: Vec<T>,
     round_function: Poseidon2Goldilocks,
     mut circuit_callback: CB,
-    recursion_queue_callback: &mut QSCB
+    recursion_queue_callback: &mut QSCB,
 ) -> (
     FirstAndLastCircuitWitness<ObservableWitness<GoldilocksField, T>>,
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
