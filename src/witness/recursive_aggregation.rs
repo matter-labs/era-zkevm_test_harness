@@ -96,7 +96,7 @@ pub fn create_leaf_witnesses(
 
     assert_eq!(leaf_params.0, circuit_type as u8);
 
-    let queue_splits = split_reqursion_queue(queue);
+    let queue_splits = split_recursion_queue(queue);
     let mut proofs_iter = proofs.into_iter();
 
     let mut results = Vec::with_capacity(queue_splits.len());
