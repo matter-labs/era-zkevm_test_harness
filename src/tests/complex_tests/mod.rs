@@ -636,8 +636,10 @@ fn run_and_try_create_witness_inner(
             .find(|el| el.0 == subset.0 as u8)
             .cloned()
             .unwrap();
-        let (aggregations, _closed_form_inputs) = create_leaf_witnesses(subset, proofs, vk, param);
-        all_leaf_aggregations.push(aggregations);
+
+        let (aggregations, recursive_circuits, _closed_form_inputs) =
+            create_leaf_witnesses(subset, proofs, vk, param);
+        all_leaf_aggregations.push((aggregations, recursive_circuits));
         all_closed_form_inputs_for_scheduler.extend(_closed_form_inputs);
     }
 
@@ -647,14 +649,14 @@ fn run_and_try_create_witness_inner(
 
     use circuit_definitions::circuit_definitions::recursion_layer::*;
 
-    for aggregations_for_circuit_type in all_leaf_aggregations.iter() {
+    for (aggregations_for_circuit_type, recursive_circuits) in all_leaf_aggregations.iter() {
         if aggregations_for_circuit_type.is_empty() {
             continue;
         }
 
         let mut instance_idx = 0;
         let mut setup_data = None;
-        for (idx, (_, _, el)) in aggregations_for_circuit_type.iter().enumerate() {
+        for (idx, el) in recursive_circuits.iter().enumerate() {
             let descr = el.short_description();
             println!("Doing {}: {}", idx, descr);
 
@@ -898,7 +900,7 @@ fn run_and_try_create_witness_inner(
     let node_vk_commitment = compute_node_vk_commitment(node_vk);
 
     println!("Continuing into nodes leaf aggregation circuits");
-    for per_circuit_subtree in all_leaf_aggregations.into_iter() {
+    for (per_circuit_subtree, _) in all_leaf_aggregations.into_iter() {
         let mut depth = 0;
         let mut next_aggregations = per_circuit_subtree;
 
@@ -944,15 +946,16 @@ fn run_and_try_create_witness_inner(
 
                 proofs.push(proof);
             }
-            next_aggregations = create_node_witnesses(
+            let (new_aggregations, recursive_circuits) = create_node_witnesses(
                 next_aggregations,
                 proofs,
                 vk.clone(),
                 node_vk_commitment,
                 &leaf_vk_commits,
             );
+            next_aggregations = new_aggregations;
 
-            for (idx, (_, _, el)) in next_aggregations.iter().enumerate() {
+            for (idx, el) in recursive_circuits.iter().enumerate() {
                 // test_recursive_circuit(el.clone());
                 // println!("Circuit is satisfied");
 
