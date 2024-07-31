@@ -19,7 +19,6 @@ use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::zkevm_circuits::demux_log_queue::DemuxOutput;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use circuit_definitions::{encodings::*, Field, RoundFunction};
-use postprocessing::CsForWitnessGeneration;
 use zk_evm::zkevm_opcode_defs::SECP256R1_VERIFY_PRECOMPILE_ADDRESS;
 
 use crate::zk_evm::aux_structures::LogQuery as LogQuery_;

@@ -21,7 +21,6 @@ use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::encodings::state_diff_record::StateDiffRecord;
 use circuit_definitions::encodings::LogQueueSimulator;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
-use postprocessing::CsForWitnessGeneration;
 use tracing;
 use zk_evm::aux_structures::LogQuery;
 

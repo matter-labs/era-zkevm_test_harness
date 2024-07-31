@@ -183,14 +183,14 @@ pub fn compute_leaf_params(
     );
 
     let base_vk_commitment: [_; VK_COMMITMENT_LENGTH] =
-        compute_encodable_item_from_witness_dummy_cs::<
+        compute_encodable_witness_commitment::<
             AllocatedVerificationKey<F, H>,
             VK_COMMITMENT_LENGTH,
             _,
         >(base_layer_vk.into_inner(), &round_function);
 
     let leaf_vk_commitment: [_; VK_COMMITMENT_LENGTH] =
-        compute_encodable_item_from_witness_dummy_cs::<
+        compute_encodable_witness_commitment::<
             AllocatedVerificationKey<F, H>,
             VK_COMMITMENT_LENGTH,
             _,
@@ -212,7 +212,7 @@ pub fn compute_leaf_vks_and_params_commitment(
     use crate::witness::utils::*;
 
     let params_commitment: [_; LEAF_LAYER_PARAMETERS_COMMITMENT_LENGTH] =
-        compute_encodable_item_from_witness_dummy_cs::<
+        compute_encodable_witness_commitment::<
             [RecursionLeafParameters<F>; NUM_CIRCUIT_TYPES_TO_SCHEDULE],
             LEAF_LAYER_PARAMETERS_COMMITMENT_LENGTH,
             _,
@@ -227,7 +227,7 @@ pub fn compute_node_vk_commitment(
     let round_function = ZkSyncDefaultRoundFunction::default();
     use crate::witness::utils::*;
 
-    let vk_commitment: [_; VK_COMMITMENT_LENGTH] = compute_encodable_item_from_witness_dummy_cs::<
+    let vk_commitment: [_; VK_COMMITMENT_LENGTH] = compute_encodable_witness_commitment::<
         AllocatedVerificationKey<F, H>,
         VK_COMMITMENT_LENGTH,
         _,

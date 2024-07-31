@@ -22,7 +22,7 @@ use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use circuit_definitions::{encodings::*, Field, RoundFunction};
 use memory_query::{CustomMemoryQueueSimulator, QueueWitness};
-use postprocessing::{CsForWitnessGeneration, FirstAndLastCircuitWitness};
+use postprocessing::FirstAndLastCircuitWitness;
 
 use rayon::prelude::*;
 use snark_wrapper::boojum::field::Field as _;

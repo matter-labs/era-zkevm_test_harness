@@ -5,8 +5,7 @@
 use super::artifacts::LogCircuitsArtifacts;
 use super::individual_circuits::main_vm::CallstackSimulationResult;
 use super::postprocessing::{
-    BlockFirstAndLastBasicCircuitsObservableWitnesses, CsForWitnessGeneration,
-    FirstAndLastCircuitWitness,
+    BlockFirstAndLastBasicCircuitsObservableWitnesses, FirstAndLastCircuitWitness,
 };
 use super::tracer::callstack_handler::*;
 use super::utils::*;

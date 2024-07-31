@@ -338,36 +338,6 @@ impl<F: SmallField> ClosedFormInputField<F> for EIP4844CircuitInstanceWitness<F>
     }
 }
 
-pub struct CsForWitnessGeneration {
-    cs: ConstraintSystemImpl<GoldilocksField, Poseidon2Goldilocks>,
-    cs_use_counter: usize,
-}
-
-impl CsForWitnessGeneration {
-    pub fn new() -> Self {
-        Self {
-            cs: create_cs_for_witness_generation::<GoldilocksField, Poseidon2Goldilocks>(
-                TRACE_LEN_LOG_2_FOR_CALCULATION,
-                MAX_VARS_LOG_2_FOR_CALCULATION,
-            ),
-            cs_use_counter: 0,
-        }
-    }
-
-    pub fn take_cs(&mut self) -> &mut ConstraintSystemImpl<GoldilocksField, Poseidon2Goldilocks> {
-        if self.cs_use_counter == CYCLES_PER_SCRATCH_SPACE {
-            self.cs = create_cs_for_witness_generation::<GoldilocksField, Poseidon2Goldilocks>(
-                TRACE_LEN_LOG_2_FOR_CALCULATION,
-                MAX_VARS_LOG_2_FOR_CALCULATION,
-            );
-            self.cs_use_counter = 0;
-        }
-        self.cs_use_counter += 1;
-
-        &mut self.cs
-    }
-}
-
 pub(crate) struct CircuitMaker<T: ClosedFormInputField<GoldilocksField>> {
     geometry: u32,
     round_function: Poseidon2Goldilocks,
@@ -420,7 +390,7 @@ where
         }
 
         let (proof_system_input, compact_form_witness) =
-            simulate_public_input_value_from_witness_dummy_cs(
+            simulate_public_input_value_from_encodable_witness(
                 circuit_input.closed_form_input().clone(),
                 &self.round_function,
             );
