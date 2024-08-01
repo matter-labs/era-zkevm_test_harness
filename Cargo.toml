@@ -1,6 +1,6 @@
 [package]
 name = "zkevm_test_harness"
-version = "0.140.0-gpu-wrapper.0"
+version = "0.140.0-gpu-wrapper.1"
 edition = "2021"
 authors = ["Alex Vlasov <alex.m.vlasov@gmail.com>", "Konstantin Panarin <kp@matterlabs.dev>"]
 homepage = "https://zksync.io/"
@@ -26,7 +26,7 @@ resolver = "2"
  path = "src/geometry_config_generator/main.rs"
 
 [dependencies]
-circuit_definitions = { version = "0.140.0-gpu-wrapper.0", path = "./circuit_definitions" }
+circuit_definitions = { version = "=0.140.0-gpu-wrapper.1", path = "./circuit_definitions" }
 
 zkevm-assembly = "=0.132.0"
 
