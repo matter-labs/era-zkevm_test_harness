@@ -1,6 +1,6 @@
 [package]
 name = "circuit_sequencer_api"
-version = "0.141.0"
+version = "0.141.1"
 edition = "2021"
 authors = ["The Matter Labs Team <hello@matterlabs.dev>"]
 homepage = "https://zksync.io/"
@@ -14,9 +14,9 @@ description = "ZKsync Era circuits API for sequencer"
 
 [dependencies]
 
-circuit_encodings = { version = "=0.141.0", path = "../circuit_encodings" }
-zk_evm = "=0.141.0"
-bellman = { package = "bellman_ce", version = "=0.7.0" }
+circuit_encodings = { version = "0.141", path = "../circuit_encodings" }  # Not pinned, because it's an old dependency used by MultiVM
+zk_evm = "0.141" # Not pinned, because it's an old dependency used by MultiVM
+bellman = { package = "bellman_ce", version = "0" }  # Not pinned, because it's an old dependency used by MultiVM
 
 derivative = "2.2"
 serde = {version = "1", features = ["derive"]}
