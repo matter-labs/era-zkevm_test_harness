@@ -1,21 +1,25 @@
 [package]
 name = "circuit_sequencer_api"
-version = "0.1.42"
+version = "0.142.1"
 edition = "2021"
+authors = ["The Matter Labs Team <hello@matterlabs.dev>"]
+homepage = "https://zksync.io/"
+repository = "https://github.com/matter-labs/era-zkevm_test_harness/"
 license = "MIT OR Apache-2.0"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+keywords = ["blockchain", "zksync"]
+categories = ["cryptography"]
+description = "ZKsync Era circuits API for sequencer"
 
 [dependencies]
+circuit_encodings = { version = "0.142", path = "../circuit_encodings"}  # Not pinned, because it's an old dependency used by MultiVM
 
-zk_evm = {git = "https://github.com/matter-labs/era-zk_evm.git", branch = "v1.4.1"}
-circuit_encodings = {path = "../circuit_encodings"}
-bellman = { package = "bellman_ce", git = "https://github.com/matter-labs/bellman", branch = "dev" }
+zk_evm = "0.141"
+bellman = { package = "bellman_ce", version = "0" } # Not pinned, because it's an old dependency used by MultiVM
 
 
-derivative = "*"
+derivative = "2.2"
 serde = {version = "1", features = ["derive"]}
-rayon = "*"
+rayon = "1.10"
 
 
 [features]
