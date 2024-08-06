@@ -1,6 +1,6 @@
 [package]
 name = "circuit_definitions"
-version = "0.140.0-gpu-wrapper.1"
+version = "0.140.1-gpu-wrapper.1"
 edition = "2021"
 authors = ["The Matter Labs Team <hello@matterlabs.dev>"]
 homepage = "https://zksync.io/"
@@ -17,8 +17,8 @@ description = "ZKsync Era circuits definitions"
 # zkevm_circuits = {path = "../../zkevm_circuits", features = ["verbose_circuits"]}
 # snark_wrapper = {path = "../../snark_wrapper"}
 
-snark_wrapper = "=0.1.1"
-zkevm_circuits = "=0.140.1"
+snark_wrapper = "=0.1.2"
+zkevm_circuits = "=0.140.2"
 zk_evm = "=0.140.0"
 
 derivative = "2.2"
