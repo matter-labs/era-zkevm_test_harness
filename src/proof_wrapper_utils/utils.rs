@@ -47,7 +47,7 @@ pub fn compress_stark_pi_to_snark_pi(
     result
 }
 
-pub(crate) fn get_proof_for_previous_circuit<DS: SetupDataSource + BlockDataSource>(
+pub fn get_proof_for_previous_circuit<DS: SetupDataSource + BlockDataSource>(
     source: &DS,
     circuit_type: u8,
 ) -> SourceResult<ZkSyncCompressionProof> {
@@ -59,7 +59,7 @@ pub(crate) fn get_proof_for_previous_circuit<DS: SetupDataSource + BlockDataSour
     }
 }
 
-pub(crate) fn get_vk_for_previous_circuit<DS: SetupDataSource + BlockDataSource>(
+pub fn get_vk_for_previous_circuit<DS: SetupDataSource + BlockDataSource>(
     source: &DS,
     circuit_type: u8,
 ) -> SourceResult<ZkSyncCompressionVerificationKey> {
