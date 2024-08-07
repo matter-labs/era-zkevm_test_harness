@@ -1,6 +1,6 @@
 [package]
 name = "zkevm_test_harness"
-version = "0.150.1"
+version = "0.150.2-rc.3"
 edition = "2021"
 authors = ["Alex Vlasov <alex.m.vlasov@gmail.com>", "Konstantin Panarin <kp@matterlabs.dev>"]
 homepage = "https://zksync.io/"
@@ -25,9 +25,9 @@ name = "geometry_config_generator"
 path = "src/geometry_config_generator/main.rs"
 
 [dependencies]
-circuit_definitions = { version = "=0.150.1", path = "./circuit_definitions"}
-circuit_sequencer_api = { version = "=0.150.1", path = "./circuit_sequencer_api"}
-kzg = { package = "zksync_kzg", version = "=0.150.1", path = "./kzg"}
+circuit_definitions = { version = "=0.150.2-rc.3", path = "./circuit_definitions"}
+circuit_sequencer_api = { version = "=0.150.2-rc.3", path = "./circuit_sequencer_api"}
+kzg = { package = "zksync_kzg", version = "=0.150.2-rc.3", path = "./kzg"}
 
 zkevm-assembly = "=0.150.0"
 
@@ -45,7 +45,7 @@ env_logger = "0.9"
 smallvec = "1.13"
 structopt = "0.3.26"
 codegen = "0.2.0"
-regex = { version = "1.10.4", features = ["pattern"] }
+regex = { version = "1.10.6", features = ["pattern"] }
 peak_alloc = "*"
 
 [dev-dependencies]
