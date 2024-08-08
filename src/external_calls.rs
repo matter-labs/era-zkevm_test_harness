@@ -5,6 +5,7 @@ pub use crate::run_vms::SCHEDULER_TIMESTAMP;
 use crate::snark_wrapper::boojum::field::goldilocks::GoldilocksExt2;
 use crate::snark_wrapper::boojum::gadgets::recursion::recursive_tree_hasher::CircuitGoldilocksPoseidon2Sponge;
 use crate::toolset::GeometryConfig;
+use crate::witness::oracle::WitnessGenerationArtifact;
 use crate::witness::tree::BinarySparseStorageTree;
 use crate::witness::tree::ZkSyncStorageLeaf;
 use crate::zk_evm::abstractions::Storage;
@@ -28,15 +29,7 @@ use circuit_definitions::Field as MainField;
 ///
 /// This function will setup the environment and will run out-of-circuit and then in-circuit.
 /// GenericNoopTracer will be used as out-of-circuit tracer
-pub fn run<
-    S: Storage,
-    CB: FnMut(ZkSyncBaseLayerCircuit),
-    QSCB: FnMut(
-        u64,
-        RecursionQueueSimulator<MainField>,
-        Vec<ClosedFormInputCompactFormWitness<MainField>>,
-    ),
->(
+pub fn run<S: Storage, CB: FnMut(WitnessGenerationArtifact)>(
     caller: Address,                 // for real block must be zero
     entry_point_address: Address,    // for real block must be the bootloader
     entry_point_code: Vec<[u8; 32]>, // for read block must be a bootloader code
@@ -52,8 +45,7 @@ pub fn run<
     tree: impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
     trusted_setup_path: &str,
     eip_4844_repack_inputs: [Option<Vec<u8>>; MAX_4844_BLOBS_PER_BLOCK],
-    circuit_callback: CB,
-    queue_simulator_callback: QSCB,
+    artifacts_callback: CB,
 ) -> (
     SchedulerCircuitInstanceWitness<MainField, CircuitGoldilocksPoseidon2Sponge, GoldilocksExt2>,
     BlockAuxilaryOutputWitness<MainField>,
@@ -75,8 +67,7 @@ pub fn run<
         tree,
         trusted_setup_path,
         eip_4844_repack_inputs,
-        circuit_callback,
-        queue_simulator_callback,
+        artifacts_callback,
         &mut out_of_circuit_tracer,
     ) {
         Ok((scheduler_circuit_witness, aux_data)) => (scheduler_circuit_witness, aux_data),

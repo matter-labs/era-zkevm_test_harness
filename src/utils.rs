@@ -4,6 +4,100 @@ use crate::witness::tree::BinaryHasher;
 
 use circuit_definitions::encodings::BytesSerializable;
 
+use peak_alloc::PeakAlloc;
+use std::sync::{Mutex, OnceLock};
+use std::time::Duration;
+use std::time::Instant;
+
+#[global_allocator]
+static PEAK_ALLOC: PeakAlloc = PeakAlloc;
+
+fn mem_array() -> &'static Mutex<Vec<(String, f32)>> {
+    static MEM_ARRAY: OnceLock<Mutex<Vec<(String, f32)>>> = OnceLock::new();
+    MEM_ARRAY.get_or_init(|| Mutex::new(vec![]))
+}
+
+fn time_instant() -> &'static Mutex<Instant> {
+    static TIME_INSTANT: OnceLock<Mutex<Instant>> = OnceLock::new();
+    TIME_INSTANT.get_or_init(|| Mutex::new(Instant::now()))
+}
+
+fn time_array() -> &'static Mutex<Vec<(String, Duration)>> {
+    static TIME_ARRAY: OnceLock<Mutex<Vec<(String, Duration)>>> = OnceLock::new();
+    TIME_ARRAY.get_or_init(|| Mutex::new(vec![]))
+}
+
+fn peak_mem_array() -> &'static Mutex<Vec<(String, f32)>> {
+    static PEAK_MEM_ARRAY: OnceLock<Mutex<Vec<(String, f32)>>> = OnceLock::new();
+    PEAK_MEM_ARRAY.get_or_init(|| Mutex::new(vec![]))
+}
+
+fn peak_snapshot_mem(label: &str) {
+    let peak_mem = PEAK_ALLOC.peak_usage_as_mb();
+    println!("PEAK MEM: {}: {}", label.to_owned(), peak_mem);
+    peak_mem_array()
+        .lock()
+        .unwrap()
+        .push((label.to_owned(), peak_mem));
+}
+
+pub fn print_mem_snapshots() {
+    let mem = mem_array().lock().unwrap();
+    println!("MEMORY SNAPSHOTS");
+    for snapshot in mem.clone() {
+        println!("{}: {}", snapshot.0, snapshot.1);
+    }
+    println!();
+}
+
+pub fn print_peak_mem_snapshots() {
+    let mem = peak_mem_array().lock().unwrap();
+    println!("PEAK MEMORY SNAPSHOTS");
+    for snapshot in mem.clone() {
+        println!("{}: {}", snapshot.0, snapshot.1);
+    }
+    println!();
+}
+
+pub fn print_time_snapshots() {
+    let time = time_array().lock().unwrap();
+    println!("TIME SNAPSHOTS");
+    for snapshot in time.clone() {
+        println!("{}: {:.2?}", snapshot.0, snapshot.1);
+    }
+    println!();
+}
+
+pub fn snapshot_mem(label: &str) {
+    let current_mem = PEAK_ALLOC.current_usage_as_mb();
+    println!("MEM: {}: {}", label.to_owned(), current_mem);
+    mem_array()
+        .lock()
+        .unwrap()
+        .push((label.to_owned(), current_mem));
+}
+
+pub fn snapshot_prof(label: &str) {
+    snapshot_mem(label);
+    peak_snapshot_mem(label);
+    snapshot_time(label);
+    reset_peak_snapshot_mem();
+}
+
+pub fn snapshot_time(label: &str) {
+    let mut instant = time_instant().lock().unwrap();
+    println!("TIME: {}: {:.2?}", label.to_owned(), instant.elapsed());
+    time_array()
+        .lock()
+        .unwrap()
+        .push((label.to_owned(), instant.elapsed()));
+    *instant = Instant::now();
+}
+
+pub fn reset_peak_snapshot_mem() {
+    PEAK_ALLOC.reset_peak_usage();
+}
+
 pub fn u64_as_u32_le(value: u64) -> [u32; 2] {
     [value as u32, (value >> 32) as u32]
 }

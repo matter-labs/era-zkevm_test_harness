@@ -23,6 +23,7 @@ use crate::zkevm_circuits::main_vm::main_vm_entry_point;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use circuit_definitions::zk_evm::vm_state::cycle;
 use storage::{InMemoryCustomRefundStorage, StorageRefund};
+use witness::oracle::WitnessGenerationArtifact;
 use zkevm_assembly::Assembly;
 
 #[test]
@@ -265,6 +266,11 @@ pub(crate) fn run_with_options(entry_point_bytecode: Vec<[u8; 32]>, options: Opt
     let mut out_of_circuit_tracer =
         TestingTracer::new(Some(storage_impl.create_refund_controller()));
 
+    let artifacts_callback = |artifact: WitnessGenerationArtifact| match artifact {
+        WitnessGenerationArtifact::BaseLayerCircuit(circuit) => basic_block_circuits.push(circuit),
+        _ => {}
+    };
+
     if let Err(err) = run_vms(
         Address::zero(),
         *BOOTLOADER_FORMAL_ADDRESS,
@@ -281,8 +287,7 @@ pub(crate) fn run_with_options(entry_point_bytecode: Vec<[u8; 32]>, options: Opt
         tree,
         "kzg/src/trusted_setup.json",
         std::array::from_fn(|_| None),
-        |circuit| basic_block_circuits.push(circuit),
-        |_, _, _| {},
+        artifacts_callback,
         &mut out_of_circuit_tracer,
     ) {
         let error_text = match err {

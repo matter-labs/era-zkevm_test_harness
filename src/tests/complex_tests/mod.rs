@@ -58,6 +58,7 @@ use circuit_definitions::{
 use circuit_definitions::{Field, RoundFunction};
 use utils::read_basic_test_artifact;
 
+use witness::oracle::WitnessGenerationArtifact;
 use zkevm_assembly::Assembly;
 
 #[ignore = "Too slow"]
@@ -255,6 +256,18 @@ pub(crate) fn generate_base_layer(
 
     let mut basic_block_circuits = vec![];
     let mut recursion_queues = vec![];
+
+    let artifacts_callback = |artifact: WitnessGenerationArtifact| match artifact {
+        WitnessGenerationArtifact::BaseLayerCircuit(circuit) => basic_block_circuits.push(circuit),
+        WitnessGenerationArtifact::RecursionQueue((a, b, c)) => recursion_queues.push((
+            a,
+            b,
+            c.into_iter()
+                .map(|x| ZkSyncBaseLayerStorage::from_inner(a as u8, x))
+                .collect(),
+        )),
+    };
+
     let (scheduler_partial_input, _aux_data) = run(
         Address::zero(),
         test_artifact.entry_point_address,
@@ -271,16 +284,7 @@ pub(crate) fn generate_base_layer(
         tree,
         "kzg/src/trusted_setup.json",
         blobs,
-        |circuit| basic_block_circuits.push(circuit),
-        |a, b, c| {
-            recursion_queues.push((
-                a,
-                b,
-                c.into_iter()
-                    .map(|x| ZkSyncBaseLayerStorage::from_inner(a as u8, x))
-                    .collect(),
-            ))
-        },
+        artifacts_callback,
     );
 
     (

@@ -22,6 +22,7 @@ use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use circuit_definitions::{encodings::*, Field, RoundFunction};
 use memory_query::{CustomMemoryQueueSimulator, QueueWitness};
+use oracle::WitnessGenerationArtifact;
 use postprocessing::{CsForWitnessGeneration, FirstAndLastCircuitWitness};
 
 use rayon::prelude::*;
@@ -33,10 +34,7 @@ use zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
 
 use crate::zk_evm::zkevm_opcode_defs::BOOTLOADER_HEAP_PAGE;
 
-pub(crate) fn compute_ram_circuit_snapshots<
-    CB: FnMut(ZkSyncBaseLayerCircuit),
-    QSCB: FnMut(u64, RecursionQueueSimulator<Field>, Vec<ClosedFormInputCompactFormWitness<Field>>),
->(
+pub(crate) fn compute_ram_circuit_snapshots<CB: FnMut(WitnessGenerationArtifact)>(
     total_amount_of_queries: usize, // including additional queries from precompiles
     memory_queue_states_accumulator: LastPerCircuitAccumulator<MemoryQueueState<Field>>,
     sorted_memory_queue_states_accumulator: LastPerCircuitAccumulator<MemoryQueueState<Field>>,
@@ -46,8 +44,7 @@ pub(crate) fn compute_ram_circuit_snapshots<
     num_non_deterministic_heap_queries: usize,
     geometry: &GeometryConfig,
     cs_for_witness_generation: &mut CsForWitnessGeneration,
-    mut circuit_callback: CB,
-    mut recursion_queue_callback: QSCB,
+    mut artifacts_callback: CB,
 ) -> (
     FirstAndLastCircuitWitness<RamPermutationObservableWitness<Field>>,
     Vec<ClosedFormInputCompactFormWitness<Field>>,
@@ -428,8 +425,8 @@ pub(crate) fn compute_ram_circuit_snapshots<
             tmp.current_sorted_queue_state.clone(),
         );
 
-        circuit_callback(ZkSyncBaseLayerCircuit::RAMPermutation(
-            maker.process(instance_witness, circuit_type),
+        artifacts_callback(WitnessGenerationArtifact::BaseLayerCircuit(
+            ZkSyncBaseLayerCircuit::RAMPermutation(maker.process(instance_witness, circuit_type)),
         ));
     }
 
@@ -441,11 +438,11 @@ pub(crate) fn compute_ram_circuit_snapshots<
         queue_simulator,
         ram_permutation_circuits_compact_forms_witnesses,
     ) = maker.into_results();
-    recursion_queue_callback(
+    artifacts_callback(WitnessGenerationArtifact::RecursionQueue((
         circuit_type as u64,
         queue_simulator,
         ram_permutation_circuits_compact_forms_witnesses.clone(),
-    );
+    )));
 
     (
         ram_permutation_circuits,

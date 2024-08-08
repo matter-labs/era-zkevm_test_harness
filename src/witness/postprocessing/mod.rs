@@ -2,6 +2,7 @@ use super::*;
 
 use crate::witness::utils::*;
 use crate::zkevm_circuits::eip_4844::input::EIP4844OutputData;
+use boojum::gadgets::queue::full_state_queue::FullStateCircuitQueueRawWitness;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use circuit_definitions::boojum::field::U64Representable;
 use circuit_definitions::boojum::gadgets::traits::allocatable::CSAllocatable;
@@ -62,7 +63,12 @@ use circuit_definitions::zkevm_circuits::transient_storage_validity_by_grand_pro
 use circuit_definitions::zkevm_circuits::transient_storage_validity_by_grand_product::input::*;
 use circuit_definitions::Field;
 use crossbeam::atomic::AtomicCell;
+use derivative::Derivative;
 use observable_witness::ObservableWitness;
+use oracle::WitnessGenerationArtifact;
+use zkevm_circuits::base_structures::memory_query::{MemoryQuery, MEMORY_QUERY_PACKED_WIDTH};
+use zkevm_circuits::base_structures::vm_state::FULL_SPONGE_QUEUE_STATE_WIDTH;
+use zkevm_circuits::ram_permutation::input::RamPermutationCycleInputOutputWitness;
 
 use std::sync::Arc;
 
@@ -497,19 +503,15 @@ where
 pub(crate) fn make_circuits<
     T: ClosedFormInputField<GoldilocksField>,
     S: ZkSyncUniformSynthesisFunction<GoldilocksField>,
-    CB: FnMut(ZkSyncUniformCircuitInstance<GoldilocksField, S>),
-    QSCB: FnMut(
-        u64,
-        RecursionQueueSimulator<GoldilocksField>,
-        Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
-    ),
+    WCB: Fn(ZkSyncUniformCircuitInstance<GoldilocksField, S>) -> ZkSyncBaseLayerCircuit,
+    CB: FnMut(WitnessGenerationArtifact),
 >(
     geometry: u32,
     circuit_type: BaseLayerCircuitType,
     circuits_data: Vec<T>,
     round_function: Poseidon2Goldilocks,
-    mut circuit_callback: CB,
-    recursion_queue_callback: &mut QSCB,
+    wrap_circuit: WCB,
+    artifacts_callback: &mut CB,
     cs_for_witness_generation: &mut CsForWitnessGeneration,
 ) -> (
     FirstAndLastCircuitWitness<ObservableWitness<GoldilocksField, T>>,
@@ -532,7 +534,9 @@ where
     let mut maker = CircuitMaker::new(geometry, round_function.clone(), cs_for_witness_generation);
 
     for circuit_input in circuits_data.into_iter() {
-        circuit_callback(maker.process(circuit_input, circuit_type));
+        artifacts_callback(WitnessGenerationArtifact::BaseLayerCircuit(wrap_circuit(
+            maker.process(circuit_input, circuit_type),
+        )));
     }
 
     let (
@@ -540,14 +544,39 @@ where
         recursion_queue_simulator,
         circuits_compact_forms_witnesses,
     ) = maker.into_results();
-    recursion_queue_callback(
+    artifacts_callback(WitnessGenerationArtifact::RecursionQueue((
         circuit_type as u64,
         recursion_queue_simulator,
         circuits_compact_forms_witnesses.clone(),
-    );
+    )));
 
     (
         first_and_last_observable_witnesses,
         circuits_compact_forms_witnesses,
     )
+}
+
+#[derive(Derivative, serde::Serialize, serde::Deserialize)]
+#[derivative(Clone, Debug, Default)]
+#[serde(bound = "")]
+pub struct RamPermutationQueuesWitness<F: SmallField> {
+    pub unsorted_queue_witness: FullStateCircuitQueueRawWitness<
+        F,
+        MemoryQuery<F>,
+        FULL_SPONGE_QUEUE_STATE_WIDTH,
+        MEMORY_QUERY_PACKED_WIDTH,
+    >,
+    pub sorted_queue_witness: FullStateCircuitQueueRawWitness<
+        F,
+        MemoryQuery<F>,
+        FULL_SPONGE_QUEUE_STATE_WIDTH,
+        MEMORY_QUERY_PACKED_WIDTH,
+    >,
+}
+
+#[derive(Derivative, serde::Serialize, serde::Deserialize)]
+#[derivative(Clone, Debug, Default)]
+#[serde(bound = "")]
+pub struct RamPermutationCircuitInstancePartialWitness<F: SmallField> {
+    pub closed_form_input: RamPermutationCycleInputOutputWitness<F>,
 }

@@ -15,10 +15,9 @@ use crate::boojum::field::SmallField;
 use crate::boojum::gadgets::queue::QueueState;
 use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 use crate::ethereum_types::U256;
+use crate::snapshot_prof;
 use crate::toolset::GeometryConfig;
-use crate::witness::artifacts::{
-    DemuxedLogQueries, MemoryArtifacts, MemoryCircuitsArtifacts,
-};
+use crate::witness::artifacts::{DemuxedLogQueries, MemoryArtifacts, MemoryCircuitsArtifacts};
 use crate::witness::aux_data_structs::one_per_circuit_accumulator::{
     CircuitsEntryAccumulatorSparse, LastPerCircuitAccumulator,
 };
@@ -689,22 +688,14 @@ use crate::zkevm_circuits::demux_log_queue::DemuxOutput;
 /// Process log circuits that do not use memory.
 /// Storage, transient storage, events, l2 to l1 queries
 /// Precompiles use memory and are processed in 'process_memory_related_circuits'
-fn process_io_log_circuits<
-    CB: FnMut(ZkSyncBaseLayerCircuit),
-    QSCB: FnMut(
-        u64,
-        RecursionQueueSimulator<GoldilocksField>,
-        Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
-    ),
->(
+fn process_io_log_circuits<CB: FnMut(WitnessGenerationArtifact)>(
     geometry: &GeometryConfig,
     tree: impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
     demuxed_log_queues_states: IOLogsQueuesStates,
     demuxed_log_queries: DemuxedIOLogQueries,
     round_function: &Poseidon2Goldilocks,
     cs_for_witness_generation: &mut CsForWitnessGeneration,
-    mut circuit_callback: &mut CB,
-    mut recursion_queue_callback: &mut QSCB,
+    mut artifacts_callback: &mut CB,
 ) -> (
     LogCircuitsArtifacts<GoldilocksField>,
     FirstAndLastCircuitWitness<StorageApplicationObservableWitness<GoldilocksField>>,
@@ -801,8 +792,7 @@ fn process_io_log_circuits<
             geometry.cycles_per_storage_application as usize,
             geometry,
             cs_for_witness_generation,
-            &mut circuit_callback,
-            &mut recursion_queue_callback,
+            &mut artifacts_callback,
         );
 
     (
@@ -972,14 +962,7 @@ pub(crate) struct PrecompilesInputData {
     pub logs_queries: DemuxedPrecompilesLogQueries,
 }
 
-fn process_memory_related_circuits<
-    CB: FnMut(ZkSyncBaseLayerCircuit),
-    QSCB: FnMut(
-        u64,
-        RecursionQueueSimulator<GoldilocksField>,
-        Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
-    ),
->(
+fn process_memory_related_circuits<CB: FnMut(WitnessGenerationArtifact)>(
     geometry: &GeometryConfig,
     vm_snapshots: &Vec<VmSnapshot>,
     memory_queries: Vec<(Cycle, MemoryQuery)>,
@@ -989,8 +972,7 @@ fn process_memory_related_circuits<
     precompiles_data: PrecompilesInputData,
     round_function: &Poseidon2Goldilocks,
     cs_for_witness_generation: &mut CsForWitnessGeneration,
-    mut circuit_callback: &mut CB,
-    mut recursion_queue_callback: &mut QSCB,
+    mut artifacts_callback: &mut CB,
 ) -> (
     MemoryCircuitsArtifacts<GoldilocksField>,
     MemoryArtifacts<GoldilocksField>,
@@ -1055,6 +1037,8 @@ fn process_memory_related_circuits<
 
     let amount_of_explicit_memory_queries = memory_queries.len();
 
+    snapshot_prof("BEFORE QUEUES SIMULATION");
+
     use std::thread;
     let sorted_handle = {
         let memory_queries = memory_queries.clone();
@@ -1094,6 +1078,8 @@ fn process_memory_related_circuits<
         implicit_memory_queries.amount_of_queries(),
         implicit_memory_states.amount_of_states()
     );
+
+    snapshot_prof("AFTER QUEUES SIMULATION");
 
     use crate::witness::individual_circuits::memory_related::decommit_code::compute_decommitter_circuit_snapshots;
 
@@ -1197,6 +1183,8 @@ fn process_memory_related_circuits<
 
     tracing::debug!("Running RAM permutation simulation");
 
+    snapshot_prof("BEFORE RAM");
+
     let (ram_permutation_circuits, ram_permutation_circuits_compact_forms_witnesses) =
         compute_ram_circuit_snapshots(
             amount_of_memory_queries,
@@ -1208,9 +1196,10 @@ fn process_memory_related_circuits<
             num_non_deterministic_heap_queries,
             geometry,
             cs_for_witness_generation,
-            &mut circuit_callback,
-            &mut recursion_queue_callback,
+            &mut artifacts_callback,
         );
+
+    snapshot_prof("AFTER RAM");
 
     (
         circuits_data,
@@ -1221,16 +1210,20 @@ fn process_memory_related_circuits<
     )
 }
 
+pub enum WitnessGenerationArtifact {
+    BaseLayerCircuit(ZkSyncBaseLayerCircuit),
+    RecursionQueue(
+        (
+            u64,
+            RecursionQueueSimulator<GoldilocksField>,
+            Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
+        ),
+    ),
+}
+
 /// Make basic circuits instances and witnesses,
 /// create artifacts for recursion layer and scheduler
-pub(crate) fn create_artifacts_from_tracer<
-    CB: FnMut(ZkSyncBaseLayerCircuit),
-    QSCB: FnMut(
-        u64,
-        RecursionQueueSimulator<GoldilocksField>,
-        Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
-    ),
->(
+pub(crate) fn create_artifacts_from_tracer<CB: FnMut(WitnessGenerationArtifact)>(
     tracer: WitnessTracer,
     round_function: &Poseidon2Goldilocks,
     geometry: &GeometryConfig,
@@ -1242,8 +1235,7 @@ pub(crate) fn create_artifacts_from_tracer<
     evm_simulator_code_hash: U256,
     eip_4844_repack_inputs: [Option<Vec<u8>>; MAX_4844_BLOBS_PER_BLOCK],
     trusted_setup_path: &str,
-    mut circuit_callback: CB,
-    mut recursion_queue_callback: QSCB,
+    mut artifacts_callback: CB,
 ) -> (
     BlockFirstAndLastBasicCircuitsObservableWitnesses,
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
@@ -1354,8 +1346,7 @@ pub(crate) fn create_artifacts_from_tracer<
         round_function,
         geometry,
         &mut cs_for_witness_generation,
-        &mut circuit_callback,
-        &mut recursion_queue_callback,
+        &mut artifacts_callback,
     );
 
     tracing::debug!("Processing log circuits");
@@ -1371,8 +1362,7 @@ pub(crate) fn create_artifacts_from_tracer<
             demuxed_log_queries.io,
             round_function,
             &mut cs_for_witness_generation,
-            &mut circuit_callback,
-            &mut recursion_queue_callback,
+            &mut artifacts_callback,
         );
 
     tracing::debug!("Processing memory-related circuits");
@@ -1407,8 +1397,7 @@ pub(crate) fn create_artifacts_from_tracer<
         precompiles_data,
         round_function,
         &mut cs_for_witness_generation,
-        &mut circuit_callback,
-        &mut recursion_queue_callback,
+        &mut artifacts_callback,
     );
 
     tracing::debug!("Waiting for callstack sumulation");
@@ -1445,8 +1434,7 @@ pub(crate) fn create_artifacts_from_tracer<
         vm_snapshots,
         *round_function,
         &mut cs_for_witness_generation,
-        &mut circuit_callback,
-        &mut recursion_queue_callback,
+        &mut artifacts_callback,
     );
 
     tracing::debug!("Making remaining circuits");
@@ -1480,8 +1468,8 @@ pub(crate) fn create_artifacts_from_tracer<
         BaseLayerCircuitType::DecommitmentsFilter,
         decommittments_deduplicator_circuits_data,
         *round_function,
-        |x| circuit_callback(ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(x)),
-        &mut recursion_queue_callback,
+        |x| ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(x),
+        &mut artifacts_callback,
         &mut cs_for_witness_generation,
     );
 
@@ -1492,8 +1480,8 @@ pub(crate) fn create_artifacts_from_tracer<
             BaseLayerCircuitType::Decommiter,
             code_decommitter_circuits_data,
             *round_function,
-            |x| circuit_callback(ZkSyncBaseLayerCircuit::CodeDecommitter(x)),
-            &mut recursion_queue_callback,
+            |x| ZkSyncBaseLayerCircuit::CodeDecommitter(x),
+            &mut artifacts_callback,
             &mut cs_for_witness_generation,
         );
 
@@ -1504,8 +1492,8 @@ pub(crate) fn create_artifacts_from_tracer<
             BaseLayerCircuitType::KeccakPrecompile,
             keccak256_circuits_data,
             *round_function,
-            |x| circuit_callback(ZkSyncBaseLayerCircuit::KeccakRoundFunction(x)),
-            &mut recursion_queue_callback,
+            |x| ZkSyncBaseLayerCircuit::KeccakRoundFunction(x),
+            &mut artifacts_callback,
             &mut cs_for_witness_generation,
         );
 
@@ -1516,8 +1504,8 @@ pub(crate) fn create_artifacts_from_tracer<
             BaseLayerCircuitType::Sha256Precompile,
             sha256_circuits_data,
             *round_function,
-            |x| circuit_callback(ZkSyncBaseLayerCircuit::Sha256RoundFunction(x)),
-            &mut recursion_queue_callback,
+            |x| ZkSyncBaseLayerCircuit::Sha256RoundFunction(x),
+            &mut artifacts_callback,
             &mut cs_for_witness_generation,
         );
 
@@ -1528,8 +1516,8 @@ pub(crate) fn create_artifacts_from_tracer<
             BaseLayerCircuitType::EcrecoverPrecompile,
             ecrecover_circuits_data,
             *round_function,
-            |x| circuit_callback(ZkSyncBaseLayerCircuit::ECRecover(x)),
-            &mut recursion_queue_callback,
+            |x| ZkSyncBaseLayerCircuit::ECRecover(x),
+            &mut artifacts_callback,
             &mut cs_for_witness_generation,
         );
 
@@ -1540,8 +1528,8 @@ pub(crate) fn create_artifacts_from_tracer<
             BaseLayerCircuitType::Secp256r1Verify,
             secp256r1_verify_circuits_data,
             *round_function,
-            |x| circuit_callback(ZkSyncBaseLayerCircuit::Secp256r1Verify(x)),
-            &mut recursion_queue_callback,
+            |x| ZkSyncBaseLayerCircuit::Secp256r1Verify(x),
+            &mut artifacts_callback,
             &mut cs_for_witness_generation,
         );
 
@@ -1551,8 +1539,8 @@ pub(crate) fn create_artifacts_from_tracer<
         BaseLayerCircuitType::StorageFilter,
         storage_deduplicator_circuit_data,
         *round_function,
-        |x| circuit_callback(ZkSyncBaseLayerCircuit::StorageSorter(x)),
-        &mut recursion_queue_callback,
+        |x| ZkSyncBaseLayerCircuit::StorageSorter(x),
+        &mut artifacts_callback,
         &mut cs_for_witness_generation,
     );
 
@@ -1562,8 +1550,8 @@ pub(crate) fn create_artifacts_from_tracer<
         BaseLayerCircuitType::EventsRevertsFilter,
         events_deduplicator_circuit_data,
         *round_function,
-        |x| circuit_callback(ZkSyncBaseLayerCircuit::EventsSorter(x)),
-        &mut recursion_queue_callback,
+        |x| ZkSyncBaseLayerCircuit::EventsSorter(x),
+        &mut artifacts_callback,
         &mut cs_for_witness_generation,
     );
 
@@ -1574,8 +1562,8 @@ pub(crate) fn create_artifacts_from_tracer<
             BaseLayerCircuitType::L1MessagesRevertsFilter,
             l1_messages_deduplicator_circuit_data,
             *round_function,
-            |x| circuit_callback(ZkSyncBaseLayerCircuit::L1MessagesSorter(x)),
-            &mut recursion_queue_callback,
+            |x| ZkSyncBaseLayerCircuit::L1MessagesSorter(x),
+            &mut artifacts_callback,
             &mut cs_for_witness_generation,
         );
 
@@ -1586,8 +1574,8 @@ pub(crate) fn create_artifacts_from_tracer<
             BaseLayerCircuitType::L1MessagesHasher,
             l1_messages_linear_hash_data,
             *round_function,
-            |x| circuit_callback(ZkSyncBaseLayerCircuit::L1MessagesHasher(x)),
-            &mut recursion_queue_callback,
+            |x| ZkSyncBaseLayerCircuit::L1MessagesHasher(x),
+            &mut artifacts_callback,
             &mut cs_for_witness_generation,
         );
 
@@ -1600,8 +1588,8 @@ pub(crate) fn create_artifacts_from_tracer<
         BaseLayerCircuitType::TransientStorageChecker,
         transient_storage_sorter_circuit_data,
         *round_function,
-        |x| circuit_callback(ZkSyncBaseLayerCircuit::TransientStorageSorter(x)),
-        &mut recursion_queue_callback,
+        |x| ZkSyncBaseLayerCircuit::TransientStorageSorter(x),
+        &mut artifacts_callback,
         &mut cs_for_witness_generation,
     );
 
@@ -1615,8 +1603,8 @@ pub(crate) fn create_artifacts_from_tracer<
         BaseLayerCircuitType::EIP4844Repack,
         eip_4844_circuits.clone(),
         *round_function,
-        |x| circuit_callback(ZkSyncBaseLayerCircuit::EIP4844Repack(x)),
-        &mut recursion_queue_callback,
+        |x| ZkSyncBaseLayerCircuit::EIP4844Repack(x),
+        &mut artifacts_callback,
         &mut cs_for_witness_generation,
     );
 
