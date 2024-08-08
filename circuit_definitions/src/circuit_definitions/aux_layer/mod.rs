@@ -16,6 +16,7 @@ use crate::zkevm_circuits::recursion::compression::CompressionRecursionConfig;
 use snark_wrapper::boojum::config::CSConfig;
 use snark_wrapper::boojum::dag::CircuitResolver;
 use snark_wrapper::boojum::dag::StCircuitResolver;
+use snark_wrapper::verifier::WrapperCircuitWidth3NoLookupNoCustomGate;
 
 use crate::ProofConfig;
 
@@ -422,19 +423,19 @@ impl ZkSyncCompressionForWrapperCircuit {
         use crate::boojum::cs::traits::circuit::CircuitBuilder;
         match &self {
             Self::CompressionMode1Circuit(..) => {
-                <CompressionMode1Circuit as CircuitBuilder<GoldilocksField>>::geometry()
+                <CompressionMode1ForWrapperCircuit as CircuitBuilder<GoldilocksField>>::geometry()
             }
             Self::CompressionMode2Circuit(..) => {
-                <CompressionMode2Circuit as CircuitBuilder<GoldilocksField>>::geometry()
+                <CompressionMode2ForWrapperCircuit as CircuitBuilder<GoldilocksField>>::geometry()
             }
             Self::CompressionMode3Circuit(..) => {
-                <CompressionMode3Circuit as CircuitBuilder<GoldilocksField>>::geometry()
+                <CompressionMode3ForWrapperCircuit as CircuitBuilder<GoldilocksField>>::geometry()
             }
             Self::CompressionMode4Circuit(..) => {
-                <CompressionMode4Circuit as CircuitBuilder<GoldilocksField>>::geometry()
+                <CompressionMode4ForWrapperCircuit as CircuitBuilder<GoldilocksField>>::geometry()
             }
             Self::CompressionMode5Circuit(..) => {
-                <CompressionMode5Circuit as CircuitBuilder<GoldilocksField>>::geometry()
+                <CompressionMode5ForWrapperCircuit as CircuitBuilder<GoldilocksField>>::geometry()
             }
         }
     }
@@ -650,6 +651,14 @@ use snark_wrapper::implementations::poseidon2::CircuitPoseidon2Sponge;
 use snark_wrapper::verifier::WrapperCircuit;
 
 pub type ZkSyncSnarkWrapperCircuit = WrapperCircuit<
+    Bn256,
+    Poseidon2Sponge<Bn256, GoldilocksField, AbsorptionModeReplacement<Fr>, 2, 3>,
+    CircuitPoseidon2Sponge<Bn256, 2, 3, 3, true>,
+    CircuitPoseidon2Transcript<Bn256, 2, 3, 3, true>,
+    ZkSyncCompressionWrapper,
+>;
+
+pub type ZkSyncSnarkWrapperCircuitNoLookupCustomGate = WrapperCircuitWidth3NoLookupNoCustomGate<
     Bn256,
     Poseidon2Sponge<Bn256, GoldilocksField, AbsorptionModeReplacement<Fr>, 2, 3>,
     CircuitPoseidon2Sponge<Bn256, 2, 3, 3, true>,
