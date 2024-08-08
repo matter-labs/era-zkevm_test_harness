@@ -316,8 +316,6 @@ impl<
 pub struct FullWidthQueueIntermediateStates<F: SmallField, const SW: usize, const ROUNDS: usize> {
     pub head: [F; SW],
     pub tail: [F; SW],
-    pub old_head: [F; SW],
-    pub old_tail: [F; SW],
     pub num_items: u32,
     pub round_function_execution_pairs: [([F; SW], [F; SW]); ROUNDS],
 }
@@ -433,8 +431,6 @@ impl<
         let intermediate_info = FullWidthQueueIntermediateStates {
             head: self.head,
             tail: new_tail,
-            old_head: self.head,
-            old_tail,
             num_items: self.num_items,
             round_function_execution_pairs: states,
         };
@@ -473,8 +469,6 @@ impl<
         let intermediate_info = FullWidthQueueIntermediateStates {
             head: self.head,
             tail: self.tail,
-            old_head,
-            old_tail: self.tail,
             num_items: self.num_items,
             round_function_execution_pairs: states,
         };
@@ -562,6 +556,12 @@ impl<
         }
     }
 
+    pub fn replace_container(mut self, container: C) -> (Self, C) {
+        let prev_container = self.witness;
+        self.witness = container;
+        (self, prev_container)
+    }
+
     pub fn take_sponge_like_queue_state(&self) -> QueueStateWitness<F, SW> {
         let result = QueueStateWitness {
             head: self.head,
@@ -605,8 +605,6 @@ impl<
         let intermediate_info = FullWidthQueueIntermediateStates {
             head: self.head,
             tail: new_tail,
-            old_head: self.head,
-            old_tail,
             num_items: self.num_items,
             round_function_execution_pairs: states,
         };

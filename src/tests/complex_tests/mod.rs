@@ -266,6 +266,7 @@ pub(crate) fn generate_base_layer(
                 .map(|x| ZkSyncBaseLayerStorage::from_inner(a as u8, x))
                 .collect(),
         )),
+        _ => unimplemented!(),
     };
 
     let (scheduler_partial_input, _aux_data) = run(

@@ -40,6 +40,9 @@ pub(crate) fn compute_ram_circuit_snapshots<CB: FnMut(WitnessGenerationArtifact)
     sorted_memory_queue_states_accumulator: LastPerCircuitAccumulator<MemoryQueueState<Field>>,
     memory_queue_simulator: MemoryQueuePerCircuitSimulator<Field>,
     sorted_memory_queries_simulator: MemoryQueuePerCircuitSimulator<Field>,
+    sorted_queries_aux_data_for_chunks: Vec<(u32, MemoryQuery, usize)>,
+    sorted_encodings: Vec<[Field; 8]>, // TODO
+    unsorted_encodings: Vec<[Field; 8]>,
     round_function: &RoundFunction,
     num_non_deterministic_heap_queries: usize,
     geometry: &GeometryConfig,
@@ -99,6 +102,8 @@ pub(crate) fn compute_ram_circuit_snapshots<CB: FnMut(WitnessGenerationArtifact)
         total_amount_of_queries
     );
 
+    assert_eq!(unsorted_encodings.len(), sorted_encodings.len());
+
     let mut lhs_grand_product_chains =
         Vec::with_capacity(DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS);
     let mut rhs_grand_product_chains =
@@ -118,21 +123,13 @@ pub(crate) fn compute_ram_circuit_snapshots<CB: FnMut(WitnessGenerationArtifact)
             round_function,
         );
 
-        let lhs_contributions: Vec<_> = memory_queue_simulator
-            .witness
-            .iter()
-            .map(|el| &el.0)
-            .collect();
-        let rhs_contributions: Vec<_> = sorted_memory_queries_simulator
-            .witness
-            .iter()
-            .map(|el| &el.0)
-            .collect();
+        let lhs_contributions = unsorted_encodings;
+        let rhs_contributions = sorted_encodings;
 
         for idx in 0..DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS {
             let (lhs_grand_product_chain, rhs_grand_product_chain) = compute_grand_product_chains(
-                &lhs_contributions,
-                &rhs_contributions,
+                &lhs_contributions.iter().collect(), // TODO
+                &rhs_contributions.iter().collect(),
                 &challenges[idx],
             );
 
@@ -140,11 +137,11 @@ pub(crate) fn compute_ram_circuit_snapshots<CB: FnMut(WitnessGenerationArtifact)
             assert_eq!(rhs_grand_product_chain.len(), total_amount_of_queries);
             assert_eq!(
                 lhs_grand_product_chain.len(),
-                memory_queue_simulator.witness.len()
+                memory_queue_simulator.num_items as usize
             );
             assert_eq!(
                 rhs_grand_product_chain.len(),
-                sorted_memory_queries_simulator.witness.len()
+                sorted_memory_queries_simulator.num_items as usize
             );
 
             lhs_grand_product_chains.push(lhs_grand_product_chain);
@@ -168,23 +165,6 @@ pub(crate) fn compute_ram_circuit_snapshots<CB: FnMut(WitnessGenerationArtifact)
         unsorted_memory_queue_chunk_final_states.len(),
         transposed_rhs_chains.len()
     );
-    let unsorted_witness_chunks = memory_queue_simulator
-        .witness
-        .into_circuits(amount_of_circuits);
-
-    assert_eq!(
-        unsorted_memory_queue_chunk_final_states.len(),
-        unsorted_witness_chunks.len()
-    );
-
-    let sorted_witness_chunks = sorted_memory_queries_simulator
-        .witness
-        .into_circuits(amount_of_circuits);
-
-    assert_eq!(
-        unsorted_memory_queue_chunk_final_states.len(),
-        sorted_witness_chunks.len()
-    );
 
     let unsorted_global_final_state = unsorted_memory_queue_chunk_final_states
         .last()
@@ -205,8 +185,7 @@ pub(crate) fn compute_ram_circuit_snapshots<CB: FnMut(WitnessGenerationArtifact)
         .zip(sorted_memory_queue_chunk_final_states.into_iter())
         .zip(transposed_lhs_chains.into_iter())
         .zip(transposed_rhs_chains.into_iter())
-        .zip(unsorted_witness_chunks)
-        .zip(sorted_witness_chunks);
+        .zip(sorted_queries_aux_data_for_chunks);
 
     // now trivial transformation into desired data structures,
     // and we are all good
@@ -238,13 +217,10 @@ pub(crate) fn compute_ram_circuit_snapshots<CB: FnMut(WitnessGenerationArtifact)
         idx,
         (
             (
-                (
-                    ((unsorted_sponge_final_state, sorted_sponge_final_state), lhs_grand_product),
-                    rhs_grand_product,
-                ),
-                unsorted_states,
+                ((unsorted_sponge_final_state, sorted_sponge_final_state), lhs_grand_product),
+                rhs_grand_product,
             ),
-            sorted_states,
+            (num_nondet_writes_in_chunk, last_sorted_query, sorted_states_len),
         ),
     ) in it.enumerate()
     {
@@ -259,7 +235,15 @@ pub(crate) fn compute_ram_circuit_snapshots<CB: FnMut(WitnessGenerationArtifact)
 
         // we need witnesses to pop elements from the front of the queue
 
-        let unsorted_witness = FullStateCircuitQueueRawWitness {
+        let unsorted_witness_placeholder = FullStateCircuitQueueRawWitness {
+            elements: Default::default(),
+        };
+
+        let sorted_witness_placeholder = FullStateCircuitQueueRawWitness {
+            elements: Default::default(),
+        };
+
+        /*let unsorted_witness = FullStateCircuitQueueRawWitness {
             elements: unsorted_states
                 .into_iter()
                 .map(|el| {
@@ -277,14 +261,14 @@ pub(crate) fn compute_ram_circuit_snapshots<CB: FnMut(WitnessGenerationArtifact)
                     (witness, el.1)
                 })
                 .collect(),
-        };
+        }; */
 
         // now we need to have final grand product value that will also become an input for the next circuit
 
         let if_first = idx == 0;
         let is_last = idx == num_circuits - 1;
         // TODO into_iter
-        let num_nondet_writes_in_chunk = sorted_states
+        /*let num_nondet_writes_in_chunk = sorted_states
             .iter()
             .filter(|el| {
                 let query = &el.2;
@@ -293,6 +277,7 @@ pub(crate) fn compute_ram_circuit_snapshots<CB: FnMut(WitnessGenerationArtifact)
                     && query.location.page.0 == BOOTLOADER_HEAP_PAGE
             })
             .count();
+        */
 
         let new_num_nondet_writes =
             current_number_of_nondet_writes + (num_nondet_writes_in_chunk as u32);
@@ -315,7 +300,6 @@ pub(crate) fn compute_ram_circuit_snapshots<CB: FnMut(WitnessGenerationArtifact)
                 .try_into()
                 .unwrap();
 
-        let last_sorted_query = sorted_states.last().unwrap().2;
         use circuit_definitions::encodings::memory_query::*;
         let sorting_key = sorting_key(&last_sorted_query);
         let comparison_key = comparison_key(&last_sorted_query);
@@ -385,11 +369,11 @@ pub(crate) fn compute_ram_circuit_snapshots<CB: FnMut(WitnessGenerationArtifact)
                     num_nondeterministic_writes: new_num_nondet_writes,
                 },
             },
-            unsorted_queue_witness: unsorted_witness,
-            sorted_queue_witness: sorted_witness,
+            unsorted_queue_witness: unsorted_witness_placeholder,
+            sorted_queue_witness: sorted_witness_placeholder,
         };
 
-        if sorted_states.len() % per_circuit_capacity != 0 {
+        if sorted_states_len % per_circuit_capacity != 0 {
             // RAM circuit does padding, so all previous values must be reset
             instance_witness
                 .closed_form_input
