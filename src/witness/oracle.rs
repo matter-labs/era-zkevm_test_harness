@@ -37,6 +37,7 @@ use crate::zkevm_circuits::base_structures::vm_state::{
 use crate::zkevm_circuits::scheduler::block_header::MAX_4844_BLOBS_PER_BLOCK;
 use circuit_definitions::boojum::field::goldilocks::GoldilocksField;
 use circuit_definitions::boojum::field::{Field, U64Representable};
+use circuit_definitions::boojum::gadgets::queue::QueueStateWitness;
 use circuit_definitions::boojum::implementations::poseidon2::Poseidon2Goldilocks;
 use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit;
 use circuit_definitions::encodings::callstack_entry::ExtendedCallstackEntry;
@@ -833,20 +834,17 @@ fn simulate_memory_queue(
     round_function: Poseidon2Goldilocks,
     channel_sender: Sender<WitnessGenerationArtifact>,
 ) -> (
-    MemoryArtifacts<GoldilocksField>,
+    CircuitsEntryAccumulatorSparse<(u32, QueueStateWitness<GoldilocksField, FULL_SPONGE_QUEUE_STATE_WIDTH>)>,
     MemoryQueueState<GoldilocksField>,
     LastPerCircuitAccumulator<MemoryQueueState<GoldilocksField>>,
     MemoryQueuePerCircuitSimulator<GoldilocksField>,
     ImplicitMemoryStates<GoldilocksField>,
     Vec<[GoldilocksField; 8]>, // TODO
 ) {
-    let mut memory_artifacts_for_main_vm = MemoryArtifacts {
-        memory_queries: vec![],
-        memory_queue_entry_states: CircuitsEntryAccumulatorSparse::new(
-            geometry.cycles_per_vm_snapshot as usize,
-            (0, QueueState::placeholder_witness()),
-        ),
-    };
+    let mut memory_queue_entry_states = CircuitsEntryAccumulatorSparse::new(
+        geometry.cycles_per_vm_snapshot as usize,
+        (0, QueueState::placeholder_witness()),
+    );
 
     // for RAM permutation circuits
     let mut memory_queue_states_accumulator =
@@ -871,8 +869,7 @@ fn simulate_memory_queue(
             memory_queue_simulator.push_and_output_intermediate_data(*query, &round_function);
 
         memory_queue_states_accumulator.push(intermediate_info);
-        memory_artifacts_for_main_vm
-            .memory_queue_entry_states
+        memory_queue_entry_states
             .push((*cycle, transform_sponge_like_queue_state(intermediate_info)));
 
         if memory_queue_simulator.witness.len() == geometry.cycles_per_ram_permutation as usize {
@@ -943,7 +940,7 @@ fn simulate_memory_queue(
     }
 
     (
-        memory_artifacts_for_main_vm,
+        memory_queue_entry_states,
         final_explicit_memory_queue_state,
         memory_queue_states_accumulator,
         memory_queue_simulator,
@@ -1206,7 +1203,7 @@ fn process_memory_related_circuits<CB: FnMut(WitnessGenerationArtifact)>(
     }
 
     let (
-        mut memory_artifacts_for_main_vm,
+        memory_queue_entry_states_for_main_vm,
         final_explicit_memory_queue_state,
         memory_queue_states_accumulator,
         memory_queue_simulator,
@@ -1221,10 +1218,12 @@ fn process_memory_related_circuits<CB: FnMut(WitnessGenerationArtifact)>(
         sorted_queries_aux_data_for_chunks,
     ) = sorted_handle.join().unwrap();
 
-    let memory_queries = std::sync::Arc::<Vec<(u32, MemoryQuery)>>::into_inner(memory_queries_arc).unwrap();
-    memory_artifacts_for_main_vm.memory_queries = memory_queries;
+    let memory_artifacts_for_main_vm = MemoryArtifacts {
+        memory_queries: Arc::into_inner(memory_queries_arc).unwrap(),
+        memory_queue_entry_states: memory_queue_entry_states_for_main_vm
+    };
+    let implicit_memory_queries = Arc::into_inner(implicit_memory_queries_arc).unwrap();
 
-    let implicit_memory_queries = std::sync::Arc::<ImplicitMemoryQueries>::into_inner(implicit_memory_queries_arc).unwrap();
     // direct VM related part is done, other subcircuit's functionality is moved to other functions
     // that should properly do sorts and memory writes
 
