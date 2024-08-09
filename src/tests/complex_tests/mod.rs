@@ -39,6 +39,7 @@ use crate::zk_evm::GenericNoopTracer;
 use crate::zkevm_circuits::eip_4844::input::*;
 use crate::zkevm_circuits::scheduler::block_header::MAX_4844_BLOBS_PER_BLOCK;
 use crate::zkevm_circuits::scheduler::input::SchedulerCircuitInstanceWitness;
+use boojum::gadgets::queue::full_state_queue::FullStateCircuitQueueRawWitness;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use circuit_definitions::circuit_definitions::aux_layer::compression::{
     self, CompressionMode1Circuit,
@@ -256,6 +257,8 @@ pub(crate) fn generate_base_layer(
 
     let mut basic_block_circuits = vec![];
     let mut recursion_queues = vec![];
+    let mut unsorted_memory_queue_witnesses = vec![];
+    let mut sorted_memory_queue_witnesses = vec![];
 
     let artifacts_callback = |artifact: WitnessGenerationArtifact| match artifact {
         WitnessGenerationArtifact::BaseLayerCircuit(circuit) => basic_block_circuits.push(circuit),
@@ -266,7 +269,8 @@ pub(crate) fn generate_base_layer(
                 .map(|x| ZkSyncBaseLayerStorage::from_inner(a as u8, x))
                 .collect(),
         )),
-        _ => unimplemented!(),
+        WitnessGenerationArtifact::UnsortedMemoryQueueWitness(witnesses) => unsorted_memory_queue_witnesses.push(witnesses),
+        WitnessGenerationArtifact::SortedMemoryQueueWitness(witnesses) => sorted_memory_queue_witnesses.push(witnesses),
     };
 
     let (scheduler_partial_input, _aux_data) = run(
@@ -287,6 +291,25 @@ pub(crate) fn generate_base_layer(
         blobs,
         artifacts_callback,
     );
+
+    let mut unsorted_memory_queue_witnesses_it = unsorted_memory_queue_witnesses.into_iter();
+    let mut sorted_memory_queue_witnesses = sorted_memory_queue_witnesses.into_iter();
+    for el in basic_block_circuits.iter_mut() {
+        match &el {
+            ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {
+                let mut witness = inner.witness.take().unwrap();
+                witness.sorted_queue_witness = FullStateCircuitQueueRawWitness {
+                    elements: sorted_memory_queue_witnesses.next().unwrap().into()
+                };
+                witness.unsorted_queue_witness = FullStateCircuitQueueRawWitness {
+                    elements: unsorted_memory_queue_witnesses_it.next().unwrap().into()
+                };
+
+                inner.witness.store(Some(witness));
+            },
+            _ => {}
+        }
+    }
 
     (
         basic_block_circuits,

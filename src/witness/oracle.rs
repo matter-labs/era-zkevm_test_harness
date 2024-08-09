@@ -933,7 +933,7 @@ fn simulate_memory_queue(
         }
 
         channel_sender
-            .send(WitnessGenerationArtifact::SortedMemoryQueueWitness(
+            .send(WitnessGenerationArtifact::UnsortedMemoryQueueWitness(
                 unsorted_witnesses_for_circuit,
             ))
             .unwrap();
@@ -1045,7 +1045,7 @@ fn simulate_sorted_memory_queue(
             }
 
             channel_sender
-                .send(WitnessGenerationArtifact::UnsortedMemoryQueueWitness(
+                .send(WitnessGenerationArtifact::SortedMemoryQueueWitness(
                     sorted_witnesses_for_circuit,
                 ))
                 .unwrap();
