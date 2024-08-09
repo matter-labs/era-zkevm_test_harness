@@ -42,6 +42,7 @@ use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit
 use circuit_definitions::encodings::callstack_entry::ExtendedCallstackEntry;
 use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::encodings::{CircuitEquivalentReflection, LogQueueSimulator};
+use circuit_definitions::zkevm_circuits::base_structures::memory_query::MemoryQueryWitness;
 use circuit_definitions::zkevm_circuits::eip_4844::input::EIP4844CircuitInstanceWitness;
 use circuit_definitions::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
@@ -883,29 +884,27 @@ fn simulate_memory_queue(
                 ),
             );
 
+            let mut unsorted_witnesses_for_circuit = Vec::with_capacity(witnesses.len());
             for witness in witnesses.iter() {
                 encodings_witnesses.push(witness.0);
+                unsorted_witnesses_for_circuit.push((witness.2.reflect(), witness.1));
             }
-
-            let w = witnesses.into_circuits(1);
             channel_sender
                 .send(WitnessGenerationArtifact::UnsortedMemoryQueueWitness(
-                    w[0].clone(),
+                    unsorted_witnesses_for_circuit,
                 ))
                 .unwrap();
         }
     }
 
-    {
-        assert_eq!(
-            memory_artifacts_for_main_vm.memory_queries.len(),
-            memory_queue_states_accumulator.len()
-        );
-        assert_eq!(
-            memory_artifacts_for_main_vm.memory_queries.len(),
-            memory_queue_simulator.num_items as usize
-        );
-    }
+    assert_eq!(
+        memory_artifacts_for_main_vm.memory_queries.len(),
+        memory_queue_states_accumulator.len()
+    );
+    assert_eq!(
+        memory_artifacts_for_main_vm.memory_queries.len(),
+        memory_queue_simulator.num_items as usize
+    );
 
     let final_explicit_memory_queue_state = memory_queue_states_accumulator.last().unwrap().clone();
 
@@ -926,14 +925,19 @@ fn simulate_memory_queue(
 
     let amount_of_ram_circuits = (witnesses.len() as u32 + geometry.cycles_per_ram_permutation - 1)
         / geometry.cycles_per_ram_permutation;
+
     for unsorted_witnesses_for_chunk in witnesses.into_circuits(amount_of_ram_circuits as usize) {
-        for witness in unsorted_witnesses_for_chunk.iter() {
-            encodings_witnesses.push(witness.0)
+        let mut unsorted_witnesses_for_circuit =
+            Vec::with_capacity(unsorted_witnesses_for_chunk.len());
+
+        for witness in unsorted_witnesses_for_chunk.into_iter() {
+            encodings_witnesses.push(witness.0);
+            unsorted_witnesses_for_circuit.push((witness.2.reflect(), witness.1));
         }
 
         channel_sender
             .send(WitnessGenerationArtifact::SortedMemoryQueueWitness(
-                unsorted_witnesses_for_chunk,
+                unsorted_witnesses_for_circuit,
             ))
             .unwrap();
     }
@@ -992,20 +996,21 @@ fn simulate_sorted_memory_queue(
             amount_of_queries,
         );
 
-    let mut sorted_encodings = Vec::with_capacity(all_memory_queries_sorted.len());
-    let amount_of_ram_circuits =
-        (all_memory_queries_sorted.len() as u32 + geometry.cycles_per_ram_permutation - 1)
-            / geometry.cycles_per_ram_permutation;
+    let mut sorted_encodings = Vec::with_capacity(amount_of_queries);
+    let amount_of_ram_circuits = (amount_of_queries as u32 + geometry.cycles_per_ram_permutation
+        - 1)
+        / geometry.cycles_per_ram_permutation;
     let mut sorted_queries_aux_data_for_chunks =
         Vec::with_capacity(amount_of_ram_circuits as usize);
 
-    for query in all_memory_queries_sorted.into_iter() {
+    for (idx, query) in all_memory_queries_sorted.into_iter().enumerate() {
         let (_, intermediate_info) = sorted_memory_queries_simulator
             .push_and_output_intermediate_data(*query, &round_function);
         sorted_memory_queue_states_accumulator.push(intermediate_info);
 
         if sorted_memory_queries_simulator.witness.len()
             == geometry.cycles_per_ram_permutation as usize
+            || idx == amount_of_queries - 1
         {
             let witnesses;
             (sorted_memory_queries_simulator, witnesses) = sorted_memory_queries_simulator
@@ -1034,55 +1039,20 @@ fn simulate_sorted_memory_queue(
                 sorted_states_len,
             ));
 
-            for witness in sorted_witnesses_for_chunk.iter() {
+            let mut sorted_witnesses_for_circuit =
+                Vec::with_capacity(sorted_witnesses_for_chunk.len());
+
+            for witness in sorted_witnesses_for_chunk.into_iter() {
                 sorted_encodings.push(witness.0);
+                sorted_witnesses_for_circuit.push((witness.2.reflect(), witness.1));
             }
 
             channel_sender
                 .send(WitnessGenerationArtifact::UnsortedMemoryQueueWitness(
-                    sorted_witnesses_for_chunk,
+                    sorted_witnesses_for_circuit,
                 ))
                 .unwrap();
         }
-    }
-
-    if sorted_memory_queries_simulator.witness.len() != 0 as usize {
-        let witnesses;
-        (sorted_memory_queries_simulator, witnesses) = sorted_memory_queries_simulator
-            .replace_container(PerCircuitAccumulator::with_flat_capacity(
-                geometry.cycles_per_ram_permutation as usize,
-                geometry.cycles_per_ram_permutation as usize,
-            ));
-
-        let sorted_witnesses_for_chunk = witnesses.into_circuits(1)[0].clone();
-
-        let sorted_states_len = sorted_witnesses_for_chunk.len();
-        let num_nondet_writes_in_chunk = sorted_witnesses_for_chunk
-            .iter()
-            .filter(|el| {
-                let query = &el.2;
-                query.rw_flag == true
-                    && query.timestamp.0 == 0
-                    && query.location.page.0 == BOOTLOADER_HEAP_PAGE
-            })
-            .count();
-        let last_sorted_query = sorted_witnesses_for_chunk.last().unwrap().2;
-
-        sorted_queries_aux_data_for_chunks.push((
-            num_nondet_writes_in_chunk as u32,
-            last_sorted_query,
-            sorted_states_len,
-        ));
-
-        for witness in sorted_witnesses_for_chunk.iter() {
-            sorted_encodings.push(witness.0);
-        }
-
-        channel_sender
-            .send(WitnessGenerationArtifact::UnsortedMemoryQueueWitness(
-                sorted_witnesses_for_chunk,
-            ))
-            .unwrap();
     }
 
     (
@@ -1400,8 +1370,8 @@ pub enum WitnessGenerationArtifact {
             Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
         ),
     ),
-    SortedMemoryQueueWitness(Vec<([GoldilocksField; 8], [GoldilocksField; 12], MemoryQuery)>),
-    UnsortedMemoryQueueWitness(Vec<([GoldilocksField; 8], [GoldilocksField; 12], MemoryQuery)>),
+    SortedMemoryQueueWitness(Vec<(MemoryQueryWitness<GoldilocksField>, [GoldilocksField; 12])>),
+    UnsortedMemoryQueueWitness(Vec<(MemoryQueryWitness<GoldilocksField>, [GoldilocksField; 12])>),
 }
 
 /// Make basic circuits instances and witnesses,
