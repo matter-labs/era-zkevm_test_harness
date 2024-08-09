@@ -1444,6 +1444,8 @@ pub(crate) fn create_artifacts_from_tracer<CB: FnMut(WitnessGenerationArtifact)>
         std::mem::take(&mut callstack_with_aux_data.flat_new_frames_history);
     drop(callstack_with_aux_data);
 
+    snapshot_prof("BEFORE MUX LOG QUEUE CIRCUITS");
+
     tracing::debug!("Running multiplexed log queue simulation");
 
     // We have all log queries in one multiplexed queue. We need to simulate this queue,
@@ -1460,6 +1462,8 @@ pub(crate) fn create_artifacts_from_tracer<CB: FnMut(WitnessGenerationArtifact)>
         final_callstack_entry,
         *round_function,
     );
+
+    snapshot_prof("AFTER MUX LOG QUEUE CIRCUITS");
 
     use std::thread;
     let callstack_handle = {
@@ -1509,6 +1513,8 @@ pub(crate) fn create_artifacts_from_tracer<CB: FnMut(WitnessGenerationArtifact)>
 
     tracing::debug!("Processing log circuits");
 
+    snapshot_prof("AFTER LOG DEMUX CIRCUITS");
+
     // Process part of log circuits that do not use memory (I/O-like).
     // Precompiles will be processed in process_memory_related_circuits.
     // Also makes storage application circuits and compact form witnesses.
@@ -1522,6 +1528,8 @@ pub(crate) fn create_artifacts_from_tracer<CB: FnMut(WitnessGenerationArtifact)>
             &mut cs_for_witness_generation,
             &mut artifacts_callback,
         );
+
+    snapshot_prof("AFTER LOG CIRCUITS");
 
     tracing::debug!("Processing memory-related circuits");
 
