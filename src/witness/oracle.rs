@@ -828,8 +828,8 @@ use circuit_definitions::encodings::memory_query::MemoryQueueState;
 
 fn simulate_memory_queue(
     geometry: GeometryConfig,
-    memory_queries: Vec<(Cycle, MemoryQuery)>,
-    implicit_memory_queries: ImplicitMemoryQueries,
+    memory_queries: Arc<Vec<(Cycle, MemoryQuery)>>,
+    implicit_memory_queries: Arc<ImplicitMemoryQueries>,
     round_function: Poseidon2Goldilocks,
     channel_sender: Sender<WitnessGenerationArtifact>,
 ) -> (
@@ -841,7 +841,7 @@ fn simulate_memory_queue(
     Vec<[GoldilocksField; 8]>, // TODO
 ) {
     let mut memory_artifacts_for_main_vm = MemoryArtifacts {
-        memory_queries,
+        memory_queries: vec![],
         memory_queue_entry_states: CircuitsEntryAccumulatorSparse::new(
             geometry.cycles_per_vm_snapshot as usize,
             (0, QueueState::placeholder_witness()),
@@ -852,7 +852,7 @@ fn simulate_memory_queue(
     let mut memory_queue_states_accumulator =
         LastPerCircuitAccumulator::<MemoryQueueState<GoldilocksField>>::with_flat_capacity(
             geometry.cycles_per_ram_permutation as usize,
-            memory_artifacts_for_main_vm.memory_queries.len(),
+            memory_queries.len(),
         );
 
     use crate::witness::aux_data_structs::per_circuit_accumulator::PerCircuitAccumulator;
@@ -866,7 +866,7 @@ fn simulate_memory_queue(
     let mut encodings_witnesses = vec![];
 
     // very slow
-    for (cycle, query) in memory_artifacts_for_main_vm.memory_queries.iter() {
+    for (cycle, query) in memory_queries.iter() {
         let (_, intermediate_info) =
             memory_queue_simulator.push_and_output_intermediate_data(*query, &round_function);
 
@@ -898,11 +898,11 @@ fn simulate_memory_queue(
     }
 
     assert_eq!(
-        memory_artifacts_for_main_vm.memory_queries.len(),
+        memory_queries.len(),
         memory_queue_states_accumulator.len()
     );
     assert_eq!(
-        memory_artifacts_for_main_vm.memory_queries.len(),
+        memory_queries.len(),
         memory_queue_simulator.num_items as usize
     );
 
@@ -954,8 +954,8 @@ fn simulate_memory_queue(
 
 fn simulate_sorted_memory_queue(
     geometry: GeometryConfig,
-    memory_queries: Vec<(Cycle, MemoryQuery)>,
-    implicit_memory_queries: ImplicitMemoryQueries,
+    memory_queries: Arc<Vec<(Cycle, MemoryQuery)>>,
+    implicit_memory_queries: Arc<ImplicitMemoryQueries>,
     round_function: Poseidon2Goldilocks,
     channel_sender: Sender<WitnessGenerationArtifact>,
 ) -> (
@@ -1149,6 +1149,11 @@ fn process_memory_related_circuits<CB: FnMut(WitnessGenerationArtifact)>(
     );
 
     let amount_of_explicit_memory_queries = memory_queries.len();
+    let amount_of_ram_circuits = ((amount_of_explicit_memory_queries
+        + implicit_memory_queries.amount_of_queries()) as u32
+        + geometry.cycles_per_ram_permutation
+        - 1)
+        / geometry.cycles_per_ram_permutation;
 
     snapshot_prof("BEFORE QUEUES SIMULATION");
 
@@ -1157,18 +1162,21 @@ fn process_memory_related_circuits<CB: FnMut(WitnessGenerationArtifact)>(
         Receiver<WitnessGenerationArtifact>,
     ) = mpsc::channel();
 
+    let implicit_memory_queries_arc = Arc::new(implicit_memory_queries);
+    let memory_queries_arc = Arc::new(memory_queries);
+
     use std::thread;
     let sorted_handle = {
-        let memory_queries = memory_queries.clone();
-        let implicit_memory_queries = implicit_memory_queries.clone();
+        let memory_queries_arc = memory_queries_arc.clone();
+        let implicit_memory_queries_arc = implicit_memory_queries_arc.clone();
         let geometry = *geometry;
         let round_function = *round_function;
         let tx_thread = tx.clone();
         thread::spawn(move || {
             simulate_sorted_memory_queue(
                 geometry,
-                memory_queries,
-                implicit_memory_queries,
+                memory_queries_arc,
+                implicit_memory_queries_arc,
                 round_function,
                 tx_thread,
             )
@@ -1176,27 +1184,21 @@ fn process_memory_related_circuits<CB: FnMut(WitnessGenerationArtifact)>(
     };
 
     let unsorted_handle = {
-        let memory_queries = memory_queries;
-        let implicit_memory_queries = implicit_memory_queries.clone();
+        let memory_queries_arc = memory_queries_arc.clone();
+        let implicit_memory_queries_arc = implicit_memory_queries_arc.clone();
         let geometry = *geometry;
         let round_function = *round_function;
         let tx_thread = tx.clone();
         thread::spawn(move || {
             simulate_memory_queue(
                 geometry,
-                memory_queries,
-                implicit_memory_queries,
+                memory_queries_arc,
+                implicit_memory_queries_arc,
                 round_function,
                 tx_thread,
             )
         })
     };
-
-    let amount_of_ram_circuits = ((amount_of_explicit_memory_queries
-        + implicit_memory_queries.amount_of_queries()) as u32
-        + geometry.cycles_per_ram_permutation
-        - 1)
-        / geometry.cycles_per_ram_permutation;
 
     for _ in 0..amount_of_ram_circuits * 2 {
         let artifact = rx.recv().unwrap();
@@ -1204,7 +1206,7 @@ fn process_memory_related_circuits<CB: FnMut(WitnessGenerationArtifact)>(
     }
 
     let (
-        memory_artifacts_for_main_vm,
+        mut memory_artifacts_for_main_vm,
         final_explicit_memory_queue_state,
         memory_queue_states_accumulator,
         memory_queue_simulator,
@@ -1219,6 +1221,10 @@ fn process_memory_related_circuits<CB: FnMut(WitnessGenerationArtifact)>(
         sorted_queries_aux_data_for_chunks,
     ) = sorted_handle.join().unwrap();
 
+    let memory_queries = std::sync::Arc::<Vec<(u32, MemoryQuery)>>::into_inner(memory_queries_arc).unwrap();
+    memory_artifacts_for_main_vm.memory_queries = memory_queries;
+
+    let implicit_memory_queries = std::sync::Arc::<ImplicitMemoryQueries>::into_inner(implicit_memory_queries_arc).unwrap();
     // direct VM related part is done, other subcircuit's functionality is moved to other functions
     // that should properly do sorts and memory writes
 
