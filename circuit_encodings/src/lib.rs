@@ -642,7 +642,7 @@ pub struct FullWidthStackSimulator<
 > {
     pub state: [F; SW],
     pub num_items: u32,
-    pub witness: Vec<([F; N], [F; SW], I)>,
+    pub witness: Vec<([F; SW], I)>,
 }
 
 impl<
@@ -695,7 +695,7 @@ impl<
 
         let states = make_round_function_pairs(old_state, states);
 
-        self.witness.push((encoding, self.state, element));
+        self.witness.push((self.state, element));
         self.num_items += 1;
         self.state = new_state;
 
@@ -725,7 +725,7 @@ impl<
         let popped = self.witness.pop().unwrap();
         self.num_items -= 1;
 
-        let (_element_encoding, previous_state, element) = popped;
+        let (previous_state, element) = popped;
         let encoding = element.encoding_witness();
 
         let mut state = previous_state;
