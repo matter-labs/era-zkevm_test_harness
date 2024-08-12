@@ -1,6 +1,6 @@
 [package]
 name = "circuit_definitions"
-version = "0.150.2-rc.1"
+version = "0.150.2-rc.3"
 edition = "2021"
 authors = ["The Matter Labs Team <hello@matterlabs.dev>"]
 homepage = "https://zksync.io/"
@@ -13,10 +13,10 @@ description = "ZKsync Era circuits definitions"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-snark_wrapper = "=0.1.0"
+snark_wrapper = "=0.1.2"
 # snark_wrapper = {path = "../../snark_wrapper"}
 
-circuit_encodings = { version = "0.150.2-rc.1", path = "../circuit_encodings" }
+circuit_encodings = { version = "0.150.2-rc.3", path = "../circuit_encodings" }
 
 derivative = "2.2"
 serde = {version = "1", features = ["derive"]}

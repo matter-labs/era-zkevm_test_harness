@@ -136,7 +136,7 @@ pub fn transform_queue_witness<
     const N: usize,
     D: CircuitEncodable<F, N>,
 >(
-    witness_iter: impl Iterator<Item = &'a ([F; N], [F; QUEUE_STATE_WIDTH], I)>,
+    witness_iter: impl Iterator<Item = &'a ([F; N], [F; QUEUE_STATE_WIDTH], I)> +'a,
 ) -> CircuitQueueWitness<F, D, QUEUE_STATE_WIDTH, N> {
     let wit: VecDeque<_> = witness_iter
         .map(|(_enc, old_tail, el)| (el.reflect(), *old_tail))
