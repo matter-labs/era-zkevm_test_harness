@@ -271,8 +271,12 @@ pub(crate) fn run_with_options(entry_point_bytecode: Vec<[u8; 32]>, options: Opt
 
     let artifacts_callback = |artifact: WitnessGenerationArtifact| match artifact {
         WitnessGenerationArtifact::BaseLayerCircuit(circuit) => basic_block_circuits.push(circuit),
-        WitnessGenerationArtifact::UnsortedMemoryQueueWitness(witnesses) => unsorted_memory_queue_witnesses.push(witnesses),
-        WitnessGenerationArtifact::SortedMemoryQueueWitness(witnesses) => sorted_memory_queue_witnesses.push(witnesses),
+        WitnessGenerationArtifact::UnsortedMemoryQueueWitness(witnesses) => {
+            unsorted_memory_queue_witnesses.push(witnesses)
+        }
+        WitnessGenerationArtifact::SortedMemoryQueueWitness(witnesses) => {
+            sorted_memory_queue_witnesses.push(witnesses)
+        }
         _ => {}
     };
 
@@ -321,14 +325,14 @@ pub(crate) fn run_with_options(entry_point_bytecode: Vec<[u8; 32]>, options: Opt
             ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {
                 let mut witness = inner.witness.take().unwrap();
                 witness.sorted_queue_witness = FullStateCircuitQueueRawWitness {
-                    elements: sorted_memory_queue_witnesses.next().unwrap().into()
+                    elements: sorted_memory_queue_witnesses.next().unwrap().into(),
                 };
                 witness.unsorted_queue_witness = FullStateCircuitQueueRawWitness {
-                    elements: unsorted_memory_queue_witnesses_it.next().unwrap().into()
+                    elements: unsorted_memory_queue_witnesses_it.next().unwrap().into(),
                 };
 
                 inner.witness.store(Some(witness));
-            },
+            }
             _ => {}
         }
         base_test_circuit(el);

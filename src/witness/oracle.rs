@@ -834,7 +834,10 @@ fn simulate_memory_queue(
     round_function: Poseidon2Goldilocks,
     channel_sender: Sender<WitnessGenerationArtifact>,
 ) -> (
-    CircuitsEntryAccumulatorSparse<(u32, QueueStateWitness<GoldilocksField, FULL_SPONGE_QUEUE_STATE_WIDTH>)>,
+    CircuitsEntryAccumulatorSparse<(
+        u32,
+        QueueStateWitness<GoldilocksField, FULL_SPONGE_QUEUE_STATE_WIDTH>,
+    )>,
     MemoryQueueState<GoldilocksField>,
     LastPerCircuitAccumulator<MemoryQueueState<GoldilocksField>>,
     MemoryQueuePerCircuitSimulator<GoldilocksField>,
@@ -894,10 +897,7 @@ fn simulate_memory_queue(
         }
     }
 
-    assert_eq!(
-        memory_queries.len(),
-        memory_queue_states_accumulator.len()
-    );
+    assert_eq!(memory_queries.len(), memory_queue_states_accumulator.len());
     assert_eq!(
         memory_queries.len(),
         memory_queue_simulator.num_items as usize
@@ -1220,7 +1220,7 @@ fn process_memory_related_circuits<CB: FnMut(WitnessGenerationArtifact)>(
 
     let memory_artifacts_for_main_vm = MemoryArtifacts {
         memory_queries: Arc::into_inner(memory_queries_arc).unwrap(),
-        memory_queue_entry_states: memory_queue_entry_states_for_main_vm
+        memory_queue_entry_states: memory_queue_entry_states_for_main_vm,
     };
     let implicit_memory_queries = Arc::into_inner(implicit_memory_queries_arc).unwrap();
 

@@ -269,8 +269,12 @@ pub(crate) fn generate_base_layer(
                 .map(|x| ZkSyncBaseLayerStorage::from_inner(a as u8, x))
                 .collect(),
         )),
-        WitnessGenerationArtifact::UnsortedMemoryQueueWitness(witnesses) => unsorted_memory_queue_witnesses.push(witnesses),
-        WitnessGenerationArtifact::SortedMemoryQueueWitness(witnesses) => sorted_memory_queue_witnesses.push(witnesses),
+        WitnessGenerationArtifact::UnsortedMemoryQueueWitness(witnesses) => {
+            unsorted_memory_queue_witnesses.push(witnesses)
+        }
+        WitnessGenerationArtifact::SortedMemoryQueueWitness(witnesses) => {
+            sorted_memory_queue_witnesses.push(witnesses)
+        }
     };
 
     let (scheduler_partial_input, _aux_data) = run(
@@ -299,14 +303,14 @@ pub(crate) fn generate_base_layer(
             ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {
                 let mut witness = inner.witness.take().unwrap();
                 witness.sorted_queue_witness = FullStateCircuitQueueRawWitness {
-                    elements: sorted_memory_queue_witnesses.next().unwrap().into()
+                    elements: sorted_memory_queue_witnesses.next().unwrap().into(),
                 };
                 witness.unsorted_queue_witness = FullStateCircuitQueueRawWitness {
-                    elements: unsorted_memory_queue_witnesses_it.next().unwrap().into()
+                    elements: unsorted_memory_queue_witnesses_it.next().unwrap().into(),
                 };
 
                 inner.witness.store(Some(witness));
-            },
+            }
             _ => {}
         }
     }
