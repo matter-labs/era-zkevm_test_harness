@@ -5,10 +5,9 @@ use crate::witness::aux_data_structs::one_per_circuit_accumulator::CircuitsEntry
 use crate::witness::aux_data_structs::per_circuit_accumulator::PerCircuitAccumulatorSparse;
 use crate::witness::individual_circuits::SmallField;
 use crate::witness::oracle::FrameLogQueueDetailedState;
-use crate::witness::postprocessing::{
-    ClosedFormInputField, CsForWitnessGeneration, FirstAndLastCircuitWitness,
-};
+use crate::witness::postprocessing::{ClosedFormInputField, FirstAndLastCircuitWitness};
 use crate::witness::tracer::vm_snapshot::VmSnapshot;
+use crate::witness::utils::simulate_public_input_value_from_encodable_witness;
 use crate::zk_evm::aux_structures::MemoryQuery;
 use crate::zk_evm::vm_state::VmLocalState;
 use crate::zkevm_circuits::base_structures::vm_state::{
@@ -316,9 +315,7 @@ fn repack_input_for_main_vm(
 use crate::witness::postprocessing::observable_witness::VmObservableWitness;
 use crate::zkevm_circuits::fsm_input_output::circuit_inputs::main_vm::VmCircuitWitness;
 
-use super::{
-    simulate_public_input_value_from_witness, vm_instance_witness_to_circuit_formal_input,
-};
+use super::vm_instance_witness_to_circuit_formal_input;
 
 pub(crate) fn process_main_vm<
     CB: FnMut(ZkSyncBaseLayerCircuit),
@@ -344,7 +341,6 @@ pub(crate) fn process_main_vm<
     flat_new_frames_history: Vec<(Cycle, CallStackEntry)>,
     mut vm_snapshots: Vec<VmSnapshot>,
     round_function: Poseidon2Goldilocks,
-    cs_for_witness_generation: &mut CsForWitnessGeneration,
     circuit_callback: &mut CB,
     recursion_queue_callback: &mut QSCB,
 ) -> (
@@ -372,11 +368,11 @@ pub(crate) fn process_main_vm<
                 observable_input.as_ref().unwrap().clone();
         }
 
-        let (proof_system_input, compact_form_witness) = simulate_public_input_value_from_witness(
-            cs_for_witness_generation.take_cs(),
-            circuit_input.closed_form_input.clone(),
-            &round_function,
-        );
+        let (proof_system_input, compact_form_witness) =
+            simulate_public_input_value_from_encodable_witness(
+                circuit_input.closed_form_input.clone(),
+                &round_function,
+            );
 
         let instance = VMMainCircuit {
             witness: AtomicCell::new(Some(circuit_input)),
