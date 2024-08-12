@@ -865,6 +865,9 @@ mod tests {
         }
         assert_eq!(queue.num_items, 10);
 
+        let old_head = queue.head;
+        let old_tail = queue.tail;
+
         // pop one element
         let (element, data) = queue.pop_and_output_intermediate_data(&round_function);
         // it should return the first one that we entered (with circuit 0).
@@ -874,8 +877,8 @@ mod tests {
         assert_eq!(data.num_items, 9);
 
         assert_eq!(data.head, tail_after_first);
-        assert_eq!(data.old_head, empty_head);
-        assert_eq!(data.old_tail, data.tail);
+        assert_eq!(old_head, empty_head);
+        assert_eq!(data.tail, old_tail);
 
         let mut parts = queue.split_by(3, &round_function);
 
