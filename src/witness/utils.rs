@@ -22,6 +22,9 @@ use crate::zkevm_circuits::base_structures::vm_state::{
     FULL_SPONGE_QUEUE_STATE_WIDTH, QUEUE_STATE_WIDTH,
 };
 use crate::zkevm_circuits::fsm_input_output::circuit_inputs::INPUT_OUTPUT_COMMITMENT_LENGTH;
+use boojum::cs::Place;
+use boojum::dag::CSWitnessValues;
+use boojum::gadgets::traits::encodable::WitnessVarLengthEncodable;
 use circuit_definitions::boojum::cs::gates::lookup_marker::LookupFormalGate;
 use circuit_definitions::boojum::cs::gates::ConstantToVariableMappingToolMarker;
 use circuit_definitions::boojum::cs::gates::FmaGateInBaseWithoutConstantParams;
@@ -32,6 +35,7 @@ use circuit_definitions::boojum::cs::Variable;
 use circuit_definitions::encodings::*;
 use individual_circuits::main_vm::VmInCircuitAuxilaryParameters;
 use individual_circuits::main_vm::VmInstanceWitness;
+use serde::Serialize;
 
 use super::*;
 
@@ -192,86 +196,31 @@ pub type ConstraintSystemImpl<F, R> = CSReferenceImplementation<
     )>,
 >;
 
-pub const TRACE_LEN_LOG_2_FOR_CALCULATION: usize = 20;
-pub const MAX_VARS_LOG_2_FOR_CALCULATION: usize = 26;
-pub const CYCLES_PER_SCRATCH_SPACE: usize = 5000;
-
-pub fn create_cs_for_witness_generation<
+pub fn simulate_public_input_value_from_encodable_witness<
     F: SmallField,
-    R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-        + AlgebraicRoundFunction<F, 8, 12, 4>
-        + serde::Serialize
-        + serde::de::DeserializeOwned,
+    const AW: usize,
+    const SW: usize,
+    const CW: usize,
+    R: AlgebraicRoundFunction<F, AW, SW, CW>,
+    T: Clone
+        + std::fmt::Debug
+        + CSAllocatable<F>
+        + CircuitVarLengthEncodable<F>
+        + WitnessVarLengthEncodable<F>
+        + WitnessHookable<F>,
+    IN: Clone
+        + std::fmt::Debug
+        + CSAllocatable<F>
+        + CircuitVarLengthEncodable<F>
+        + WitnessVarLengthEncodable<F>
+        + WitnessHookable<F>,
+    OUT: Clone
+        + std::fmt::Debug
+        + CSAllocatable<F>
+        + CircuitVarLengthEncodable<F>
+        + WitnessVarLengthEncodable<F>
+        + WitnessHookable<F>,
 >(
-    max_trace_len_log_2: usize,
-    max_vars_log_2: usize,
-) -> ConstraintSystemImpl<F, R> {
-    // create temporary cs, and allocate in full
-
-    let geometry = CSGeometry {
-        num_columns_under_copy_permutation: 140,
-        num_witness_columns: 0,
-        num_constant_columns: 4,
-        max_allowed_constraint_degree: 8,
-    };
-    let max_trace_len = 1 << max_trace_len_log_2;
-    let num_vars = 1 << max_vars_log_2;
-
-    use crate::boojum::cs::cs_builder_reference::CsReferenceImplementationBuilder;
-
-    let builder_impl =
-        CsReferenceImplementationBuilder::<F, F, ProvingCSConfig>::new(geometry, max_trace_len);
-    let builder = boojum::cs::cs_builder::new_builder::<_, F>(builder_impl);
-    let builder = builder.allow_lookup(
-        boojum::cs::LookupParameters::UseSpecializedColumnsWithTableIdAsConstant {
-            width: 3,
-            num_repetitions: 1,
-            share_table_id: true,
-        },
-    );
-
-    let builder = ConstantsAllocatorGate::configure_builder(
-        builder,
-        GatePlacementStrategy::UseGeneralPurposeColumns,
-    );
-    let builder = R::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-    let builder = FmaGateInBaseFieldWithoutConstant::configure_builder(
-        builder,
-        GatePlacementStrategy::UseGeneralPurposeColumns,
-    );
-    let builder = BooleanConstraintGate::configure_builder(
-        builder,
-        GatePlacementStrategy::UseGeneralPurposeColumns,
-    );
-    let builder = ReductionGate::<F, 4>::configure_builder(
-        builder,
-        GatePlacementStrategy::UseGeneralPurposeColumns,
-    );
-    let builder =
-        SelectionGate::configure_builder(builder, GatePlacementStrategy::UseGeneralPurposeColumns);
-
-    let mut cs = builder.build(num_vars);
-
-    use crate::boojum::gadgets::tables::*;
-
-    let table = create_binop_table();
-    cs.add_lookup_table::<BinopTable, 3>(table);
-
-    cs
-}
-
-pub fn simulate_public_input_value_from_witness<
-    F: SmallField,
-    CS: ConstraintSystem<F>,
-    R: BuildableCircuitRoundFunction<F, 8, 12, 4>
-        + AlgebraicRoundFunction<F, 8, 12, 4>
-        + serde::Serialize
-        + serde::de::DeserializeOwned,
-    T: Clone + std::fmt::Debug + CSAllocatable<F> + CircuitVarLengthEncodable<F> + WitnessHookable<F>,
-    IN: Clone + std::fmt::Debug + CSAllocatable<F> + CircuitVarLengthEncodable<F> + WitnessHookable<F>,
-    OUT: Clone + std::fmt::Debug + CSAllocatable<F> + CircuitVarLengthEncodable<F> + WitnessHookable<F>,
->(
-    cs: &mut CS,
     input_witness: ClosedFormInputWitness<F, T, IN, OUT>,
     round_function: &R,
 ) -> (
@@ -283,20 +232,129 @@ where
     <IN as CSAllocatable<F>>::Witness: serde::Serialize + serde::de::DeserializeOwned + Eq,
     <OUT as CSAllocatable<F>>::Witness: serde::Serialize + serde::de::DeserializeOwned + Eq,
 {
-    // allocate in full
-
-    let full_input = ClosedFormInput::allocate(cs, input_witness);
-    // compute the compact form
-    let compact_form = ClosedFormInputCompactForm::from_full_form(cs, &full_input, round_function);
     // compute the encoding and committment of compact form
-    let compact_form_witness = compact_form.witness_hook(&*cs)().unwrap();
+    let compact_form_witness = closed_form_witness_from_full_form(&input_witness, round_function);
 
-    // dbg!(&compact_form_witness);
-
-    let input_commitment = commit_variable_length_encodable_item(cs, &compact_form, round_function);
-    let public_input = input_commitment.witness_hook(&*cs)().unwrap();
+    let public_input = commit_variable_length_encodable_witness::<
+        F,
+        ClosedFormInputCompactForm<F>,
+        AW,
+        SW,
+        CW,
+        INPUT_OUTPUT_COMMITMENT_LENGTH,
+        R,
+    >(&compact_form_witness, round_function);
 
     (public_input, compact_form_witness)
+}
+
+pub fn closed_form_witness_from_full_form<
+    F: SmallField,
+    const AW: usize,
+    const SW: usize,
+    const CW: usize,
+    T: Clone
+        + std::fmt::Debug
+        + CSAllocatable<F>
+        + CircuitVarLengthEncodable<F>
+        + WitnessVarLengthEncodable<F>
+        + WitnessHookable<F>,
+    IN: Clone
+        + std::fmt::Debug
+        + CSAllocatable<F>
+        + CircuitVarLengthEncodable<F>
+        + WitnessVarLengthEncodable<F>
+        + WitnessHookable<F>,
+    OUT: Clone
+        + std::fmt::Debug
+        + CSAllocatable<F>
+        + CircuitVarLengthEncodable<F>
+        + WitnessVarLengthEncodable<F>
+        + WitnessHookable<F>,
+    R: AlgebraicRoundFunction<F, AW, SW, CW>,
+>(
+    full_form: &ClosedFormInputWitness<F, T, IN, OUT>,
+    round_function: &R,
+) -> ClosedFormInputCompactFormWitness<F>
+where
+    <T as CSAllocatable<F>>::Witness: serde::Serialize + serde::de::DeserializeOwned + Eq,
+    <IN as CSAllocatable<F>>::Witness: serde::Serialize + serde::de::DeserializeOwned + Eq,
+    <OUT as CSAllocatable<F>>::Witness: serde::Serialize + serde::de::DeserializeOwned + Eq,
+{
+    let observable_input_committment = commit_variable_length_encodable_witness::<
+        F,
+        IN,
+        AW,
+        SW,
+        CW,
+        CLOSED_FORM_COMMITTMENT_LENGTH,
+        R,
+    >(&full_form.observable_input, round_function);
+    let observable_output_committment = commit_variable_length_encodable_witness::<
+        F,
+        OUT,
+        AW,
+        SW,
+        CW,
+        CLOSED_FORM_COMMITTMENT_LENGTH,
+        R,
+    >(&full_form.observable_output, round_function);
+
+    let hidden_fsm_input_committment = commit_variable_length_encodable_witness::<
+        F,
+        T,
+        AW,
+        SW,
+        CW,
+        CLOSED_FORM_COMMITTMENT_LENGTH,
+        R,
+    >(&full_form.hidden_fsm_input, round_function);
+    let hidden_fsm_output_committment = commit_variable_length_encodable_witness::<
+        F,
+        T,
+        AW,
+        SW,
+        CW,
+        CLOSED_FORM_COMMITTMENT_LENGTH,
+        R,
+    >(&full_form.hidden_fsm_output, round_function);
+
+    // mask FSM part. Observable part is NEVER masked
+
+    let empty_committment = [F::ZERO; CLOSED_FORM_COMMITTMENT_LENGTH];
+
+    // mask FSM part. Observable part is NEVER masked
+
+    let hidden_fsm_input_committment = if full_form.start_flag {
+        empty_committment.clone()
+    } else {
+        hidden_fsm_input_committment.clone()
+    };
+
+    // mask output. Observable output is zero is not the last indeed
+    let observable_output_committment = if full_form.completion_flag {
+        observable_output_committment.clone()
+    } else {
+        empty_committment.clone()
+    };
+
+    // and vice versa for FSM
+    let hidden_fsm_output_committment = if full_form.completion_flag {
+        empty_committment.clone()
+    } else {
+        hidden_fsm_output_committment.clone()
+    };
+
+    let new = ClosedFormInputCompactFormWitness {
+        start_flag: full_form.start_flag,
+        completion_flag: full_form.completion_flag,
+        observable_input_committment,
+        observable_output_committment,
+        hidden_fsm_input_committment,
+        hidden_fsm_output_committment,
+    };
+
+    new
 }
 
 pub fn vm_instance_witness_to_vm_formal_state<F: SmallField>(
@@ -695,4 +753,85 @@ pub fn transpose_chunks<T: Clone>(original: &Vec<Vec<T>>, chunk_size: usize) -> 
     }
 
     transposed
+}
+
+pub fn commit_encoding_round_function<
+    F: SmallField,
+    const AW: usize,
+    const SW: usize,
+    const CW: usize,
+    const N: usize,
+    R: AlgebraicRoundFunction<F, AW, SW, CW>,
+>(
+    input: &[F],
+    _round_function: &R,
+) -> [F; N] {
+    // we use length specialization here
+    let expected_length = input.len();
+
+    let mut state = R::initial_state();
+    R::specialize_for_len(expected_length as u32, &mut state);
+
+    // pad with zeroes
+
+    let mut buffer_length = expected_length / AW;
+    if expected_length % AW != 0 {
+        buffer_length += 1;
+    }
+
+    buffer_length *= AW;
+
+    let mut buffer = Vec::with_capacity(buffer_length);
+    buffer.extend_from_slice(input);
+
+    buffer.resize(buffer_length, F::ZERO);
+
+    for chunk in buffer.array_chunks::<AW>() {
+        R::absorb_into_state::<AbsorptionModeOverwrite>(&mut state, chunk);
+        R::round_function(&mut state);
+    }
+
+    let output = R::state_into_commitment::<N>(&state);
+    output
+}
+
+pub fn commit_variable_length_encodable_witness<
+    F: SmallField,
+    T: WitnessVarLengthEncodable<F>,
+    const AW: usize,
+    const SW: usize,
+    const CW: usize,
+    const N: usize,
+    R: AlgebraicRoundFunction<F, AW, SW, CW>,
+>(
+    item: &T::Witness,
+    round_function: &R,
+) -> [F; N] {
+    let expected_length = T::witness_encoding_length(item);
+
+    let mut buffer = Vec::with_capacity(expected_length);
+    T::encode_witness_to_buffer(item, &mut buffer);
+
+    assert_eq!(buffer.len(), expected_length);
+
+    commit_encoding_round_function::<F, AW, SW, CW, N, R>(&buffer, round_function)
+}
+
+pub(crate) fn compute_encodable_witness_commitment<
+    T: CSAllocatable<GoldilocksField>
+        + WitnessVarLengthEncodable<GoldilocksField>
+        + CircuitVarLengthEncodable<GoldilocksField>,
+    const N: usize,
+    R: BuildableCircuitRoundFunction<GoldilocksField, 8, 12, 4>
+        + AlgebraicRoundFunction<GoldilocksField, 8, 12, 4>
+        + serde::Serialize
+        + serde::de::DeserializeOwned,
+>(
+    wit: T::Witness,
+    round_function: &R,
+) -> [GoldilocksField; N] {
+    let commitment =
+        commit_variable_length_encodable_witness::<_, T, 8, 12, 4, N, R>(&wit, round_function);
+
+    commitment
 }

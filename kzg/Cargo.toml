@@ -23,7 +23,7 @@ once_cell = "1"
 serde_with = {version = "1", features = ["hex"]}
 
 boojum = "=0.2.2"
-zkevm_circuits = "=0.150.2"
+zkevm_circuits = "=0.150.3"
 
 [dev-dependencies]
 rand = "0.4"

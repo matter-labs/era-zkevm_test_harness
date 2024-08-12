@@ -23,8 +23,8 @@ use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use circuit_definitions::{encodings::*, Field, RoundFunction};
 use memory_query::{CustomMemoryQueueSimulator, QueueWitness};
 use oracle::WitnessGenerationArtifact;
-use postprocessing::{CsForWitnessGeneration, FirstAndLastCircuitWitness};
 
+use postprocessing::FirstAndLastCircuitWitness;
 use rayon::prelude::*;
 use snark_wrapper::boojum::field::Field as _;
 use std::borrow::Borrow;
@@ -46,7 +46,6 @@ pub(crate) fn compute_ram_circuit_snapshots<CB: FnMut(WitnessGenerationArtifact)
     round_function: &RoundFunction,
     num_non_deterministic_heap_queries: usize,
     geometry: &GeometryConfig,
-    cs_for_witness_generation: &mut CsForWitnessGeneration,
     mut artifacts_callback: CB,
 ) -> (
     FirstAndLastCircuitWitness<RamPermutationObservableWitness<Field>>,
@@ -207,11 +206,7 @@ pub(crate) fn compute_ram_circuit_snapshots<CB: FnMut(WitnessGenerationArtifact)
     let mut last_queue_state = (placeholder_witness.clone(), placeholder_witness);
 
     let circuit_type = BaseLayerCircuitType::RamValidation;
-    let mut maker = CircuitMaker::new(
-        geometry.cycles_per_ram_permutation,
-        round_function.clone(),
-        cs_for_witness_generation,
-    );
+    let mut maker = CircuitMaker::new(geometry.cycles_per_ram_permutation, round_function.clone());
 
     for (
         idx,

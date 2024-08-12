@@ -22,7 +22,6 @@ use circuit_definitions::encodings::state_diff_record::StateDiffRecord;
 use circuit_definitions::encodings::LogQueueSimulator;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use oracle::WitnessGenerationArtifact;
-use postprocessing::CsForWitnessGeneration;
 use tracing;
 use zk_evm::aux_structures::LogQuery;
 
@@ -35,7 +34,6 @@ pub(crate) fn decompose_into_storage_application_witnesses<CB: FnMut(WitnessGene
     round_function: &Poseidon2Goldilocks,
     num_rounds_per_circuit: usize,
     geometry: &GeometryConfig,
-    cs_for_witness_generation: &mut CsForWitnessGeneration,
     mut artifacts_callback: CB,
 ) -> (
     FirstAndLastCircuitWitness<StorageApplicationObservableWitness<GoldilocksField>>,
@@ -47,7 +45,6 @@ pub(crate) fn decompose_into_storage_application_witnesses<CB: FnMut(WitnessGene
     let mut maker = CircuitMaker::new(
         geometry.cycles_per_storage_application,
         round_function.clone(),
-        cs_for_witness_generation,
     );
 
     if deduplicated_rollup_storage_queries.is_empty() {

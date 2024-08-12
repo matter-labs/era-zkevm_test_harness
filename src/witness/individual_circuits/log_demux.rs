@@ -20,7 +20,6 @@ use circuit_definitions::zkevm_circuits::demux_log_queue::DemuxOutput;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use circuit_definitions::{encodings::*, Field, RoundFunction};
 use oracle::WitnessGenerationArtifact;
-use postprocessing::CsForWitnessGeneration;
 use zk_evm::zkevm_opcode_defs::SECP256R1_VERIFY_PRECOMPILE_ADDRESS;
 
 use crate::zk_evm::aux_structures::LogQuery as LogQuery_;
@@ -180,7 +179,6 @@ pub(crate) fn process_logs_demux_and_make_circuits<CB: FnMut(WitnessGenerationAr
     per_circuit_capacity: usize,
     round_function: &RoundFunction,
     geometry: &GeometryConfig,
-    cs_for_witness_generation: &mut CsForWitnessGeneration,
     mut artifacts_callback: CB,
 ) -> (
     FirstAndLastCircuitWitness<LogDemuxerObservableWitness<Field>>,
@@ -195,11 +193,7 @@ pub(crate) fn process_logs_demux_and_make_circuits<CB: FnMut(WitnessGenerationAr
 
     let circuit_type = BaseLayerCircuitType::LogDemultiplexer;
 
-    let mut maker = CircuitMaker::new(
-        geometry.cycles_per_log_demuxer,
-        round_function.clone(),
-        cs_for_witness_generation,
-    );
+    let mut maker = CircuitMaker::new(geometry.cycles_per_log_demuxer, round_function.clone());
 
     // trivial empty case
     if log_demux_artifacts

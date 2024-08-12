@@ -6,8 +6,7 @@ use super::artifacts::LogCircuitsArtifacts;
 use super::individual_circuits::main_vm::CallstackSimulationResult;
 use super::individual_circuits::memory_related::{ImplicitMemoryQueries, ImplicitMemoryStates};
 use super::postprocessing::{
-    BlockFirstAndLastBasicCircuitsObservableWitnesses, CsForWitnessGeneration,
-    FirstAndLastCircuitWitness,
+    BlockFirstAndLastBasicCircuitsObservableWitnesses, FirstAndLastCircuitWitness,
 };
 use super::tracer::callstack_handler::*;
 use super::utils::*;
@@ -701,7 +700,6 @@ fn process_io_log_circuits<CB: FnMut(WitnessGenerationArtifact)>(
     demuxed_log_queues_states: IOLogsQueuesStates,
     demuxed_log_queries: DemuxedIOLogQueries,
     round_function: &Poseidon2Goldilocks,
-    cs_for_witness_generation: &mut CsForWitnessGeneration,
     mut artifacts_callback: &mut CB,
 ) -> (
     LogCircuitsArtifacts<GoldilocksField>,
@@ -798,7 +796,6 @@ fn process_io_log_circuits<CB: FnMut(WitnessGenerationArtifact)>(
             round_function,
             geometry.cycles_per_storage_application as usize,
             geometry,
-            cs_for_witness_generation,
             &mut artifacts_callback,
         );
 
@@ -1081,7 +1078,6 @@ fn process_memory_related_circuits<CB: FnMut(WitnessGenerationArtifact)>(
     executed_decommittment_queries: Vec<(Cycle, DecommittmentQuery, Vec<U256>)>,
     precompiles_data: PrecompilesInputData,
     round_function: &Poseidon2Goldilocks,
-    cs_for_witness_generation: &mut CsForWitnessGeneration,
     mut artifacts_callback: &mut CB,
 ) -> (
     MemoryCircuitsArtifacts<GoldilocksField>,
@@ -1351,7 +1347,6 @@ fn process_memory_related_circuits<CB: FnMut(WitnessGenerationArtifact)>(
             round_function,
             num_non_deterministic_heap_queries,
             geometry,
-            cs_for_witness_generation,
             &mut artifacts_callback,
         );
 
@@ -1485,10 +1480,6 @@ pub(crate) fn create_artifacts_from_tracer<CB: FnMut(WitnessGenerationArtifact)>
         })
     };
 
-    // Scratch-space constraint system for circuits processing
-    // Used when creating circuit instances and compact form witnesses
-    let mut cs_for_witness_generation = CsForWitnessGeneration::new();
-
     // demux log queue circuit
     use crate::witness::individual_circuits::log_demux::process_logs_demux_and_make_circuits;
 
@@ -1507,7 +1498,6 @@ pub(crate) fn create_artifacts_from_tracer<CB: FnMut(WitnessGenerationArtifact)>
         geometry.cycles_per_log_demuxer as usize,
         round_function,
         geometry,
-        &mut cs_for_witness_generation,
         &mut artifacts_callback,
     );
 
@@ -1525,7 +1515,6 @@ pub(crate) fn create_artifacts_from_tracer<CB: FnMut(WitnessGenerationArtifact)>
             io_logs_queues_states,
             demuxed_log_queries.io,
             round_function,
-            &mut cs_for_witness_generation,
             &mut artifacts_callback,
         );
 
@@ -1562,7 +1551,6 @@ pub(crate) fn create_artifacts_from_tracer<CB: FnMut(WitnessGenerationArtifact)>
         executed_decommittment_queries,
         precompiles_data,
         round_function,
-        &mut cs_for_witness_generation,
         &mut artifacts_callback,
     );
 
@@ -1599,7 +1587,6 @@ pub(crate) fn create_artifacts_from_tracer<CB: FnMut(WitnessGenerationArtifact)>
         flat_new_frames_history,
         vm_snapshots,
         *round_function,
-        &mut cs_for_witness_generation,
         &mut artifacts_callback,
     );
 
@@ -1636,7 +1623,6 @@ pub(crate) fn create_artifacts_from_tracer<CB: FnMut(WitnessGenerationArtifact)>
         *round_function,
         |x| ZkSyncBaseLayerCircuit::CodeDecommittmentsSorter(x),
         &mut artifacts_callback,
-        &mut cs_for_witness_generation,
     );
 
     // Actual decommitter
@@ -1648,7 +1634,6 @@ pub(crate) fn create_artifacts_from_tracer<CB: FnMut(WitnessGenerationArtifact)>
             *round_function,
             |x| ZkSyncBaseLayerCircuit::CodeDecommitter(x),
             &mut artifacts_callback,
-            &mut cs_for_witness_generation,
         );
 
     // keccak precompiles
@@ -1660,7 +1645,6 @@ pub(crate) fn create_artifacts_from_tracer<CB: FnMut(WitnessGenerationArtifact)>
             *round_function,
             |x| ZkSyncBaseLayerCircuit::KeccakRoundFunction(x),
             &mut artifacts_callback,
-            &mut cs_for_witness_generation,
         );
 
     // sha256 precompiles
@@ -1672,7 +1656,6 @@ pub(crate) fn create_artifacts_from_tracer<CB: FnMut(WitnessGenerationArtifact)>
             *round_function,
             |x| ZkSyncBaseLayerCircuit::Sha256RoundFunction(x),
             &mut artifacts_callback,
-            &mut cs_for_witness_generation,
         );
 
     // ecrecover precompiles
@@ -1684,7 +1667,6 @@ pub(crate) fn create_artifacts_from_tracer<CB: FnMut(WitnessGenerationArtifact)>
             *round_function,
             |x| ZkSyncBaseLayerCircuit::ECRecover(x),
             &mut artifacts_callback,
-            &mut cs_for_witness_generation,
         );
 
     // secp256r1 verify
@@ -1696,7 +1678,6 @@ pub(crate) fn create_artifacts_from_tracer<CB: FnMut(WitnessGenerationArtifact)>
             *round_function,
             |x| ZkSyncBaseLayerCircuit::Secp256r1Verify(x),
             &mut artifacts_callback,
-            &mut cs_for_witness_generation,
         );
 
     // storage sorter
@@ -1707,7 +1688,6 @@ pub(crate) fn create_artifacts_from_tracer<CB: FnMut(WitnessGenerationArtifact)>
         *round_function,
         |x| ZkSyncBaseLayerCircuit::StorageSorter(x),
         &mut artifacts_callback,
-        &mut cs_for_witness_generation,
     );
 
     // events sorter
@@ -1718,7 +1698,6 @@ pub(crate) fn create_artifacts_from_tracer<CB: FnMut(WitnessGenerationArtifact)>
         *round_function,
         |x| ZkSyncBaseLayerCircuit::EventsSorter(x),
         &mut artifacts_callback,
-        &mut cs_for_witness_generation,
     );
 
     // l1 messages sorter
@@ -1730,7 +1709,6 @@ pub(crate) fn create_artifacts_from_tracer<CB: FnMut(WitnessGenerationArtifact)>
             *round_function,
             |x| ZkSyncBaseLayerCircuit::L1MessagesSorter(x),
             &mut artifacts_callback,
-            &mut cs_for_witness_generation,
         );
 
     // l1 messages pubdata hasher
@@ -1742,7 +1720,6 @@ pub(crate) fn create_artifacts_from_tracer<CB: FnMut(WitnessGenerationArtifact)>
             *round_function,
             |x| ZkSyncBaseLayerCircuit::L1MessagesHasher(x),
             &mut artifacts_callback,
-            &mut cs_for_witness_generation,
         );
 
     // transient storage sorter
@@ -1756,7 +1733,6 @@ pub(crate) fn create_artifacts_from_tracer<CB: FnMut(WitnessGenerationArtifact)>
         *round_function,
         |x| ZkSyncBaseLayerCircuit::TransientStorageSorter(x),
         &mut artifacts_callback,
-        &mut cs_for_witness_generation,
     );
 
     // eip 4844 circuits are basic, but they do not need closed form input commitments
@@ -1771,7 +1747,6 @@ pub(crate) fn create_artifacts_from_tracer<CB: FnMut(WitnessGenerationArtifact)>
         *round_function,
         |x| ZkSyncBaseLayerCircuit::EIP4844Repack(x),
         &mut artifacts_callback,
-        &mut cs_for_witness_generation,
     );
 
     // All done!
