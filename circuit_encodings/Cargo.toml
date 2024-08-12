@@ -1,6 +1,6 @@
 [package]
 name = "circuit_encodings"
-version = "0.150.2-rc.3"
+version = "0.150.2"
 edition = "2021"
 authors = ["The Matter Labs Team <hello@matterlabs.dev>"]
 homepage = "https://zksync.io/"

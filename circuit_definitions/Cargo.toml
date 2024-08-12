@@ -1,6 +1,6 @@
 [package]
 name = "circuit_definitions"
-version = "0.150.2-rc.3"
+version = "0.150.2"
 edition = "2021"
 authors = ["The Matter Labs Team <hello@matterlabs.dev>"]
 homepage = "https://zksync.io/"
@@ -16,7 +16,7 @@ description = "ZKsync Era circuits definitions"
 snark_wrapper = "=0.1.2"
 # snark_wrapper = {path = "../../snark_wrapper"}
 
-circuit_encodings = { version = "0.150.2-rc.3", path = "../circuit_encodings" }
+circuit_encodings = { version = "0.150.2", path = "../circuit_encodings" }
 
 derivative = "2.2"
 serde = {version = "1", features = ["derive"]}
