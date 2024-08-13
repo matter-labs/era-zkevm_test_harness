@@ -69,6 +69,8 @@ pub struct ImplicitMemoryQueriesIter<'a> {
     iter: Iter<'a, MemoryQuery>,
 }
 
+use core::slice::Iter;
+
 impl<'a> Iterator for ImplicitMemoryQueriesIter<'a> {
     type Item = &'a MemoryQuery;
 
@@ -157,33 +159,6 @@ impl<F: SmallField> ImplicitMemoryStates<F> {
             + self.sha256_memory_states.len()
     }
 }
-
-use core::array::IntoIter as ArrayIntoIter;
-use core::slice::Iter;
-pub struct ImplicitMemoryStatesIter<'a, F: SmallField> {
-    last_vector: Iter<'a, MemoryQueueState<F>>,
-    outer_iter: ArrayIntoIter<&'a Vec<MemoryQueueState<F>>, 5>,
-}
-
-impl<'a, F: SmallField> Iterator for ImplicitMemoryStatesIter<'a, F> {
-    type Item = &'a MemoryQueueState<F>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let mut next = self.last_vector.next();
-
-        while next.is_none() {
-            let new_last_vector = self.outer_iter.next();
-            if new_last_vector.is_none() {
-                return None;
-            }
-            self.last_vector = new_last_vector.unwrap().into_iter();
-            next = self.last_vector.next();
-        }
-
-        next
-    }
-}
-
 use crate::witness::aux_data_structs::MemoryQueuePerCircuitSimulator;
 
 fn get_simulator_snapshot<F: SmallField>(
