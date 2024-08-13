@@ -824,7 +824,7 @@ use crate::witness::artifacts::DecommitmentArtifactsForMainVM;
 use crate::witness::artifacts::LogQueueStates;
 use crate::zkevm_circuits::demux_log_queue::NUM_DEMUX_OUTPUTS;
 
-use circuit_definitions::encodings::memory_query::MemoryQueueState;
+use circuit_definitions::encodings::memory_query::{MemoryQueueState, MemoryQueueStateWitnesses};
 
 fn simulate_memory_queue(
     geometry: GeometryConfig,
@@ -1389,8 +1389,6 @@ fn process_memory_related_circuits<CB: FnMut(WitnessGenerationArtifact)>(
     )
 }
 
-pub type MemoryQueueWitness<F: SmallField> =
-    Vec<(MemoryQueryWitness<F>, [F; FULL_SPONGE_QUEUE_STATE_WIDTH])>;
 pub enum WitnessGenerationArtifact {
     BaseLayerCircuit(ZkSyncBaseLayerCircuit),
     RecursionQueue(
@@ -1400,8 +1398,8 @@ pub enum WitnessGenerationArtifact {
             Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
         ),
     ),
-    SortedMemoryQueueWitness(MemoryQueueWitness<GoldilocksField>),
-    UnsortedMemoryQueueWitness(MemoryQueueWitness<GoldilocksField>),
+    SortedMemoryQueueWitness(MemoryQueueStateWitnesses<GoldilocksField>),
+    UnsortedMemoryQueueWitness(MemoryQueueStateWitnesses<GoldilocksField>),
 }
 
 /// Make basic circuits instances and witnesses,
