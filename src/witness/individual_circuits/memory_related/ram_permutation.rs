@@ -225,7 +225,7 @@ pub(crate) fn compute_ram_circuit_snapshots<CB: FnMut(WitnessGenerationArtifact)
         );
 
         // we need witnesses to pop elements from the front of the queue
-
+        // but this data should be saved to storage before, during queues simulation
         let unsorted_witness_placeholder = FullStateCircuitQueueRawWitness {
             elements: Default::default(),
         };
@@ -234,41 +234,10 @@ pub(crate) fn compute_ram_circuit_snapshots<CB: FnMut(WitnessGenerationArtifact)
             elements: Default::default(),
         };
 
-        /*let unsorted_witness = FullStateCircuitQueueRawWitness {
-            elements: unsorted_states
-                .into_iter()
-                .map(|el| {
-                    let witness = el.2.reflect();
-                    (witness, el.1)
-                })
-                .collect(),
-        };
-
-        let sorted_witness = FullStateCircuitQueueRawWitness {
-            elements: sorted_states
-                .iter()
-                .map(|el| {
-                    let witness = el.2.reflect();
-                    (witness, el.1)
-                })
-                .collect(),
-        }; */
-
         // now we need to have final grand product value that will also become an input for the next circuit
 
         let if_first = idx == 0;
         let is_last = idx == num_circuits - 1;
-        // TODO into_iter
-        /*let num_nondet_writes_in_chunk = sorted_states
-            .iter()
-            .filter(|el| {
-                let query = &el.2;
-                query.rw_flag == true
-                    && query.timestamp.0 == 0
-                    && query.location.page.0 == BOOTLOADER_HEAP_PAGE
-            })
-            .count();
-        */
 
         let new_num_nondet_writes =
             current_number_of_nondet_writes + (num_nondet_writes_in_chunk as u32);
