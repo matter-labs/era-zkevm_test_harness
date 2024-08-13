@@ -41,8 +41,8 @@ pub(crate) fn compute_ram_circuit_snapshots<CB: FnMut(WitnessGenerationArtifact)
     memory_queue_simulator: MemoryQueuePerCircuitSimulator<Field>,
     sorted_memory_queries_simulator: MemoryQueuePerCircuitSimulator<Field>,
     sorted_queries_aux_data_for_chunks: Vec<(u32, MemoryQuery, usize)>,
-    sorted_encodings: Vec<[Field; 8]>, // TODO
-    unsorted_encodings: Vec<[Field; 8]>,
+    sorted_encodings: Vec<[Field; MEMORY_QUERY_PACKED_WIDTH]>,
+    unsorted_encodings: Vec<[Field; MEMORY_QUERY_PACKED_WIDTH]>,
     round_function: &RoundFunction,
     num_non_deterministic_heap_queries: usize,
     geometry: &GeometryConfig,
@@ -91,9 +91,7 @@ pub(crate) fn compute_ram_circuit_snapshots<CB: FnMut(WitnessGenerationArtifact)
         memory_queue_simulator.num_items
     );
 
-    // now we should chunk it by circuits but briefly simulating their logic
-
-    // since encodings of the elements provide all the information necessary to perform soring argument,
+    // since encodings of the elements provide all the information necessary to perform sorting argument,
     // we use them naively
 
     assert_eq!(
@@ -127,7 +125,7 @@ pub(crate) fn compute_ram_circuit_snapshots<CB: FnMut(WitnessGenerationArtifact)
 
         for idx in 0..DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS {
             let (lhs_grand_product_chain, rhs_grand_product_chain) = compute_grand_product_chains(
-                &lhs_contributions.iter().collect(), // TODO
+                &lhs_contributions.iter().collect(),
                 &rhs_contributions.iter().collect(),
                 &challenges[idx],
             );
@@ -153,8 +151,6 @@ pub(crate) fn compute_ram_circuit_snapshots<CB: FnMut(WitnessGenerationArtifact)
 
     // now we need to split them into individual circuits
     // splitting is not extra hard here, we walk over iterator over everything and save states on checkpoints
-
-    // we also want to have chunks of witness for each of all the intermediate states
 
     assert_eq!(
         unsorted_memory_queue_chunk_final_states.len(),
