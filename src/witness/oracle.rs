@@ -1389,6 +1389,8 @@ fn process_memory_related_circuits<CB: FnMut(WitnessGenerationArtifact)>(
     )
 }
 
+pub type MemoryQueueWitness<F: SmallField> =
+    Vec<(MemoryQueryWitness<F>, [F; FULL_SPONGE_QUEUE_STATE_WIDTH])>;
 pub enum WitnessGenerationArtifact {
     BaseLayerCircuit(ZkSyncBaseLayerCircuit),
     RecursionQueue(
@@ -1398,8 +1400,8 @@ pub enum WitnessGenerationArtifact {
             Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
         ),
     ),
-    SortedMemoryQueueWitness(Vec<(MemoryQueryWitness<GoldilocksField>, [GoldilocksField; 12])>),
-    UnsortedMemoryQueueWitness(Vec<(MemoryQueryWitness<GoldilocksField>, [GoldilocksField; 12])>),
+    SortedMemoryQueueWitness(MemoryQueueWitness<GoldilocksField>),
+    UnsortedMemoryQueueWitness(MemoryQueueWitness<GoldilocksField>),
 }
 
 /// Make basic circuits instances and witnesses,
