@@ -42,7 +42,9 @@ use circuit_definitions::circuit_definitions::base_layer::ZkSyncBaseLayerCircuit
 use circuit_definitions::encodings::callstack_entry::ExtendedCallstackEntry;
 use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::encodings::{CircuitEquivalentReflection, LogQueueSimulator};
-use circuit_definitions::zkevm_circuits::base_structures::memory_query::MemoryQueryWitness;
+use circuit_definitions::zkevm_circuits::base_structures::memory_query::{
+    MemoryQueryWitness, MEMORY_QUERY_PACKED_WIDTH,
+};
 use circuit_definitions::zkevm_circuits::eip_4844::input::EIP4844CircuitInstanceWitness;
 use circuit_definitions::zkevm_circuits::fsm_input_output::ClosedFormInputCompactFormWitness;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
@@ -839,14 +841,15 @@ fn simulate_memory_queue(
     LastPerCircuitAccumulator<MemoryQueueState<GoldilocksField>>,
     MemoryQueuePerCircuitSimulator<GoldilocksField>,
     ImplicitMemoryStates<GoldilocksField>,
-    Vec<[GoldilocksField; 8]>, // TODO
+    Vec<[GoldilocksField; MEMORY_QUERY_PACKED_WIDTH]>,
 ) {
+    // for MainVM circuits
     let mut memory_queue_entry_states = CircuitsEntryAccumulatorSparse::new(
         geometry.cycles_per_vm_snapshot as usize,
         (0, QueueState::placeholder_witness()),
     );
 
-    // for RAM permutation circuits
+    // for RAM permutation circuits, only last per circuit
     let mut memory_queue_states_accumulator =
         LastPerCircuitAccumulator::<MemoryQueueState<GoldilocksField>>::with_flat_capacity(
             geometry.cycles_per_ram_permutation as usize,
@@ -854,16 +857,53 @@ fn simulate_memory_queue(
         );
 
     use crate::witness::aux_data_structs::per_circuit_accumulator::PerCircuitAccumulator;
-    // very big data struct inside
+    // simulator states are very RAM-heavy
     let mut memory_queue_simulator =
         MemoryQueuePerCircuitSimulator::using_container(PerCircuitAccumulator::with_flat_capacity(
             geometry.cycles_per_ram_permutation as usize,
             geometry.cycles_per_ram_permutation as usize,
         ));
 
-    let mut encodings_witnesses = vec![];
+    // for fs challenges in RAM permutation circuits
+    let mut encodings_witnesses_for_fs = vec![];
 
-    // very slow
+    // move accumulated full state witnesses from simulator, and process them
+    let mut process_simulation_result =
+        |mut memory_queue_simulator: MemoryQueuePerCircuitSimulator<GoldilocksField>| {
+            let witnesses;
+            (memory_queue_simulator, witnesses) = memory_queue_simulator.replace_container(
+                PerCircuitAccumulator::with_flat_capacity(
+                    geometry.cycles_per_ram_permutation as usize,
+                    geometry.cycles_per_ram_permutation as usize,
+                ),
+            );
+            let amount_of_circuits_accumulated = witnesses.amount_of_circuits_accumulated();
+            for full_witnesses_for_circuit in
+                witnesses.into_circuits(amount_of_circuits_accumulated)
+            {
+                let mut unsorted_witnesses_for_circuit =
+                    Vec::with_capacity(full_witnesses_for_circuit.len());
+
+                // split full witnesses
+                for witness in full_witnesses_for_circuit.into_iter() {
+                    encodings_witnesses_for_fs.push(witness.0);
+                    unsorted_witnesses_for_circuit.push((witness.2.reflect(), witness.1));
+                }
+
+                // send to storage
+                channel_sender
+                    .send(WitnessGenerationArtifact::UnsortedMemoryQueueWitness(
+                        unsorted_witnesses_for_circuit,
+                    ))
+                    .unwrap();
+            }
+
+            memory_queue_simulator
+        };
+
+    // the simulation is mostly a sequential computation of hashes
+    // for this reason it is one of the slowest parts
+    // we are simulating explicit part of queue (direct memory queries)
     for (cycle, query) in memory_queries.iter() {
         let (_, intermediate_info) =
             memory_queue_simulator.push_and_output_intermediate_data(*query, &round_function);
@@ -872,25 +912,9 @@ fn simulate_memory_queue(
         memory_queue_entry_states
             .push((*cycle, transform_sponge_like_queue_state(intermediate_info)));
 
+        // if we have collected witnesses for the circuit, we process and send part of them to the storage to free up RAM
         if memory_queue_simulator.witness.len() == geometry.cycles_per_ram_permutation as usize {
-            let witnesses;
-            (memory_queue_simulator, witnesses) = memory_queue_simulator.replace_container(
-                PerCircuitAccumulator::with_flat_capacity(
-                    geometry.cycles_per_ram_permutation as usize,
-                    geometry.cycles_per_ram_permutation as usize,
-                ),
-            );
-
-            let mut unsorted_witnesses_for_circuit = Vec::with_capacity(witnesses.len());
-            for witness in witnesses.iter() {
-                encodings_witnesses.push(witness.0);
-                unsorted_witnesses_for_circuit.push((witness.2.reflect(), witness.1));
-            }
-            channel_sender
-                .send(WitnessGenerationArtifact::UnsortedMemoryQueueWitness(
-                    unsorted_witnesses_for_circuit,
-                ))
-                .unwrap();
+            memory_queue_simulator = process_simulation_result(memory_queue_simulator);
         }
     }
 
@@ -902,6 +926,8 @@ fn simulate_memory_queue(
 
     let final_explicit_memory_queue_state = memory_queue_states_accumulator.last().unwrap().clone();
 
+    // now we need to handle implicit memory queries produced by decomitter, precompiles etc.
+
     use crate::witness::individual_circuits::memory_related::simulate_implicit_memory_queues;
     let implicit_memory_states = simulate_implicit_memory_queues(
         &mut memory_queue_simulator,
@@ -910,31 +936,12 @@ fn simulate_memory_queue(
         round_function,
     );
 
-    let witnesses;
-    (memory_queue_simulator, witnesses) =
-        memory_queue_simulator.replace_container(PerCircuitAccumulator::with_flat_capacity(
-            geometry.cycles_per_ram_permutation as usize,
-            geometry.cycles_per_ram_permutation as usize,
-        ));
+    memory_queue_simulator = process_simulation_result(memory_queue_simulator);
 
-    let amount_of_ram_circuits = (witnesses.len() as u32 + geometry.cycles_per_ram_permutation - 1)
-        / geometry.cycles_per_ram_permutation;
-
-    for unsorted_witnesses_for_chunk in witnesses.into_circuits(amount_of_ram_circuits as usize) {
-        let mut unsorted_witnesses_for_circuit =
-            Vec::with_capacity(unsorted_witnesses_for_chunk.len());
-
-        for witness in unsorted_witnesses_for_chunk.into_iter() {
-            encodings_witnesses.push(witness.0);
-            unsorted_witnesses_for_circuit.push((witness.2.reflect(), witness.1));
-        }
-
-        channel_sender
-            .send(WitnessGenerationArtifact::UnsortedMemoryQueueWitness(
-                unsorted_witnesses_for_circuit,
-            ))
-            .unwrap();
-    }
+    assert_eq!(
+        memory_queries.len() + implicit_memory_queries.amount_of_queries(),
+        encodings_witnesses_for_fs.len()
+    );
 
     (
         memory_queue_entry_states,
@@ -942,7 +949,7 @@ fn simulate_memory_queue(
         memory_queue_states_accumulator,
         memory_queue_simulator,
         implicit_memory_states,
-        encodings_witnesses,
+        encodings_witnesses_for_fs,
     )
 }
 
@@ -955,7 +962,7 @@ fn simulate_sorted_memory_queue(
 ) -> (
     LastPerCircuitAccumulator<MemoryQueueState<GoldilocksField>>,
     MemoryQueuePerCircuitSimulator<GoldilocksField>,
-    Vec<[GoldilocksField; 8]>,
+    Vec<[GoldilocksField; MEMORY_QUERY_PACKED_WIDTH]>,
     Vec<(u32, MemoryQuery, usize)>,
 ) {
     let mut all_memory_queries_sorted: Vec<&MemoryQuery> = memory_queries
@@ -974,9 +981,13 @@ fn simulate_sorted_memory_queue(
         a @ _ => a,
     });
 
-    // can be internally parallelized
+    let amount_of_queries = all_memory_queries_sorted.len();
+    assert_eq!(
+        memory_queries.len() + implicit_memory_queries.amount_of_queries(),
+        amount_of_queries
+    );
 
-    let amount_of_queries = memory_queries.len() + implicit_memory_queries.amount_of_queries();
+    // simulator states are very RAM-heavy
     let mut sorted_memory_queries_simulator =
         MemoryQueuePerCircuitSimulator::using_container(PerCircuitAccumulator::with_flat_capacity(
             geometry.cycles_per_ram_permutation as usize,
@@ -990,18 +1001,24 @@ fn simulate_sorted_memory_queue(
             amount_of_queries,
         );
 
-    let mut sorted_encodings = Vec::with_capacity(amount_of_queries);
+    // for fs challenges in RAM permutation circuits
+    let mut encodings_witnesses_for_fs = Vec::with_capacity(amount_of_queries);
+
     let amount_of_ram_circuits = (amount_of_queries as u32 + geometry.cycles_per_ram_permutation
         - 1)
         / geometry.cycles_per_ram_permutation;
+    // for RAM permutation circuits
     let mut sorted_queries_aux_data_for_chunks =
         Vec::with_capacity(amount_of_ram_circuits as usize);
 
+    // the simulation is mostly a sequential computation of hashes
+    // for this reason it is one of the slowest parts
     for (idx, query) in all_memory_queries_sorted.into_iter().enumerate() {
         let (_, intermediate_info) = sorted_memory_queries_simulator
             .push_and_output_intermediate_data(*query, &round_function);
         sorted_memory_queue_states_accumulator.push(intermediate_info);
 
+        // if we have collected witnesses for the circuit, we process and send part of them to the storage to free up RAM
         if sorted_memory_queries_simulator.witness.len()
             == geometry.cycles_per_ram_permutation as usize
             || idx == amount_of_queries - 1
@@ -1013,46 +1030,51 @@ fn simulate_sorted_memory_queue(
                     geometry.cycles_per_ram_permutation as usize,
                 ));
 
-            let sorted_witnesses_for_chunk = witnesses.into_circuits(1)[0].clone();
+            assert_eq!(witnesses.amount_of_circuits_accumulated(), 1);
 
-            let sorted_states_len = sorted_witnesses_for_chunk.len();
-            let num_nondet_writes_in_chunk = sorted_witnesses_for_chunk
-                .iter()
-                .filter(|el| {
-                    let query = &el.2;
-                    query.rw_flag == true
-                        && query.timestamp.0 == 0
-                        && query.location.page.0 == BOOTLOADER_HEAP_PAGE
-                })
-                .count();
-            let last_sorted_query = sorted_witnesses_for_chunk.last().unwrap().2;
+            // should be only one iteration
+            for full_witnesses_for_circuit in witnesses.into_circuits(1) {
+                let sorted_states_len = full_witnesses_for_circuit.len();
+                let num_nondet_writes_in_chunk = full_witnesses_for_circuit
+                    .iter()
+                    .filter(|el| {
+                        let query = &el.2;
+                        query.rw_flag == true
+                            && query.timestamp.0 == 0
+                            && query.location.page.0 == BOOTLOADER_HEAP_PAGE
+                    })
+                    .count();
+                let last_sorted_query = full_witnesses_for_circuit.last().unwrap().2;
 
-            sorted_queries_aux_data_for_chunks.push((
-                num_nondet_writes_in_chunk as u32,
-                last_sorted_query,
-                sorted_states_len,
-            ));
+                sorted_queries_aux_data_for_chunks.push((
+                    num_nondet_writes_in_chunk as u32,
+                    last_sorted_query,
+                    sorted_states_len,
+                ));
 
-            let mut sorted_witnesses_for_circuit =
-                Vec::with_capacity(sorted_witnesses_for_chunk.len());
+                let mut sorted_witnesses_for_circuit =
+                    Vec::with_capacity(full_witnesses_for_circuit.len());
 
-            for witness in sorted_witnesses_for_chunk.into_iter() {
-                sorted_encodings.push(witness.0);
-                sorted_witnesses_for_circuit.push((witness.2.reflect(), witness.1));
+                // split full witnesses
+                for witness in full_witnesses_for_circuit.into_iter() {
+                    encodings_witnesses_for_fs.push(witness.0);
+                    sorted_witnesses_for_circuit.push((witness.2.reflect(), witness.1));
+                }
+
+                // send to storage
+                channel_sender
+                    .send(WitnessGenerationArtifact::SortedMemoryQueueWitness(
+                        sorted_witnesses_for_circuit,
+                    ))
+                    .unwrap();
             }
-
-            channel_sender
-                .send(WitnessGenerationArtifact::SortedMemoryQueueWitness(
-                    sorted_witnesses_for_circuit,
-                ))
-                .unwrap();
         }
     }
 
     (
         sorted_memory_queue_states_accumulator,
         sorted_memory_queries_simulator,
-        sorted_encodings,
+        encodings_witnesses_for_fs,
         sorted_queries_aux_data_for_chunks,
     )
 }
@@ -1150,6 +1172,10 @@ fn process_memory_related_circuits<CB: FnMut(WitnessGenerationArtifact)>(
 
     snapshot_prof("BEFORE QUEUES SIMULATION");
 
+    // Memory queues simulation is a slowest part in basic witness generation.
+    // Each queue simulation is sequential single-threaded computation of hashes.
+    // We will simulate unsorted and sorted queues in separate threads.
+
     let (tx, rx): (
         Sender<WitnessGenerationArtifact>,
         Receiver<WitnessGenerationArtifact>,
@@ -1193,6 +1219,8 @@ fn process_memory_related_circuits<CB: FnMut(WitnessGenerationArtifact)>(
         })
     };
 
+    // send "finalized" part of RAM permutations circuits witnesses to storage (parts of simulator states, RAM-heavy)
+    // the rest will be processed further
     for _ in 0..amount_of_ram_circuits * 2 {
         let artifact = rx.recv().unwrap();
         artifacts_callback(artifact);
