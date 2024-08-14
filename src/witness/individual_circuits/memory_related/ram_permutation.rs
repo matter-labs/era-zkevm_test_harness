@@ -224,16 +224,6 @@ pub(crate) fn compute_ram_circuit_snapshots<CB: FnMut(WitnessGenerationArtifact)
             DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS
         );
 
-        // we need witnesses to pop elements from the front of the queue
-        // but this data should be saved to storage before, during queues simulation
-        let unsorted_witness_placeholder = FullStateCircuitQueueRawWitness {
-            elements: Default::default(),
-        };
-
-        let sorted_witness_placeholder = FullStateCircuitQueueRawWitness {
-            elements: Default::default(),
-        };
-
         // now we need to have final grand product value that will also become an input for the next circuit
 
         let if_first = idx == 0;
@@ -329,8 +319,8 @@ pub(crate) fn compute_ram_circuit_snapshots<CB: FnMut(WitnessGenerationArtifact)
                     num_nondeterministic_writes: new_num_nondet_writes,
                 },
             },
-            unsorted_queue_witness: unsorted_witness_placeholder,
-            sorted_queue_witness: sorted_witness_placeholder,
+            unsorted_queue_witness: Default::default(),
+            sorted_queue_witness: Default::default(),
         };
 
         if sorted_states_len % per_circuit_capacity != 0 {
