@@ -892,9 +892,10 @@ fn simulate_memory_queue(
 
                 // send to storage
                 channel_sender
-                    .send(WitnessGenerationArtifact::UnsortedMemoryQueueWitness(
+                    .send(WitnessGenerationArtifact::MemoryQueueWitness((
                         unsorted_witnesses_for_circuit,
-                    ))
+                        false, // unsorted
+                    )))
                     .unwrap();
             }
 
@@ -1063,9 +1064,10 @@ fn simulate_sorted_memory_queue(
 
                 // send to storage
                 channel_sender
-                    .send(WitnessGenerationArtifact::SortedMemoryQueueWitness(
+                    .send(WitnessGenerationArtifact::MemoryQueueWitness((
                         sorted_witnesses_for_circuit,
-                    ))
+                        true, // sorted
+                    )))
                     .unwrap();
             }
         }
@@ -1398,8 +1400,7 @@ pub enum WitnessGenerationArtifact {
             Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
         ),
     ),
-    SortedMemoryQueueWitness(MemoryQueueStateWitnesses<GoldilocksField>),
-    UnsortedMemoryQueueWitness(MemoryQueueStateWitnesses<GoldilocksField>),
+    MemoryQueueWitness((MemoryQueueStateWitnesses<GoldilocksField>, bool)), // sorted/unsorted
 }
 
 /// Make basic circuits instances and witnesses,

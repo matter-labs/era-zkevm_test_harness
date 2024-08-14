@@ -271,11 +271,12 @@ pub(crate) fn run_with_options(entry_point_bytecode: Vec<[u8; 32]>, options: Opt
 
     let artifacts_callback = |artifact: WitnessGenerationArtifact| match artifact {
         WitnessGenerationArtifact::BaseLayerCircuit(circuit) => basic_block_circuits.push(circuit),
-        WitnessGenerationArtifact::UnsortedMemoryQueueWitness(witnesses) => {
-            unsorted_memory_queue_witnesses.push(witnesses)
-        }
-        WitnessGenerationArtifact::SortedMemoryQueueWitness(witnesses) => {
-            sorted_memory_queue_witnesses.push(witnesses)
+        WitnessGenerationArtifact::MemoryQueueWitness((witnesses, sorted)) => {
+            if sorted {
+                sorted_memory_queue_witnesses.push(witnesses)
+            } else {
+                unsorted_memory_queue_witnesses.push(witnesses)
+            }
         }
         _ => {}
     };

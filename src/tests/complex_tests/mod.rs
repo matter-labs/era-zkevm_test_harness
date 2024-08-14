@@ -269,11 +269,12 @@ pub(crate) fn generate_base_layer(
                 .map(|x| ZkSyncBaseLayerStorage::from_inner(a as u8, x))
                 .collect(),
         )),
-        WitnessGenerationArtifact::UnsortedMemoryQueueWitness(witnesses) => {
-            unsorted_memory_queue_witnesses.push(witnesses)
-        }
-        WitnessGenerationArtifact::SortedMemoryQueueWitness(witnesses) => {
-            sorted_memory_queue_witnesses.push(witnesses)
+        WitnessGenerationArtifact::MemoryQueueWitness((witnesses, sorted)) => {
+            if sorted {
+                sorted_memory_queue_witnesses.push(witnesses);
+            } else {
+                unsorted_memory_queue_witnesses.push(witnesses);
+            }
         }
     };
 
