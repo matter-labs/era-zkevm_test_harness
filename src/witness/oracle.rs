@@ -14,7 +14,6 @@ use crate::boojum::field::SmallField;
 use crate::boojum::gadgets::queue::QueueState;
 use crate::boojum::gadgets::traits::allocatable::CSAllocatable;
 use crate::ethereum_types::U256;
-use crate::snapshot_prof;
 use crate::toolset::GeometryConfig;
 use crate::witness::artifacts::{DemuxedLogQueries, MemoryArtifacts, MemoryCircuitsArtifacts};
 use crate::witness::aux_data_structs::one_per_circuit_accumulator::{
@@ -1172,8 +1171,6 @@ fn process_memory_related_circuits<CB: FnMut(WitnessGenerationArtifact)>(
         - 1)
         / geometry.cycles_per_ram_permutation;
 
-    snapshot_prof("BEFORE QUEUES SIMULATION");
-
     // Memory queues simulation is a slowest part in basic witness generation.
     // Each queue simulation is sequential single-threaded computation of hashes.
     // We will simulate unsorted and sorted queues in separate threads.
@@ -1257,8 +1254,6 @@ fn process_memory_related_circuits<CB: FnMut(WitnessGenerationArtifact)>(
         implicit_memory_queries.amount_of_queries(),
         implicit_memory_states.amount_of_states()
     );
-
-    snapshot_prof("AFTER QUEUES SIMULATION");
 
     use crate::witness::individual_circuits::memory_related::decommit_code::compute_decommitter_circuit_snapshots;
 
@@ -1362,8 +1357,6 @@ fn process_memory_related_circuits<CB: FnMut(WitnessGenerationArtifact)>(
 
     tracing::debug!("Running RAM permutation simulation");
 
-    snapshot_prof("BEFORE RAM");
-
     let (ram_permutation_circuits, ram_permutation_circuits_compact_forms_witnesses) =
         compute_ram_circuit_snapshots(
             amount_of_memory_queries,
@@ -1379,8 +1372,6 @@ fn process_memory_related_circuits<CB: FnMut(WitnessGenerationArtifact)>(
             geometry,
             &mut artifacts_callback,
         );
-
-    snapshot_prof("AFTER RAM");
 
     (
         circuits_data,
@@ -1468,8 +1459,6 @@ pub(crate) fn create_artifacts_from_tracer<CB: FnMut(WitnessGenerationArtifact)>
         std::mem::take(&mut callstack_with_aux_data.flat_new_frames_history);
     drop(callstack_with_aux_data);
 
-    snapshot_prof("BEFORE MUX LOG QUEUE CIRCUITS");
-
     tracing::debug!("Running multiplexed log queue simulation");
 
     // We have all log queries in one multiplexed queue. We need to simulate this queue,
@@ -1486,8 +1475,6 @@ pub(crate) fn create_artifacts_from_tracer<CB: FnMut(WitnessGenerationArtifact)>
         final_callstack_entry,
         *round_function,
     );
-
-    snapshot_prof("AFTER MUX LOG QUEUE CIRCUITS");
 
     use std::thread;
     let callstack_handle = {
@@ -1532,8 +1519,6 @@ pub(crate) fn create_artifacts_from_tracer<CB: FnMut(WitnessGenerationArtifact)>
 
     tracing::debug!("Processing log circuits");
 
-    snapshot_prof("AFTER LOG DEMUX CIRCUITS");
-
     // Process part of log circuits that do not use memory (I/O-like).
     // Precompiles will be processed in process_memory_related_circuits.
     // Also makes storage application circuits and compact form witnesses.
@@ -1546,8 +1531,6 @@ pub(crate) fn create_artifacts_from_tracer<CB: FnMut(WitnessGenerationArtifact)>
             round_function,
             &mut artifacts_callback,
         );
-
-    snapshot_prof("AFTER LOG CIRCUITS");
 
     tracing::debug!("Processing memory-related circuits");
 
