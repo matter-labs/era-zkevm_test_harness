@@ -319,6 +319,9 @@ pub(crate) fn compute_ram_circuit_snapshots<CB: FnMut(WitnessGenerationArtifact)
                     num_nondeterministic_writes: new_num_nondet_writes,
                 },
             },
+            // we will need witnesses to pop elements from the front of the queue
+            // but this data should be saved to storage before, during queues simulation (RAM-heavy)
+            // so we use placeholders here
             unsorted_queue_witness: Default::default(),
             sorted_queue_witness: Default::default(),
         };
