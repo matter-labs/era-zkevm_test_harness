@@ -157,3 +157,7 @@ impl<F: SmallField> CircuitEquivalentReflection<F> for MemoryQuery {
         }
     }
 }
+
+use zkevm_circuits::base_structures::memory_query::MemoryQueryWitness;
+pub type MemoryQueueStateWitnesses<F> =
+    Vec<(MemoryQueryWitness<F>, [F; FULL_SPONGE_QUEUE_STATE_WIDTH])>;

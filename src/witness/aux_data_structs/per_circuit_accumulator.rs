@@ -32,6 +32,10 @@ impl<T> PerCircuitAccumulatorContainer<T> {
         self.accumulated
     }
 
+    pub fn amount_of_circuits_accumulated(&self) -> usize {
+        self.circuits_data.len()
+    }
+
     pub fn last(&self) -> Option<&T> {
         let last_batch = self.circuits_data.last();
         last_batch?;
@@ -179,6 +183,10 @@ impl<T> PerCircuitAccumulator<T> {
 
     pub fn len(&self) -> usize {
         self.container.len()
+    }
+
+    pub fn amount_of_circuits_accumulated(&self) -> usize {
+        self.container.amount_of_circuits_accumulated()
     }
 
     pub fn push(&mut self, val: T) {

@@ -316,8 +316,6 @@ impl<
 pub struct FullWidthQueueIntermediateStates<F: SmallField, const SW: usize, const ROUNDS: usize> {
     pub head: [F; SW],
     pub tail: [F; SW],
-    pub old_head: [F; SW],
-    pub old_tail: [F; SW],
     pub num_items: u32,
     pub round_function_execution_pairs: [([F; SW], [F; SW]); ROUNDS],
 }
@@ -433,8 +431,6 @@ impl<
         let intermediate_info = FullWidthQueueIntermediateStates {
             head: self.head,
             tail: new_tail,
-            old_head: self.head,
-            old_tail,
             num_items: self.num_items,
             round_function_execution_pairs: states,
         };
@@ -473,8 +469,6 @@ impl<
         let intermediate_info = FullWidthQueueIntermediateStates {
             head: self.head,
             tail: self.tail,
-            old_head,
-            old_tail: self.tail,
             num_items: self.num_items,
             round_function_execution_pairs: states,
         };
@@ -562,6 +556,12 @@ impl<
         }
     }
 
+    pub fn replace_container(mut self, container: C) -> (Self, C) {
+        let prev_container = self.witness;
+        self.witness = container;
+        (self, prev_container)
+    }
+
     pub fn take_sponge_like_queue_state(&self) -> QueueStateWitness<F, SW> {
         let result = QueueStateWitness {
             head: self.head,
@@ -605,8 +605,6 @@ impl<
         let intermediate_info = FullWidthQueueIntermediateStates {
             head: self.head,
             tail: new_tail,
-            old_head: self.head,
-            old_tail,
             num_items: self.num_items,
             round_function_execution_pairs: states,
         };
@@ -644,7 +642,7 @@ pub struct FullWidthStackSimulator<
 > {
     pub state: [F; SW],
     pub num_items: u32,
-    pub witness: Vec<([F; N], [F; SW], I)>,
+    pub witness: Vec<([F; SW], I)>,
 }
 
 impl<
@@ -697,7 +695,7 @@ impl<
 
         let states = make_round_function_pairs(old_state, states);
 
-        self.witness.push((encoding, self.state, element));
+        self.witness.push((self.state, element));
         self.num_items += 1;
         self.state = new_state;
 
@@ -727,7 +725,7 @@ impl<
         let popped = self.witness.pop().unwrap();
         self.num_items -= 1;
 
-        let (_element_encoding, previous_state, element) = popped;
+        let (previous_state, element) = popped;
         let encoding = element.encoding_witness();
 
         let mut state = previous_state;
@@ -867,6 +865,9 @@ mod tests {
         }
         assert_eq!(queue.num_items, 10);
 
+        let old_head = queue.head;
+        let old_tail = queue.tail;
+
         // pop one element
         let (element, data) = queue.pop_and_output_intermediate_data(&round_function);
         // it should return the first one that we entered (with circuit 0).
@@ -876,8 +877,8 @@ mod tests {
         assert_eq!(data.num_items, 9);
 
         assert_eq!(data.head, tail_after_first);
-        assert_eq!(data.old_head, empty_head);
-        assert_eq!(data.old_tail, data.tail);
+        assert_eq!(old_head, empty_head);
+        assert_eq!(data.tail, old_tail);
 
         let mut parts = queue.split_by(3, &round_function);
 

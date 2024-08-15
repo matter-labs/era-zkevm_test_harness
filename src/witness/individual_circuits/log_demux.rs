@@ -19,6 +19,7 @@ use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::zkevm_circuits::demux_log_queue::DemuxOutput;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use circuit_definitions::{encodings::*, Field, RoundFunction};
+use oracle::WitnessGenerationArtifact;
 use zk_evm::zkevm_opcode_defs::SECP256R1_VERIFY_PRECOMPILE_ADDRESS;
 
 use crate::zk_evm::aux_structures::LogQuery as LogQuery_;
@@ -172,17 +173,13 @@ impl DemuxedQueuesStatesSimulator {
 }
 
 /// Take a storage log, output logs separately for events, l1 messages, storage, etc
-pub(crate) fn process_logs_demux_and_make_circuits<
-    CB: FnMut(ZkSyncBaseLayerCircuit),
-    QSCB: FnMut(u64, RecursionQueueSimulator<Field>, Vec<ClosedFormInputCompactFormWitness<Field>>),
->(
+pub(crate) fn process_logs_demux_and_make_circuits<CB: FnMut(WitnessGenerationArtifact)>(
     mut log_demux_artifacts: LogDemuxCircuitArtifacts<Field>,
     demuxed_queues: &DemuxedLogQueries,
     per_circuit_capacity: usize,
     round_function: &RoundFunction,
     geometry: &GeometryConfig,
-    mut circuit_callback: CB,
-    mut recursion_queue_callback: QSCB,
+    mut artifacts_callback: CB,
 ) -> (
     FirstAndLastCircuitWitness<LogDemuxerObservableWitness<Field>>,
     Vec<ClosedFormInputCompactFormWitness<Field>>,
@@ -208,11 +205,11 @@ pub(crate) fn process_logs_demux_and_make_circuits<
     {
         let (log_demux_circuits, queue_simulator, log_demux_circuits_compact_forms_witnesses) =
             maker.into_results();
-        recursion_queue_callback(
+        artifacts_callback(WitnessGenerationArtifact::RecursionQueue((
             circuit_type as u64,
             queue_simulator,
             log_demux_circuits_compact_forms_witnesses.clone(),
-        );
+        )));
 
         let (io_queues_states, precompiles_queues_states) =
             DemuxedQueuesStatesSimulator::build_empty(*round_function);
@@ -391,18 +388,18 @@ pub(crate) fn process_logs_demux_and_make_circuits<
         }
         previous_hidden_fsm_output = Some(witness.closed_form_input.hidden_fsm_output.clone());
 
-        circuit_callback(ZkSyncBaseLayerCircuit::LogDemuxer(
-            maker.process(witness, circuit_type),
+        artifacts_callback(WitnessGenerationArtifact::BaseLayerCircuit(
+            ZkSyncBaseLayerCircuit::LogDemuxer(maker.process(witness, circuit_type)),
         ));
     }
 
     let (log_demux_circuits, queue_simulator, log_demux_circuits_compact_forms_witnesses) =
         maker.into_results();
-    recursion_queue_callback(
+    artifacts_callback(WitnessGenerationArtifact::RecursionQueue((
         circuit_type as u64,
         queue_simulator,
         log_demux_circuits_compact_forms_witnesses.clone(),
-    );
+    )));
 
     for (sub_queue, mut iter) in queries_iterators {
         assert!(

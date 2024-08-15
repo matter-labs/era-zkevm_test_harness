@@ -7,6 +7,7 @@ use crate::snark_wrapper::boojum::gadgets::recursion::recursive_tree_hasher::Cir
 use crate::toolset::create_tools;
 use crate::toolset::GeometryConfig;
 use crate::witness::oracle::create_artifacts_from_tracer;
+use crate::witness::oracle::WitnessGenerationArtifact;
 use crate::witness::tracer::tracer::WitnessTracer;
 use crate::witness::tree::BinarySparseStorageTree;
 use crate::witness::tree::ZkSyncStorageLeaf;
@@ -61,15 +62,7 @@ pub type RunVMsResult = (
 /// - witness with AUX data (with information that might be useful during verification to generate the public input)
 ///
 /// This function will setup the environment and will run out-of-circuit and then in-circuit
-pub fn run_vms<
-    S: Storage,
-    CB: FnMut(ZkSyncBaseLayerCircuit),
-    QSCB: FnMut(
-        u64,
-        RecursionQueueSimulator<MainField>,
-        Vec<ClosedFormInputCompactFormWitness<MainField>>,
-    ),
->(
+pub fn run_vms<S: Storage, CB: FnMut(WitnessGenerationArtifact)>(
     caller: Address,                 // for real block must be zero
     entry_point_address: Address,    // for real block must be the bootloader
     entry_point_code: Vec<[u8; 32]>, // for read block must be a bootloader code
@@ -85,8 +78,7 @@ pub fn run_vms<
     tree: impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
     trusted_setup_path: &str,
     eip_4844_repack_inputs: [Option<Vec<u8>>; MAX_4844_BLOBS_PER_BLOCK],
-    circuit_callback: CB,
-    queue_simulator_callback: QSCB,
+    artifacts_callback: CB,
     out_of_circuit_tracer: &mut impl Tracer<SupportedMemory = SimpleMemory>,
 ) -> Result<RunVMsResult, RunVmError> {
     let round_function = ZkSyncDefaultRoundFunction::default();
@@ -254,8 +246,7 @@ pub fn run_vms<
         evm_simulator_code_hash,
         eip_4844_repack_inputs.clone(),
         trusted_setup_path,
-        circuit_callback,
-        queue_simulator_callback,
+        artifacts_callback,
     );
 
     let (scheduler_circuit_witness, aux_data) = {

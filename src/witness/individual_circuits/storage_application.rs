@@ -21,27 +21,20 @@ use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::encodings::state_diff_record::StateDiffRecord;
 use circuit_definitions::encodings::LogQueueSimulator;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
+use oracle::WitnessGenerationArtifact;
 use tracing;
 use zk_evm::aux_structures::LogQuery;
 
 use crate::sha3::Digest;
 
-pub(crate) fn decompose_into_storage_application_witnesses<
-    CB: FnMut(ZkSyncBaseLayerCircuit),
-    QSCB: FnMut(
-        u64,
-        RecursionQueueSimulator<GoldilocksField>,
-        Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
-    ),
->(
+pub(crate) fn decompose_into_storage_application_witnesses<CB: FnMut(WitnessGenerationArtifact)>(
     deduplicated_rollup_storage_queue_simulator: LogQueueSimulator<GoldilocksField>,
     deduplicated_rollup_storage_queries: Vec<LogQuery>,
     mut tree: impl BinarySparseStorageTree<256, 32, 32, 8, 32, Blake2s256, ZkSyncStorageLeaf>,
     round_function: &Poseidon2Goldilocks,
     num_rounds_per_circuit: usize,
     geometry: &GeometryConfig,
-    mut circuit_callback: CB,
-    mut recursion_queue_callback: QSCB,
+    mut artifacts_callback: CB,
 ) -> (
     FirstAndLastCircuitWitness<StorageApplicationObservableWitness<GoldilocksField>>,
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
@@ -261,8 +254,8 @@ pub(crate) fn decompose_into_storage_application_witnesses<
 
         initial_fsm_state = final_fsm_state.clone();
 
-        circuit_callback(ZkSyncBaseLayerCircuit::StorageApplication(
-            maker.process(input, circuit_type),
+        artifacts_callback(WitnessGenerationArtifact::BaseLayerCircuit(
+            ZkSyncBaseLayerCircuit::StorageApplication(maker.process(input, circuit_type)),
         ));
     }
 
@@ -271,11 +264,11 @@ pub(crate) fn decompose_into_storage_application_witnesses<
         queue_simulator,
         storage_application_circuits_compact_forms_witnesses,
     ) = maker.into_results();
-    recursion_queue_callback(
+    artifacts_callback(WitnessGenerationArtifact::RecursionQueue((
         circuit_type as u64,
         queue_simulator,
         storage_application_circuits_compact_forms_witnesses.clone(),
-    );
+    )));
 
     tracing::debug!(
         "Final enumeration index = {}",

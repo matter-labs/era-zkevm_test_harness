@@ -12,7 +12,7 @@ use crate::zk_evm::ethereum_types::U256;
 use crate::zkevm_circuits::{
     base_structures::memory_query::MEMORY_QUERY_PACKED_WIDTH, ram_permutation::input::*,
 };
-use artifacts::{ImplicitMemoryArtifacts, MemoryArtifacts};
+use artifacts::MemoryArtifacts;
 use circuit_definitions::circuit_definitions::base_layer::{
     RAMPermutationInstanceSynthesisFunction, ZkSyncBaseLayerCircuit,
 };
@@ -22,8 +22,9 @@ use circuit_definitions::encodings::recursion_request::RecursionQueueSimulator;
 use circuit_definitions::zkevm_circuits::scheduler::aux::BaseLayerCircuitType;
 use circuit_definitions::{encodings::*, Field, RoundFunction};
 use memory_query::{CustomMemoryQueueSimulator, QueueWitness};
-use postprocessing::FirstAndLastCircuitWitness;
+use oracle::WitnessGenerationArtifact;
 
+use postprocessing::FirstAndLastCircuitWitness;
 use rayon::prelude::*;
 use snark_wrapper::boojum::field::Field as _;
 use std::borrow::Borrow;
@@ -33,48 +34,43 @@ use zkevm_circuits::base_structures::vm_state::QUEUE_STATE_WIDTH;
 
 use crate::zk_evm::zkevm_opcode_defs::BOOTLOADER_HEAP_PAGE;
 
-pub(crate) fn compute_ram_circuit_snapshots<
-    CB: FnMut(ZkSyncBaseLayerCircuit),
-    QSCB: FnMut(u64, RecursionQueueSimulator<Field>, Vec<ClosedFormInputCompactFormWitness<Field>>),
->(
-    memory_queries: &Vec<(u32, MemoryQuery)>,
-    implicit_memory_artifacts: ImplicitMemoryArtifacts<Field>,
-    mut memory_queue_states_accumulator: LastPerCircuitAccumulator<MemoryQueueState<Field>>,
+pub(crate) fn compute_ram_circuit_snapshots<CB: FnMut(WitnessGenerationArtifact)>(
+    total_amount_of_queries: usize, // including additional queries from precompiles
+    memory_queue_states_accumulator: LastPerCircuitAccumulator<MemoryQueueState<Field>>,
+    sorted_memory_queue_states_accumulator: LastPerCircuitAccumulator<MemoryQueueState<Field>>,
     memory_queue_simulator: MemoryQueuePerCircuitSimulator<Field>,
+    sorted_memory_queries_simulator: MemoryQueuePerCircuitSimulator<Field>,
+    sorted_queries_aux_data_for_chunks: Vec<(u32, MemoryQuery, usize)>,
+    sorted_encodings: Vec<[Field; MEMORY_QUERY_PACKED_WIDTH]>,
+    unsorted_encodings: Vec<[Field; MEMORY_QUERY_PACKED_WIDTH]>,
     round_function: &RoundFunction,
     num_non_deterministic_heap_queries: usize,
-    per_circuit_capacity: usize,
     geometry: &GeometryConfig,
-    mut circuit_callback: CB,
-    mut recursion_queue_callback: QSCB,
+    mut artifacts_callback: CB,
 ) -> (
     FirstAndLastCircuitWitness<RamPermutationObservableWitness<Field>>,
     Vec<ClosedFormInputCompactFormWitness<Field>>,
 ) {
-    assert_eq!(memory_queries.len(), memory_queue_states_accumulator.len());
-
     assert_eq!(
-        implicit_memory_artifacts.memory_queries.len(),
-        implicit_memory_artifacts.memory_queue_states.len()
+        total_amount_of_queries,
+        memory_queue_states_accumulator.len()
     );
 
-    // including additional queries from precompiles
-    let total_amount_of_queries =
-        memory_queries.len() + implicit_memory_artifacts.memory_queries.len();
+    assert_eq!(
+        total_amount_of_queries,
+        sorted_memory_queue_states_accumulator.len()
+    );
 
     assert!(
         total_amount_of_queries > 0,
         "VM should have made some memory requests"
     );
 
+    let per_circuit_capacity = geometry.cycles_per_ram_permutation as usize;
+
     let amount_of_circuits =
         (total_amount_of_queries + per_circuit_capacity - 1) / per_circuit_capacity;
 
-    memory_queue_states_accumulator
-        .reserve_exact_flat(implicit_memory_artifacts.memory_queue_states.len());
-    for state in implicit_memory_artifacts.memory_queue_states.into_iter() {
-        memory_queue_states_accumulator.push(state);
-    }
     let unsorted_memory_queue_chunk_final_states = memory_queue_states_accumulator.into_circuits();
 
     assert_eq!(
@@ -82,47 +78,8 @@ pub(crate) fn compute_ram_circuit_snapshots<
         amount_of_circuits
     );
 
-    let mut sorted_memory_queue_chunk_final_states = Vec::with_capacity(amount_of_circuits);
-
-    let mut sorted_memory_queries_simulator =
-        MemoryQueuePerCircuitSimulator::using_container(PerCircuitAccumulator::with_flat_capacity(
-            per_circuit_capacity,
-            memory_queries.len() + implicit_memory_artifacts.memory_queries.len(),
-        ));
-    {
-        let mut sorted_memory_queries_accumulated: Vec<&MemoryQuery> = memory_queries
-            .iter()
-            .map(|(_, query)| query)
-            .chain(implicit_memory_artifacts.memory_queries.iter())
-            .collect();
-
-        // sort by memory location, and then by timestamp
-        sorted_memory_queries_accumulated.par_sort_by(|a, b| match a.location.cmp(&b.location) {
-            Ordering::Equal => a.timestamp.cmp(&b.timestamp),
-            a @ _ => a,
-        });
-
-        // those two thins are parallelizable, and can be internally parallelized too
-
-        // now we can finish reconstruction of each sorted and unsorted memory queries
-
-        // reconstruct sorted one in full
-
-        for chunk in sorted_memory_queries_accumulated.chunks(per_circuit_capacity) {
-            let intermediate_info = chunk
-                .iter()
-                .map(|query| {
-                    let (_, _intermediate_info) = sorted_memory_queries_simulator
-                        .push_and_output_intermediate_data(**query, round_function);
-                    _intermediate_info
-                })
-                .last()
-                .unwrap();
-            sorted_memory_queue_chunk_final_states.push(intermediate_info);
-        }
-    }
-
-    drop(implicit_memory_artifacts.memory_queries);
+    let sorted_memory_queue_chunk_final_states =
+        sorted_memory_queue_states_accumulator.into_circuits();
 
     assert_eq!(
         unsorted_memory_queue_chunk_final_states.len(),
@@ -134,15 +91,15 @@ pub(crate) fn compute_ram_circuit_snapshots<
         memory_queue_simulator.num_items
     );
 
-    // now we should chunk it by circuits but briefly simulating their logic
-
-    // since encodings of the elements provide all the information necessary to perform soring argument,
+    // since encodings of the elements provide all the information necessary to perform sorting argument,
     // we use them naively
 
     assert_eq!(
         memory_queue_simulator.num_items as usize,
         total_amount_of_queries
     );
+
+    assert_eq!(unsorted_encodings.len(), sorted_encodings.len());
 
     let mut lhs_grand_product_chains =
         Vec::with_capacity(DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS);
@@ -163,21 +120,13 @@ pub(crate) fn compute_ram_circuit_snapshots<
             round_function,
         );
 
-        let lhs_contributions: Vec<_> = memory_queue_simulator
-            .witness
-            .iter()
-            .map(|el| &el.0)
-            .collect();
-        let rhs_contributions: Vec<_> = sorted_memory_queries_simulator
-            .witness
-            .iter()
-            .map(|el| &el.0)
-            .collect();
+        let lhs_contributions = unsorted_encodings;
+        let rhs_contributions = sorted_encodings;
 
         for idx in 0..DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS {
             let (lhs_grand_product_chain, rhs_grand_product_chain) = compute_grand_product_chains(
-                &lhs_contributions,
-                &rhs_contributions,
+                &lhs_contributions.iter().collect(),
+                &rhs_contributions.iter().collect(),
                 &challenges[idx],
             );
 
@@ -185,11 +134,11 @@ pub(crate) fn compute_ram_circuit_snapshots<
             assert_eq!(rhs_grand_product_chain.len(), total_amount_of_queries);
             assert_eq!(
                 lhs_grand_product_chain.len(),
-                memory_queue_simulator.witness.len()
+                memory_queue_simulator.num_items as usize
             );
             assert_eq!(
                 rhs_grand_product_chain.len(),
-                sorted_memory_queries_simulator.witness.len()
+                sorted_memory_queries_simulator.num_items as usize
             );
 
             lhs_grand_product_chains.push(lhs_grand_product_chain);
@@ -203,8 +152,6 @@ pub(crate) fn compute_ram_circuit_snapshots<
     // now we need to split them into individual circuits
     // splitting is not extra hard here, we walk over iterator over everything and save states on checkpoints
 
-    // we also want to have chunks of witness for each of all the intermediate states
-
     assert_eq!(
         unsorted_memory_queue_chunk_final_states.len(),
         transposed_lhs_chains.len()
@@ -212,23 +159,6 @@ pub(crate) fn compute_ram_circuit_snapshots<
     assert_eq!(
         unsorted_memory_queue_chunk_final_states.len(),
         transposed_rhs_chains.len()
-    );
-    let unsorted_witness_chunks = memory_queue_simulator
-        .witness
-        .into_circuits(amount_of_circuits);
-
-    assert_eq!(
-        unsorted_memory_queue_chunk_final_states.len(),
-        unsorted_witness_chunks.len()
-    );
-
-    let sorted_witness_chunks = sorted_memory_queries_simulator
-        .witness
-        .into_circuits(amount_of_circuits);
-
-    assert_eq!(
-        unsorted_memory_queue_chunk_final_states.len(),
-        sorted_witness_chunks.len()
     );
 
     let unsorted_global_final_state = unsorted_memory_queue_chunk_final_states
@@ -250,8 +180,7 @@ pub(crate) fn compute_ram_circuit_snapshots<
         .zip(sorted_memory_queue_chunk_final_states.into_iter())
         .zip(transposed_lhs_chains.into_iter())
         .zip(transposed_rhs_chains.into_iter())
-        .zip(unsorted_witness_chunks)
-        .zip(sorted_witness_chunks);
+        .zip(sorted_queries_aux_data_for_chunks);
 
     // now trivial transformation into desired data structures,
     // and we are all good
@@ -279,13 +208,10 @@ pub(crate) fn compute_ram_circuit_snapshots<
         idx,
         (
             (
-                (
-                    ((unsorted_sponge_final_state, sorted_sponge_final_state), lhs_grand_product),
-                    rhs_grand_product,
-                ),
-                unsorted_states,
+                ((unsorted_sponge_final_state, sorted_sponge_final_state), lhs_grand_product),
+                rhs_grand_product,
             ),
-            sorted_states,
+            (num_nondet_writes_in_chunk, last_sorted_query, sorted_states_len),
         ),
     ) in it.enumerate()
     {
@@ -298,42 +224,10 @@ pub(crate) fn compute_ram_circuit_snapshots<
             DEFAULT_NUM_PERMUTATION_ARGUMENT_REPETITIONS
         );
 
-        // we need witnesses to pop elements from the front of the queue
-
-        let unsorted_witness = FullStateCircuitQueueRawWitness {
-            elements: unsorted_states
-                .into_iter()
-                .map(|el| {
-                    let witness = el.2.reflect();
-                    (witness, el.1)
-                })
-                .collect(),
-        };
-
-        let sorted_witness = FullStateCircuitQueueRawWitness {
-            elements: sorted_states
-                .iter()
-                .map(|el| {
-                    let witness = el.2.reflect();
-                    (witness, el.1)
-                })
-                .collect(),
-        };
-
         // now we need to have final grand product value that will also become an input for the next circuit
 
         let if_first = idx == 0;
         let is_last = idx == num_circuits - 1;
-        // TODO into_iter
-        let num_nondet_writes_in_chunk = sorted_states
-            .iter()
-            .filter(|el| {
-                let query = &el.2;
-                query.rw_flag == true
-                    && query.timestamp.0 == 0
-                    && query.location.page.0 == BOOTLOADER_HEAP_PAGE
-            })
-            .count();
 
         let new_num_nondet_writes =
             current_number_of_nondet_writes + (num_nondet_writes_in_chunk as u32);
@@ -356,7 +250,6 @@ pub(crate) fn compute_ram_circuit_snapshots<
                 .try_into()
                 .unwrap();
 
-        let last_sorted_query = sorted_states.last().unwrap().2;
         use circuit_definitions::encodings::memory_query::*;
         let sorting_key = sorting_key(&last_sorted_query);
         let comparison_key = comparison_key(&last_sorted_query);
@@ -426,11 +319,14 @@ pub(crate) fn compute_ram_circuit_snapshots<
                     num_nondeterministic_writes: new_num_nondet_writes,
                 },
             },
-            unsorted_queue_witness: unsorted_witness,
-            sorted_queue_witness: sorted_witness,
+            // we will need witnesses to pop elements from the front of the queue
+            // but this data should be saved to storage before, during queues simulation (RAM-heavy)
+            // so we use placeholders here
+            unsorted_queue_witness: Default::default(),
+            sorted_queue_witness: Default::default(),
         };
 
-        if sorted_states.len() % per_circuit_capacity != 0 {
+        if sorted_states_len % per_circuit_capacity != 0 {
             // RAM circuit does padding, so all previous values must be reset
             instance_witness
                 .closed_form_input
@@ -466,8 +362,8 @@ pub(crate) fn compute_ram_circuit_snapshots<
             tmp.current_sorted_queue_state.clone(),
         );
 
-        circuit_callback(ZkSyncBaseLayerCircuit::RAMPermutation(
-            maker.process(instance_witness, circuit_type),
+        artifacts_callback(WitnessGenerationArtifact::BaseLayerCircuit(
+            ZkSyncBaseLayerCircuit::RAMPermutation(maker.process(instance_witness, circuit_type)),
         ));
     }
 
@@ -479,11 +375,11 @@ pub(crate) fn compute_ram_circuit_snapshots<
         queue_simulator,
         ram_permutation_circuits_compact_forms_witnesses,
     ) = maker.into_results();
-    recursion_queue_callback(
+    artifacts_callback(WitnessGenerationArtifact::RecursionQueue((
         circuit_type as u64,
         queue_simulator,
         ram_permutation_circuits_compact_forms_witnesses.clone(),
-    );
+    )));
 
     (
         ram_permutation_circuits,

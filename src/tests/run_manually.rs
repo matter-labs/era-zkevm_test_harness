@@ -20,9 +20,11 @@ use crate::zk_evm::witness_trace::VmWitnessTracer;
 use crate::zk_evm::GenericNoopTracer;
 use crate::zkevm_circuits::base_structures::vm_state::GlobalContextWitness;
 use crate::zkevm_circuits::main_vm::main_vm_entry_point;
+use boojum::gadgets::queue::full_state_queue::FullStateCircuitQueueRawWitness;
 use circuit_definitions::aux_definitions::witness_oracle::VmWitnessOracle;
 use circuit_definitions::zk_evm::vm_state::cycle;
 use storage::{InMemoryCustomRefundStorage, StorageRefund};
+use witness::oracle::WitnessGenerationArtifact;
 use zkevm_assembly::Assembly;
 
 #[test]
@@ -260,10 +262,24 @@ pub(crate) fn run_with_options(entry_point_bytecode: Vec<[u8; 32]>, options: Opt
     save_predeployed_contracts(&mut storage_impl.storage, &mut tree, &known_contracts);
 
     let mut basic_block_circuits = vec![];
+    let mut unsorted_memory_queue_witnesses = vec![];
+    let mut sorted_memory_queue_witnesses = vec![];
 
     // we are using TestingTracer to track prints and exceptions inside out_of_circuit_vm cycles
     let mut out_of_circuit_tracer =
         TestingTracer::new(Some(storage_impl.create_refund_controller()));
+
+    let artifacts_callback = |artifact: WitnessGenerationArtifact| match artifact {
+        WitnessGenerationArtifact::BaseLayerCircuit(circuit) => basic_block_circuits.push(circuit),
+        WitnessGenerationArtifact::MemoryQueueWitness((witnesses, sorted)) => {
+            if sorted {
+                sorted_memory_queue_witnesses.push(witnesses)
+            } else {
+                unsorted_memory_queue_witnesses.push(witnesses)
+            }
+        }
+        _ => {}
+    };
 
     if let Err(err) = run_vms(
         Address::zero(),
@@ -281,8 +297,7 @@ pub(crate) fn run_with_options(entry_point_bytecode: Vec<[u8; 32]>, options: Opt
         tree,
         "kzg/src/trusted_setup.json",
         std::array::from_fn(|_| None),
-        |circuit| basic_block_circuits.push(circuit),
-        |_, _, _| {},
+        artifacts_callback,
         &mut out_of_circuit_tracer,
     ) {
         let error_text = match err {
@@ -303,8 +318,24 @@ pub(crate) fn run_with_options(entry_point_bytecode: Vec<[u8; 32]>, options: Opt
 
     println!("Simulation and witness creation are completed");
 
+    let mut unsorted_memory_queue_witnesses_it = unsorted_memory_queue_witnesses.into_iter();
+    let mut sorted_memory_queue_witnesses = sorted_memory_queue_witnesses.into_iter();
     for el in basic_block_circuits {
         println!("Doing {} circuit", el.short_description());
+        match &el {
+            ZkSyncBaseLayerCircuit::RAMPermutation(inner) => {
+                let mut witness = inner.witness.take().unwrap();
+                witness.sorted_queue_witness = FullStateCircuitQueueRawWitness {
+                    elements: sorted_memory_queue_witnesses.next().unwrap().into(),
+                };
+                witness.unsorted_queue_witness = FullStateCircuitQueueRawWitness {
+                    elements: unsorted_memory_queue_witnesses_it.next().unwrap().into(),
+                };
+
+                inner.witness.store(Some(witness));
+            }
+            _ => {}
+        }
         base_test_circuit(el);
     }
 

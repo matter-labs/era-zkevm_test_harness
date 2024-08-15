@@ -315,16 +315,10 @@ fn repack_input_for_main_vm(
 use crate::witness::postprocessing::observable_witness::VmObservableWitness;
 use crate::zkevm_circuits::fsm_input_output::circuit_inputs::main_vm::VmCircuitWitness;
 
+use super::oracle::WitnessGenerationArtifact;
 use super::vm_instance_witness_to_circuit_formal_input;
 
-pub(crate) fn process_main_vm<
-    CB: FnMut(ZkSyncBaseLayerCircuit),
-    QSCB: FnMut(
-        u64,
-        RecursionQueueSimulator<GoldilocksField>,
-        Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
-    ),
->(
+pub(crate) fn process_main_vm<CB: FnMut(WitnessGenerationArtifact)>(
     geometry: &GeometryConfig,
     in_circuit_global_context: GlobalContextWitness<GoldilocksField>,
     memory_artifacts_for_main_vm: MemoryArtifacts<GoldilocksField>,
@@ -341,8 +335,7 @@ pub(crate) fn process_main_vm<
     flat_new_frames_history: Vec<(Cycle, CallStackEntry)>,
     mut vm_snapshots: Vec<VmSnapshot>,
     round_function: Poseidon2Goldilocks,
-    circuit_callback: &mut CB,
-    recursion_queue_callback: &mut QSCB,
+    artifacts_callback: &mut CB,
 ) -> (
     FirstAndLastCircuitWitness<VmObservableWitness<GoldilocksField>>,
     Vec<ClosedFormInputCompactFormWitness<GoldilocksField>>,
@@ -408,7 +401,7 @@ pub(crate) fn process_main_vm<
         };
         queue_simulator.push(recursive_request, &round_function);
 
-        circuit_callback(instance);
+        artifacts_callback(WitnessGenerationArtifact::BaseLayerCircuit(instance));
         main_vm_circuits_compact_forms_witnesses.push(compact_form_witness);
     };
 
@@ -540,11 +533,11 @@ pub(crate) fn process_main_vm<
         }
     }
 
-    recursion_queue_callback(
+    artifacts_callback(WitnessGenerationArtifact::RecursionQueue((
         BaseLayerCircuitType::VM as u64,
         queue_simulator,
         main_vm_circuits_compact_forms_witnesses.clone(),
-    );
+    )));
 
     (main_vm_circuits, main_vm_circuits_compact_forms_witnesses)
 }

@@ -8,7 +8,6 @@ use crate::zk_evm::ethereum_types::U256;
 use crate::zkevm_circuits::base_structures::decommit_query::DecommitQueryWitness;
 use crate::zkevm_circuits::base_structures::decommit_query::DECOMMIT_QUERY_PACKED_WIDTH;
 use crate::zkevm_circuits::code_unpacker_sha256::input::*;
-use artifacts::ImplicitMemoryArtifacts;
 use circuit_definitions::encodings::decommittment_request::normalized_preimage_as_u256;
 use circuit_definitions::encodings::decommittment_request::DecommittmentQueueSimulator;
 use circuit_definitions::encodings::decommittment_request::DecommittmentQueueState;
@@ -17,13 +16,31 @@ use circuit_definitions::encodings::memory_query::MemoryQueueState;
 use circuit_definitions::zk_evm::aux_structures::DecommittmentQuery;
 use std::collections::VecDeque;
 
-// TODO docs
-pub(crate) fn decommitter_memory_queries_amount(
+pub(crate) fn decommitter_memory_queries(
     deduplicated_decommit_requests_with_data: &Vec<(DecommittmentQuery, Vec<U256>)>,
-) -> usize {
-    deduplicated_decommit_requests_with_data
-        .iter()
-        .fold(0, |inner, (_, writes)| inner + writes.len())
+) -> Vec<MemoryQuery> {
+    let mut result = vec![];
+    for (query, writes) in deduplicated_decommit_requests_with_data.iter() {
+        assert!(query.is_fresh);
+
+        // now feed the queries into it
+        let as_queries_it = writes.iter().enumerate().map(|(idx, el)| MemoryQuery {
+            timestamp: query.timestamp,
+            location: zk_evm::aux_structures::MemoryLocation {
+                memory_type: zk_evm::abstractions::MemoryType::Code,
+                page: query.memory_page,
+                index: MemoryIndex(idx as u32),
+            },
+            rw_flag: true,
+            value: *el,
+            value_is_pointer: false,
+        });
+
+        // and plain test memory queues
+        result.extend(as_queries_it);
+    }
+
+    result
 }
 
 pub(crate) struct DecommiterCircuitProcessingInputs<F: SmallField> {
@@ -37,25 +54,27 @@ pub(crate) fn compute_decommitter_circuit_snapshots<
     R: BuildableCircuitRoundFunction<F, 8, 12, 4> + AlgebraicRoundFunction<F, 8, 12, 4>,
 >(
     amount_of_memory_queries: usize,
-    implicit_memory_artifacts: &mut ImplicitMemoryArtifacts<F>,
-    memory_queue_states_accumulator: &LastPerCircuitAccumulator<MemoryQueueState<F>>,
-    memory_queue_simulator: &mut MemoryQueuePerCircuitSimulator<F>,
+    decommitter_memory_queries: Vec<MemoryQuery>,
+    decommitter_simulator_snapshots: Vec<SimulatorSnapshot<F, FULL_SPONGE_QUEUE_STATE_WIDTH>>,
+    decommitter_memory_states: Vec<MemoryQueueState<F>>,
+    final_explicit_memory_queue_state: MemoryQueueState<F>,
     decommiter_circuit_inputs: DecommiterCircuitProcessingInputs<F>,
     round_function: &R,
     decommiter_circuit_capacity: usize,
-) -> Vec<CodeDecommitterCircuitInstanceWitness<F>> {
+) -> (Vec<CodeDecommitterCircuitInstanceWitness<F>>, usize) {
     assert_eq!(
-        amount_of_memory_queries + implicit_memory_artifacts.memory_queries.len(),
-        memory_queue_states_accumulator.len() + implicit_memory_artifacts.memory_queue_states.len()
-    );
-    assert_eq!(
-        amount_of_memory_queries + implicit_memory_artifacts.memory_queries.len(),
-        memory_queue_simulator.num_items as usize
+        decommitter_memory_queries.len(),
+        decommitter_memory_states.len()
     );
 
-    let start_idx_for_memory_accumulator = implicit_memory_artifacts.memory_queue_states.len();
+    let memory_simulator_before = &decommitter_simulator_snapshots[0];
+    assert_eq!(
+        amount_of_memory_queries,
+        memory_simulator_before.num_items as usize
+    );
+    let start_idx_for_memory_accumulator = 0;
 
-    let initial_memory_queue_state = &memory_queue_simulator.take_sponge_like_queue_state();
+    let initial_memory_queue_state = &memory_simulator_before.take_sponge_like_queue_state();
 
     let DecommiterCircuitProcessingInputs {
         deduplicated_decommit_requests_with_data,
@@ -68,46 +87,6 @@ pub(crate) fn compute_decommitter_circuit_snapshots<
     assert!(
         deduplicated_decommit_requests_with_data.len() > 0,
         "we must have some decommitment requests"
-    );
-
-    for (query, writes) in deduplicated_decommit_requests_with_data.iter() {
-        assert!(query.is_fresh);
-
-        // now feed the queries into it
-        let as_queries: Vec<_> = writes
-            .iter()
-            .cloned()
-            .enumerate()
-            .map(|(idx, el)| MemoryQuery {
-                timestamp: query.timestamp,
-                location: zk_evm::aux_structures::MemoryLocation {
-                    memory_type: zk_evm::abstractions::MemoryType::Code,
-                    page: query.memory_page,
-                    index: MemoryIndex(idx as u32),
-                },
-                rw_flag: true,
-                value: el,
-                value_is_pointer: false,
-            })
-            .collect();
-
-        // fill up the memory queue
-        for query in as_queries.iter() {
-            let (_old_tail, intermediate_info) =
-                memory_queue_simulator.push_and_output_intermediate_data(*query, round_function);
-
-            implicit_memory_artifacts
-                .memory_queue_states
-                .push(intermediate_info);
-        }
-
-        // and plain test memory queues
-        implicit_memory_artifacts.memory_queries.extend(as_queries);
-    }
-
-    assert_eq!(
-        implicit_memory_artifacts.memory_queries.len(),
-        implicit_memory_artifacts.memory_queue_states.len()
     );
 
     // our simulator is simple: it will try to take an element from the queue, run some number of rounds, and compare the results
@@ -189,10 +168,9 @@ pub(crate) fn compute_decommitter_circuit_snapshots<
         };
 
         let wintess_state = if start_idx_for_memory_accumulator + memory_queue_state_offset == 0 {
-            memory_queue_states_accumulator.last().unwrap()
+            &final_explicit_memory_queue_state
         } else {
-            implicit_memory_artifacts
-                .memory_queue_states
+            decommitter_memory_states
                 .get(start_idx_for_memory_accumulator + memory_queue_state_offset - 1)
                 .unwrap()
         };
@@ -405,10 +383,9 @@ pub(crate) fn compute_decommitter_circuit_snapshots<
         );
 
         let wintess_state = if start_idx_for_memory_accumulator + memory_queue_state_offset == 0 {
-            memory_queue_states_accumulator.last().unwrap()
+            &final_explicit_memory_queue_state
         } else {
-            implicit_memory_artifacts
-                .memory_queue_states
+            decommitter_memory_states
                 .get(start_idx_for_memory_accumulator + memory_queue_state_offset - 1)
                 .unwrap()
         };
@@ -449,14 +426,14 @@ pub(crate) fn compute_decommitter_circuit_snapshots<
         }
     }
 
+    let memory_simulator_after = &decommitter_simulator_snapshots[1];
+
+    let amount_of_memory_queries_after =
+        amount_of_memory_queries + decommitter_memory_queries.len();
     assert_eq!(
-        amount_of_memory_queries + implicit_memory_artifacts.memory_queries.len(),
-        memory_queue_states_accumulator.len() + implicit_memory_artifacts.memory_queue_states.len()
-    );
-    assert_eq!(
-        amount_of_memory_queries + implicit_memory_artifacts.memory_queries.len(),
-        memory_queue_simulator.num_items as usize
+        amount_of_memory_queries_after,
+        memory_simulator_after.num_items as usize
     );
 
-    results
+    (results, amount_of_memory_queries_after)
 }
