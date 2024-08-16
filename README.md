@@ -1,3 +1,7 @@
+> [!WARNING]
+> This repository has been archived. Development has moved to the [zksync-protocol](https://github.com/matter-labs/zksync-protocol) repository.
+> Please use it instead.
+
 # zkSync Era: A ZK Rollup For Scaling Ethereum
 
 [![Logo](eraLogo.png)](https://zksync.io/)
