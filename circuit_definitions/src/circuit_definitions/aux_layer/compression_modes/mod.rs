@@ -29,6 +29,8 @@ type R = Poseidon2Goldilocks;
 type EXT = GoldilocksExt2;
 type H = GoldilocksPoseidon2Sponge<AbsorptionModeOverwrite>;
 
+pub type CompressionPoWForWrapper =
+    Poseidon2Sponge<Bn256, F, AbsorptionModeReplacement<Fr>, 2, 3>;
 pub type CompressionTreeHasherForWrapper =
     Poseidon2Sponge<Bn256, F, AbsorptionModeReplacement<Fr>, 2, 3>;
 pub type CompressionTranscriptForWrapper =
