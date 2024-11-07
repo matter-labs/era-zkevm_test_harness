@@ -69,7 +69,7 @@ pub fn run<
 >(
     caller: Address,                 // for real block must be zero
     entry_point_address: Address,    // for real block must be the bootloader
-    entry_point_code: Vec<[u8; 32]>, // for read lobkc must be a bootloader code
+    entry_point_code: Vec<[u8; 32]>, // for read block must be a bootloader code
     initial_heap_content: Vec<u8>,   // bootloader starts with non-deterministic heap
     zk_porter_is_available: bool,
     default_aa_code_hash: U256,
